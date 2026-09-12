@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
@@ -28,7 +29,9 @@ test('video upload, validation, ranges, dedupe, export, backup restore and resta
     const a = await (await post('/api/collections', { name: '影片' })).json(), b = await (await post('/api/collections', { name: '复用' })).json();
     const responses = await Promise.all([upload(file, a.id), upload(file, b.id), upload(webm, a.id, '记录.webm')]);
     assert.ok(responses.every(r => r.status === 201)); const [mp4, shared, clip] = await Promise.all(responses.map(r => r.json()));
-    assert.equal(mp4.kind, 'video'); assert.equal(mp4.mime, 'video/mp4'); assert.equal(clip.mime, 'video/webm'); assert.ok(mp4.duration > 1); assert.equal(mp4.width, 320); assert.equal(mp4.thumbnail_url, null);
+    assert.equal(mp4.kind, 'video'); assert.equal(mp4.mime, 'video/mp4'); assert.equal(clip.mime, 'video/webm'); assert.ok(mp4.duration > 1); assert.equal(mp4.width, 320); assert.equal(mp4.thumbnail_url, '/media/'+mp4.id+'/thumbnail');
+    for(const item of [mp4,clip]){const r=await request(item.thumbnail_url);assert.equal(r.status,200);assert.match(r.headers.get('content-type'),/image\/webp/);const info=await sharp(Buffer.from(await r.arrayBuffer())).metadata();assert.ok(info.width<=480&&info.height<=480);}
+    assert.equal((await request(mp4.thumbnail_url,{headers:{Cookie:''}})).status,401);
     assert.equal((await readdir(join(dir, 'media'))).length, 2); assert.equal([mp4, shared].filter(item => item.shared).length, 1);
     assert.equal((await (await upload(file, a.id)).json()).duplicate, true);
     assert.equal((await upload(Buffer.from('not video'), a.id)).status, 415);
@@ -67,6 +70,7 @@ test('video upload, validation, ranges, dedupe, export, backup restore and resta
     const login = await post('/api/auth/login', { password: '0049' }); cookie = login.headers.get('set-cookie').split(';')[0];
     assert.equal((await request(mp4.url, { headers: { Range: 'bytes=0-10' } })).status, 206);
     assert.equal((await readdir(join(dir, 'uploads'))).length, 0);
+    assert.equal((await request(mp4.thumbnail_url)).status,200,'cover regenerates after restore and restart');
   } finally { await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(r => server.close(r)); runtime.db.close(); }
 });
 

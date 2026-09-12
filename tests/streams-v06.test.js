@@ -20,9 +20,10 @@ test("sniffer identifies media MIME and excludes fragments, deduplicates and bou
   assert.equal(mediaKind("blob:https://site.test/123"), null);
   assert.equal(mediaKind("https://a.test/a.ts", "video/mp2t"), null);
   const state = { resources: [], source_url: "https://site.test/post" };
-  const first = addResource(state, { url: "https://site.test/a.jpg" });
+  assert.equal(addResource(state,{url:"https://site.test/a.jpg"}),null);
+  const first = addResource(state, { url: "https://site.test/a.mp4" });
   assert.equal(
-    addResource(state, { url: "https://site.test/a.jpg", bytes: 99 }).id,
+    addResource(state, { url: "https://site.test/a.mp4", bytes: 99 }).id,
     first.id,
   );
   for (let i = 0; i < 150; i++)

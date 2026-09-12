@@ -37,6 +37,7 @@ import { withSource } from './source.js';
 import { createImportManager } from './imports.js';
 import { registerStreamRoutes } from './streams.js';
 import { registerGroupOrderRoutes } from './group-order.js';
+import {videoThumbnail} from './video-thumbnail.js';
 
 const now = () => new Date().toISOString();
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -160,7 +161,7 @@ export function createApp({
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
       url: row.file_key ? `/media/${row.id}/original` : null,
-      thumbnail_url: row.kind === 'image' ? `/media/${row.id}/thumbnail` : null,
+      thumbnail_url: ['image','video'].includes(row.kind) ? `/media/${row.id}/thumbnail` : null,
       file_key: undefined,
       thumbnail_key: undefined,
       hash: undefined,
@@ -209,7 +210,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.6" }),
+    res.json({ status: "ok", version: "0.9.7" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -309,7 +310,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.6",
+      version: "0.9.7",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -1019,15 +1020,14 @@ export function createApp({
     if (!["original", "thumbnail"].includes(req.params.variant))
       throw fail(404, "图片版本不存在");
     res.set("Cache-Control", "private, no-cache");
-    if (item.kind === 'video') {
-      if (req.params.variant !== 'original') throw fail(404, '视频没有图片缩略图');
+    if (item.kind === 'video' && req.params.variant === 'original') {
       return serveVideo(req, res, dataDir, item);
     }
     if (req.params.variant === "thumbnail") {
       let buffer = previewCache.get(item.hash);
       if (!buffer) {
         buffer = await thumbnailQueue.run(item.hash, async () => {
-          const result = await thumbnail(dataDir, item);
+          const result = await (item.kind==='video'?videoThumbnail:thumbnail)(dataDir, item);
           cachePreview(item.hash, result);
           return result;
         });

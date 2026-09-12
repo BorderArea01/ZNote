@@ -917,7 +917,7 @@ export default function Workspace({
                               decoding="async"
                             />
                           ) : item.kind === 'video' ? (
-                            <div className="video-card-preview"><Film size={42} /><strong>点击预览视频</strong><small>{item.video_codec || 'VIDEO'} · {item.duration ? `${Math.round(item.duration)} 秒` : '原文件'}</small></div>
+                            <div className="video-card-preview">{item.thumbnail_url&&<img className="video-cover" src={item.thumbnail_url} alt="视频首帧" loading="lazy" onError={e=>{e.currentTarget.hidden=true}}/>}<Film size={42} /><strong>点击预览视频</strong><small>{item.video_codec || 'VIDEO'} · {item.duration ? `${Math.round(item.duration)} 秒` : '原文件'}</small></div>
                           ) : (
                             <>
                               <span className="note-type">

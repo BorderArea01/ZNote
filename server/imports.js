@@ -1,3 +1,4 @@
+import {videoDetails} from '../shared/video-details.js';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, stat, rm } from 'node:fs/promises';
@@ -91,7 +92,7 @@ export async function downloadVideo({ url, dir, signal, progress }) {
   const path = join(dir, media[0]); if ((await stat(path)).size > MAX_VIDEO_BYTES) throw fail(413, '视频超过 500 MB，未入库');
   let metadata = {}; const info = join(dir, 'media.info.json');
   if (existsSync(info) && (await stat(info)).size < 5 * 1024 * 1024) { try { metadata = JSON.parse(await readFile(info, 'utf8')); } catch {} }
-  return { path, originalname: media[0], title: String(metadata.title || '网络视频').slice(0, 200), description: String(metadata.description || '').slice(0, 100000) };
+  return { path, originalname: media[0], title: String(metadata.title || '网络视频').slice(0, 200), description: String(metadata.description || '').slice(0, 100000), author: metadata.uploader || metadata.creator || metadata.channel || '', author_url: metadata.uploader_url || metadata.channel_url || '' };
 }
 
 export function createImportManager({ dataDir, save, downloader = downloadVideo }) {
@@ -121,7 +122,8 @@ export function createImportManager({ dataDir, save, downloader = downloadVideo 
           const file = await downloader({ url: job.source_url, dir, signal: job.controller.signal, progress: message => { job.message = message; } });
           if (job.controller.signal.aborted) throw fail(409, '采集已取消');
           job.message = '正在验证视频并入库'; job.status = 'saving';
-          const item = await save(file, { ...job.input, title: file.title, content: file.description || '', source_url: job.source_url });
+          const details=videoDetails(file,job.input.tags);
+          const item = await save(file, { ...job.input, ...details, content:[details.content,file.description||''].filter(Boolean).join('\n\n'), source_url: job.source_url });
           job.item_id = item.id; job.duplicate = !!item.duplicate; job.status = 'completed'; job.message = item.duplicate ? '知识库已收录此视频，已补充来源' : '视频已入库';
         } catch (e) { job.status = job.controller.signal.aborted ? 'cancelled' : 'failed'; job.message = job.status === 'cancelled' ? '采集已取消' : (e.status ? e.message : '采集处理失败，请检查存储空间后重试'); }
         finally {

@@ -58,7 +58,7 @@ const source = createServer(async (req, res) => {
     } else {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.end(
-        '<!doctype html><html><head><title>媒体发现验证页</title><style>body{font:18px system-ui;background:#eef4f2;color:#234339;padding:35px}img{width:300px;height:200px}video{width:320px}input,button{font:inherit;padding:10px}</style></head><body><h1>图片与视频一起发现</h1><p>悬停图片，或点击播放按钮载入网络资源</p><img id="sample" alt="高清测试图" src="/small.png" data-original="/large.png"><p><input id="typing" placeholder="输入区不触发快捷键"></p><button id="load">加载 MP4 与 m3u8</button><video id="player" controls muted></video><script src="/hls.js"></script><script>document.getElementById("load").onclick=()=>{fetch("/movie?id=one").then(r=>r.arrayBuffer());const h=new Hls();h.loadSource("/stream?id=hls");h.attachMedia(document.getElementById("player"));};</script></body></html>',
+        '<!doctype html><html><head><title>媒体发现验证页</title><meta property="og:title" content="雨后城市纪录"><meta name="author" content="影像作者"><style>body{font:18px system-ui;background:#eef4f2;color:#234339;padding:35px}img{width:300px;height:200px}video{width:320px}input,button{font:inherit;padding:10px}</style></head><body><h1>图片与视频一起发现</h1><p>悬停图片，或点击播放按钮载入网络资源</p><img id="sample" alt="高清测试图" src="/small.png" data-original="/large.png"><p><input id="typing" placeholder="输入区不触发快捷键"></p><button id="load">加载 MP4 与 m3u8</button><video id="player" controls muted></video><script src="/hls.js"></script><script>document.getElementById("load").onclick=()=>{fetch("/movie?id=one").then(r=>r.arrayBuffer());const h=new Hls();h.loadSource("/stream?id=hls");h.attachMedia(document.getElementById("player"));};</script></body></html>',
       );
     }
   } catch (e) {
@@ -117,7 +117,7 @@ try {
   await page.goto(sourceUrl);
   const overlay = page.locator("[data-znote-overlay]");
   await overlay
-    .getByRole("button", { name: "ZNote 媒体发现", exact: true })
+    .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .waitFor();
   await page.locator("#sample").hover();
   const preview = overlay.locator('[aria-label="ZNote 高清图片预览"]');
@@ -246,9 +246,9 @@ try {
   await page.locator("#typing").fill("s k");
   assert.equal(await page.locator("#typing").inputValue(), "s k");
   await overlay
-    .getByRole("button", { name: "ZNote 媒体发现", exact: true })
+    .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .click();
-  const panel = overlay.getByRole("dialog", { name: "ZNote 媒体发现" });
+  const panel = overlay.getByRole("dialog", { name: "ZNote 视频嗅探" });
   await panel.waitFor();
   await page.locator("#load").click();
   await panel
@@ -257,7 +257,9 @@ try {
     .first()
     .waitFor();
   await panel.locator(".item").filter({ hasText: "视频文件" }).waitFor();
-  assert.ok(await panel.locator(".item").filter({ hasText: "图片 ·" }).count());
+  assert.equal(await panel.locator(".item").filter({ hasText: "图片 ·" }).count(),0);
+  assert.equal(await panel.getByRole("button",{name:"图片",exact:true}).count(),0);
+  await panel.locator(".item").filter({hasText:"影像作者"}).first().waitFor();
   assert.ok(
     (await page.locator("#player").getAttribute("src")).startsWith("blob:"),
   );
@@ -265,7 +267,7 @@ try {
   const hlsRow = panel
     .locator(".item")
     .filter({ hasText: "m3u8 分段视频" })
-    .filter({ hasText: "stream" });
+    .first();
   const opened = context.waitForEvent("page");
   await hlsRow.getByRole("button", { name: "预览", exact: true }).click();
   const media = await opened;
@@ -292,9 +294,12 @@ try {
   ).json();
   assert.equal(videos.total, 1);
   assert.equal(videos.items[0].width, 320);
+  assert.equal(videos.items[0].title,"雨后城市纪录");assert.ok(videos.items[0].tags.includes("影像作者"));assert.ok(videos.items[0].content.includes("作者：影像作者"));
+  const cover=await context.request.get(base+videos.items[0].thumbnail_url);assert.ok(cover.ok());assert.match(cover.headers()["content-type"],/image\/webp/);
   assert.ok(videos.items[0].duration >= 3.9);
   assert.equal(videos.items[0].source_url, sourceUrl + "/");
-  const library=await context.newPage();await library.goto(base+'/#item/'+videos.items[0].id);await library.locator('video').waitFor();await library.waitForFunction(()=>document.querySelector('video')?.readyState>=2);await library.locator('video').evaluate(async v=>{v.muted=true;await v.play();});await library.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.ok(await library.locator('video').evaluate(v=>v.webkitAudioDecodedByteCount)>0);await library.close();
+  await context.request.patch(base+'/api/preferences',{data:{default_collection_id:collection.id}});
+  const library=await context.newPage();await library.goto(base+'/#item/'+videos.items[0].id);await library.locator('video').waitFor();await library.waitForFunction(()=>document.querySelector('video')?.readyState>=2);await library.locator('video').evaluate(async v=>{v.muted=true;await v.play();});await library.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.ok(await library.locator('video').evaluate(v=>v.webkitAudioDecodedByteCount)>0);await library.keyboard.press('Escape');await library.locator('.video-cover').first().evaluate(img=>img.decode());await library.screenshot({path:resolve('artifacts/v097-video-library.png')});await library.close();
   await media.getByRole("button", { name: "下载", exact: true }).click();
   await media.getByText("已交给浏览器下载", { exact: true }).waitFor();
   for (let i = 0; i < 100; i++) {
@@ -304,8 +309,7 @@ try {
   }
   assert.ok(downloads.filter((d) => d.state === "complete").length >= 2);
   await page.bringToFront();
-  await panel.getByRole('button',{name:'视频',exact:true}).click();assert.equal(await panel.locator('.item').filter({hasText:'图片 ·'}).count(),0);
-  await panel.getByRole('button',{name:'全部',exact:true}).click();
+
   await panel.getByRole('button',{name:'暂停嗅探',exact:true}).click();
   await page.evaluate(()=>fetch('/movie?id=paused').then(r=>r.arrayBuffer()));await page.waitForTimeout(200);
   let sniffer=await worker.evaluate(()=>chrome.storage.session.get('sniffTabs'));assert.ok(Object.values(sniffer.sniffTabs).every(s=>s.resources.every(r=>!r.url.includes('id=paused'))));
@@ -315,20 +319,20 @@ try {
   await page.reload();
   await page
     .locator("[data-znote-overlay]")
-    .getByRole("button", { name: "ZNote 媒体发现", exact: true })
+    .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .click();
   const state = await worker.evaluate(() =>
     chrome.storage.session.get("sniffTabs"),
   );
   assert.ok(
     Object.values(state.sniffTabs).every((s) =>
-      s.resources.every((r) => r.kind === "image"),
+      s.resources.length === 0,
     ),
   );
   assert.ok(requests.every((r) => !r.auth));
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: fast dismissal within 300 ms; mouse crosses preview gap and lingers over buttons; real save/download button clicks; default Z and custom D/Q; settings help; masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; S real download; input guard; mixed MIME sniffing behind blob player; HLS playback, remux save/download; source; navigation isolation; no source token leakage",
+    "PASS: fast dismissal within 300 ms; mouse crosses preview gap and lingers over buttons; real save/download button clicks; default Z and custom D/Q; settings help; masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; S real download; input guard; video-only MIME sniffing behind blob player; HLS playback, remux save/download; source; navigation isolation; no source token leakage",
   );
 } catch (e) {
   await page.screenshot({ path: resolve("artifacts/v07-tools-failure.png") });

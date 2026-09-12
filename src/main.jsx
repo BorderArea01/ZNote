@@ -480,7 +480,7 @@ function Detail({
     >
       <div className="detail-content">
         {item.kind === 'video' && <div className="video-stage">
-          <video src={item.url} controls preload="metadata" playsInline onError={() => setVideoError(true)} aria-label={`播放 ${title}`} />
+          <video src={item.url} poster={item.thumbnail_url} controls preload="metadata" playsInline onError={() => setVideoError(true)} aria-label={`播放 ${title}`} />
           <p>{item.width} × {item.height} · {bytes(item.bytes)} · {item.video_codec}{item.duration ? ` · ${Math.round(item.duration)} 秒` : ''}</p>
           {videoError && <p role="alert">浏览器无法播放此编码或文件。原视频已保存，可下载后使用本地播放器打开。</p>}
           <a href={item.url} download={title}>下载原视频</a>
@@ -812,7 +812,7 @@ function SettingsPanel({
         />
         <BackupSettings />
         <section>
-          <div className="settings-title"><h3>浏览器媒体工具</h3><HelpHint label="浏览器采集">悬停看高清大图，默认 S 下载、Z 入库，支持自定义快捷键。媒体浮窗可发现图片、MP4 和 m3u8，也可将网页正文保存为 Markdown；采集自动保留来源。</HelpHint><HelpHint label="扩展安装与更新">Chrome / Edge 安装后刷新本页，再点击一键连接。更新时覆盖同一目录、重新加载扩展，连接和偏好会保留。0.7 及更早版本首次升级需移除旧版并重新连接一次。m3u8 合并使用本机 ZNote 服务。</HelpHint></div>
+          <div className="settings-title"><h3>浏览器媒体工具</h3><HelpHint label="浏览器采集">悬停看高清大图，默认 S 下载、Z 入库，支持自定义快捷键。视频浮窗专门嗅探 MP4、WebM 和 m3u8，也可将网页正文保存为 Markdown；采集自动保留来源。</HelpHint><HelpHint label="扩展安装与更新">Chrome / Edge 安装后刷新本页，再点击一键连接。更新时覆盖同一目录、重新加载扩展，连接和偏好会保留。0.7 及更早版本首次升级需移除旧版并重新连接一次。m3u8 合并使用本机 ZNote 服务。</HelpHint></div>
 
           <div className="connection-actions"><a className="button" href="/api/clipper/download"><Download size={16} />下载扩展</a><button className="primary" data-znote-connect onClick={() => notify('请先安装新版扩展并刷新本页，再点击一键连接')}>一键连接扩展</button></div>
           <p id="znote-connect-status" role="status" className="muted"></p>

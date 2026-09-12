@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.6-287464?style=flat-square" alt="Version 0.9.6" />
+    <img src="https://img.shields.io/badge/version-0.9.7-287464?style=flat-square" alt="Version 0.9.7" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -28,8 +28,8 @@
 | :--- | :--- |
 | 🖼️ 图片素材库 | 批量上传、拖拽和粘贴；添加标题、说明、多标签与收藏；按筛选结果连续翻图 |
 | ✍️ 图文笔记 | 编辑和预览 Markdown，插入图片，保留文字链接、表格与代码，使用 `[[双向链接]]` |
-| 🎬 视频收藏 | 保存 MP4、WebM、MOV，在浏览器预览、拖动进度、全屏播放 |
-| 🧩 浏览器采集 | 悬停看大图，点按钮或按快捷键下载/入库；浮窗发现图片、视频和 m3u8；提取网页正文 |
+| 🎬 视频收藏 | 保存 MP4、WebM、MOV，以首帧作封面；采集作品标题和作者，预览、拖动进度、全屏播放 |
+| 🧩 浏览器采集 | 悬停看大图，点按钮或按快捷键下载/入库；浮窗嗅探视频和 m3u8；提取网页正文 |
 | 🏷️ 有序归类 | 所有分类、标签与回收站按知识库隔离；多标签筛选、批量删除与恢复 |
 | 🔌 开放接口 | REST API、OpenAPI、读写令牌、增量事件与 Webhook，方便工具和插件接入 |
 | 📦 数据可带走 | 六种导出、自动备份、网页恢复；原文件按字节保留，同内容去重 |
@@ -114,7 +114,7 @@ docker compose up -d --build
 3. 在同一个浏览器刷新 ZNote，点击 **「一键连接扩展」**，无需复制地址或 API 令牌。
 4. 在扩展设置里选择默认知识库、标签和快捷键。
 
-**网站黑名单**位于扩展设置的「浏览器行为」中：每行一个域名（含子域名）或完整网站地址（区分端口）。命中后停用悬停预览、媒体浮窗和图片 / 视频嗅探；当前连接的知识库及带有 ZNote 页面标记的网站自动排除。保存后已打开页面同步生效。
+**网站黑名单**位于扩展设置的「浏览器行为」中：每行一个域名（含子域名）或完整网站地址（区分端口）。命中后停用悬停预览、媒体浮窗和视频嗅探；当前连接的知识库及带有 ZNote 页面标记的网站自动排除。保存后已打开页面同步生效。
 
 **正常更新会保留连接与偏好**：覆盖原目录并重新加载扩展，再刷新目标网页即可。0.7 及更早版本首次升级，需要移除旧版、加载新版，再一键连接一次。
 

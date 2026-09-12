@@ -1,3 +1,4 @@
+import {videoDetails} from './video-details.js';
 export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [] };
 export async function settings() {
   const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
@@ -57,7 +58,7 @@ export async function limitedImage(url, signal) {
   } finally { await reader.cancel(); }
   return new Blob(chunks, { type: response.headers.get('content-type') || 'application/octet-stream' });
 }
-export async function saveDirectVideo(url, sourceUrl, title, signal) {
+export async function saveDirectVideo(url, sourceUrl, title, signal, metadata = {}) {
   if (!/^https?:\/\//i.test(url || '')) throw new Error('播放器使用分段或 blob 地址，请改用“采集此页面的视频”');
   const response = await fetch(url, { credentials: 'include', signal: signal || AbortSignal.timeout(300000) });
   if (!response.ok) throw new Error('视频文件访问失败，可改用页面视频采集或下载后上传');
@@ -69,10 +70,11 @@ export async function saveDirectVideo(url, sourceUrl, title, signal) {
   try { while (true) { const {done,value} = await reader.read(); if (done) break; size += value.length; if (size > max) throw new Error('视频超过 500 MB'); chunks.push(value); } } finally { await reader.cancel(); }
   const config = await settings(), form = new FormData();
   form.set('file', new Blob(chunks, { type: mime || 'video/mp4' }), '网页视频.mp4');
-  form.set('title', (title || '网页视频').slice(0, 200));
-  form.set('content', '保存网页播放器直接提供的视频文件。');
+  const details=videoDetails({...metadata,title:title||metadata.title},config.tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean));
+  form.set('title',details.title);
+  form.set('content',details.content);
   if (/^https?:\/\//i.test(sourceUrl || '')) form.set('source_url', sourceUrl);
-  form.set('tags', JSON.stringify(config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean)));
+  form.set('tags',JSON.stringify(details.tags));
   if (config.collection_id) form.set('collection_id', config.collection_id);
   return api('/api/videos', { method: 'POST', body: form, signal: signal || AbortSignal.timeout(300000) });
 }

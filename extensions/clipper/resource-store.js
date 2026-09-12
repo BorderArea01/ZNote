@@ -27,12 +27,12 @@ export function mediaKind(url, mime = "") {
     return "video";
   return null;
 }
-export function addResource(state, value) {
+export function addResource(state, value, allowImages=false) {
   const kind =
     mediaKind(value.url, value.mime) ||
     (value.kind === "image" && mediaKind(value.url, "image/unknown")) ||
     (value.kind === "video" && mediaKind(value.url, "video/mp4"));
-  if (!kind) return null;
+  if (!kind || (kind==='image'&&!allowImages)) return null;
   const url = new URL(value.url);
   url.hash = "";
   let source = state.source_url;
@@ -41,8 +41,14 @@ export function addResource(state, value) {
     if (/^https?:$/.test(detail.protocol) && detail.origin === page.origin && !detail.username && !detail.password && detail.href.length <= 4096) source = detail.href;
   } catch {}
   let resource = state.resources.find((r) => r.url === url.href);
+  const rank=Math.max(0,Math.min(3,Number(value.metadata_rank)||0));
+  const metadata={title:String(value.title||'').slice(0,200),author:String(value.author||'').slice(0,200),author_url:String(value.author_url||'').slice(0,4096)};
   if (resource) {
-    if (value.source_url) resource.source_url = source;
+    if(rank>=(resource.metadata_rank||0)){
+      if(value.source_url)resource.source_url=source;
+      for(const field of ['title','author','author_url'])if(metadata[field])resource[field]=metadata[field];
+      resource.metadata_rank=rank;
+    }
     if (value.bytes) resource.bytes = value.bytes;
     if (value.mime) {
       resource.mime = value.mime.slice(0, 100);
@@ -60,6 +66,7 @@ export function addResource(state, value) {
       value.title || url.pathname.split("/").pop() || "网页资源",
     ).slice(0, 180),
     source_url: source,
+    author:metadata.author,author_url:metadata.author_url,metadata_rank:rank,
     found_at: Date.now(),
   };
   state.resources.push(resource);

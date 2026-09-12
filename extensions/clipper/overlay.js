@@ -16,7 +16,6 @@
     list,
     selector,
     tagInput,
-    filter = "all",
     enabled = false,
     resources = [],
     hovered = null,
@@ -98,15 +97,11 @@
   function draw() {
     if (!list) return;
     list.replaceChildren();
-    const selected = resources.filter(
-      (r) =>
-        filter === "all" ||
-        (filter === "video" ? r.kind !== "image" : r.kind === "image"),
-    );
-    dock.textContent = `◈ 媒体 ${resources.length || ""}`;
+    const selected = resources.filter(r=>r.kind==='video'||r.kind==='hls');
+    dock.textContent = `▶ 视频 ${selected.length || ''}`;
     if (!selected.length)
       list.append(
-        element("p", "暂未发现资源。滚动加载图片，或播放视频后再查看。", {
+        element("p", "暂未发现视频。播放视频后自动发现 MP4、WebM 或 m3u8。", {
           class: "empty",
         }),
       );
@@ -133,6 +128,7 @@
         );
       const info = element("div", null, { class: "info" });
       info.append(element("span", r.title, { class: "title", title: r.title }));
+      if(r.author)info.append(element('span','作者：'+r.author,{class:'meta'}));
       info.append(
         element(
           "span",
@@ -158,29 +154,18 @@
   function scan() {
     if (!enabled || siteBlocked) return;
     const found = [];
-    for (const img of document.images) {
-      const rect = img.getBoundingClientRect();
-      if (rect.width < 24 || rect.height < 24) continue;
-      const c = globalThis.ZNoteCandidates(img)[0];
-      if (c)
-        found.push({
-          url: c.url,
-          kind: "image",
-          title: img.alt || document.title,
-          source_url: globalThis.ZNoteSourceLink(img),
-        });
+    const videos=[...document.querySelectorAll('video')];
+    const active=videos.filter(v=>!v.paused&&v.getBoundingClientRect().width>0);
+    const primary=active.length===1?active[0]:videos.length===1?videos[0]:null;
+    const metadata=videos.length<=1||primary?globalThis.ZNoteVideoMetadata(primary):{title:document.title};
+    for (const video of videos) {
+      const details=globalThis.ZNoteVideoMetadata(video);
+      for(const url of [video.currentSrc,video.src,...[...video.querySelectorAll('source')].map(s=>s.src)])
+        if (/^https?:/.test(url))found.push({...details,url,kind:'video'});
     }
-    for (const video of document.querySelectorAll("video,source")) {
-      const url = video.currentSrc || video.src;
-      if (/^https?:/.test(url))
-        found.push({ url, mime: "video/mp4", title: document.title });
-    }
-    for (const el of document.querySelectorAll('[style*="background"]'))
-      for (const c of globalThis.ZNoteCandidates(el))
-        found.push({ url: c.url, kind: "image", title: document.title });
-    for (const r of performance.getEntriesByType("resource"))
-      found.push({ url: r.name });
-    send({ type: "media-scan", resources: found.slice(-200) })
+    for (const r of performance.getEntriesByType('resource'))
+      if(/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(r.name))found.push({...metadata,metadata_rank:1,url:r.name});
+    send({ type: 'media-scan', resources: found.slice(0,200), metadata })
       .then((state) => {
         resources = state.resources;
         draw();
@@ -420,40 +405,24 @@
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(css + ":host>div,:host>button{pointer-events:auto}");
     root.adoptedStyleSheets = [sheet];
-    dock = button("◈ 媒体", () =>
+    dock = button("▶ 视频", () =>
       panel.classList.contains("hidden")
         ? open()
         : panel.classList.add("hidden"),
     );
     dock.className = "dock";
-    dock.setAttribute("aria-label", "ZNote 媒体发现");
+    dock.setAttribute("aria-label", "ZNote 视频嗅探");
     root.append(dock);
     panel = element("div", null, {
       class: "panel hidden",
       role: "dialog",
-      "aria-label": "ZNote 媒体发现",
+      "aria-label": "ZNote 视频嗅探",
     });
     const head = element("div", null, { class: "head" });
-    head.append(element("span", "ZNote · 媒体发现"));
+    head.append(element("span", "ZNote · 视频嗅探"));
     head.append(button("收起", () => panel.classList.add("hidden")));
     panel.append(head);
     const controls = element("div", null, { class: "controls" });
-    for (const [text, value] of [
-      ["全部", "all"],
-      ["图片", "image"],
-      ["视频", "video"],
-    ]) {
-      const btn = button(text, () => {
-        filter = value;
-        controls
-          .querySelectorAll("[aria-pressed]")
-          .forEach((b) => b.setAttribute("aria-pressed", "false"));
-        btn.setAttribute("aria-pressed", "true");
-        draw();
-      });
-      btn.setAttribute("aria-pressed", String(value === "all"));
-      controls.append(btn);
-    }
     controls.append(button("扫描", scan));
     const pause = button("暂停嗅探", async () => {
       const state = await send({
@@ -496,7 +465,7 @@
     panel.append(list);
     const footer = element(
       "div",
-      "最多保留当前页最近 100 个资源；播放视频可发现新资源。",
+      "最多保留当前页最近 100 个视频资源。",
       { class: "footer" },
     );
     footer.append(
@@ -644,6 +613,7 @@
       },
       true,
     );
+    for(const event of ['play','loadstart','loadedmetadata'])document.addEventListener(event,e=>{if(e.target.tagName==='VIDEO'&&enabled)scan()},true);
     const observer = new MutationObserver(() => {
       if (enabled) {
         clearTimeout(observer.timer);

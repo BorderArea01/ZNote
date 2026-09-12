@@ -11,7 +11,7 @@ const fake = async ({ dir, signal, url }) => {
   for(let i=0;i<8;i++) { if (signal.aborted) throw new Error('aborted'); await delay(10); }
   if (url.includes('/999')) throw Object.assign(new Error('平台要求登录'), { status: 422 });
   const path = join(dir,'media.mp4'); await copyFile('tests/fixtures/sample.mp4',path);
-  return { path, originalname:'media.mp4', title:'测试视频', description:'原有说明' };
+  return { path, originalname:'media.mp4', title:'测试视频', description:'原有说明', author:'采集作者',author_url:'https://x.com/author' };
 };
 test('platform URLs reject arbitrary destinations, userinfo and lookalike domains', () => {
   for(const url of ['https://www.bilibili.com/video/BV13x41117TL','https://v.douyin.com/ABC/','https://www.douyin.com/video/123','https://xhslink.com/a/abc','https://www.xiaohongshu.com/explore/abcd','https://x.com/user/status/123']) assert.ok(platformUrl(url));
@@ -49,7 +49,7 @@ test('imports API auth, async jobs, exact media, duplicate provenance, failure, 
     const submitted=await post('/api/imports',data); assert.equal(submitted.status,202); const job=await submitted.json();
     assert.equal((await(await post('/api/imports',data)).json()).id,job.id);
     const done=await wait(job.id); assert.equal(done.status,'completed',done.message);
-    const item=await(await req('/api/items/'+done.item_id)).json(); assert.equal(item.source_url,data.url); assert.match(item.content,/原有说明\n\n来源链接/); assert.deepEqual(item.tags,[...data.tags,'X']); assert.ok(item.captured_at);
+    const item=await(await req('/api/items/'+done.item_id)).json(); assert.equal(item.source_url,data.url); assert.match(item.content,/原有说明\n\n来源链接/); assert.deepEqual(item.tags,['采集作者',...data.tags,'X']);assert.ok(item.content.includes('作者：[采集作者](<https://x.com/author>)'));assert.equal(item.title,'测试视频'); assert.ok(item.captured_at);
     assert.deepEqual(Buffer.from(await(await req(item.url)).arrayBuffer()),await readFile('tests/fixtures/sample.mp4'));
     const second=await(await post('/api/imports',{...data,url:'https://x.com/b/status/124'})).json(); assert.equal((await wait(second.id)).duplicate,true);
     const newer=await(await req('/api/items/'+item.id)).json(); assert.match(newer.content,/status\/123/); assert.match(newer.content,/status\/124/); assert.equal(newer.source_url,data.url); assert.equal((await readdir(join(dir,'media'))).length,1);

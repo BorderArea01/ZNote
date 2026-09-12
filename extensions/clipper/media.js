@@ -1,3 +1,4 @@
+import {videoDetails} from './video-details.js';
 import {
   settings,
   serverUrl,
@@ -45,22 +46,9 @@ async function process(action) {
       });
       const form = new FormData();
       for (const [name, blob] of bundle.files) form.append("files", blob, name);
-      form.set("title", resource.title.slice(0, 200));
-      form.set("source_url", resource.source_url);
-      form.set(
-        "tags",
-        JSON.stringify(
-          config.tags
-            .split(/[,，]/)
-            .map((t) => t.trim())
-            .filter(Boolean),
-        ),
-      );
-      if (config.collection_id) form.set("collection_id", config.collection_id);
-      form.set(
-        "content",
-        `从网页发现的 m3u8 分段视频合并保存，清晰度：${bundle.label}；音视频未重新编码。`,
-      );
+      const details=videoDetails(resource,config.tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean));
+      form.set('title',details.title);form.set('content',details.content);form.set('tags',JSON.stringify(details.tags));form.set('source_url',resource.source_url);
+      if(config.collection_id)form.set('collection_id',config.collection_id);
       if (action === "save")
         item = await api("/api/streams", {
           method: "POST",
@@ -103,6 +91,7 @@ async function process(action) {
         resource.source_url,
         resource.title,
         controller.signal,
+        resource,
       );
     report(
       item
@@ -131,6 +120,7 @@ try {
     throw new Error("资源记录已过期，请回原页面重新选择");
   document.title = "ZNote · " + resource.title;
   $("title").textContent = resource.title;
+  if(resource.author){$('author').hidden=false;$('author').textContent='作者：'+resource.author;}
   $("source").href = resource.source_url;
   if (resource.kind === "image") {
     $("image").hidden = false;

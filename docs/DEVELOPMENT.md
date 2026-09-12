@@ -92,3 +92,5 @@ node tests/pixiv-enhanced-ui.mjs
 - 修改功能后同步 README、对应文档和更新记录。
 
 主要功能包括图片/视频/Markdown、标签检索、数据恢复、来源追溯、浏览器采集和 Webhook。新增能力优先复用现有 API 与持久化路径。
+
+视频封面参考 [FFmpeg 的帧输出选项](https://ffmpeg.org/ffmpeg.html)，只从本地输入提取第一帧，并限制协议、进程时间、输出尺寸和字节数。`video-enrichment.test.js` 用先红后蓝的测试视频验证首帧、原文件不变、失败提示及元数据优先级；`video-metadata-ui.mjs` 使用受控网站 DOM 检查作者归属；`media-tools-ui.mjs` 实际加载 Edge 扩展，覆盖图片悬停独立入库、视频专用列表、MP4 / HLS 入库、封面、标题和作者。

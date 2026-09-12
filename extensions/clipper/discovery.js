@@ -6,6 +6,7 @@ const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
     states = v[key] || {};
+    for(const state of Object.values(states))state.resources=(state.resources||[]).filter(r=>r.kind!=='image');
   });
 const serial = (operation) => {
   const next = chain.then(operation);
@@ -32,7 +33,7 @@ async function stateFor(tabId) {
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (
-      details.tabId < 0 ||
+      details.tabId < 0 || details.type === "image" ||
       details.statusCode < 200 ||
       details.statusCode >= 300
     )
@@ -41,7 +42,7 @@ chrome.webRequest.onHeadersReceived.addListener(
       details.responseHeaders?.find((h) => h.name.toLowerCase() === name)
         ?.value || "";
     const mime = header("content-type");
-    if (!mediaKind(details.url, mime)) return;
+    if (!['video','hls'].includes(mediaKind(details.url, mime))) return;
     serial(async () => {
       const state = states[details.tabId];
       if (!state?.enabled) return;
@@ -49,6 +50,7 @@ chrome.webRequest.onHeadersReceived.addListener(
       if (state.blocked || blockedSite(state.source_url,policy)) { delete states[details.tabId];await persist();return; }
       if(details.documentUrl && blockedSite(details.documentUrl,policy))return;
       addResource(state, {
+        ...state.metadata,
         url: details.url,
         mime,
         bytes: header("content-length"),
@@ -184,7 +186,7 @@ export async function discover(message, sender) {
   if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action);
   if (message.type === "media-action") {
     const resource = await serial(async () =>
-      states[tabId]?.resources.find((r) => r.id === message.id),
+      [...(states[tabId]?.resources||[]),...(states[tabId]?.hoverResources||[])].find((r) => r.id === message.id),
     );
     if (!resource) throw new Error("资源已失效，请重新扫描");
     return resourceAction(resource, message.action);
@@ -192,12 +194,13 @@ export async function discover(message, sender) {
   if (message.type === "hover-resource")
     return serial(async () => {
       const state = await stateFor(tabId);
-      const resource = addResource(state, {
+      const resource = addResource({resources:state.hoverResources ||= [],source_url:state.source_url}, {
         url: message.url,
         kind: "image",
         title: message.title,
         source_url: message.source_url,
-      });
+      },true);
+      if(state.hoverResources.length>8)state.hoverResources.splice(0,state.hoverResources.length-8);
       state.updated = Date.now();
       await persist();
       return resource;
@@ -243,6 +246,10 @@ export async function discover(message, sender) {
     }
     if (message.type === "media-stop") state.enabled = false;
     if (message.type === "media-clear") state.resources = [];
+    if (message.type === 'media-scan' && state.enabled && sender.frameId===0 && message.metadata) {
+      state.metadata={source_url:String(message.metadata.source_url||state.source_url).slice(0,4096),title:String(message.metadata.title||'').slice(0,200),author:String(message.metadata.author||'').slice(0,200),author_url:String(message.metadata.author_url||'').slice(0,4096),metadata_rank:1};
+      for(const resource of state.resources)if(!resource.metadata_rank)addResource(state,{url:resource.url,kind:resource.kind,mime:resource.mime,...state.metadata});
+    }
     if (message.type === "media-scan" && state.enabled)
       for (const resource of (Array.isArray(message.resources)
         ? message.resources

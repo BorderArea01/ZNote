@@ -27,3 +27,5 @@ for (const [src, dest] of [
   ["turndown-plugin-gfm/LICENSE", "turndown-gfm-LICENSE"],
 ])
   await copyFile("node_modules/" + src, "extensions/clipper/vendor/" + dest);
+
+await copyFile('shared/video-details.js','extensions/clipper/video-details.js');

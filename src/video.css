@@ -5,3 +5,4 @@
 .video-stage video { display: block; width: 100%; max-height: 65vh; background: #111; border-radius: 8px; }
 .video-stage p { font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
 .video-stage a { font-size: 13px; }
+.video-card-preview { position: relative; overflow: hidden; }.video-card-preview .video-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }.video-card-preview:has(.video-cover:not([hidden])) > :not(.video-cover) { z-index: 1; color: white; text-shadow: 0 1px 4px #000; }.video-card-preview:has(.video-cover:not([hidden]))::after { content: ""; position: absolute; inset: 40% 0 0; background: linear-gradient(transparent,#0009); }

@@ -28,7 +28,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'znote-video-file') record(async () => {
     if (directVideoBusy) throw new Error('已有一个视频文件正在上传，请等待完成');
     directVideoBusy = true;
-    try { return await saveDirectVideo(info.srcUrl, info.pageUrl || tab.url, tab.title); } finally { directVideoBusy = false; }
+    try { const metadata=await chrome.tabs.sendMessage(tab.id,{type:'video-metadata',url:info.srcUrl},{frameId:info.frameId||0}).catch(()=>({}));return await saveDirectVideo(info.srcUrl,metadata.source_url||info.pageUrl||tab.url,metadata.title||tab.title,undefined,metadata); } finally { directVideoBusy = false; }
   }).catch(() => {});
 });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
