@@ -51,6 +51,7 @@ import { AppearanceProvider } from './appearance.jsx';
 import { api, send, bytes } from "./api.js";
 import { HelpHint } from './HelpHint.jsx';
 import './polish.css';
+import './preview.css';
 import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import { OrganizeDialog } from './organize.jsx';
@@ -495,12 +496,13 @@ function Detail({
               <button disabled={!previousAvailable || busy || galleryBusy} onClick={() => step(-1)}>← 上一张</button>
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一张 →</button>
+              <HelpHint label="翻图快捷键">A / D 或 ← / → 翻图，F 收藏；输入文字时不触发。</HelpHint>
             </div>
             <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} onSelect={index=>step(index-galleryIndex)}/>
-            <HelpHint label="翻图快捷键">A / D 或 ← / → 翻图，F 收藏；输入文字时不触发。</HelpHint>
           </div>
         )}
         <div className="detail-editor">
+          <div className="detail-editor-content">
           {externalImages.length>0 && !item.deleted_at && <div className="note-archive-status" role="status">
             <span>{new Set(externalImages.map(i=>i.url)).size} 张配图尚未归档到本地</span>
             <button disabled={busy} onClick={save}><Download size={15}/>{busy?'正在归档…':'归档外部配图'}</button>
@@ -683,6 +685,7 @@ function Detail({
               复制 Markdown 引用
             </button>
           )}
+          </div>
           {error && (
             <div className="error" role="alert">
               {error}
