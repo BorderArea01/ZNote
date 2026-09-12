@@ -71,6 +71,12 @@ curl http://localhost:3741/api/items \
 
 ## 图片组与标签
 
+`GET /api/item-groups/order?id=条目ID` 获取同一知识库内完整图片组的 `items`、`cover_id`、`note_id` 和 `revision`。条目可为组内图片或所属笔记。
+
+`POST /api/item-groups/order` 接收 `{ id, revision, ids: [按展示顺序排列的全部图片ID], sync_note: true }`。第一张为封面；必须提交同组全部有效图片且不重复，组成员或版本变化返回 409，所有修改回滚。笔记配图默认同步正文图片位置（文字和链接保留），`sync_note: false` 仅调整素材库组顺序。成功返回新快照及更新后的锚点 `item`。需要 write 权限。
+
+`group_order` 为可空的展示顺序，空值沿用 `group_index` 原始页序；上传仍使用原始 `group_index`，不要用展示顺序覆盖来源页码。`gallery=true&group_key=...&collection=...` 返回展示顺序，手动排序不破坏再次采集的去重。
+
 `POST /api/item-groups/move` 接收 `{ id, version, collection_id, move_note: true }`。`id` 是组内任意图片，`version` 是当前版本，`collection_id: null` 表示未分类。移动同一源知识库中的整组图片；笔记配图同时移动所属笔记。可附带当前图片的 `title/content/tags` 编辑，成功返回图片对象和 `moved_count`。目标已有同组或重复内容时返回 409，所有更新一起回滚。
 
 保存笔记时，本地配图自动归入 `note:笔记ID`；共享原文件但保留每篇笔记独立的分组与顺序。更新笔记知识库或通过 `batch-organize` 移动笔记，也会一起移动配图。普通单图片移动接口仍可用于单页整理。

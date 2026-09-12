@@ -36,6 +36,7 @@ import { createClipperPairing } from './clipper-pair.js';
 import { withSource } from './source.js';
 import { createImportManager } from './imports.js';
 import { registerStreamRoutes } from './streams.js';
+import { registerGroupOrderRoutes } from './group-order.js';
 
 const now = () => new Date().toISOString();
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -208,7 +209,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.5" }),
+    res.json({ status: "ok", version: "0.9.6" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -308,7 +309,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.5",
+      version: "0.9.6",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -476,9 +477,9 @@ export function createApp({
       created: "created_at DESC, id",
       title: "title COLLATE NOCASE, id",
     }[q.sort];
-    if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'group_index, id' : sort}`).all(...args).map(item => item.id) });
+    if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...args).map(item => item.id) });
     if(q.grouped==='true') {
-      const grouped=`SELECT *, MIN(group_index) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
+      const grouped=`SELECT *, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
       return res.json({items:db.prepare(`${grouped} ORDER BY ${sort} LIMIT ? OFFSET ?`).all(...args,q.limit,q.offset).map(serialize),total:db.prepare(`SELECT count(*) n FROM (${grouped})`).get(...args).n,offset:q.offset,limit:q.limit});
     }
     res.json({
@@ -526,6 +527,11 @@ export function createApp({
       );
       db.prepare('UPDATE items SET source_url=?,captured_at=? WHERE id=?').run(input.source_url ?? null, input.captured_at ?? null, id);
       if(image && input.group_key !== undefined) db.prepare('UPDATE items SET group_key=?,group_index=?,group_title=? WHERE id=?').run(input.group_key,input.group_index,input.group_title??null,id);
+      if(image?.order!=null) db.prepare('UPDATE items SET group_order=? WHERE id=?').run(image.order,id);
+      else if(image && input.group_key) {
+        const ordered=db.prepare('SELECT MAX(COALESCE(group_order,group_index)) AS last,COUNT(group_order) AS ordered FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL AND id<>?').get(input.group_key,input.collection_id,id);
+        if(ordered.ordered)db.prepare('UPDATE items SET group_order=? WHERE id=?').run(ordered.last+1,id);
+      }
       if (image?.kind === 'video') db.prepare('UPDATE items SET duration=?,video_codec=? WHERE id=?').run(image.duration, image.codecName, id);
       event("item.created", id);
     });
@@ -534,6 +540,8 @@ export function createApp({
   function groupNoteImages(input,noteId) {
     const key='note:'+noteId, images=markdownImages(input.content,true).filter(i=>i.url.startsWith('/media/'));
     const groupTitle=(input.title+' · 配图').slice(0,200);
+    const prior=db.prepare("SELECT content FROM items WHERE id=? AND kind='note'").get(noteId);
+    const orderChanged=!prior||JSON.stringify(markdownImages(prior.content,true).filter(i=>i.url.startsWith('/media/')).map(i=>i.url))!==JSON.stringify(images.map(i=>i.url));
     const replacements=new Map(), retained=new Set(), seen=new Set();let index=0;
     for(const image of images){
       if(seen.has(image.url))continue;seen.add(image.url);
@@ -544,13 +552,14 @@ export function createApp({
       if(row&&retained.has(row.id))row=null;
       if(!row && source.collection_id===input.collection_id && (!source.group_key || source.group_key===key) && !retained.has(source.id))row=source;
       if(!row){
-        row={...source,id:randomUUID(),collection_id:input.collection_id,group_key:key,group_index:index,group_title:groupTitle,version:1,created_at:now(),updated_at:now()};
+        row={...source,id:randomUUID(),collection_id:input.collection_id,group_key:key,group_index:index,group_order:index,group_title:groupTitle,version:1,created_at:now(),updated_at:now()};
         const columns=Object.keys(row);db.prepare(`INSERT INTO items(${columns.join(',')}) VALUES(${columns.map(()=>'?').join(',')})`).run(...columns.map(c=>row[c]));event('item.created',row.id);
       }
       if(row.group_key!==key||row.group_index!==index||row.group_title!==groupTitle){db.prepare('UPDATE items SET group_key=?,group_index=?,group_title=?,version=version+1,updated_at=? WHERE id=?').run(key,index,groupTitle,now(),row.id);event('item.updated',row.id);}
+      if(orderChanged && row.group_order!==index){db.prepare('UPDATE items SET group_order=?,version=version+1,updated_at=? WHERE id=?').run(index,now(),row.id);event('item.updated',row.id);}
       retained.add(row.id);const url=`/media/${row.id}/original`;if(url!==image.url)replacements.set(image.url,url);index++;
     }
-    for(const row of db.prepare('SELECT id FROM items WHERE group_key=?').all(key))if(!retained.has(row.id)){db.prepare('UPDATE items SET group_key=NULL,group_index=0,group_title=NULL,version=version+1,updated_at=? WHERE id=?').run(now(),row.id);event('item.updated',row.id);}
+    for(const row of db.prepare('SELECT id FROM items WHERE group_key=?').all(key))if(!retained.has(row.id)){db.prepare('UPDATE items SET group_key=NULL,group_index=0,group_order=NULL,group_title=NULL,version=version+1,updated_at=? WHERE id=?').run(now(),row.id);event('item.updated',row.id);}
     return {...input,content:replaceMarkdownImages(input.content,images,replacements)};
   }
   app.post("/api/items", async (req, res) => {
@@ -610,7 +619,7 @@ export function createApp({
     validateCollection(input.collection_id);
     const existing = source.collection_id === input.collection_id ? source : mediaCollision(source,input.collection_id);
     if (existing) return res.json({ ...serialize(existing), duplicate: true });
-    res.status(201).json({ ...insert(input, imageReference(source)), shared: true });
+    res.status(201).json({ ...insert(input, {...imageReference(source),order:source.group_order}), shared: true });
   });
   app.post('/api/item-groups/favorite', (req,res) => {
     const input=z.object({group_key:z.string().min(1).max(200),collection_id:z.string().nullable(),favorite:z.boolean()}).parse(req.body);
@@ -633,6 +642,7 @@ export function createApp({
       return {...serialize(getItem(anchor.id)),moved_count:group.length};
     });res.json(result);
   });
+  registerGroupOrderRoutes({app,db,transaction,getItem,serialize,event,groupNoteImages});
   app.post('/api/items/batch-organize', (req, res) => {
     const input = z.object({
       items: z.array(z.object({ id: z.string(), version: z.number().int().positive() })).min(1).max(100),

@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.5-287464?style=flat-square" alt="Version 0.9.5" />
+    <img src="https://img.shields.io/badge/version-0.9.6-287464?style=flat-square" alt="Version 0.9.6" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -36,6 +36,10 @@
 | 🌐 随处访问 | 一个服务，电脑、手机和平板通过浏览器访问；适合家庭或个人局域网 |
 
 ## 成组浏览与整理
+
+图片组预览内点 **「调整顺序」**，拖动缩略图后保存，**排在第一张的图片就是封面**；也可用前后移动按钮或「设为封面」。笔记内点「调整配图顺序」，可选择同步正文图片顺序，文字和图片链接保留。顺序保存在本地数据库，重新打开、迁移和完整备份恢复后仍有效。
+
+笔记编辑与预览按窗口高度自适应，标题、工具栏与保存栏保持可见；长正文仅在中间区域滚动。
 
 同一篇笔记的配图会在素材库折叠成组；点击正文中的任意图片，按正文顺序连续浏览。预览下方有可点击的缩略图列，也可用 **A / D、← / →** 或在图片上滚动鼠标翻页。**点击图片展开后，滚轮改为缩放**，拖动平移，双击复位。
 

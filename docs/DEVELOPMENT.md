@@ -15,6 +15,8 @@ tests/                  API 和浏览器测试，使用独立临时数据
 docs/                   部署、存储、API 和示例截图
 ```
 
+`node tests/note-order-ui.mjs` 使用独立数据在 Edge 中验证笔记编辑 / 预览的六种视口、鼠标和触摸拖拽、封面持久化、正文配图同步、版本冲突保留草稿及关闭保护；支持 `UI_DIST` 指定构建目录。`group-order.test.js` 覆盖 Pixiv 原始页码与展示顺序分离、相同字节多页重采集、新页追加、Markdown 链接、跨库与过期快照拒绝、schema 5 升级及完整备份恢复。
+
 `data/`、`node_modules/`、`dist/`、`artifacts/`、运行日志及下载的媒体工具不进入版本控制。不要提交访问令牌、Cookie、备份或自己的素材库。
 
 ## 本地开发

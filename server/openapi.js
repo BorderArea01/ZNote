@@ -41,7 +41,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.9.5",
+    version: "0.9.6",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -552,7 +552,7 @@ spec.paths['/api/clipper/download'] = { get: { summary: '下载浏览器采集�
 spec.paths['/api/items'].get.parameters.push({ name: 'gallery', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'false' }, description: 'true 返回当前过滤范围内按排序冻结的图片 ID 列表 {ids:[]}，忽略 limit/offset；不读取图片二进制，用于连续整理时保持顺序' });
 spec.paths['/api/items'].get.parameters.push(
   {name:'grouped',in:'query',schema:{type:'string',enum:['true','false'],default:'false'},description:'按作品组折叠，封面为首个匹配页，返回 group_count；total 为折叠后数量。默认保持逐条 API 行为。'},
-  {name:'group_key',in:'query',schema:str,description:'限定作品组；与 collection 配合，gallery=true 时按 group_index 返回各页 ID。'}
+  {name:'group_key',in:'query',schema:str,description:'限定作品组；与 collection 配合，gallery=true 时按 group_order 展示顺序返回各页 ID，未排序时沿用 group_index。'}
 );
 Object.assign(spec.components.schemas.Item.allOf[1].properties, {group_key:{...str,nullable:true},group_index:{type:'integer'},group_title:{...str,nullable:true},group_count:{type:'integer',description:'仅折叠查询返回当前过滤范围内的组页数'}});
 spec.paths['/api/item-groups/favorite']={post:operation('收藏或取消收藏当前知识库的整组图片',{type:'object',properties:{count:{type:'integer'}}},{requestBody:body({type:'object',required:['group_key','collection_id','favorite'],properties:{group_key:str,collection_id:{...str,nullable:true},favorite:{type:'boolean'}}})})};
@@ -586,6 +586,12 @@ spec.paths['/api/item-groups/move']={post:operation('原子移动整组图片，
   description:'以 id 对应图片作为组锚点，version 必须匹配；移动同一源知识库的全部组成员。move_note:true 同时移动所属笔记。目标存在同组或重复内容时返回 409，所有修改回滚。成功返回 moved_count。',
   requestBody:body({type:'object',required:['id','version','collection_id'],properties:{id:str,version:{type:'integer',minimum:1},collection_id:{...str,nullable:true},move_note:{type:'boolean',default:false},title:input.properties.title,content:input.properties.content,tags:input.properties.tags}})
 })};
+spec.components.schemas.Item.allOf[1].properties.group_order={type:'integer',nullable:true,description:'展示顺序；为空时沿用原始 group_index，不用于采集去重'};
+const groupOrderState={type:'object',properties:{revision:str,note_id:{...str,nullable:true},cover_id:str,items:list({type:'object',properties:{id:str,title:str,thumbnail_url:str,version:{type:'integer'}}}),item:ref('Item')}};
+spec.paths['/api/item-groups/order']={
+  get:operation('读取当前知识库图片组排序快照',groupOrderState,{parameters:[{name:'id',in:'query',required:true,schema:str,description:'组内图片或所属笔记 ID'}]}),
+  post:operation('原子保存图片组顺序（write）',groupOrderState,{description:'提交全部有效成员，第一张为封面。revision 或组成员变化返回 409，整次回滚。sync_note 默认同步笔记正文图片顺序，保留周围文字和链接。',requestBody:body({type:'object',required:['id','revision','ids'],properties:{id:str,revision:{type:'string',minLength:64,maxLength:64},ids:{type:'array',minItems:1,maxItems:10000,uniqueItems:true,items:str},sync_note:{type:'boolean',default:true}}})})
+};
 spec.paths['/api/items/batch-trash']={post:operation('当前知识库批量回收或恢复，版本冲突时整体回滚',{type:'object'},
   {requestBody:body({type:'object',required:['items','collection_id'],properties:{collection_id:{type:'string',nullable:true},restore:{type:'boolean',default:false},
     items:{type:'array',minItems:1,maxItems:100,items:{type:'object',required:['id','version'],properties:{id:str,version:{type:'integer',minimum:1}}}}}})})};

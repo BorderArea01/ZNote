@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
 import { markdownImages } from '../shared/markdown-images.js';
 import { mediaDescription } from '../shared/media-description.js';
+import { GroupOrderDialog } from './GroupOrderDialog.jsx';
 import { GalleryStrip } from './GalleryStrip.jsx';
 import { ZoomViewer } from './ZoomViewer.jsx';
 import { useCollectionTags } from './useCollectionTags.js';
@@ -52,6 +53,7 @@ import { api, send, bytes } from "./api.js";
 import { HelpHint } from './HelpHint.jsx';
 import './polish.css';
 import './preview.css';
+import './group-order.css';
 import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import { OrganizeDialog } from './organize.jsx';
@@ -338,6 +340,7 @@ function Detail({
   suggestions,
   onClose,
   onSaved,
+  onGroupOrdered,
   onDelete,
   onRestore,
   uploadFiles,
@@ -369,6 +372,8 @@ function Detail({
   const [error, setError] = useState("");
   const [lightbox, setLightbox] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [sorting,setSorting] = useState(false);
+  const openSorting=async()=>{if(!dirty||await save())setSorting(true)};
   const externalImages = React.useMemo(()=>item.kind==='note'?markdownImages(content):[],[item.kind,content]);
   const input = useRef();
   const imageArea = useRef(), noteArea = useRef(), lastWheel = useRef(0);
@@ -437,7 +442,7 @@ function Detail({
     }
   }
   async function step(delta) {
-    if (busy || galleryBusy || copying) return;
+    if (busy || galleryBusy || copying || sorting) return;
     if (dirty && !(await save())) return;
     onStep?.(delta);
   }
@@ -457,7 +462,7 @@ function Detail({
   });
   useEffect(() => {
     const key = e => {
-      if (lightbox || copying || busy || galleryBusy || e.repeat || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (lightbox || copying || sorting || busy || galleryBusy || e.repeat || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
       const delta=['ArrowLeft','a','A'].includes(e.key)?-1:['ArrowRight','d','D'].includes(e.key)?1:0;
       if(noteIndex!==null){if(e.key==='Escape')setNoteIndex(null);if(delta){e.preventDefault();setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)))}return;}
       if(item.kind!=='image')return;
@@ -503,6 +508,7 @@ function Detail({
         )}
         <div className="detail-editor">
           <div className="detail-editor-content">
+          <div className={item.kind==='note'?'note-properties':'media-properties'}>
           {externalImages.length>0 && !item.deleted_at && <div className="note-archive-status" role="status">
             <span>{new Set(externalImages.map(i=>i.url)).size} 张配图尚未归档到本地</span>
             <button disabled={busy} onClick={save}><Download size={15}/>{busy?'正在归档…':'归档外部配图'}</button>
@@ -516,6 +522,7 @@ function Detail({
             {dirty && <span className="unsaved">未保存</span>}
           </div>
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
+            {item.kind==='image'&&item.group_key&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
             <button onClick={async () => { if (!dirty || await save()) setCopying(true); }} disabled={busy}>复用到其他知识库</button>
           </div>}
@@ -559,6 +566,7 @@ function Detail({
               />
             </label>
           </div>
+          </div>
           {item.kind === "note" ? (
             <>
               <div className="editor-toolbar">
@@ -578,6 +586,7 @@ function Detail({
                     预览
                   </button>
                 </div>
+                {noteImages.length>1&&!item.deleted_at&&<button onClick={openSorting} disabled={busy}>调整配图顺序</button>}
                 <button
                   onClick={() => input.current.click()}
                   disabled={busy || !!item.deleted_at}
@@ -741,7 +750,8 @@ function Detail({
         }}
       />
       {lightbox && <ZoomViewer src={lightbox} alt={title} onClose={()=>setLightbox(false)}/>}
-      {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls"><button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
+      {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
+      {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);onGroupOrdered?.(result);onSaved();notify('顺序已保存，第一张为封面');}}/>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
     </Dialog>
   );

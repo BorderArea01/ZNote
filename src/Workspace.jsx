@@ -1087,6 +1087,7 @@ export default function Workspace({
           suggestions={tags}
           onClose={closeDetail}
           onSaved={refresh}
+          onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
           onDelete={remove}
           onRestore={restore}
           uploadFiles={uploadFiles}
