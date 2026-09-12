@@ -1,7 +1,7 @@
-globalThis.ZNotePreviewLayout = (viewport, rect, image, preferred) => {
+globalThis.ZNotePreviewLayout = (viewport, rect, image, preferred, controlsHeight = 118) => {
   const margin = 12,
     gap = 18,
-    chromeHeight = 118;
+    chromeHeight = controlsHeight;
   const bounds = {
     left: margin,
     top: margin,

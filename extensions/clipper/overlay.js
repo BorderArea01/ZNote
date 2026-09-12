@@ -27,6 +27,8 @@
     pendingTarget,
     downloadButton,
     saveButton,
+    groupBar, groupCounter, previousButton, nextButton, batchButton,
+    imageGroup = null, groupIndex = 0, pageToken = 0, pageBusy = false, lastWheel = 0,
     downloadKey = 's',
     saveKey = 'z',
     previewWidth = 720,
@@ -227,6 +229,7 @@
     hovered = null;
     hoverURL = "";
     hoverToken++;
+    pageToken++; imageGroup = null; pageBusy = false; drawGroup();
   }
   function inPreviewBridge() {
     if (!hovered || preview.classList.contains('hidden')) return false;
@@ -259,14 +262,15 @@
     let rect = hovered.getBoundingClientRect();
     const anchor = hovered.closest('a')?.getBoundingClientRect();
     if (anchor && anchor.width >= rect.width && anchor.height >= rect.height) rect = anchor;
-    const box = globalThis.ZNotePreviewLayout({width:innerWidth,height:innerHeight},rect,{width:previewImage.naturalWidth,height:previewImage.naturalHeight},previewWidth);
+    const controlsHeight = preview.scrollHeight - previewImage.getBoundingClientRect().height + 18;
+    const box = globalThis.ZNotePreviewLayout({width:innerWidth,height:innerHeight},rect,{width:previewImage.naturalWidth,height:previewImage.naturalHeight},previewWidth,Math.max(imageGroup?160:118,controlsHeight));
     previewImage.style.width = box.width + 'px'; previewImage.style.height = box.height + 'px';
     previewImage.style.maxWidth = 'none'; previewImage.style.maxHeight = 'none';
     preview.style.width = (box.width + 18) + 'px';
     preview.style.left = box.left + 'px'; preview.style.top = box.top + 'px';
     // Full-screen images may leave no free region: let pointer events reach the
     // website through the displayed image, keeping only our controls interactive.
-    preview.style.pointerEvents = box.overlaps ? 'none' : 'auto';
+    preview.style.pointerEvents = box.overlaps && !imageGroup ? 'none' : 'auto';
     previewImage.style.pointerEvents = 'none';
   }
   async function showImage(target, x, y) {
@@ -274,6 +278,7 @@
       candidates = globalThis.ZNoteCandidates(target);
     if (!candidates.length) return;
     hovered = target;
+    imageGroup = null; pageToken++; pageBusy = false; drawGroup();
     hoverURL = '';
     preview.classList.add('hidden');
     for (const c of candidates) {
@@ -301,20 +306,64 @@
       previewImage.onload = placePreview;
       placePreview();
       requestAnimationFrame(() => { if (token === hoverToken) placePreview(); });
+      loadGroup(target, token);
       return;
     }
     if (token === hoverToken) { hovered = null; pendingTarget = null; }
   }
+  function drawGroup() {
+    groupBar.classList.toggle('hidden', !imageGroup);
+    downloadButton.disabled=pageBusy||hoverBusy;saveButton.disabled=pageBusy||hoverBusy;
+    if (!imageGroup) return;
+    groupCounter.textContent = `${groupIndex + 1} / ${imageGroup.images.length}`;
+    previousButton.disabled = pageBusy || groupIndex === 0;
+    nextButton.disabled = pageBusy || groupIndex === imageGroup.images.length - 1;
+    batchButton.textContent = `批量下载 ${imageGroup.images.length} 张`;
+  }
+  async function loadGroup(target, token) {
+    try {
+      const group = await globalThis.ZNoteWorkImages?.(target);
+      if (!group || token !== hoverToken || group.source_url !== location.href) return;
+      // Match originals to scaled Pixiv thumbnails without confusing another work.
+      const pixivPage = hoverURL.match(/\/(\d+_p\d+)/)?.[1];
+      const index = group.images.findIndex(url => url === hoverURL || (pixivPage && url.includes('/' + pixivPage + '.')));
+      if(index<0)return;
+      imageGroup = group; groupIndex = index; drawGroup(); placePreview();
+      if(hoverURL!==group.images[index])turnPage(0);
+    } catch(e) { if(token===hoverToken)previewLabel.textContent = e.message; }
+  }
+  async function turnPage(delta) {
+    if(imageGroup && imageGroup.source_url!==location.href){hide();return;}
+    if (!imageGroup || pageBusy || hoverBusy) return;
+    const index = groupIndex + delta;
+    if (index < 0 || index >= imageGroup.images.length) return;
+    const group = imageGroup, token = ++pageToken, hover = hoverToken;
+    pageBusy = true; drawGroup(); previewLabel.textContent = '正在加载原图…';
+    const img = new Image(); img.referrerPolicy = previewImage.referrerPolicy;
+    const ok = await new Promise(resolve => {
+      const timer=setTimeout(()=>resolve(false),15000);
+      img.onload=()=>{clearTimeout(timer);resolve(true);};img.onerror=()=>{clearTimeout(timer);resolve(false);};img.src=group.images[index];
+    });
+    if(token!==pageToken || hover!==hoverToken)return;
+    pageBusy = false;
+    if(ok) {
+      groupIndex=index; hoverURL=group.images[index]; previewImage.src=hoverURL;
+      previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · 滚轮翻页`;
+      previewImage.onload=placePreview; requestAnimationFrame(placePreview);
+    } else previewLabel.textContent='这张原图暂时无法加载，可再次翻页重试';
+    drawGroup();
+  }
   async function hoverAction(action) {
-    if (!hoverURL || !hovered || hoverBusy) return;
+    if(imageGroup && imageGroup.source_url!==location.href){hide();return;}
+    if (!hoverURL || !hovered || hoverBusy || pageBusy) return;
     hoverBusy = true;
     clearTimeout(hideTimer); hideTimer = null;
     downloadButton.disabled = true; saveButton.disabled = true;
     const url = hoverURL,
-      title = hovered.alt || document.title;
+      title = imageGroup ? `${imageGroup.title} · ${String(groupIndex+1).padStart(3,'0')}` : hovered.alt || document.title;
     previewLabel.textContent = "正在处理…";
     try {
-      const resource = await send({ type: "hover-resource", url, title, source_url: globalThis.ZNoteSourceLink(hovered) });
+      const resource = await send({ type: "hover-resource", url, title, source_url: imageGroup?.source_url || globalThis.ZNoteSourceLink(hovered) });
       const result = await send({
         type: "media-action",
         id: resource.id,
@@ -457,7 +506,26 @@
     sizeInput.addEventListener('input', e => { if (e.isTrusted) { previewWidth = Number(sizeInput.value); placePreview(); } });
     sizeInput.addEventListener('change', e => { if (e.isTrusted) send({type:'media-preview-size',width:Number(sizeInput.value)}).catch(e=>previewLabel.textContent=e.message); });
     sizing.append(sizeInput);
-    preview.append(previewImage, previewLabel, bar, sizing);
+    groupBar = element('div', null, {class:'bar hidden'});
+    groupBar.style.pointerEvents='auto';
+    previousButton = button('←',()=>turnPage(-1)); previousButton.setAttribute('aria-label','上一张');
+    nextButton = button('→',()=>turnPage(1)); nextButton.setAttribute('aria-label','下一张');
+    groupCounter = element('span', '', {'aria-label':'作品页码'});
+    batchButton = button('批量下载', async()=>{
+      if(!imageGroup)return; batchButton.disabled=true;
+      if(imageGroup.source_url!==location.href){hide();batchButton.disabled=false;return;}
+      try { await send({type:'media-gallery',group:imageGroup}); }
+      catch(e) {previewLabel.textContent=e.message;}
+      finally {batchButton.disabled=false;}
+    });
+    groupBar.append(previousButton,groupCounter,nextButton,batchButton);
+    groupBar.title='鼠标放在预览区域，向下滚动看下一张，向上滚动看上一张';
+    preview.append(previewImage, previewLabel, groupBar, bar, sizing);
+    preview.addEventListener('wheel',e=>{
+      if(!e.isTrusted || !imageGroup || e.ctrlKey || !e.deltaY || /INPUT|SELECT/.test(e.target.tagName))return;
+      e.preventDefault();e.stopPropagation();
+      if(Date.now()-lastWheel<220)return;lastWheel=Date.now();turnPage(Math.sign(e.deltaY));
+    },{passive:false});
     window.addEventListener('resize', placePreview);
     window.addEventListener('scroll', () => { if (hovered) hide(); }, {passive:true});
     root.append(preview);
@@ -524,6 +592,7 @@
           return;
         }
         if (!hoverURL || preview.classList.contains("hidden")) return;
+        if(imageGroup && ['ArrowLeft','ArrowRight'].includes(e.key)) {e.preventDefault();e.stopImmediatePropagation();turnPage(e.key==='ArrowRight'?1:-1);return;}
         const key = e.key.toLowerCase();
         if (key === downloadKey || key === saveKey) {
           e.preventDefault();

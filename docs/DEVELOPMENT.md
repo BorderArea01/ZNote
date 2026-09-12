@@ -31,7 +31,7 @@ npm start
 
 直接在 Chrome / Edge 开发者模式加载 `extensions/clipper/`。保持 manifest 中的固定 `key` 不变，避免改变 ID 和丢失连接设置。
 
-修改 `article-source.js` 后运行：
+修改 `article-source.js`、`work-images.js` 或站点适配器后运行：
 
 ```bash
 npm run clipper:build
@@ -40,6 +40,8 @@ npm run clipper:build
 此命令生成离线正文提取脚本并复制对应许可证。其他扩展源码可直接重新加载。刷新目标网页使新的 content script 生效。
 
 测试使用隔离浏览器配置，不修改日常使用的扩展设置。
+
+`node tests/gallery-ui.mjs` 验证悬停滚轮、页序原文件、失败重试、停止继续和刷新恢复；`node tests/work-images-ui.mjs` 验证 Pixiv / Pawchive 作品分组。下载文件保存在各测试自己的 `artifacts/` 子目录。
 
 ## 验证
 

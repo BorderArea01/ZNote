@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.8.3-287464?style=flat-square" alt="Version 0.8.3" />
+    <img src="https://img.shields.io/badge/version-0.8.4-287464?style=flat-square" alt="Version 0.8.4" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -108,6 +108,8 @@ docker compose up -d --build
 网络采集自动保留**来源网址和网站标签**，例如「小红书」「b站」「抖音」「X」。同一文件从多个页面采集，会合并来源，方便回看出处。
 
 **Pixiv / Pawchive**：在单个作品页采集正文。Pixiv 读取全部页的原图和作品说明；Pawchive 从正文文件链接获取原图，排除头像、推荐卡片和缩略图。
+
+**漫画与多图作品**：悬停预览显示当前页码，鼠标放在预览区域内滚轮翻页，也可点左右按钮。点击「批量下载 N 张」即可按页序保存到 `下载目录/ZNote/作品标题/001.png…`，原图不重新编码。进度页支持停止、继续、失败重试；刷新不会重复下载已完成项。优先支持 Pixiv / Pawchive 单作品页，其他网站按当前文章或明确图库中可识别的图片分组，每组最多 200 张。
 
 **图文笔记的配图默认本地归档**：普通 Markdown 外链图片也会在保存时尝试入库，成功后改为内部地址。已有笔记可点击「归档外部配图」；无法下载时保留来源和失败说明。每次最多 200 张 / 500 MB，单张 25 MB，可再次保存继续处理。
 

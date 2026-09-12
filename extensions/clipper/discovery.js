@@ -1,5 +1,6 @@
 import { mediaKind, addResource } from "./resource-store.js";
 import { api, settings, serverUrl, saveImage, limitedImage } from "./client.js";
+import { openGallery } from './gallery-ticket.js';
 const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
@@ -167,6 +168,7 @@ export async function discover(message, sender) {
   const tabId = sender.tab?.id;
   if (tabId === undefined || sender.id !== chrome.runtime.id)
     throw new Error("无效页面");
+  if (message.type === 'media-gallery') return openGallery(message.group, sender);
   if (message.type === "media-action") {
     const resource = await serial(async () =>
       states[tabId]?.resources.find((r) => r.id === message.id),
