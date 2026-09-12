@@ -2,8 +2,9 @@ import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { siteArticle } from './site-articles.js';
-import { workImages } from './work-images.js';
+import { workImages, workLocation } from './work-images.js';
 globalThis.ZNoteWorkImages = workImages;
+globalThis.ZNoteWorkLocation = workLocation;
 
 async function extract() {
   if (document.getElementsByTagName("*").length > 50000)

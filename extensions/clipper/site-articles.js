@@ -22,7 +22,9 @@ export async function siteArticle(document, location, fetcher = fetch) {
     for(const [index,page] of pages.entries()) {
       const url=new URL(page.urls?.original||'');
       if(url.protocol!=='https:'||!/(^|\.)pximg\.net$/.test(url.hostname))throw Error('Pixiv 原图地址无法识别');
-      const img=clone.createElement('img');img.src=url.href;img.alt=`第 ${index+1} 张`;img.setAttribute('data-znote-work-image','');article.append(img);
+      const img=clone.createElement('img');img.src=url.href;img.alt=`第 ${index+1} 张`;img.setAttribute('data-znote-work-image','');
+      try {const preview=new URL(page.urls.regular||page.urls.small||url.href);if(preview.protocol==='https:'&&/(^|\.)pximg\.net$/.test(preview.hostname)&&!preview.username&&!preview.password)img.setAttribute('data-znote-preview',preview.href);}catch{}
+      article.append(img);
     }
     clone.body.append(article);return {document:clone,title:info.title,byline:info.userName||'',selector:'article'};
   }
@@ -39,7 +41,10 @@ export async function siteArticle(document, location, fetcher = fetch) {
     for(const link of article.querySelectorAll('figure a[href],a.fileThumb[href]')){
       const url=new URL(link.getAttribute('href'),location.href).href;if(!isOriginal(url))continue;
       if(seen.has(url)){link.remove();continue;} seen.add(url);
-      const img=clone.createElement('img');img.src=url;img.alt=link.querySelector('img')?.alt||`作品配图 ${seen.size}`;img.setAttribute('data-znote-work-image','');link.replaceWith(img);
+      const img=clone.createElement('img');img.src=url;img.alt=link.querySelector('img')?.alt||`作品配图 ${seen.size}`;img.setAttribute('data-znote-work-image','');
+      const source=link.querySelector('img');
+      try {const preview=new URL(source?.getAttribute('data-src')||source?.getAttribute('src')||url,location.href);if(/^https?:$/.test(preview.protocol)&&/^(?:img|file)\.pawchive\.(pw|st)$/.test(preview.hostname)&&!preview.username&&!preview.password)img.setAttribute('data-znote-preview',preview.href);}catch{}
+      link.replaceWith(img);
     }
     for(const image of article.querySelectorAll('img')) if(!seen.has(image.getAttribute('src'))&&!image.closest('.post__content'))image.remove();
     if(!seen.size && !article.querySelector('.post__content'))throw Error('未找到作品正文或原图，请确认已登录且作品加载完成');

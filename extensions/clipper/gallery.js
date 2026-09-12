@@ -1,7 +1,11 @@
 import { limitedImage } from './client.js';
 import { imageFilename, downloadBlob } from './gallery-download.js';
+import './preview-cache.js';
 const $=id=>document.getElementById(id);
-let group, index=0, previewToken=0, objectURL, previewAbort, running=false, controller, lastWheel=0;
+let group, index=0, previewToken=0, running=false, controller, lastWheel=0;
+const previewCache=new globalThis.ZNotePreviewCache(async(url,signal)=>{
+  const blob=await limitedImage(url,AbortSignal.any([signal,AbortSignal.timeout(12000)]));return{url:URL.createObjectURL(blob)};
+},value=>URL.revokeObjectURL(value.url));
 const ticketKey='gallery-'+new URL(location.href).searchParams.get('id');
 const states=[], buttons=[];
 const persist=()=>chrome.storage.session.set({[ticketKey]:{...group,states:[...states],started:true}});
@@ -15,18 +19,20 @@ function draw() {
   $('download').textContent=done===group.images.length?'全部已下载':done||states.includes('failed')?'重试未完成':'下载全部';
   $('cancel').hidden=!running;
 }
-async function show(next) {
+async function show(next, original=false) {
   if(!group||next<0||next>=group.images.length)return;
   index=next;draw();const token=++previewToken;
-  previewAbort?.abort();previewAbort=new AbortController();
-  $('image').removeAttribute('src');if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}
-  $('preview-status').textContent='正在加载原图…';
+  const url=original?group.images[index]:(group.previews?.[index]||group.images[index]);
+  const nearby=[index-1,index+1].filter(i=>i>=0&&i<group.images.length&&group.previews?.[i]&&group.previews[i]!==group.images[i]).map(i=>group.previews[i]);
+  $('image').removeAttribute('src');previewCache.retain([url,...nearby]);
+  $('original').hidden=(group.previews?.[index]||group.images[index])===group.images[index];
+  $('preview-status').textContent=original?'正在加载原图…':'正在加载预览…';
   try {
-    const blob=await limitedImage(group.images[index],AbortSignal.any([previewAbort.signal,AbortSignal.timeout(15000)]));
+    const value=await previewCache.get(url);
     if(token!==previewToken)return;
-    objectURL=URL.createObjectURL(blob);$('image').src=objectURL;
-    $('image').onload=()=>{$('preview-status').textContent=`${$('image').naturalWidth} × ${$('image').naturalHeight} · 原图预览`;};
+    $('image').onload=()=>{if(token===previewToken)$('preview-status').textContent=`${$('image').naturalWidth} × ${$('image').naturalHeight} · ${url===group.images[index]?'原图预览':'快速预览'}`;};
     $('image').onerror=()=>{$('preview-status').textContent='浏览器无法预览此图片，仍可尝试下载原文件';};
+    $('image').src=value.url;for(const next of nearby)previewCache.get(next).catch(()=>{});
   } catch(e) {if(token===previewToken)$('preview-status').textContent='暂时无法预览：'+e.message;}
 }
 async function downloadAll() {
@@ -48,6 +54,7 @@ async function downloadAll() {
   $('status').textContent=`${controller.signal.aborted?'已停止。':''}已下载 ${done} / ${group.images.length} 张${failed?`，${failed} 张失败：${lastError}`:''}${done===group.images.length?'，保存在下载目录的 ZNote 文件夹。':'，可重试未完成项。'}`;
 }
 $('previous').onclick=()=>show(index-1);$('next').onclick=()=>show(index+1);
+$('original').onclick=()=>show(index,true);
 const startDownload=()=>downloadAll().catch(e=>{controller?.abort();running=false;draw();$('status').textContent='下载已停止：'+e.message;});
 $('download').onclick=startDownload;$('cancel').onclick=()=>controller?.abort();
 document.querySelector('.viewer').addEventListener('wheel',e=>{if(e.ctrlKey||!e.deltaY)return;e.preventDefault();if(Date.now()-lastWheel<220)return;lastWheel=Date.now();show(index+Math.sign(e.deltaY));},{passive:false});

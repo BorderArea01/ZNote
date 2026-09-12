@@ -204,7 +204,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.8.5" }),
+    res.json({ status: "ok", version: "0.8.6" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -304,7 +304,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.8.5",
+      version: "0.8.6",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,

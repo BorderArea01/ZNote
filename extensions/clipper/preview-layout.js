@@ -48,10 +48,10 @@ globalThis.ZNotePreviewLayout = (viewport, rect, image, preferred, controlsHeigh
   };
   const candidates = areas
     .map((area) => ({ area, ...size(area) }))
-    .filter((v) => v.width >= 120 && v.height >= 65)
+    .filter((v) => v.width >= Math.min(120,image.width) && v.height >= Math.min(65,image.height) && v.area.width >= Math.max(Math.min(240,bounds.width),v.width+18) && v.area.height >= v.height+chromeHeight)
     .sort((a, b) => b.width * b.height - a.width * a.height);
   const choice = candidates[0] || { area: bounds, ...size(bounds) };
-  const width = choice.width + 18,
+  const width = Math.max(Math.min(240,bounds.width),choice.width+18),
     height = choice.height + chromeHeight;
   return {
     left: Math.max(
@@ -63,6 +63,7 @@ globalThis.ZNotePreviewLayout = (viewport, rect, image, preferred, controlsHeigh
       Math.min(rect.top, choice.area.top + choice.area.height - height),
     ),
     width: choice.width,
+    containerWidth: width,
     height: choice.height,
     overlaps: !candidates.length,
   };

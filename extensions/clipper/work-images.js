@@ -1,30 +1,71 @@
 import { siteArticle } from './site-articles.js';
-
-let cached;
-export async function workImages(target, doc = document, loc = location) {
-  const host = loc.hostname.replace(/^www\./, ''), source_url = loc.href;
-  let title = doc.title, images;
-  if (host === 'pixiv.net' || /^pawchive\.(pw|st)$/.test(host)) {
-    if (host === 'pixiv.net') {
-      const id = loc.pathname.match(/\/artworks\/(\d+)/)?.[1];
-      const urls = globalThis.ZNoteCandidates(target).map(c => c.url);
-      if (!id || !urls.some(url => url.includes('/' + id + '_p'))) return null;
-    } else if (!target.closest('main') || target.closest('.post-card--preview,.post__comments,.post__recommendations,header,aside,nav')) return null;
-    if (!cached || cached.url !== source_url || Date.now() - cached.time > 60000) {
-      cached = {url:source_url,time:Date.now(),promise:siteArticle(doc,loc)};
-      cached.promise.catch(() => { if (cached?.url === source_url) cached = null; });
-    }
-    const article = await cached.promise;
-    title = article.title || title;
-    images = [...article.document.querySelectorAll('[data-znote-work-image]')].map(img => img.src);
-  } else {
-    // Only an explicit article/gallery containing the hovered image, never a whole feed.
-    const container = target.closest('article,[data-gallery],.post__content');
-    if (!container) return null;
-    images = [...container.querySelectorAll('img')].filter(img => !img.closest('nav,aside,header,footer,[data-znote-overlay]') && Math.max(img.naturalWidth,img.width) >= 120 && Math.max(img.naturalHeight,img.height) >= 120)
-      .map(img => globalThis.ZNoteCandidates(img)[0]?.url).filter(Boolean);
+const cache = new Map();
+const safeURL = value => {try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&u.href.length<=4096?u.href:null;}catch{return null;}};
+function workLink(target, loc, pattern) {
+  for(let node=target,depth=0;node&&depth<4&&!['BODY','HTML','MAIN'].includes(node.tagName);node=node.parentElement,depth++) {
+    if(!node.matches?.('a[href]')&&node.querySelectorAll('img').length>1)break;
+    const links=node.matches?.('a[href]')?[node]:[...node.querySelectorAll('a[href]')].slice(0,12);
+    for(const link of links){try{const url=new URL(link.getAttribute('href'),loc.href);if(url.origin===loc.origin&&pattern.test(url.pathname)&&!url.username&&!url.password)return url;}catch{}}
   }
-  images = [...new Set(images)].filter(value => { try { const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&value.length<=4096; } catch { return false; } });
-  if (images.length > 200) throw Error('当前作品超过 200 张，请分段采集');
-  return images.length > 1 ? {title:title.slice(0,180),source_url,images} : null;
+  return null;
+}
+export function workLocation(target, loc = location) {
+  const host=loc.hostname.replace(/^www\./,''),candidates=globalThis.ZNoteCandidates(target);
+  if(host==='pixiv.net') {
+    if(candidates.some(c=>/\/user-profile\//.test(c.url)))return null;
+    const pattern=/^\/(?:[a-z]{2}\/)?artworks\/\d+\/?$/;
+    const link=workLink(target,loc,pattern);
+    const imageId=candidates.map(c=>{try{const u=new URL(c.url);return /(^|\.)pximg\.net$/.test(u.hostname)?u.pathname.match(/\/(\d+)_p\d+/)?.[1]:null;}catch{return null;}}).find(Boolean);
+    if(link){const id=link.pathname.match(/artworks\/(\d+)/)[1];if(imageId&&id!==imageId)return null;return link;}
+    if(imageId)return new URL('/artworks/'+imageId,loc.origin);
+  }
+  if(/^pawchive\.(pw|st)$/.test(host)) {
+    if(!candidates.some(c=>/^https?:\/\/(?:img|file)\.pawchive\.(pw|st)\//.test(c.url)))return null;
+    const pattern=/^\/(?:fanbox|patreon)\/user\/[^/]+\/post\/[^/]+\/?$/;
+    const link=workLink(target,loc,pattern);if(link)return link;
+    if(pattern.test(loc.pathname)&&target.closest('main')&&!target.closest('.post-card--preview,.post__comments,.post__recommendations,header,aside,nav'))return new URL(loc.href);
+  }
+  return null;
+}
+export async function workImages(target, doc = document, loc = location) {
+  const host=loc.hostname.replace(/^www\./,''),page_url=loc.href,selected=workLocation(target,loc);
+  let source_url=page_url,title=doc.title,images,previews;
+  if(host==='pixiv.net'||/^pawchive\.(pw|st)$/.test(host)) {
+    if(!selected)return null;source_url=selected.href;
+    let cached=cache.get(source_url);
+    if(!cached||Date.now()-cached.time>60000) {
+      const promise=(async()=>{
+        let root=doc;
+        if(host!=='pixiv.net'&&selected.pathname!==loc.pathname){
+          const response=await fetch(selected,{credentials:'include',redirect:'error',signal:AbortSignal.timeout(12000)});
+          if(!response.ok)throw Error(`作品读取失败 HTTP ${response.status}`);
+          const html=await response.text();if(html.length>5*1024*1024)throw Error('作品页面过大');
+          root=new DOMParser().parseFromString(html,'text/html');
+        }
+        return siteArticle(root,selected);
+      })();
+      cached={time:Date.now(),promise};cache.delete(source_url);cache.set(source_url,cached);
+      while(cache.size>8)cache.delete(cache.keys().next().value);
+      promise.catch(()=>{if(cache.get(source_url)===cached)cache.delete(source_url);});
+    }
+    const article=await cached.promise;
+    title=article.title||title;
+    const nodes=[...article.document.querySelectorAll('[data-znote-work-image]')];
+    images=nodes.map(img=>img.src);previews=nodes.map(img=>img.getAttribute('data-znote-preview')||img.src);
+  } else {
+    const container=target.closest('article,[data-gallery],.post__content');if(!container)return null;
+    const nodes=[...container.querySelectorAll('img')].filter(img=>!img.closest('nav,aside,header,footer,[data-znote-overlay]')&&Math.max(img.naturalWidth,img.width)>=32&&Math.max(img.naturalHeight,img.height)>=32&&
+      ((Math.max(img.naturalWidth,img.width)>=120&&Math.max(img.naturalHeight,img.height)>=120)||img.matches('[data-original],[data-full],[data-preview]')||/\.(png|jpe?g|webp|gif|avif)(?:[?#]|$)/i.test(img.closest('a[href]')?.href||'')));
+    images=nodes.map(img=>globalThis.ZNoteCandidates(img)[0]?.url);
+    previews=nodes.map((img,i)=>img.getAttribute('data-preview')||images[i]);
+  }
+  const pairs=[];const seen=new Set();
+  images.forEach((value,i)=>{const url=safeURL(value);if(url&&!seen.has(url)){seen.add(url);pairs.push({original:url,preview:safeURL(previews[i])||url});}});
+  if(pairs.length>200)throw Error('当前作品超过 200 张，请分段采集');
+  if(!pairs.length||(!selected&&pairs.length<2))return null;
+  const candidates=globalThis.ZNoteCandidates(target).map(c=>c.url);
+  const identity=url=>{try{const u=new URL(url);if(selected&&host==='pixiv.net')return u.pathname.match(/\/(\d+_p\d+)/)?.[1]||url;if(selected&&/^pawchive\./.test(host))return u.pathname.replace(/^\/thumbnail/,'');return url;}catch{return url;}};
+  const index=pairs.findIndex(p=>candidates.some(url=>url===p.original||url===p.preview||identity(url)===identity(p.original)||identity(url)===identity(p.preview)));
+  if(index<0&&!selected)return null;
+  return {title:title.slice(0,180),source_url,page_url,images:pairs.map(p=>p.original),previews:pairs.map(p=>p.preview),start_index:Math.max(0,index)};
 }

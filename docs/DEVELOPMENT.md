@@ -45,6 +45,8 @@ npm run clipper:build
 
 `node tests/hover-wheel-ui.mjs` 保持鼠标在原缩略图上验证滚轮翻页，并覆盖展开预览中央、慢速连续翻页、当前页下载及外部区域滚动。交互调查参考了 [Powerful Pixiv Downloader 的 PreviewWork](https://github.com/xuejianxianzun/PixivBatchDownloader/blob/master/src/ts/PreviewWork.ts)，本项目独立实现事件范围判断与异步翻页，不包含该项目源码。
 
+`node tests/cover-groups-ui.mjs` 验证 48px 的 Pixiv 列表封面、Paw 遮罩封面与作品来源；`node tests/preview-speed-ui.mjs` 对比轻量预览与延迟原图，验证预加载、翻页耗时、原文件下载和手动原图预览。缓存的请求合并与释放另由 `preview-cache.test.js` 覆盖。
+
 ## 验证
 
 ```bash

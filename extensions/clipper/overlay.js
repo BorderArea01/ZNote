@@ -28,7 +28,8 @@
     downloadButton,
     saveButton,
     groupBar, groupCounter, previousButton, nextButton, batchButton,
-    imageGroup = null, groupIndex = 0, requestedIndex = 0, pageToken = 0, pageBusy = false, pageLoad, lastWheel = 0,
+    imageGroup = null, groupIndex = 0, requestedIndex = 0, pageToken = 0, pageBusy = false, lastWheel = 0,
+    previewCache, originalButton, groupLoading=false, failedIndex=null,
     downloadKey = 's',
     saveKey = 'z',
     previewWidth = 720,
@@ -229,7 +230,7 @@
     hovered = null;
     hoverURL = "";
     hoverToken++;
-    pageToken++; pageLoad?.(); pageLoad=null; imageGroup = null; pageBusy = false; drawGroup();
+    pageToken++; previewCache?.clear(); imageGroup = null; pageBusy = false; groupLoading=false;failedIndex=null;drawGroup();
   }
   function inPreviewBridge() {
     if (!hovered || preview.classList.contains('hidden')) return false;
@@ -254,8 +255,11 @@
     hideDelay = delay;
     hideTimer = setTimeout(() => {
       hideTimer = null;
-      if (!preview.matches(':hover') && !hovered?.matches(':hover')) hide();
+      if (!preview.matches(':hover') && !sourceUnderPointer()) hide();
     }, delay);
+  }
+  function sourceUnderPointer() {
+    return !!hovered && globalThis.ZNoteImageTarget({clientX:pointer.x,clientY:pointer.y,composedPath:()=>document.elementsFromPoint(pointer.x,pointer.y)})===hovered;
   }
   function placePreview() {
     if (!hovered || !previewImage.naturalWidth || preview.classList.contains('hidden')) return;
@@ -266,7 +270,7 @@
     const box = globalThis.ZNotePreviewLayout({width:innerWidth,height:innerHeight},rect,{width:previewImage.naturalWidth,height:previewImage.naturalHeight},previewWidth,Math.max(imageGroup?160:118,controlsHeight));
     previewImage.style.width = box.width + 'px'; previewImage.style.height = box.height + 'px';
     previewImage.style.maxWidth = 'none'; previewImage.style.maxHeight = 'none';
-    preview.style.width = (box.width + 18) + 'px';
+    preview.style.width = (box.containerWidth || box.width + 18) + 'px';
     preview.style.left = box.left + 'px'; preview.style.top = box.top + 'px';
     // Full-screen images may leave no free region: let pointer events reach the
     // website through the displayed image, keeping only our controls interactive.
@@ -278,9 +282,18 @@
       candidates = globalThis.ZNoteCandidates(target);
     if (!candidates.length) return;
     hovered = target;
-    imageGroup = null; pageToken++; pageLoad?.(); pageLoad=null; pageBusy = false; lastWheel=0; drawGroup();
+    imageGroup = null; pageToken++; previewCache?.clear(); pageBusy = false; groupLoading=false;failedIndex=null;lastWheel=0; drawGroup();
     hoverURL = '';
     preview.classList.add('hidden');
+    // Start work metadata in parallel; show the small existing cover immediately
+    // on illustration sites instead of downloading a full original first.
+    const selectedWork=globalThis.ZNoteWorkLocation?.(target);
+    groupLoading=!!selectedWork;
+    const groupResult=globalThis.ZNoteWorkImages?.(target).catch(error=>({error}));
+    if(selectedWork && target.tagName==='IMG') {
+      const current=target.currentSrc||target.src;
+      if(current){const i=candidates.findIndex(c=>c.url===current);if(i>=0)candidates.unshift(...candidates.splice(i,1));}
+    }
     for (const c of candidates) {
       const img = new Image();
       const loaded = await new Promise((resolve) => {
@@ -301,64 +314,70 @@
       hoverURL = c.url;
       previewImage.referrerPolicy = img.referrerPolicy;
       previewImage.src = c.url;
-      previewLabel.textContent = `${img.naturalWidth} × ${img.naturalHeight} · ${shortcutHelp()}`;
+      previewLabel.textContent = groupLoading?'正在识别作品，稍后可下载完整原图…':`${img.naturalWidth} × ${img.naturalHeight} · ${shortcutHelp()}`;
       preview.classList.remove("hidden");
       previewImage.onload = placePreview;
       placePreview();
+      drawGroup();
       requestAnimationFrame(() => { if (token === hoverToken) placePreview(); });
-      loadGroup(target, token);
+      loadGroup(target, token, groupResult);
       return;
     }
     if (token === hoverToken) { hovered = null; pendingTarget = null; }
   }
   function drawGroup() {
-    groupBar.classList.toggle('hidden', !imageGroup);
-    downloadButton.disabled=pageBusy||hoverBusy;saveButton.disabled=pageBusy||hoverBusy;
+    groupBar.classList.toggle('hidden', !imageGroup || imageGroup.images.length<2);
+    const originalIndex=failedIndex??groupIndex;
+    originalButton?.classList.toggle('hidden',!imageGroup || (imageGroup.previews?.[originalIndex]||imageGroup.images[originalIndex])===imageGroup.images[originalIndex]);
+    if(originalButton)originalButton.disabled=pageBusy||hoverBusy;
+    downloadButton.disabled=!hoverURL||groupLoading||pageBusy||hoverBusy;saveButton.disabled=downloadButton.disabled;
     if (!imageGroup) return;
     groupCounter.textContent = `${groupIndex + 1} / ${imageGroup.images.length}`;
     previousButton.disabled = requestedIndex === 0;
     nextButton.disabled = requestedIndex === imageGroup.images.length - 1;
     batchButton.textContent = `批量下载 ${imageGroup.images.length} 张`;
   }
-  async function loadGroup(target, token) {
+  async function loadGroup(target, token, result) {
     try {
-      const group = await globalThis.ZNoteWorkImages?.(target);
-      if (!group || token !== hoverToken || group.source_url !== location.href) return;
+      const group = await result;
+      if (!group || token !== hoverToken) return;
+      if(group.error)throw group.error;
+      if((group.page_url||group.source_url)!==location.href)return;
       // Match originals to scaled Pixiv thumbnails without confusing another work.
       const pixivPage = hoverURL.match(/\/(\d+_p\d+)/)?.[1];
-      const index = group.images.findIndex(url => url === hoverURL || (pixivPage && url.includes('/' + pixivPage + '.')));
+      const index = group.start_index ?? group.images.findIndex(url => url === hoverURL || (pixivPage && url.includes('/' + pixivPage + '.')));
       if(index<0)return;
       imageGroup = group; requestedIndex = groupIndex = index; drawGroup(); placePreview();
-      if(hoverURL!==group.images[index])turnPage(0);
-    } catch(e) { if(token===hoverToken)previewLabel.textContent = e.message; }
+      hoverURL=group.images[index];
+      turnPage(0);
+    } catch(e) { if(token===hoverToken){previewLabel.textContent = e.message;if(groupLoading)hoverURL='';} }
+    finally {if(token===hoverToken){groupLoading=false;drawGroup();}}
   }
-  async function turnPage(delta) {
-    if(imageGroup && imageGroup.source_url!==location.href){hide();return;}
+  async function turnPage(delta, original=false) {
+    if(imageGroup && (imageGroup.page_url||imageGroup.source_url)!==location.href){hide();return;}
     if (!imageGroup || hoverBusy) return;
     const index = requestedIndex + delta;
     if (index < 0 || index >= imageGroup.images.length) return;
     const group = imageGroup, token = ++pageToken, hover = hoverToken;
-    pageLoad?.();
-    requestedIndex=index; pageBusy = true; drawGroup(); previewLabel.textContent = `正在加载第 ${index+1} / ${group.images.length} 张原图…`;
-    const img = new Image(); img.referrerPolicy = previewImage.referrerPolicy;
-    const ok = await new Promise(resolve => {
-      const finish=value=>{clearTimeout(timer);img.onload=null;img.onerror=null;resolve(value);};
-      const timer=setTimeout(()=>{finish(false);img.src='';},15000);
-      pageLoad=()=>{finish(false);img.src='';};
-      img.onload=()=>finish(true);img.onerror=()=>finish(false);img.src=group.images[index];
-    });
+    requestedIndex=index; failedIndex=null; pageBusy = true; drawGroup(); previewLabel.textContent = `正在加载第 ${index+1} / ${group.images.length} 张${original?'原图':'预览'}…`;
+    const url=original?group.images[index]:(group.previews?.[index]||group.images[index]);
+    const nearby=[index-1,index+1].filter(i=>i>=0&&i<group.images.length&&group.previews?.[i]&&group.previews[i]!==group.images[i]).map(i=>group.previews[i]);
+    previewCache.retain([url,...nearby]);
+    let img;
+    try {img=await previewCache.get(url);}catch{}
     if(token!==pageToken || hover!==hoverToken)return;
-    pageBusy = false; pageLoad=null;
-    if(ok) {
-      groupIndex=index; hoverURL=group.images[index]; previewImage.src=hoverURL;
-      previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · 滚轮翻页`;
+    pageBusy = false;
+    if(img) {
+      groupIndex=index; hoverURL=group.images[index]; previewImage.src=img.src;
+      previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · ${url===hoverURL?'原图':'快速预览'} · 滚轮翻页`;
       previewImage.onload=placePreview; requestAnimationFrame(placePreview);
-    } else {requestedIndex=groupIndex;previewLabel.textContent='这张原图暂时无法加载，可再次翻页重试';}
+      for(const next of nearby)previewCache.get(next).catch(()=>{});
+    } else {failedIndex=index;requestedIndex=groupIndex;previewLabel.textContent='预览暂时无法加载，可重试或点击“查看原图”';}
     drawGroup();
   }
   async function hoverAction(action) {
-    if(imageGroup && imageGroup.source_url!==location.href){hide();return;}
-    if (!hoverURL || !hovered || hoverBusy || pageBusy) return;
+    if(imageGroup && (imageGroup.page_url||imageGroup.source_url)!==location.href){hide();return;}
+    if (!hoverURL || !hovered || groupLoading || hoverBusy || pageBusy) return;
     hoverBusy = true;
     clearTimeout(hideTimer); hideTimer = null;
     downloadButton.disabled = true; saveButton.disabled = true;
@@ -380,7 +399,7 @@
     } finally {
       hoverBusy = false;
       downloadButton.disabled = false; saveButton.disabled = false;
-      if (!preview.matches(':hover') && !hovered?.matches(':hover')) scheduleHide();
+      if (!preview.matches(':hover') && !sourceUnderPointer()) scheduleHide();
     }
   }
   async function mount() {
@@ -494,13 +513,15 @@
       alt: "高清图片预览",
       referrerpolicy: "no-referrer",
     });
+    previewCache=new globalThis.ZNotePreviewCache((url,signal)=>globalThis.ZNoteLoadPreview(url,previewImage.referrerPolicy,signal));
     previewLabel = element("small", shortcutHelp());
     const bar = element("div", null, { class: "bar" });
     bar.style.pointerEvents = 'auto';
     bar.style.fontSize = '13px';
     downloadButton = button('S 下载', () => hoverAction('download'));
     saveButton = button('Z 保存知识库', () => hoverAction('save'));
-    bar.append(downloadButton, saveButton, button('关闭', hide));
+    originalButton=button('查看原图',()=>turnPage((failedIndex??groupIndex)-requestedIndex,true));originalButton.className='hidden';
+    bar.append(downloadButton, saveButton, originalButton, button('关闭', hide));
     bar.querySelectorAll('button').forEach(b=>b.style.padding='5px 7px');
     const sizing = element('label', '展示大小 ', {class:'bar'});
     sizing.style.pointerEvents = 'auto';
@@ -516,7 +537,7 @@
     groupCounter = element('span', '', {'aria-label':'作品页码'});
     batchButton = button('批量下载', async()=>{
       if(!imageGroup)return; batchButton.disabled=true;
-      if(imageGroup.source_url!==location.href){hide();batchButton.disabled=false;return;}
+      if((imageGroup.page_url||imageGroup.source_url)!==location.href){hide();batchButton.disabled=false;return;}
       try { await send({type:'media-gallery',group:imageGroup}); }
       catch(e) {previewLabel.textContent=e.message;}
       finally {batchButton.disabled=false;}
@@ -527,11 +548,11 @@
     // Capture wheel on either the source thumbnail or our preview. Never hijack
     // scrolling elsewhere on the page, the size slider, or browser zoom gestures.
     document.addEventListener('wheel',e=>{
-      if(!e.isTrusted || !imageGroup || preview.classList.contains('hidden') || e.ctrlKey || e.altKey || e.metaKey || !e.deltaY)return;
+      if(!e.isTrusted || !imageGroup || imageGroup.images.length<2 || preview.classList.contains('hidden') || e.ctrlKey || e.altKey || e.metaKey || !e.deltaY)return;
       const path=e.composedPath();
       if(path.some(el=>el?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName)))return;
       if(!path.includes(preview) && globalThis.ZNoteImageTarget(e)!==hovered)return;
-      if(imageGroup.source_url!==location.href){hide();return;}
+      if((imageGroup.page_url||imageGroup.source_url)!==location.href){hide();return;}
       e.preventDefault();e.stopImmediatePropagation();
       clearTimeout(hideTimer);hideTimer=null;
       if(Date.now()-lastWheel<220)return;lastWheel=Date.now();turnPage(Math.sign(e.deltaY));
@@ -553,7 +574,7 @@
         if (!e.isTrusted) return;
         pointer = { x: e.clientX, y: e.clientY };
         if (own(e) || !hoverAllowed) return;
-        if (hoverBusy) { if (!hovered?.matches(':hover')) scheduleHide(); return; }
+        if (hoverBusy) { if (!sourceUnderPointer()) scheduleHide(); return; }
         const target = globalThis.ZNoteImageTarget(e);
         if (!target) { if (hovered || pendingTarget) scheduleHide(); return; }
         clearTimeout(hideTimer); hideTimer = null;

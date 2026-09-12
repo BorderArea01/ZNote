@@ -1,0 +1,22 @@
+import {chromium} from 'playwright';import {mkdtemp} from 'node:fs/promises';import {resolve,join} from 'node:path';import sharp from 'sharp';import assert from 'node:assert/strict';
+const dir=await mkdtemp(resolve('artifacts/cover-groups-')),extension=resolve('extensions/clipper');
+const tiny=await sharp({create:{width:48,height:48,channels:3,background:'#607c65'}}).jpeg().toBuffer(),medium=await sharp({create:{width:1000,height:700,channels:3,background:'#789c86'}}).jpeg().toBuffer();
+const context=await chromium.launchPersistentContext(join(dir,'profile'),{channel:'msedge',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`],viewport:{width:1440,height:1000}});
+let originals=0,pawRequests=0;const baseCSS='<style>body{margin:40px;min-height:1500px}img{width:48px;height:48px}.post-card{position:relative;width:48px;height:48px}.mask{position:absolute;inset:0}</style>';
+await context.route('https://**/*',async route=>{
+ const u=new URL(route.request().url());
+ if(u.hostname==='i.pximg.net'||/^(img|file)\.pawchive\.pw$/.test(u.hostname)){
+  if(u.pathname.includes('original')||u.hostname==='file.pawchive.pw')originals++;
+  return route.fulfill({contentType:'image/jpeg',body:u.pathname.includes('tiny')?tiny:medium});
+ }
+ if(u.pathname.startsWith('/ajax/illust/')) {const id=u.pathname.match(/illust\/(\d+)/)[1];return route.fulfill({json:{body:u.pathname.endsWith('/pages')?[0,1,2].map(n=>({urls:{original:`https://i.pximg.net/img-original/${id}_p${n}.png`,regular:`https://i.pximg.net/img-master/${id}_p${n}.jpg`}})):{title:'小封面作品',pageCount:3}}});}
+ if(u.hostname==='www.pixiv.net')return route.fulfill({contentType:'text/html',body:`<!doctype html>${baseCSS}<h1>作者页小封面</h1><a href="/artworks/12345"><img id="cover" src="https://i.pximg.net/tiny/12345_p0_square1200.jpg"></a><a href="/artworks/67890"><img id="other" src="https://i.pximg.net/tiny/67890_p0_square1200.jpg"></a>`});
+ if(u.pathname.includes('/post/')){pawRequests++;return route.fulfill({contentType:'text/html',body:'<main><h1>Paw comic</h1>'+[1,2,3].map(n=>`<figure><a href="https://file.pawchive.pw/data/page${n}.png?f=${n}.png"><img src="https://img.pawchive.pw/thumbnail/data/page${n}.png"></a></figure>`).join('')+'</main>'});}
+ return route.fulfill({contentType:'text/html',body:`<!doctype html>${baseCSS}<main><h1>Paw 列表</h1><article class="post-card post-card--preview"><img id="cover" style="pointer-events:none" src="https://img.pawchive.pw/tiny/cover.png"><a class="mask" href="/fanbox/user/1/post/2"><span>3</span></a></article></main>`});
+});
+try{const page=await context.newPage(),preview=page.locator('[data-znote-overlay]').locator('.preview');const cdp=await context.newCDPSession(page);await cdp.send('Browser.setDownloadBehavior',{behavior:'deny'});
+ await page.goto('https://www.pixiv.net/users/1/artworks');await page.locator('[data-znote-overlay]').waitFor({state:'attached'});await page.locator('#cover').hover();await preview.getByText('1 / 3',{exact:true}).waitFor();await preview.locator('small').filter({hasText:'快速预览'}).waitFor();await page.mouse.wheel(0,100);await preview.getByText('2 / 3',{exact:true}).waitFor();assert.ok((await preview.locator('img').getAttribute('src')).includes('12345_p1.jpg'));assert.equal(originals,0);
+ const opened=context.waitForEvent('page');await preview.getByRole('button',{name:'批量下载 3 张'}).click();const gallery=await opened;await gallery.locator('#source[href]').waitFor();assert.equal(await gallery.locator('#source').getAttribute('href'),'https://www.pixiv.net/artworks/12345');await gallery.close();
+ await page.goto('https://pawchive.pw/fanbox/user/1');await page.locator('[data-znote-overlay]').waitFor({state:'attached'});await page.locator('.mask').hover();await preview.getByText('1 / 3',{exact:true}).waitFor();await preview.locator('small').filter({hasText:'快速预览'}).waitFor();const before=originals;await page.mouse.wheel(0,100);await preview.getByText('2 / 3',{exact:true}).waitFor();assert.ok((await preview.locator('img').getAttribute('src')).includes('/thumbnail/data/page2.png'));assert.equal(originals,before);assert.equal(pawRequests,1);assert.equal(await page.evaluate(()=>scrollY),0);
+ console.log('PASS: 48px Pixiv author-page cover resolves linked work; masked Paw list cover fetches only selected post; preview uses small resources; batch ticket keeps work detail source');
+}finally{await context.close();}
