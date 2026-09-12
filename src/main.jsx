@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
 import { markdownImages } from '../shared/markdown-images.js';
+import { mediaDescription } from '../shared/media-description.js';
+import { GalleryStrip } from './GalleryStrip.jsx';
+import { ZoomViewer } from './ZoomViewer.jsx';
+import { useCollectionTags } from './useCollectionTags.js';
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -70,22 +74,24 @@ const icons = {
   favorites: Star,
   trash: Trash2,
 };
+const MarkdownImagesContext = React.createContext(null);
 function MarkdownImage({ src, alt }) {
+  const onImage = React.useContext(MarkdownImagesContext);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => { setFailed(false); setAttempt(0); }, [src]);
   if (!src?.startsWith('/media/')) return <span className="external-image">外部图片：<a href={src} target="_blank" rel="noreferrer">{alt || '在新窗口打开'}</a></span>;
   if (failed) return <span className="note-image-error" role="status">{alt || '笔记图片'} · 加载失败 <button onClick={() => { setFailed(false); setAttempt(n => n + 1); }}>重试图片</button></span>;
   const url = attempt ? `${src}${src.includes('?') ? '&' : '?'}retry=${attempt}` : src;
-  return <img src={url} alt={alt || '笔记图片'} loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+  return <img src={url} alt={alt || '笔记图片'} loading="lazy" decoding="async" onError={() => setFailed(true)} role={onImage?'button':undefined} tabIndex={onImage?0:undefined} onClick={onImage?e=>{e.preventDefault();e.stopPropagation();onImage(src)}:undefined} onKeyDown={onImage?e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();onImage(src)}}:undefined} />;
 }
-function Markdown({ content, onLink }) {
+function Markdown({ content, onLink, onImage }) {
   const markdown = content.replace(
     /\[\[([^\]\n]+)\]\]/g,
     (_, title) => `[${title}](#wiki/${encodeURIComponent(title)})`,
   );
   return (
-    <ReactMarkdown
+    <MarkdownImagesContext.Provider value={onImage}><ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
         a: ({ href, children }) => (
@@ -107,7 +113,7 @@ function Markdown({ content, onLink }) {
       }}
     >
       {markdown}
-    </ReactMarkdown>
+    </ReactMarkdown></MarkdownImagesContext.Provider>
   );
 }
 function Auth({ configured, onDone }) {
@@ -342,6 +348,8 @@ function Detail({
   nextAvailable,
   galleryBusy,
   galleryPosition,
+  galleryItems = [],
+  galleryIndex = -1,
 }) {
   const [item, setItem] = useState(initial);
   const [videoError, setVideoError] = useState(false);
@@ -349,6 +357,9 @@ function Detail({
   const [content, setContent] = useState(initial.content);
   const [tags, setTags] = useState(initial.tags);
   const [collection, setCollection] = useState(initial.collection_id || "");
+  const scopedSuggestions = useCollectionTags(collection);
+  const [noteIndex,setNoteIndex] = useState(null);
+  const noteImages = React.useMemo(()=>markdownImages(content,true).filter(i=>i.url.startsWith('/media/')).map((i,index)=>({...i,id:String(index),thumbnail_url:i.url.replace(/\/(original|thumbnail)(\?|$)/,'/thumbnail$2')})),[content]);
   const [editing, setEditing] = useState(
     initial.kind === "note" && !initial.id,
   );
@@ -359,6 +370,7 @@ function Detail({
   const [copying, setCopying] = useState(false);
   const externalImages = React.useMemo(()=>item.kind==='note'?markdownImages(content):[],[item.kind,content]);
   const input = useRef();
+  const imageArea = useRef(), noteArea = useRef(), lastWheel = useRef(0);
   const textarea = useRef();
   const dirty =
     title !== item.title ||
@@ -401,11 +413,10 @@ function Detail({
     try {
       const value = { title, content, tags, collection_id: collection || null };
       if (item.id) value.version = item.version;
-      const result = await send(
-        `/api/items${item.id ? `/${item.id}` : ""}`,
-        value,
-        item.id ? "PATCH" : "POST",
-      );
+      const movingGroup=item.kind==='image'&&item.group_key&&value.collection_id!==item.collection_id;
+      const result = movingGroup
+        ? await send('/api/item-groups/move',{...value,id:item.id,move_note:true})
+        : await send(`/api/items${item.id ? `/${item.id}` : ""}`,value,item.id?'PATCH':'POST');
       setItem(result);
       setTitle(result.title);
       setContent(result.content);
@@ -414,7 +425,7 @@ function Detail({
       onSaved();
       const failures=result.image_archive?.failures||[];
       if(failures.length)setError(`${failures.length} 张配图暂未归档：${failures[0].error}。可再次点击归档重试。`);
-      notify(failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存');
+      notify(result.moved_count?`已移动整组 ${result.moved_count} 张图片${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存');
       return true;
     } catch (e) {
       setError(e.message);
@@ -437,11 +448,18 @@ function Detail({
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
+  useEffect(()=>{
+    const el=noteIndex!==null?noteArea.current:imageArea.current;if(!el)return;
+    const wheel=e=>{if(e.ctrlKey||e.metaKey||!e.deltaY||lightbox)return;e.preventDefault();if(busy||galleryBusy||Date.now()-lastWheel.current<220)return;lastWheel.current=Date.now();const delta=Math.sign(e.deltaY);if(noteIndex!==null)setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)));else if(delta<0?previousAvailable:nextAvailable)step(delta)};
+    el.addEventListener('wheel',wheel,{passive:false});return()=>el.removeEventListener('wheel',wheel);
+  });
   useEffect(() => {
     const key = e => {
-      if (copying || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey || item.kind !== 'image') return;
-      if (e.key === 'ArrowLeft' && previousAvailable) { e.preventDefault(); step(-1); }
-      if (e.key === 'ArrowRight' && nextAvailable) { e.preventDefault(); step(1); }
+      if (lightbox || copying || busy || galleryBusy || e.repeat || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
+      const delta=['ArrowLeft','a','A'].includes(e.key)?-1:['ArrowRight','d','D'].includes(e.key)?1:0;
+      if(noteIndex!==null){if(e.key==='Escape')setNoteIndex(null);if(delta){e.preventDefault();setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)))}return;}
+      if(item.kind!=='image')return;
+      if (delta && (delta<0?previousAvailable:nextAvailable)) { e.preventDefault(); step(delta); }
       if (e.key.toLowerCase() === 'f') { e.preventDefault(); toggleFavorite(); }
     };
     window.addEventListener('keydown', key);
@@ -462,7 +480,7 @@ function Detail({
         </div>}
         {item.kind === "image" && (
           <div className="image-stage">
-            <button onClick={() => setLightbox(true)} aria-label="全屏查看图片">
+            <button ref={imageArea} onClick={() => setLightbox(item.url)} aria-label="全屏查看图片" title="滚轮翻图 · 点击展开缩放">
               <img src={item.url} alt={title} />
             </button>
             <span>
@@ -477,7 +495,8 @@ function Detail({
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一张 →</button>
             </div>
-            <HelpHint label="翻图快捷键">← → 翻图，F 收藏；翻图时自动保存修改。</HelpHint>
+            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} onSelect={index=>step(index-galleryIndex)}/>
+            <HelpHint label="翻图快捷键">A / D 或 ← / → 翻图，F 收藏；输入文字时不触发。</HelpHint>
           </div>
         )}
         <div className="detail-editor">
@@ -512,8 +531,7 @@ function Detail({
           />
           <div className="metadata-fields">
             <label>
-              <BookOpen size={15} />
-              知识库
+              <span className="metadata-label"><BookOpen size={15} />{item.kind==='image'&&item.group_key?'知识库 · 整组':'知识库'}</span>
               <select
                 aria-label="所属知识库"
                 value={collection}
@@ -529,12 +547,11 @@ function Detail({
               </select>
             </label>
             <label>
-              <Hash size={15} />
-              标签
+              <span className="metadata-label"><Hash size={15} />标签</span>
               <TagInput
                 value={tags}
                 onChange={setTags}
-                suggestions={suggestions}
+                suggestions={scopedSuggestions}
                 disabled={!!item.deleted_at}
               />
             </label>
@@ -594,6 +611,7 @@ function Detail({
                   {content ? (
                     <Markdown
                       content={content}
+                      onImage={src=>setNoteIndex(Math.max(0,noteImages.findIndex(i=>i.url===src)))}
                       onLink={(q) => {
                         if (!dirty || confirm("尚未保存，确定离开吗？"))
                           onSearch(q);
@@ -608,16 +626,16 @@ function Detail({
               )}
             </>
           ) : (
-            <label className="description-label">
-              {item.kind === 'video' ? '关于这个视频' : '关于这张图片'}
-              <textarea
+            <section className="description-label">
+              <div className="editor-toolbar"><strong>{item.kind === 'video' ? '关于这个视频' : '关于这张图片'}</strong><button onClick={()=>setEditing(!editing)}>{editing?'预览说明':'编辑说明'}</button></div>
+              {editing ? <textarea
                 aria-label={item.kind === 'video' ? '视频说明' : '图片说明'}
                 placeholder="记录来源、用途，或者让你想到的事情…"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 disabled={!!item.deleted_at}
-              />
-            </label>
+              /> : <div className="markdown-preview media-description"><Markdown content={mediaDescription(content)||'暂无说明'} onLink={onSearch}/></div>}
+            </section>
           )}
           {item.id && (
             <div className="backlinks">
@@ -718,14 +736,8 @@ function Detail({
           setBusy(false);
         }}
       />
-      {lightbox && (
-        <div className="lightbox">
-          <IconButton label="退出全屏" onClick={() => setLightbox(false)}>
-            <X size={28} />
-          </IconButton>
-          <img src={item.url} alt={title} />
-        </div>
-      )}
+      {lightbox && <ZoomViewer src={lightbox} alt={title} onClose={()=>setLightbox(false)}/>}
+      {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls"><button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
     </Dialog>
   );

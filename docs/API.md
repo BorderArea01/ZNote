@@ -69,6 +69,14 @@ curl http://localhost:3741/api/items \
 
 只允许受校验的包内路径；最多 1203 个文件、合计 500 MB、单清单 2 MB。FFmpeg 不从网络读取分片，合并不重新编码。支持完整点播及普通 AES-128，不支持 DRM、DASH 或持续直播录制。
 
+## 图片组与标签
+
+`POST /api/item-groups/move` 接收 `{ id, version, collection_id, move_note: true }`。`id` 是组内任意图片，`version` 是当前版本，`collection_id: null` 表示未分类。移动同一源知识库中的整组图片；笔记配图同时移动所属笔记。可附带当前图片的 `title/content/tags` 编辑，成功返回图片对象和 `moved_count`。目标已有同组或重复内容时返回 409，所有更新一起回滚。
+
+保存笔记时，本地配图自动归入 `note:笔记ID`；共享原文件但保留每篇笔记独立的分组与顺序。更新笔记知识库或通过 `batch-organize` 移动笔记，也会一起移动配图。普通单图片移动接口仍可用于单页整理。
+
+`GET /api/tags?collection=知识库ID` 只返回指定库的标签。`collection=unfiled` 或省略参数时只返回未分类内容的标签，不再默认返回所有知识库的标签。
+
 ## 事件与 Webhook
 
 `GET /api/events?after=cursor` 每页最多 100 条。事件包含 `id/type/item_id/created_at`；消费后保存游标。类型为 `item.created`、`item.updated`、`item.deleted`、`item.restored`。

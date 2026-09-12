@@ -1,5 +1,6 @@
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
+import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images.js';
 import { fetchRemoteImage } from './remote-images.js';
 import multer from "multer";
 import sharp from "sharp";
@@ -207,7 +208,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.2" }),
+    res.json({ status: "ok", version: "0.9.3" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -307,7 +308,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.2",
+      version: "0.9.3",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -394,7 +395,7 @@ export function createApp({
     res.status(204).end();
   });
   app.get("/api/tags", (req, res) => {
-    const scope = collectionScope(req.query.collection, 'items.');
+    const scope = collectionScope(req.query.collection ?? 'unfiled', 'items.');
     res.json(
       db
         .prepare(
@@ -500,6 +501,7 @@ export function createApp({
     const id = randomUUID();
     const date = now();
     transaction(() => {
+      if (!image) input=groupNoteImages(input,id);
       db.prepare(
         `INSERT INTO items(id,kind,title,content,tags,collection_id,favorite,file_key,thumbnail_key,mime,bytes,width,height,hash,created_at,updated_at,storage_codec,stored_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).run(
@@ -529,6 +531,28 @@ export function createApp({
     });
     return serialize(getItem(id));
   };
+  function groupNoteImages(input,noteId) {
+    const key='note:'+noteId, images=markdownImages(input.content,true).filter(i=>i.url.startsWith('/media/'));
+    const groupTitle=(input.title+' · 配图').slice(0,200);
+    const replacements=new Map(), retained=new Set(), seen=new Set();let index=0;
+    for(const image of images){
+      if(seen.has(image.url))continue;seen.add(image.url);
+      const id=image.url.match(/^\/media\/([^/]+)\//)?.[1];
+      const source=db.prepare("SELECT * FROM items WHERE id=? AND kind='image' AND deleted_at IS NULL").get(id);
+      if(!source)continue;
+      let row=source.group_key===key&&source.collection_id===input.collection_id&&!retained.has(source.id)?source:db.prepare('SELECT * FROM items WHERE group_key=? AND collection_id IS ? AND hash=? AND group_index=? AND deleted_at IS NULL').get(key,input.collection_id,source.hash,index);
+      if(row&&retained.has(row.id))row=null;
+      if(!row && source.collection_id===input.collection_id && (!source.group_key || source.group_key===key) && !retained.has(source.id))row=source;
+      if(!row){
+        row={...source,id:randomUUID(),collection_id:input.collection_id,group_key:key,group_index:index,group_title:groupTitle,version:1,created_at:now(),updated_at:now()};
+        const columns=Object.keys(row);db.prepare(`INSERT INTO items(${columns.join(',')}) VALUES(${columns.map(()=>'?').join(',')})`).run(...columns.map(c=>row[c]));event('item.created',row.id);
+      }
+      if(row.group_key!==key||row.group_index!==index||row.group_title!==groupTitle){db.prepare('UPDATE items SET group_key=?,group_index=?,group_title=?,version=version+1,updated_at=? WHERE id=?').run(key,index,groupTitle,now(),row.id);event('item.updated',row.id);}
+      retained.add(row.id);const url=`/media/${row.id}/original`;if(url!==image.url)replacements.set(image.url,url);index++;
+    }
+    for(const row of db.prepare('SELECT id FROM items WHERE group_key=?').all(key))if(!retained.has(row.id)){db.prepare('UPDATE items SET group_key=NULL,group_index=0,group_title=NULL,version=version+1,updated_at=? WHERE id=?').run(now(),row.id);event('item.updated',row.id);}
+    return {...input,content:replaceMarkdownImages(input.content,images,replacements)};
+  }
   app.post("/api/items", async (req, res) => {
     const input=itemInput.parse(req.body); validateCollection(input.collection_id);
     const archive=z.boolean().default(true).parse(req.body.archive_images);
@@ -562,11 +586,23 @@ export function createApp({
     height: item.height, hash: item.hash, codec: item.storage_codec, storedBytes: item.stored_bytes,
   });
   const mediaCollision = (source, collection) => {
+    if(source.group_key?.startsWith('note:'))return db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_key=? AND group_index=? AND deleted_at IS NULL AND id!=?').get(source.hash,collection,source.group_key,source.group_index,source.id);
     const indexed = source.group_key || /^https:\/\/www\.pixiv\.net\/artworks\/\d+$/.test(source.source_url || '');
     return indexed
       ? db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND source_url IS ? AND group_index=? AND deleted_at IS NULL AND id!=?').get(source.hash,collection,source.source_url,source.group_index,source.id)
       : db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND deleted_at IS NULL AND id!=?').get(source.hash,collection,source.id);
   };
+  function checkGroupDestination(group, target) {
+    if(!group.length || group[0].collection_id===target)return;
+    if(db.prepare('SELECT id FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL').get(group[0].group_key,target)||group.some(row=>mediaCollision(row,target)))
+      throw fail(409,'目标知识库已有组内图片，整组未移动，请先整理重复内容');
+  }
+  function moveNotePages(note, target) {
+    if(note.collection_id===target)return;
+    const pages=db.prepare('SELECT * FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL').all('note:'+note.id,note.collection_id);
+    checkGroupDestination(pages,target);
+    for(const page of pages){db.prepare('UPDATE items SET collection_id=?,version=version+1,updated_at=? WHERE id=?').run(target,now(),page.id);event('item.updated',page.id);}
+  }
   app.post('/api/items/:id/copy', (req, res) => {
     const source = getItem(req.params.id);
     if (!['image', 'video'].includes(source.kind) || source.deleted_at) throw fail(409, '只能复用未删除的图片或视频');
@@ -584,6 +620,19 @@ export function createApp({
     transaction(()=>{for(const item of items){db.prepare('UPDATE items SET favorite=?,updated_at=?,version=version+1 WHERE id=?').run(+input.favorite,now(),item.id);event('item.updated',item.id);}});
     res.json({count:items.length});
   });
+  app.post('/api/item-groups/move', (req,res) => {
+    const input=z.object({id:z.string(),version:z.number().int().positive(),collection_id:z.string().nullable(),move_note:z.boolean().default(false),title:z.string().min(1).max(200).optional(),content:z.string().max(500000).optional(),tags:cleanTags.optional()}).parse(req.body);
+    validateCollection(input.collection_id);
+    const result=transaction(()=>{
+      const anchor=getItem(input.id);if(anchor.deleted_at||!anchor.group_key||anchor.version!==input.version)throw fail(409,'图片组已变更，请重新打开后移动');
+      const group=db.prepare('SELECT * FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL').all(anchor.group_key,anchor.collection_id);
+      checkGroupDestination(group,input.collection_id);
+      for(const row of group){db.prepare('UPDATE items SET collection_id=?,version=version+1,updated_at=? WHERE id=?').run(input.collection_id,now(),row.id);event('item.updated',row.id);}
+      if(input.move_note&&anchor.group_key.startsWith('note:')){const note=db.prepare("SELECT * FROM items WHERE id=? AND kind='note' AND deleted_at IS NULL AND collection_id IS ?").get(anchor.group_key.slice(5),anchor.collection_id);if(note){db.prepare('UPDATE items SET collection_id=?,version=version+1,updated_at=? WHERE id=?').run(input.collection_id,now(),note.id);event('item.updated',note.id);}}
+      db.prepare('UPDATE items SET title=?,content=?,tags=? WHERE id=?').run(input.title??anchor.title,input.content??anchor.content,JSON.stringify(input.tags??JSON.parse(anchor.tags)),anchor.id);
+      return {...serialize(getItem(anchor.id)),moved_count:group.length};
+    });res.json(result);
+  });
   app.post('/api/items/batch-organize', (req, res) => {
     const input = z.object({
       items: z.array(z.object({ id: z.string(), version: z.number().int().positive() })).min(1).max(100),
@@ -591,9 +640,10 @@ export function createApp({
     }).refine(v => v.collection_id !== undefined || v.favorite !== undefined).parse(req.body);
     if (new Set(input.items.map(i => i.id)).size !== input.items.length) throw fail(400, '内容 ID 不可重复');
     if (input.collection_id !== undefined) validateCollection(input.collection_id);
-    const result = transaction(() => input.items.map(value => {
-      const old = getItem(value.id);
-      if (old.deleted_at || old.version !== value.version) throw fail(409, '部分内容已被修改或删除，请刷新后重试');
+    const result = transaction(() => {
+      const originals=input.items.map(value=>{const old=getItem(value.id);if(old.deleted_at||old.version!==value.version)throw fail(409,'部分内容已被修改或删除，请刷新后重试');return old;});
+      if(input.collection_id!==undefined)for(const old of originals)if(old.kind==='note')moveNotePages(old,input.collection_id);
+      return originals.map(old => {
       const target = input.collection_id === undefined ? old.collection_id : input.collection_id;
       if (old.hash && target !== old.collection_id && mediaCollision(old,target))
         throw fail(409, '目标知识库已有同一图片；请保留独立记录或先整理目标条目');
@@ -601,7 +651,7 @@ export function createApp({
         .run(target, input.favorite === undefined ? old.favorite : +input.favorite, now(), old.id);
       event('item.updated', old.id);
       return serialize(getItem(old.id));
-    }));
+    });});
     res.json({ items: result });
   });
   app.post('/api/items/batch-trash', (req, res) => {
@@ -663,7 +713,7 @@ export function createApp({
     if (old.deleted_at) throw fail(409, "请先从回收站恢复");
     if (patch.version !== old.version)
       throw fail(409, "内容已在其他设备更新，请重新打开后编辑");
-    const item = { ...serialize(old), ...patch };
+    let item = { ...serialize(old), ...patch };
     validateCollection(item.collection_id);
     const archive=z.boolean().default(true).parse(req.body.archive_images);
     const archived=old.kind==='note' && patch.content!==undefined && archive ? await noteArchiveQueue.run(randomUUID(),()=>archiveNoteImages(item,{download:imageDownload,save:saveAsset})):null;
@@ -673,6 +723,10 @@ export function createApp({
     if (old.hash && old.collection_id !== item.collection_id && mediaCollision(old,item.collection_id))
       throw fail(409, '目标知识库已存在同一图片');
     transaction(() => {
+      if(old.kind==='note'){
+        moveNotePages(old,item.collection_id);
+        item=groupNoteImages(item,old.id);
+      }
       db.prepare(
         "UPDATE items SET title=?,content=?,tags=?,collection_id=?,favorite=?,updated_at=?,version=version+1 WHERE id=?",
       ).run(
@@ -1075,6 +1129,13 @@ export function createApp({
           ? "服务器处理失败，请检查服务日志和存储空间"
           : err.message,
     });
+  });
+  if(!setting('note_groups_v1')) transaction(()=>{
+    for(const row of db.prepare("SELECT * FROM items WHERE kind='note' AND deleted_at IS NULL ORDER BY created_at,id").all()){
+      const grouped=groupNoteImages(serialize(row),row.id);
+      if(grouped.content!==row.content){db.prepare('UPDATE items SET content=?,version=version+1,updated_at=? WHERE id=?').run(grouped.content,now(),row.id);event('item.updated',row.id);}
+    }
+    db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('note_groups_v1','true');
   });
   return { app, db, backups, webhooks, imports, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
 }

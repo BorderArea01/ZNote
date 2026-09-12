@@ -137,6 +137,7 @@ export default function Workspace({
     listRequest.current?.abort();
     closeDetail();
     setItems([]); setTotal(0); setLoadError(''); setLoading(true);
+    setTags([]);
     setSelectedTags([]); setQuery(''); setSearch('');
     setSelection([]); setSelecting(false); setMobile(false);
     // Re-entering the current scope must also fetch again after clearing it.
@@ -780,7 +781,7 @@ export default function Workspace({
                   </IconButton>
                 </div>
               </section>
-              <TagFilter tags={tags} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
+              <TagFilter key={actualCollection || 'unfiled'} tags={tags} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
                 onToggle={toggleTag} onMode={setTagMode} onClear={() => setSelectedTags([])}
                 onBrowse={['notes', 'videos'].includes(view) ? null : browseFilteredImages}
                 busy={loading || galleryBusy || query !== search || !!loadError} />
@@ -1101,6 +1102,8 @@ export default function Workspace({
             setGallery(item.kind === 'image' ? [item] : []); setSelected(item);
           }}
           onStep={stepImage}
+          galleryItems={galleryItems}
+          galleryIndex={galleryIndex}
           previousAvailable={galleryIndex > 0}
           nextAvailable={galleryIndex >= 0 && galleryIndex < galleryItems.length - 1}
           galleryBusy={galleryBusy}

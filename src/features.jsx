@@ -1,4 +1,5 @@
 import { HelpHint } from './HelpHint.jsx';
+import { useCollectionTags } from './useCollectionTags.js';
 import React, { useEffect, useRef, useState } from "react";
 import {
   Sun,
@@ -155,6 +156,7 @@ export function UploadDialog({
     })),
   );
   const [collection, setCollection] = useState(currentCollection || "");
+  const scopedSuggestions = useCollectionTags(collection);
   const [tags, setTags] = useState([]);
   const [running, setRunning] = useState(false);
   const stop = useRef(false);
@@ -256,7 +258,7 @@ export function UploadDialog({
           label="批量上传标签"
           value={tags}
           onChange={setTags}
-          suggestions={suggestions}
+          suggestions={scopedSuggestions}
           disabled={running}
         />
         <div className="upload-queue">

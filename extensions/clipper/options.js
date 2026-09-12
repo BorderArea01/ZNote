@@ -1,4 +1,5 @@
 import { settings, serverUrl, api } from './client.js';
+import { parseBlockedSites } from './site-policy.js';
 const $ = id => document.getElementById(id);
 const current = await settings();
 $('hover-enabled').checked = current.hover;
@@ -6,6 +7,7 @@ $('dock-enabled').checked = current.dock;
 $('download-key').value = current.downloadKey.toUpperCase();
 $('save-key').value = current.saveKey.toUpperCase();
 $('preview-width').value = current.previewWidth;
+$('blocked-sites').value = current.blockedSites.join('\n');
 $('behavior').addEventListener('submit', async event => {
   event.preventDefault();
   try {
@@ -14,7 +16,7 @@ $('behavior').addEventListener('submit', async event => {
     if (downloadKey === saveKey) throw new Error('下载和入库快捷键不能相同');
     const previewWidth = Number($('preview-width').value);
     if (!Number.isInteger(previewWidth) || previewWidth < 240 || previewWidth > 1200) throw new Error('预览宽度应为 240～1200');
-    await chrome.storage.local.set({ hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, shortcutVersion: 1, previewWidth });
+    await chrome.storage.local.set({ hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, shortcutVersion: 1, previewWidth, blockedSites:parseBlockedSites($('blocked-sites').value) });
     $('status').textContent = '浏览器行为已保存，已打开网页同步生效';
   } catch (e) { $('status').textContent = e.message; }
 });

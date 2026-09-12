@@ -1,6 +1,7 @@
 import { mediaKind, addResource } from "./resource-store.js";
 import { api, settings, serverUrl, saveImage, limitedImage } from "./client.js";
 import { openGallery } from './gallery-ticket.js';
+import { blockedSite } from './site-policy.js';
 const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
@@ -44,6 +45,9 @@ chrome.webRequest.onHeadersReceived.addListener(
     serial(async () => {
       const state = states[details.tabId];
       if (!state?.enabled) return;
+      const policy=await settings();
+      if (state.blocked || blockedSite(state.source_url,policy)) { delete states[details.tabId];await persist();return; }
+      if(details.documentUrl && blockedSite(details.documentUrl,policy))return;
       addResource(state, {
         url: details.url,
         mime,
@@ -168,6 +172,15 @@ export async function discover(message, sender) {
   const tabId = sender.tab?.id;
   if (tabId === undefined || sender.id !== chrome.runtime.id)
     throw new Error("无效页面");
+  const config=await settings();
+  const tab=await chrome.tabs.get(tabId);
+  const marked=states[tabId]?.znotePage && states[tabId].source_url===tab.url;
+  const topBlocked=blockedSite(tab.url,config)||marked||(message.type==='media-settings'&&message.znotePage===true&&sender.frameId===0);
+  const blocked=topBlocked||blockedSite(sender.url,config)||(message.type==='media-settings'&&message.znotePage===true);
+  if (topBlocked) await serial(async()=>{states[tabId]={resources:[],enabled:false,blocked:true,znotePage:!!marked||(message.type==='media-settings'&&message.znotePage===true),source_url:tab.url,updated:Date.now()};await persist()});
+  else if(states[tabId]?.blocked)await serial(async()=>{delete states[tabId];await persist()});
+  if(message.type==='media-settings')return {blocked,hover:!blocked&&config.hover!==false,dock:!blocked&&config.dock!==false,downloadKey:config.downloadKey,saveKey:config.saveKey,previewWidth:config.previewWidth};
+  if(blocked && !['media-options','media-stop','media-clear'].includes(message.type))throw Error('此网站已停用 ZNote 资源嗅探，可在扩展设置管理黑名单');
   if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action);
   if (message.type === "media-action") {
     const resource = await serial(async () =>
@@ -189,10 +202,6 @@ export async function discover(message, sender) {
       await persist();
       return resource;
     });
-  if (message.type === "media-settings") {
-    const config = await settings();
-    return { hover: config.hover !== false, dock: config.dock !== false, downloadKey: config.downloadKey, saveKey: config.saveKey, previewWidth: config.previewWidth };
-  }
   if (message.type === 'media-preview-size') {
     if (!Number.isInteger(message.width) || message.width < 240 || message.width > 1200) throw new Error('预览宽度应为 240～1200');
     await chrome.storage.local.set({previewWidth: message.width});

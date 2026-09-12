@@ -627,6 +627,17 @@ a {
   place-items: center;
   color: #849071;
 }
+.gallery-strip{display:flex;gap:7px;overflow-x:auto;padding:10px 4px;max-width:100%;justify-content:center;align-items:center}
+.gallery-strip button{position:relative;flex:0 0 58px;width:58px;height:54px;border:2px solid transparent;border-radius:8px;background:var(--surface-2,#eef2f2);padding:2px;overflow:hidden}
+.gallery-strip button[aria-current=true]{border-color:var(--green,#287464)}
+.gallery-strip img{width:100%;height:100%;object-fit:cover;border-radius:4px}
+.gallery-strip span{position:absolute;right:2px;bottom:1px;color:white;background:#0009;border-radius:3px;font-size:10px;padding:0 3px}
+.note-gallery-dialog{width:min(1000px,94vw);max-height:94vh;overflow:auto}
+.note-gallery-image{display:block;width:100%;max-height:65vh;object-fit:contain}
+.note-gallery-dialog .gallery-controls{justify-content:center;padding:10px}
+.markdown-preview img[role=button]{cursor:zoom-in}
+.media-description.markdown-preview{min-height:0;padding:12px 0;font-size:14px}
+@media(max-width:600px){.gallery-strip{justify-content:flex-start}.gallery-strip button{flex-basis:48px;width:48px;height:46px}}
 .card-body {
   padding: 15px 16px 12px;
 }

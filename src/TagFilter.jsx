@@ -11,7 +11,7 @@ export function TagFilter({ tags, selected, mode, onToggle, onMode, onClear, onB
       {onBrowse && <button className="primary" disabled={busy} onClick={onBrowse}><Images size={16} />连续浏览图片</button>}
     </div>
     <div className="tag-browser-tools">
-      <label className="tag-search"><Search size={15} /><input aria-label="搜索筛选标签" placeholder="搜索全部标签…" value={query} onChange={e => setQuery(e.target.value)} /></label>
+      <label className="tag-search"><Search size={15} /><input aria-label="搜索筛选标签" placeholder="搜索当前知识库标签…" value={query} onChange={e => setQuery(e.target.value)} /></label>
       <select aria-label="标签匹配方式" value={mode} onChange={e => onMode(e.target.value)}>
         <option value="all">同时包含全部标签</option><option value="any">包含任意标签</option>
       </select>

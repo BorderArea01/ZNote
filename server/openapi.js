@@ -41,7 +41,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.9.2",
+    version: "0.9.3",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -581,6 +581,11 @@ spec.paths['/api/webhooks/{id}/deliveries'] = { get: operation('查看投递状�
 spec.paths['/api/webhooks/{id}/deliveries/{delivery}/retry'] = { post: operation('重新排队投递；沿用投递 ID，尝试次数归零（管理员）', { type: 'object' }, { parameters: [id, { name: 'delivery', in: 'path', required: true, schema: str }] }) };
 const collectionParameter={name:'collection',in:'query',schema:str,description:'知识库 ID；unfiled 为未分类，省略为全局'};
 for(const path of ['/api/stats','/api/tags'])spec.paths[path].get.parameters=[collectionParameter];
+spec.paths['/api/tags'].get.parameters=[{...collectionParameter,description:'知识库 ID；unfiled 或省略参数均仅查询未分类内容',schema:{type:'string',default:'unfiled'}}];
+spec.paths['/api/item-groups/move']={post:operation('原子移动整组图片，可同时移动所属笔记',ref('Item'),{
+  description:'以 id 对应图片作为组锚点，version 必须匹配；移动同一源知识库的全部组成员。move_note:true 同时移动所属笔记。目标存在同组或重复内容时返回 409，所有修改回滚。成功返回 moved_count。',
+  requestBody:body({type:'object',required:['id','version','collection_id'],properties:{id:str,version:{type:'integer',minimum:1},collection_id:{...str,nullable:true},move_note:{type:'boolean',default:false},title:input.properties.title,content:input.properties.content,tags:input.properties.tags}})
+})};
 spec.paths['/api/items/batch-trash']={post:operation('当前知识库批量回收或恢复，版本冲突时整体回滚',{type:'object'},
   {requestBody:body({type:'object',required:['items','collection_id'],properties:{collection_id:{type:'string',nullable:true},restore:{type:'boolean',default:false},
     items:{type:'array',minItems:1,maxItems:100,items:{type:'object',required:['id','version'],properties:{id:str,version:{type:'integer',minimum:1}}}}}})})};

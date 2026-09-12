@@ -1,4 +1,4 @@
-export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720 };
+export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [] };
 export async function settings() {
   const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
   const config = { ...defaults, ...stored };
@@ -26,7 +26,7 @@ export async function saveImage(blob, details, signal, config = null) {
   const data = new FormData();
   data.set('file', blob, details.filename || '网页图片.png');
   data.set('title', (details.title || details.filename || '网页图片').slice(0, 200));
-  data.set('content', [details.image_url ? `${details.capture_note || ''}\n图片地址：${details.image_url}`.trim() : '当前页面可见区域截图', /^https?:\/\//i.test(details.source_url || '') ? `来源链接：${details.source_url}` : ''].filter(Boolean).join('\n\n'));
+  data.set('content', [details.image_url ? details.capture_note || '' : '当前页面可见区域截图', /^https?:\/\//i.test(details.source_url || '') ? `来源链接：${details.source_url}` : ''].filter(Boolean).join('\n\n'));
   data.set('tags', JSON.stringify(config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean)));
   if (config.collection_id) data.set('collection_id', config.collection_id);
   if (/^https?:\/\//i.test(details.source_url || '')) data.set('source_url', details.source_url);

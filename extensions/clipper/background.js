@@ -3,7 +3,7 @@ import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 let directVideoBusy = false;
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth'].some(key => key in changes)) return;
+  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server'].some(key => key in changes)) return;
   chrome.tabs.query({url: ['http://*/*', 'https://*/*']}).then(tabs => Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {type: 'media-settings-changed'})))).catch(() => {});
 });
 chrome.runtime.onInstalled.addListener(() => {
@@ -52,7 +52,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     discover(message, sender).then(value => reply({ ok: true, value }), error => reply({ ok: false, error: error.message })); return true;
   }
   if (sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL('popup.html') && message.type === 'open-panel') {
-    chrome.tabs.sendMessage(message.tabId, { type: 'open-media-panel' }, { frameId: 0 }).then(() => reply({ ok: true }), () => reply({ ok: false, error: '此页面不允许扩展运行，或需要刷新页面' })); return true;
+    chrome.tabs.sendMessage(message.tabId, { type: 'open-media-panel' }, { frameId: 0 }).then(result => reply(result || { ok: false, error: '此页面未能打开媒体浮窗' }), () => reply({ ok: false, error: '此页面不允许扩展运行，或需要刷新页面' })); return true;
   }
   if (sender.id !== chrome.runtime.id || !['popup.html', 'options.html'].some(path => sender.url === chrome.runtime.getURL(path))) return;
   if (message.type === 'video') {

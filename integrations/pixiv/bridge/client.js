@@ -39,7 +39,7 @@ export function details(record, target) {
     collection_id: target.collection_id || null, tags: tags.filter(t => t.length <= 40).slice(0,30), source_url: record.source,
     captured_at: new Date().toISOString(),
     ...(target.groupMode && record.type < 2 ? {group_key:target.groupMode === 'work' ? `pixiv:art:${record.id}` : '',group_index:record.index,group_title:record.title} : {}),
-    content: [record.authorId ? `作者：[${mdText(record.author || record.authorId)}](https://www.pixiv.net/users/${record.authorId})` : `作者：${record.author || '未知'}`, `Pixiv ID：${record.id}`, record.type < 2 ? `页码：${record.index + 1} / ${record.pages}` : '', `作品标签：${record.tags.join('、')}`, record.date ? `发布日期：${record.date}` : '', description(record.description), `来源链接：${record.source}`, record.original ? `原文件：${record.original}` : ''].filter(Boolean).join('\n\n'),
+    content: [record.authorId ? `作者：[${mdText(record.author || record.authorId)}](https://www.pixiv.net/users/${record.authorId})` : `作者：${record.author || '未知'}`, description(record.description)].filter(Boolean).join('\n\n'),
   };
   return fields;
 }

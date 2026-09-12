@@ -38,14 +38,17 @@
     hideDelay,
     pointer = { x: -1, y: -1 },
     pollTimer,
-    hoverAllowed = true,
-    dockAllowed = true;
+    hoverAllowed = false,
+    dockAllowed = false,
+    siteBlocked = true;
   const own = (event) => event.composedPath().includes(host);
   const shortcutHelp = () => `${downloadKey.toUpperCase()} 下载 · ${saveKey.toUpperCase()} 入库`;
   async function refreshSettings() {
     try {
-      const config = await send({type: 'media-settings'});
+      const config = await send({type: 'media-settings',znotePage:!!document.querySelector('meta[name="znote-app"]')});
       hoverAllowed = config.hover; dockAllowed = config.dock;
+      siteBlocked = config.blocked;
+      if(siteBlocked){enabled=false;resources=[];panel.classList.add('hidden');clearInterval(pollTimer);}
       downloadKey = /^[a-z0-9]$/.test(config.downloadKey) ? config.downloadKey : 's';
       saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'z' ? 's' : 'z');
       downloadButton.textContent = `${downloadKey.toUpperCase()} 下载`;
@@ -153,7 +156,7 @@
     }
   }
   function scan() {
-    if (!enabled) return;
+    if (!enabled || siteBlocked) return;
     const found = [];
     for (const img of document.images) {
       const rect = img.getBoundingClientRect();
@@ -185,6 +188,8 @@
       .catch((e) => notify(e.message));
   }
   async function open() {
+    await refreshSettings();
+    if(siteBlocked)return;
     panel.classList.remove("hidden");
     preview.classList.add("hidden");
     try {
@@ -665,10 +670,11 @@
       if (sender.id !== chrome.runtime.id) return;
       if (message.type === 'media-settings-changed') { refreshSettings(); reply({ok: true}); }
       if (message.type === "open-media-panel") {
-        open();
-        reply({ ok: true });
+        open().then(()=>reply(siteBlocked?{ok:false,error:'此网站已停用媒体采集，可在扩展设置中管理黑名单'}:{ok:true}),()=>reply({ok:false,error:'无法打开媒体浮窗，请刷新页面重试'}));
+        return true;
       }
       if (message.type === "scan-media-frame") {
+        if(siteBlocked){reply({ok:false});return;}
         enabled = true;
         scan();
         reply({ ok: true });

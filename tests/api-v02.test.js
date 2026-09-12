@@ -91,7 +91,7 @@ test("v0.2: batch uploads, multi-tags, home preferences, six exports and lossles
   })
     .png({ compressionLevel: 0 })
     .toBuffer();
-  let imageA, imageB, note, readToken;
+  let imageA, imageB, noteImageB, note, readToken;
   const uploadBatch = async (files, collection) => {
     const form = new FormData();
     for (const [name, buffer] of files)
@@ -183,12 +183,14 @@ test("v0.2: batch uploads, multi-tags, home preferences, six exports and lossles
         collection_id: a.id,
         tags: ["资料", "随记"],
       });
+      noteImageB = await json("/api/items/"+note.content.match(/\/media\/([^/]+)\//)[1]);
+      assert.notEqual(noteImageB.id,imageB.id);
       const query = (tags) =>
         "/api/items?tags=" + encodeURIComponent(JSON.stringify(tags));
-      assert.equal((await json(query(["资料", "图像"]))).total, 2);
+      assert.equal((await json(query(["资料", "图像"]))).total, 3);
       assert.equal(
         (await json(query(["随记", "图像"]) + "&tag_mode=any")).total,
-        3,
+        4,
       );
       const changed = await json("/api/items/batch-tags", "POST", {
         items: [imageA, note].map((i) => ({ id: i.id, version: i.version })),
@@ -197,7 +199,7 @@ test("v0.2: batch uploads, multi-tags, home preferences, six exports and lossles
       });
       [imageA, note] = changed.items;
       assert.deepEqual(imageA.tags, ["资料", "图像", "重点"]);
-      assert.ok(note.content.includes(imageB.url));
+      assert.ok(note.content.includes(noteImageB.url));
       assert.equal(
         (
           await request("/api/items/batch-tags", "POST", {
@@ -275,7 +277,7 @@ test("v0.2: batch uploads, multi-tags, home preferences, six exports and lossles
         if (mode === "json") {
           const m = await r.json();
           assert.equal(m.collections.length, 1);
-          assert.ok(m.attachment_ids.includes(imageB.id));
+          assert.ok(m.items.some(i=>i.id===noteImageB.id)); assert.ok(!m.items.some(i=>i.id===imageB.id));
           continue;
         }
         const files = unzip(Buffer.from(await r.arrayBuffer()));
@@ -284,18 +286,18 @@ test("v0.2: batch uploads, multi-tags, home preferences, six exports and lossles
           assert.ok(!files.has(`images/${imageB.id}.png`));
           assert.ok(files.has("images.json"));
         } else {
-          assert.deepEqual(files.get(`images/${imageB.id}.png`), pngB);
+          assert.deepEqual(files.get(`images/${noteImageB.id}.png`), pngB);
           if (mode === "html") {
             const html = files.get("index.html").toString();
             assert.ok(html.includes("&lt;script&gt;"));
             assert.ok(!html.includes("<script>"));
-            assert.ok(html.includes(`images/${imageB.id}.png`));
+            assert.ok(html.includes(`images/${noteImageB.id}.png`));
           } else
             assert.ok(
               files
                 .get(`notes/${note.id}.md`)
                 .toString()
-                .includes(`../images/${imageB.id}.png`),
+                .includes(`../images/${noteImageB.id}.png`),
             );
         }
         if (mode === "markdown")
@@ -368,7 +370,7 @@ test("v0.2: batch uploads, multi-tags, home preferences, six exports and lossles
       assert.deepEqual(await json("/api/preferences"), {
         default_collection_id: null,
       });
-      assert.equal((await json("/api/items?collection=unfiled")).total, 2);
+      assert.equal((await json("/api/items?collection=unfiled")).total, 3);
     },
   );
 });

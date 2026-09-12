@@ -88,7 +88,7 @@ test('v0.3 shared originals, independent metadata, atomic organization and reada
       const manifest = JSON.parse(files.get(mode === 'images' ? 'images.json' : 'manifest.json'));
       const entries = manifest.items || manifest.images;
       for (const [path] of files) assert.ok(!path.startsWith('/') && !path.split('/').includes('..') && !path.includes('\\'));
-      const imageEntry = entries.find(i => i.id === (mode === 'markdown' ? first.id : second.id));
+      const noteImageId=note.content.match(/\/media\/([^/]+)\//)[1]; const imageEntry = entries.find(i => i.id === (mode === 'markdown' ? noteImageId : second.id));
       assert.match(imageEntry.file, /图片/); assert.match(imageEntry.file, /中文|另一份标题/);
       assert.deepEqual(files.get(imageEntry.file), original);
       const sidecar = JSON.parse(files.get(imageEntry.file + '.json'));
@@ -97,7 +97,7 @@ test('v0.3 shared originals, independent metadata, atomic organization and reada
         const exportedNote = entries.find(i => i.id === note.id);
         const markdown = files.get(exportedNote.file).toString();
         const link = markdown.match(/\]\(([^)]+)\)/)[1];
-        const attachment = posix.normalize(posix.join(posix.dirname(exportedNote.file), decodeURIComponent(link)));
+        const attachment = posix.normalize(posix.join(posix.dirname(exportedNote.file), decodeURIComponent(link.replace(/^<|>$/g,''))));
         assert.deepEqual(files.get(attachment), original);
       }
       if (mode === 'html') assert.match(files.get('index.html').toString(), /%E5|%E7/);

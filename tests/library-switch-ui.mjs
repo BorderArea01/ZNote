@@ -30,7 +30,7 @@ try {
     libs.push({ ...lib, asset, note });
   }
   await context.request.patch(base + '/api/preferences', { data: { default_collection_id: libs[0].id } });
-  await page.goto(base); await page.getByRole('button', { name: '打开 摄影.png', exact: true }).waitFor();
+  await page.goto(base); await page.getByRole('button', { name: '打开 摄影笔记 · 配图', exact: true }).waitFor();
   // Real navigation, including re-entering an active library/category, without reload.
   for (const lib of [libs[1], libs[0], libs[0], libs[1]]) {
     await choose(lib.name);
@@ -52,7 +52,7 @@ try {
   await choose('摄影'); await loaded();
   await page.getByPlaceholder('搜索标题、正文或标签…').fill('只在旧库搜索的词');
   await choose('插画'); await loaded();
-  await page.getByRole('button', { name: '打开 插画.png', exact: true }).waitFor();
+  await page.getByRole('button', { name: '打开 插画笔记 · 配图', exact: true }).waitFor();
   assert.equal(await page.getByPlaceholder('搜索标题、正文或标签…').inputValue(), '');
   // Hold a gallery response after it has left the API. Switching libraries must
   // invalidate both this response and any subsequent detail request.

@@ -12,7 +12,7 @@ export async function archiveNoteImages(input, { download, save }) {
         bytes+=buffer.length;
         if(buffer.length>25*1024*1024 || bytes>500*1024*1024) throw Error('配图容量超出上限');
         const item=await save({buffer,originalname:'正文配图'}, {title:`${input.title} · 配图 ${index+1}`.slice(0,200),
-          content:`正文配图\n\n图片地址：${url.startsWith('data:')?'内嵌图片':url}`,tags:JSON.stringify(input.tags),collection_id:input.collection_id,
+          content:'正文配图',tags:JSON.stringify(input.tags),collection_id:input.collection_id,
           source_url:input.source_url||null});
         replacements.set(url,item.url);
       } catch(e){failures.push({url:url.startsWith('data:')?'内嵌图片':url,error:e.message});}

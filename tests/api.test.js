@@ -213,7 +213,7 @@ test("ZNote real API lifecycle, permissions, media, export and restart", async (
         note.id,
       );
       assert.equal(
-        (await (await request("/api/tags")).json()).find(
+        (await (await request("/api/tags?collection="+collection.id)).json()).find(
           (t) => t.name === "研究",
         ).count,
         1,

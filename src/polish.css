@@ -3,6 +3,30 @@
 .upload-guidance { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
 .note-archive-status { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:16px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--surface-2); }
 .selection-bar { position:sticky; top:0; z-index:4; background:var(--surface); }
+.detail-dialog .metadata-fields{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;margin:18px 0 24px}
+.detail-dialog .metadata-fields>label{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;font-size:12px}
+.detail-dialog .metadata-label{display:inline-flex;align-items:center;gap:7px;line-height:20px;font-weight:600}
+.detail-dialog .metadata-label svg{flex:none}
+.detail-dialog .metadata-fields select{width:100%;min-height:40px;padding:9px 12px;border:1px solid var(--border);border-radius:8px}
+.detail-dialog .metadata-fields .tag-input-group{width:100%;min-width:0}
+.detail-dialog .tag-input{min-height:40px;padding:6px;gap:6px}
+html[data-style] select option,html[data-style] select optgroup{color:var(--ink);background:var(--surface)}
+html[data-theme=dark] select{color-scheme:dark}
+html[data-theme=light] select{color-scheme:light}
+html[data-style] input[type=checkbox]{appearance:auto;accent-color:var(--green);width:16px;height:16px;flex:none;margin:0;vertical-align:middle}
+html[data-style] .card-select{box-shadow:0 2px 8px #0003;border:1px solid var(--border);background:var(--surface);color:var(--ink)}
+.zoom-viewer{padding:0!important;z-index:10000;overflow:hidden}
+.zoom-surface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;outline:none}
+.zoom-surface:active{cursor:grabbing}
+.zoom-surface img{max-width:calc(100vw - 48px);max-height:calc(100vh - 120px);object-fit:contain;user-select:none;pointer-events:none;transform-origin:center}
+.zoom-tools{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#171d2dee;border:1px solid #6d7890;border-radius:16px;padding:9px 13px;color:#f0f3ff}
+.zoom-tools button,.zoom-close{color:#f0f3ff!important;background:#283246!important;border-color:#65748f!important}
+.zoom-close{position:absolute;right:22px;top:20px;border-radius:12px}
+.zoom-tools output{min-width:48px;text-align:center;font-size:13px}
+.note-gallery-stage{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in}
+.detail-dialog .metadata-fields select{margin-left:0}
+.image-stage .gallery-strip img{object-fit:cover;width:100%;height:100%;max-height:none}
+@media(min-width:760px){.note-detail .metadata-fields{grid-template-columns:minmax(160px,1fr) minmax(220px,2fr)}}
 html[data-style] button.help-trigger { display: inline-flex; flex: 0 0 28px; align-items: center; justify-content: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; box-shadow: none; vertical-align: middle; }
 html[data-style] button.help-trigger:hover, html[data-style] button.help-trigger:focus-visible { background: var(--accent-soft); color: var(--green); }
 .help-tooltip { position: fixed; z-index: 20000; width: max-content; max-width: min(320px, calc(100vw - 16px)); padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 28px #0002; font-size: 14px; font-weight: 400; line-height: 1.75; overflow-wrap: anywhere; }

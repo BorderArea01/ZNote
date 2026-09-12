@@ -22,7 +22,7 @@ export async function ingestRecord(
               {
                 ...fields,
                 title: (r.title + " · 配图").slice(0, 200),
-                content: fields.content + "\n\n图片地址：" + url,
+                content: fields.content,
               },
               "novel-image.png",
             );
