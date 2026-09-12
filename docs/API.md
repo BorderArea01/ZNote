@@ -106,3 +106,11 @@ Webhook 可在设置中创建，也可通过管理员接口 `/api/webhooks` 管�
 ## 视频首帧封面
 
 视频条目的 `thumbnail_url` 指向 `/media/:id/thumbnail`，返回首帧 WebP，最长边不超过 480px。与原视频使用相同的访问鉴权，旧视频也按需生成，无需重新上传。解码组件缺失、无法解码或超时返回 503，原视频地址仍可正常访问。完整备份保存原视频，恢复后可重新生成封面。
+
+### 永久删除回收站内容
+
+1. POST /api/trash/preview，JSON：`{ "collection_id": "知识库 ID", "ids": ["条目 ID"] }`。collection_id 必填，null 表示未分类；省略 ids 表示当前库整个回收站，指定 ids 每次最多 100 项。
+2. 返回 count、revision、referenced、shared、reclaimable_bytes。确认后 POST /api/trash/purge，带同一选择范围、revision 和 `confirm: "DELETE"`。
+3. 内容或引用变化返回 409，须重新预览、确认。成功返回上述字段及 freed_bytes、freed_files、pending_files；待清理原文件会自动重试。写入令牌可用，只读令牌不可用。清空不会跨知识库，不能永久删除活动条目。
+
+移入回收站与永久删除会保留笔记的独立配图，自动替换其 Markdown 内部地址；笔记不再引用删除条目。保存笔记引用回收站或不存在的条目返回 409，须先恢复或换用有效配图。条目及笔记版本号可能随配图替换更新，请使用响应中的最新版本。媒体读取接口保留回收站预览能力，但不允许将该地址重新写入笔记。

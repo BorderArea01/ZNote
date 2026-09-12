@@ -59,7 +59,7 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
       const table = snapshot.prepare('SELECT type,sql FROM sqlite_master WHERE name=?').get(name);
@@ -121,7 +121,7 @@ async function inspectBackup(stage) {
   } finally { snapshot?.close(); }
 }
 
-export function createBackupManager({ db, dataDir, maintenance, clearCache = () => {}, beforeRestore = async () => {}, now = () => Date.now(), maxRestoreBytes = 20 * 1024 ** 3 }) {
+export function createBackupManager({ db, dataDir, maintenance, clearCache = () => {}, beforeRestore = async () => {}, afterRestore = () => {}, now = () => Date.now(), maxRestoreBytes = 20 * 1024 ** 3 }) {
   const directory = join(dataDir, 'backups'), staging = join(dataDir, 'restore-staging');
   let busy = false, stopped = false, timer;
   const previews = new Map();
@@ -159,7 +159,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
     if (busy || maintenance.locked) throw fail(409, '备份或恢复任务正在进行');
     busy = true;
     try {
-      const id = await archive();
+      const id = await maintenance.work(archive);
       const current = await config();
       await saveConfig({ ...current, last_attempt: now(), last_success: now(), last_error: null });
       for (const entry of (await list()).slice(current.keep)) await unlink(join(directory, entry.id));
@@ -232,6 +232,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
             db.prepare("UPDATE webhook_deliveries SET status='pending',next_attempt=? WHERE status='inflight'").run(now());
             db.exec("UPDATE items SET stored_bytes=bytes WHERE kind='image' AND stored_bytes IS NULL");
             if (db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Restored foreign keys invalid');
+            afterRestore();
             db.exec('COMMIT'); committed = true;
           } catch (e) { db.exec('ROLLBACK'); throw e; }
           clearCache();

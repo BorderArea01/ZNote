@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.7-287464?style=flat-square" alt="Version 0.9.7" />
+    <img src="https://img.shields.io/badge/version-0.9.8-287464?style=flat-square" alt="Version 0.9.8" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -138,7 +138,9 @@ docker compose up -d --build
 
 **图文笔记的配图默认本地归档**：普通 Markdown 外链图片也会在保存时尝试入库，成功后改为内部地址。已有笔记可点击「归档外部配图」；无法下载时保留来源和失败说明。每次最多 200 张 / 500 MB，单张 25 MB，可再次保存继续处理。
 
-**批量删除**：按标签筛选 →「选择内容」→ 勾选当前页或指定图片 →「删除所选」。内容进入当前知识库回收站，支持批量恢复。
+**批量删除**：按标签筛选 →「选择内容」→ 勾选当前页或指定图片 →「删除所选」。内容进入当前知识库回收站，支持批量恢复。回收站卡片和详情页可「永久删除」，选择模式可「永久删除所选」，右上角可「清空回收站」（当前知识库全部回收站内容，不受筛选影响）。删除前会显示数量并确认。
+
+**配图与回收站分离**：图片移入回收站时，引用它的笔记自动保留独立配图，原文件去重共享；笔记不会继续引用回收站条目。已有旧引用会自动修复。新引用须先恢复原图片。永久删除仅释放不再被任何条目使用的原文件。
 
 更多操作、权限和格式支持见 **[扩展使用说明](extensions/clipper/README.md)**。m3u8 合并及平台视频链接解析需要媒体组件，可运行 `npm run media:setup` 安装。
 

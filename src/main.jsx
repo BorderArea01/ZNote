@@ -343,6 +343,7 @@ function Detail({
   onGroupOrdered,
   onDelete,
   onRestore,
+  onPurge,
   uploadFiles,
   notify,
   onSearch,
@@ -712,6 +713,7 @@ function Detail({
                   <Trash2 size={17} />
                 </IconButton>
               )}
+              {item.deleted_at&&onPurge&&<button className="danger" onClick={()=>onPurge(item)}><Trash2 size={16}/>永久删除</button>}
               {item.deleted_at ? (
                 <button className="primary" onClick={() => onRestore(item)}>
                   <RefreshCw size={16} />

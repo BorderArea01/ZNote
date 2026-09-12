@@ -105,7 +105,7 @@ test("one-click pairing requires an admin session and a single-use grant, never 
       {
         title: "网页正文",
         content:
-          "[链接](https://example.com/docs)\n\n![配图](/media/test/original)",
+          "[链接](https://example.com/docs)\n\n`![示例语法](/media/test/original)`",
         source_url: "https://www.bilibili.com/read/cv1",
         tags: ["文章"],
       },

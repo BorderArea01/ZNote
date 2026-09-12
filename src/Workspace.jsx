@@ -1,3 +1,4 @@
+import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { version as packageVersion } from '../package.json';
 import {
@@ -99,6 +100,7 @@ export default function Workspace({
     detailGeneration = useRef(0),
     listRequest = useRef(null);
   const [organizing, setOrganizing] = useState(false);
+  const [purging,setPurging]=useState(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
@@ -127,6 +129,7 @@ export default function Workspace({
   const refresh = () => setRevision((n) => n + 1),
     notify = setToast;
   const actualCollection = collection === "unfiled" ? null : collection;
+  function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
   const toggleSelection = id => setSelection(previous => previous.includes(id)
     ? previous.filter(value => value !== id)
     : previous.length < 100 ? [...previous,id] : previous);
@@ -197,7 +200,7 @@ export default function Workspace({
         sort,
         offset: String(offset),
         limit: "60",
-        grouped: selecting ? 'false' : 'true',
+        grouped: selecting || view==='trash' ? 'false' : 'true',
       });
       if (search) p.set("q", search);
       p.set("collection", collection || 'unfiled');
@@ -794,6 +797,7 @@ export default function Workspace({
                   <b>{total} 项内容</b>
                 </span>
                 <div className="result-actions">
+                  {view==='trash'&&<button className="text-button danger" disabled={!stats.trash} onClick={()=>openPurge(null)}><Trash2 size={14}/>清空回收站</button>}
                   <button
                     className="text-button"
                     onClick={() => {
@@ -843,6 +847,7 @@ export default function Workspace({
                   <button className={view==='trash'?'':'danger'} disabled={!selection.length || batchBusy} onClick={batchTrash}>
                     {view==='trash'?<RefreshCw size={15}/>:<Trash2 size={15}/>} {batchBusy?'正在处理…':view==='trash'?'恢复所选':'删除所选'}
                   </button>
+                  {view==='trash'&&<button className="danger" disabled={!selection.length||batchBusy} onClick={()=>openPurge(selection)}><Trash2 size={15}/>永久删除所选</button>}
                 </div>
               )}
               {loadError ? (
@@ -972,12 +977,12 @@ export default function Workspace({
                       </button>
                       <div className="card-actions">
                         {view === "trash" ? (
-                          <IconButton
+                          <><IconButton
                             label={`恢复 ${item.title}`}
                             onClick={() => restore(item)}
                           >
                             <RefreshCw size={16} />
-                          </IconButton>
+                          </IconButton><IconButton label={`永久删除 ${item.title}`} onClick={()=>openPurge([item.id])}><Trash2 size={16}/></IconButton></>
                         ) : (
                           <IconButton
                             label={
@@ -1090,6 +1095,7 @@ export default function Workspace({
           onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
           onDelete={remove}
           onRestore={restore}
+          onPurge={item=>openPurge([item.id])}
           uploadFiles={uploadFiles}
           notify={notify}
           onSearch={(q) => {
@@ -1111,6 +1117,7 @@ export default function Workspace({
           galleryPosition={galleryIndex >= 0 ? `第 ${galleryIndex + 1} / ${galleryItems.length} 张` : null}
         />
       )}
+      {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
       {organizing && <OrganizeDialog items={items.filter(i => selection.includes(i.id))} collections={collections} onClose={() => setOrganizing(false)} onDone={() => { refresh(); notify('已完成批量整理'); }} />}
       {settings && (
         <SettingsPanel

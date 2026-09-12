@@ -313,13 +313,13 @@ test("ZNote real API lifecycle, permissions, media, export and restart", async (
       );
       assert.equal(
         (await (await request("/api/items?kind=image")).json()).total,
-        0,
+        1,
       );
       assert.equal(
         (await (await request("/api/items?trash=true")).json()).total,
         1,
       );
-      assert.equal((await request(image.url)).status, 200); // Existing notes retain their image references.
+      assert.equal((await request(image.url)).status, 200); // Trash preview remains available; notes now use an independent attachment.
       assert.equal(
         (await request(`/api/items/${image.id}/restore`, "POST", {})).status,
         200,
@@ -341,12 +341,12 @@ test("ZNote real API lifecycle, permissions, media, export and restart", async (
       assert.equal(r.status, 200);
       const files = unzip(Buffer.from(await r.arrayBuffer()));
       const manifest = JSON.parse(files.get("manifest.json"));
-      assert.equal(manifest.items.length, 3);
+      assert.equal(manifest.items.length, 4);
       assert.equal(manifest.collections[0].id, collection.id);
       assert.deepEqual(files.get(`images/${image.id}.png`), original);
       assert.match(
         files.get(`notes/${note.id}.md`).toString(),
-        new RegExp(`../images/${image.id}.png`),
+        new RegExp(`../images/${manifest.items.find(i=>i.kind==='image'&&i.id!==image.id).id}.png`),
       );
       assert.ok(!files.get("manifest.json").toString().includes("zn_"));
       assert.ok(!manifest.tokens);

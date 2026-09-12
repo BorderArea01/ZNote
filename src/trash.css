@@ -1,0 +1,10 @@
+.trash-dialog{width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto}
+.trash-confirm-body{padding:24px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.trash-confirm-body p{margin:0;line-height:1.65;font-size:13px;color:var(--muted)}
+.trash-confirm-body .trash-confirm-count{font-size:20px;font-weight:650;color:var(--ink,inherit)}
+.trash-confirm-symbol{color:#d65568;background:rgba(214,85,104,.12);padding:12px;border-radius:14px;margin-bottom:4px}
+.trash-confirm-body small{color:var(--muted)}
+.trash-confirm-actions{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--border)}
+html .trash-dialog button.trash-confirm-delete{background:#bd354c;color:white;border:1px solid #bd354c}
+button.trash-confirm-delete:hover:not(:disabled){background:#a5283e}
+.trash-confirm-actions button:disabled{opacity:.5;cursor:wait}

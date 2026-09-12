@@ -1,3 +1,5 @@
+import {localMediaReferences} from '../shared/local-media.js';
+import {createTrashManager} from './trash.js';
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
 import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images.js';
@@ -90,6 +92,7 @@ export function createApp({
   port = 3741,
   staticDir = resolve("dist"),
   backupOptions = {},
+  trashOptions = {},
   webhookOptions = {},
   importOptions = {},
   imageDownload = fetchRemoteImage,
@@ -210,7 +213,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.7" }),
+    res.json({ status: "ok", version: "0.9.8" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -310,7 +313,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.7",
+      version: "0.9.8",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -539,6 +542,10 @@ export function createApp({
     return serialize(getItem(id));
   };
   function groupNoteImages(input,noteId) {
+    for(const ref of localMediaReferences(input.content)){
+      const linked=db.prepare('SELECT deleted_at FROM items WHERE id=?').get(ref.id);
+      if(!linked||linked.deleted_at)throw fail(409,'配图已删除或在回收站中，请先恢复后再引用');
+    }
     const key='note:'+noteId, images=markdownImages(input.content,true).filter(i=>i.url.startsWith('/media/'));
     const groupTitle=(input.title+' · 配图').slice(0,200);
     const prior=db.prepare("SELECT content FROM items WHERE id=? AND kind='note'").get(noteId);
@@ -669,13 +676,13 @@ export function createApp({
     const input = z.object({ items: z.array(z.object({id:z.string(),version:z.number().int().positive()})).min(1).max(100),
       collection_id:z.string().nullable(), restore:z.boolean().default(false) }).parse(req.body);
     if(new Set(input.items.map(i=>i.id)).size!==input.items.length) throw fail(400,'内容 ID 不可重复');
-    const result=transaction(()=>input.items.map(value=>{
+    const result=transaction(()=>{const changed=input.items.map(value=>{
       const item=getItem(value.id);
       if(item.version!==value.version || item.collection_id!==input.collection_id || Boolean(item.deleted_at)!==input.restore)
         throw fail(409,'部分内容已变更或不属于当前知识库，请刷新后重试');
       db.prepare('UPDATE items SET deleted_at=?,updated_at=?,version=version+1 WHERE id=?').run(input.restore?null:now(),now(),item.id);
       event(input.restore?'item.restored':'item.deleted',item.id); return serialize(getItem(item.id));
-    }));
+    });if(!input.restore)trash.repairReferences();return changed.map(item=>serialize(getItem(item.id)));});
     res.json({items:result});
   });
   app.post("/api/items/batch-tags", (req, res) => {
@@ -760,6 +767,7 @@ export function createApp({
         "UPDATE items SET deleted_at=?,updated_at=?,version=version+1 WHERE id=?",
       ).run(now(), now(), item.id);
       event("item.deleted", item.id);
+      trash.repairReferences();
     });
     res.status(204).end();
   });
@@ -1088,8 +1096,9 @@ export function createApp({
   const webhooks = createWebhookManager({ db, maintenance, ...webhookOptions });
   registerWebhookRoutes(app, webhooks, admin);
   registerClipper(app);
-  const backups = createBackupManager({ db, dataDir, maintenance, beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
+  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => trash.repairReferences(), beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
   registerBackupRoutes(app, backups, admin, dataDir);
+  const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));
   app.get("/docs-init.js", (req, res) =>
     res
@@ -1140,6 +1149,7 @@ export function createApp({
           : err.message,
     });
   });
+  transaction(()=>trash.repairReferences());
   if(!setting('note_groups_v1')) transaction(()=>{
     for(const row of db.prepare("SELECT * FROM items WHERE kind='note' AND deleted_at IS NULL ORDER BY created_at,id").all()){
       const grouped=groupNoteImages(serialize(row),row.id);
@@ -1147,5 +1157,5 @@ export function createApp({
     }
     db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('note_groups_v1','true');
   });
-  return { app, db, backups, webhooks, imports, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
+  return { app, db, backups, webhooks, imports, trash, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
 }
