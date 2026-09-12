@@ -1,0 +1,20 @@
+node_modules/
+dist/
+data/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.pem
+*.key
+artifacts/
+*.log
+tools/media/
+
+# Local deployment evidence is not project source.
+/VERIFICATION*.md
+/DEVELOPMENT-v*.md
+/PLAN-v*.md
