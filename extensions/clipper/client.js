@@ -20,9 +20,10 @@ export async function api(path, options = {}, config = null) {
   if (!response.ok) throw Object.assign(new Error(data.error || `请求失败 ${response.status}`), { status: response.status });
   return data;
 }
-export async function saveImage(blob, details, signal) {
+export async function saveImage(blob, details, signal, config = null) {
   if (blob.size > 25 * 1024 * 1024) throw new Error('图片超过 25 MB');
-  const config = await settings(), data = new FormData();
+  config ||= await settings();
+  const data = new FormData();
   data.set('file', blob, details.filename || '网页图片.png');
   data.set('title', (details.title || details.filename || '网页图片').slice(0, 200));
   data.set('content', [details.image_url ? `${details.capture_note || ''}\n图片地址：${details.image_url}`.trim() : '当前页面可见区域截图', /^https?:\/\//i.test(details.source_url || '') ? `来源链接：${details.source_url}` : ''].filter(Boolean).join('\n\n'));
@@ -30,7 +31,7 @@ export async function saveImage(blob, details, signal) {
   if (config.collection_id) data.set('collection_id', config.collection_id);
   if (/^https?:\/\//i.test(details.source_url || '')) data.set('source_url', details.source_url);
   data.set('captured_at', new Date().toISOString());
-  return api('/api/assets', { method: 'POST', body: data, signal });
+  return api('/api/assets', { method: 'POST', body: data, signal }, config);
 }
 export async function limitedImage(url, signal) {
   if (!/^(https?:|data:image\/)/i.test(url)) throw new Error('此图片地址无法直接获取，可使用页面截图');

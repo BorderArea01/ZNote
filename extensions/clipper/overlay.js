@@ -27,7 +27,7 @@
     pendingTarget,
     downloadButton,
     saveButton,
-    groupBar, groupCounter, previousButton, nextButton, batchButton,
+    groupBar, groupCounter, previousButton, nextButton, batchButton, batchSaveButton,
     imageGroup = null, groupIndex = 0, requestedIndex = 0, pageToken = 0, pageBusy = false, lastWheel = 0,
     previewCache, originalButton, groupLoading=false, failedIndex=null,
     downloadKey = 's',
@@ -336,6 +336,7 @@
     previousButton.disabled = requestedIndex === 0;
     nextButton.disabled = requestedIndex === imageGroup.images.length - 1;
     batchButton.textContent = `批量下载 ${imageGroup.images.length} 张`;
+    batchSaveButton.textContent = `批量入库 ${imageGroup.images.length} 张`;
   }
   async function loadGroup(target, token, result) {
     try {
@@ -535,14 +536,16 @@
     previousButton = button('←',()=>turnPage(-1)); previousButton.setAttribute('aria-label','上一张');
     nextButton = button('→',()=>turnPage(1)); nextButton.setAttribute('aria-label','下一张');
     groupCounter = element('span', '', {'aria-label':'作品页码'});
-    batchButton = button('批量下载', async()=>{
-      if(!imageGroup)return; batchButton.disabled=true;
-      if((imageGroup.page_url||imageGroup.source_url)!==location.href){hide();batchButton.disabled=false;return;}
-      try { await send({type:'media-gallery',group:imageGroup}); }
+    const openBatch = async(action)=>{
+      if(!imageGroup)return; batchButton.disabled=batchSaveButton.disabled=true;
+      if((imageGroup.page_url||imageGroup.source_url)!==location.href){hide();batchButton.disabled=batchSaveButton.disabled=false;return;}
+      try { await send({type:'media-gallery',group:imageGroup,action}); }
       catch(e) {previewLabel.textContent=e.message;}
-      finally {batchButton.disabled=false;}
-    });
-    groupBar.append(previousButton,groupCounter,nextButton,batchButton);
+      finally {batchButton.disabled=batchSaveButton.disabled=false;}
+    };
+    batchButton = button('批量下载',()=>openBatch('download'));
+    batchSaveButton = button('批量入库',()=>openBatch('save'));
+    groupBar.append(previousButton,groupCounter,nextButton,batchButton,batchSaveButton);
     groupBar.title='鼠标停在原缩略图或展开预览上，向下滚动看下一张，向上滚动看上一张';
     preview.append(previewImage, previewLabel, groupBar, bar, sizing);
     // Capture wheel on either the source thumbnail or our preview. Never hijack

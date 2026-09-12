@@ -168,7 +168,7 @@ export async function discover(message, sender) {
   const tabId = sender.tab?.id;
   if (tabId === undefined || sender.id !== chrome.runtime.id)
     throw new Error("无效页面");
-  if (message.type === 'media-gallery') return openGallery(message.group, sender);
+  if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action);
   if (message.type === "media-action") {
     const resource = await serial(async () =>
       states[tabId]?.resources.find((r) => r.id === message.id),

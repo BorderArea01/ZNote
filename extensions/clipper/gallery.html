@@ -1,5 +1,12 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZNote · 作品图片</title><link rel="stylesheet" href="gallery.css"></head>
 <body><header><div><span class="brand">ZNote / 作品图片</span><h1 id="title">正在读取作品…</h1><a id="source" target="_blank" rel="noreferrer">查看来源 ↗</a></div><div class="actions"><button id="download" disabled>下载全部</button><button id="cancel" hidden>停止下载</button></div></header>
-<main><section class="viewer" aria-label="作品预览"><img id="image" alt="当前作品图片"><div class="navigation"><button id="previous" aria-label="上一张">←</button><span id="counter"></span><button id="next" aria-label="下一张">→</button><button id="original" hidden>原图</button><span class="help" title="鼠标滚轮或左右方向键翻页；预览优先加载较轻大图，下载始终保存完整原图。" tabindex="0">?</span></div><p id="preview-status" role="status"></p></section><aside><p id="status" role="status">正在准备图片列表…</p><progress id="progress" max="1" value="0"></progress><ol id="pages" aria-label="作品图片列表"></ol></aside></main>
+<main><section class="viewer" aria-label="作品预览"><img id="image" alt="当前作品图片"><div class="navigation"><button id="previous" aria-label="上一张">←</button><span id="counter"></span><button id="next" aria-label="下一张">→</button><button id="original" hidden>原图</button><span class="help" title="鼠标滚轮或左右方向键翻页；预览优先加载较轻大图，下载和入库始终保存完整原图。" tabindex="0">?</span></div><p id="preview-status" role="status"></p></section><aside>
+<section class="library" aria-label="批量保存知识库"><div class="library-heading"><h2>保存到知识库</h2><span class="help" title="保存整组原图，附带来源链接、网站标签和页码。开始后本任务的知识库与标签固定；重试会跳过成功项。停止时等待当前上传确认。刷新此页可继续，关闭浏览器或更新扩展后需从原网页重新打开。" tabindex="0">?</span></div>
+<label for="collection">目标知识库</label><select id="collection" disabled></select>
+<label for="tags">标签</label><input id="tags" placeholder="多个标签用逗号分隔" disabled>
+<div class="connection"><a href="options.html" target="_blank">连接设置 ↗</a><button id="reconnect" aria-label="重新连接" title="重新读取连接设置与知识库">↻</button></div>
+<button id="save" disabled>保存全部到知识库</button><button id="save-cancel" hidden>停止入库</button>
+<p id="save-status" role="status">正在连接知识库…</p><progress id="save-progress" max="1" value="0" aria-label="入库进度"></progress></section>
+<p id="status" role="status">正在准备图片列表…</p><progress id="progress" max="1" value="0" aria-label="下载进度"></progress><ol id="pages" aria-label="作品图片列表"></ol></aside></main>
 <script type="module" src="gallery.js"></script></body></html>
