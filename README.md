@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.0-287464?style=flat-square" alt="Version 0.9.0" />
+    <img src="https://img.shields.io/badge/version-0.9.1-287464?style=flat-square" alt="Version 0.9.1" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -83,6 +83,11 @@ docker compose up -d --build
 访问 `http://NAS_IP:3741` 设置密码后，删除该初始化变量，再运行 `docker compose up -d`。数据保存在持久卷中。完整参数、HTTPS 与升级步骤见 **[部署指南](docs/DEPLOYMENT.md)**。
 
 ## 浏览器采集
+
+扩展使用独立的石墨灰暗色界面与蓝紫色强调色，覆盖悬停预览、资源浮窗、作品批量入库和连接设置。网页知识库仍可使用你选择的主题。
+
+<img src="docs/images/clipper-popup.png" width="368" alt="ZNote 扩展：石墨灰采集面板" />
+
 
 桌面 **Chrome / Edge** 扩展随项目提供。
 
@@ -169,6 +174,7 @@ npm run test:ui          # 浏览器界面测试，需要 Microsoft Edge
 | [API 接入](docs/API.md) | 鉴权、常用接口、Webhook 与示例 |
 | [开发指南](docs/DEVELOPMENT.md) | 目录结构、构建、测试、贡献方式 |
 | [更新记录](CHANGELOG.md) | 版本变化 |
+| [扩展设计与参考](docs/EXTENSION-DESIGN.md) | 开源参考、界面约定与回归入口 |
 | [第三方组件](THIRD_PARTY_NOTICES.md) | 主要依赖、来源与许可证 |
 
 ### 当前边界

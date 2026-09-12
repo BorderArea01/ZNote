@@ -3,8 +3,8 @@
     15px/1.7 system-ui,
     "Microsoft YaHei",
     sans-serif;
-  background: #101d19;
-  color: #e0efe7;
+  background: #14171f;
+  color: #ecedf6;
   color-scheme: dark;
 }
 * {
@@ -26,16 +26,16 @@ header {
 }
 header strong {
   font-size: 25px;
-  color: #8ee2bd;
+  color: #a8b5d3;
 }
 header span {
   font-size: 13px;
   font-weight: 400;
   margin-left: 14px;
-  color: #abc5b5;
+  color: #a8b5d3;
 }
 a {
-  color: #8ee2bd;
+  color: #a8b5d3;
 }
 h1 {
   font-size: 20px;
@@ -43,8 +43,8 @@ h1 {
   font-weight: 500;
 }
 .viewer {
-  background: #08110d;
-  border: 1px solid #385046;
+  background: #0c0e13;
+  border: 1px solid #2a3040;
   border-radius: 15px;
   min-height: 200px;
   display: grid;
@@ -70,16 +70,16 @@ h1 {
 button,
 select {
   font: inherit;
-  border: 1px solid #466154;
+  border: 1px solid #404b65;
   border-radius: 9px;
   padding: 9px 16px;
   color: inherit;
-  background: #1f392d;
+  background: #1c202b;
   cursor: pointer;
 }
 .primary {
-  background: #257c5b;
-  border-color: #419f78;
+  background: #404b65;
+  border-color: #697baa;
 }
 button:disabled {
   opacity: 0.5;
@@ -87,10 +87,10 @@ button:disabled {
 }
 .hint {
   font-size: 13px;
-  color: #9bb7a5;
+  color: #a8b5d3;
 }
 #status {
-  color: #a6e8c3;
+  color: #cbd3e8;
   overflow-wrap: anywhere;
 }
 label {
@@ -115,3 +115,4 @@ select {
     margin-left: 0;
   }
 }
+.primary{background:#5865ce;border-color:#808def}button:hover:not(:disabled){background:#343e56}.primary:hover:not(:disabled){background:#6875df}button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #b7c3ff;outline-offset:3px}.viewer{box-shadow:0 16px 44px #0003}header{padding-bottom:22px;border-bottom:1px solid #353a4b}header strong{color:#e8eaf2;letter-spacing:-.03em}

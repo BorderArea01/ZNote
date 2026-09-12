@@ -70,6 +70,15 @@ const icons = {
   favorites: Star,
   trash: Trash2,
 };
+function MarkdownImage({ src, alt }) {
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => { setFailed(false); setAttempt(0); }, [src]);
+  if (!src?.startsWith('/media/')) return <span className="external-image">外部图片：<a href={src} target="_blank" rel="noreferrer">{alt || '在新窗口打开'}</a></span>;
+  if (failed) return <span className="note-image-error" role="status">{alt || '笔记图片'} · 加载失败 <button onClick={() => { setFailed(false); setAttempt(n => n + 1); }}>重试图片</button></span>;
+  const url = attempt ? `${src}${src.includes('?') ? '&' : '?'}retry=${attempt}` : src;
+  return <img src={url} alt={alt || '笔记图片'} loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+}
 function Markdown({ content, onLink }) {
   const markdown = content.replace(
     /\[\[([^\]\n]+)\]\]/g,
@@ -94,17 +103,7 @@ function Markdown({ content, onLink }) {
             {children}
           </a>
         ),
-        img: ({ src, alt }) =>
-          src?.startsWith("/media/") ? (
-            <img src={src} alt={alt || "笔记图片"} loading="lazy" />
-          ) : (
-            <span className="external-image">
-              外部图片：
-              <a href={src} target="_blank" rel="noreferrer">
-                {alt || "在新窗口打开"}
-              </a>
-            </span>
-          ),
+        img: MarkdownImage,
       }}
     >
       {markdown}

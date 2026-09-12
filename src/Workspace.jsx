@@ -95,7 +95,9 @@ export default function Workspace({
   const fileInput = useRef(),
     markdownInput = useRef(),
     searchInput = useRef(),
-    generation = useRef(0);
+    generation = useRef(0),
+    detailGeneration = useRef(0),
+    listRequest = useRef(null);
   const [organizing, setOrganizing] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
@@ -104,12 +106,16 @@ export default function Workspace({
   const galleryIndex = galleryItems.findIndex(i => i.id === selected?.id);
   async function stepImage(delta) {
     if (galleryBusy) return;
+    const current = ++detailGeneration.current;
     let next = galleryItems[galleryIndex + delta];
     setGalleryBusy(true);
     try {
-      if (next) setSelected(await api(`/api/items/${next.id}`));
-    } catch (e) { setToast(e.message); }
-    finally { setGalleryBusy(false); }
+      if (next) {
+        const item = await api(`/api/items/${next.id}`);
+        if (current === detailGeneration.current) setSelected(item);
+      }
+    } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
+    finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }
   useEffect(() => {
     if (!selected || galleryIndex < 0) return;
@@ -121,24 +127,33 @@ export default function Workspace({
   const refresh = () => setRevision((n) => n + 1),
     notify = setToast;
   const actualCollection = collection === "unfiled" ? null : collection;
+  const closeDetail = () => {
+    ++detailGeneration.current;
+    setSelected(null); setGallery(null); setGalleryBusy(false);
+    if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
+  };
+  const resetScope = () => {
+    ++generation.current;
+    listRequest.current?.abort();
+    closeDetail();
+    setItems([]); setTotal(0); setLoadError(''); setLoading(true);
+    setSelectedTags([]); setQuery(''); setSearch('');
+    setSelection([]); setSelecting(false); setMobile(false);
+    // Re-entering the current scope must also fetch again after clearing it.
+    refresh();
+  };
   const chooseCollection = (id) => {
-    ++generation.current; setItems([]); setTags([]); setStats({}); setTotal(0); setLoading(true); setSelected(null); setGallery(null);
+    resetScope(); setTags([]); setStats({});
     setCollection(id);
     setView("all");
-    setSelectedTags([]);
-    setQuery("");
-    setMobile(false);
-    setSelection([]);
   };
   const goHome = () => {
     if (preferences.default_collection_id)
       chooseCollection(preferences.default_collection_id);
     else {
+      resetScope();
       setView("home");
       setCollection(null);
-      setQuery("");
-      setSelectedTags([]);
-      setMobile(false);
     }
   };
   useEffect(() => {
@@ -195,48 +210,56 @@ export default function Workspace({
     [sort, search, collection, selectedTags, tagMode, view],
   );
   async function openItem(item) {
+    const current = ++detailGeneration.current;
     setSelected(item);
-    if (item.kind !== 'image') return;
+    if (item.kind !== 'image') { setGallery(null); setGalleryBusy(false); return; }
     setGallery(items.filter(i => i.kind === 'image'));
     setGalleryBusy(true);
     try {
       // Freeze only lightweight IDs; editing a title or sort timestamp cannot
       // move the page boundary and skip an image during continuous organizing.
       const result = await api(`/api/items?${params(0)}&gallery=true`);
+      if (current !== detailGeneration.current) return;
       setGallery(result.ids.map(id => ({ id, thumbnail_url: `/media/${id}/thumbnail` })));
-    } catch (e) { setToast(e.message); }
-    finally { setGalleryBusy(false); }
+    } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
+    finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }
   async function browseFilteredImages() {
     if (galleryBusy || loading) return;
+    const current = ++detailGeneration.current;
     setGalleryBusy(true);
     try {
       const p = new URLSearchParams(params(0));
       p.set('kind', 'image'); p.set('gallery', 'true');
       const result = await api(`/api/items?${p}`);
+      if (current !== detailGeneration.current) return;
       if (!result.ids.length) { notify('当前筛选条件下没有图片'); return; }
       const first = await api(`/api/items/${result.ids[0]}`);
+      if (current !== detailGeneration.current) return;
       setGallery(result.ids.map(id => ({ id, thumbnail_url: `/media/${id}/thumbnail` })));
       setSelected(first);
-    } catch (e) { notify(e.message); }
-    finally { setGalleryBusy(false); }
+    } catch (e) { if (current === detailGeneration.current) notify(e.message); }
+    finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }
   useEffect(() => {
     if (!ready) return;
     const current = ++generation.current;
+    const controller = new AbortController();
+    listRequest.current = controller;
+    const read = path => api(path, { signal: controller.signal });
     setLoading(true);
     setLoadError("");
     setSelection([]);
     Promise.all([
       view === "home"
         ? Promise.resolve({ items: [], total: 0 })
-        : api(`/api/items?${params(0)}`),
-      api(`/api/stats?collection=${encodeURIComponent(collection || 'unfiled')}`),
-      api("/api/collections"),
-      view === 'home' ? Promise.resolve([]) : api(`/api/tags?collection=${encodeURIComponent(collection || 'unfiled')}`),
+        : read(`/api/items?${params(0)}`),
+      read(`/api/stats?collection=${encodeURIComponent(collection || 'unfiled')}`),
+      read("/api/collections"),
+      view === 'home' ? Promise.resolve([]) : read(`/api/tags?collection=${encodeURIComponent(collection || 'unfiled')}`),
     ])
       .then(([result, stats, libs, tags]) => {
-        if (current !== generation.current) return;
+        if (controller.signal.aborted || current !== generation.current) return;
         setItems(result.items);
         setTotal(result.total);
         setStats(stats);
@@ -252,11 +275,12 @@ export default function Workspace({
         }
       })
       .catch((e) => {
-        if (current === generation.current) setLoadError(e.message);
+        if (!controller.signal.aborted && current === generation.current) setLoadError(e.message);
       })
       .finally(() => {
-        if (current === generation.current) setLoading(false);
+        if (!controller.signal.aborted && current === generation.current) setLoading(false);
       });
+    return () => controller.abort();
   }, [ready, view, params, revision]);
   useEffect(() => {
     const focus = () => refresh();
@@ -267,18 +291,23 @@ export default function Workspace({
     if (!ready) return;
     const openLink = () => {
       const id = window.location.hash.match(/^#item\/([a-f0-9-]{36})$/i)?.[1];
-      if (id) api(`/api/items/${id}`).then(item => { chooseCollection(item.collection_id || 'unfiled'); setGallery(item.kind === 'image' ? [item] : []); setSelected(item); }).catch(e => setToast(e.message));
+      if (id) {
+        const current = ++detailGeneration.current;
+        api(`/api/items/${id}`).then(item => {
+          if (current !== detailGeneration.current) return;
+          chooseCollection(item.collection_id || 'unfiled');
+          history.replaceState(null, '', location.pathname + location.search + '#item/' + item.id);
+          setGallery(item.kind === 'image' ? [item] : []); setSelected(item);
+        }).catch(e => { if (current === detailGeneration.current) setToast(e.message); });
+      }
     };
     openLink(); window.addEventListener('hashchange', openLink);
     return () => window.removeEventListener('hashchange', openLink);
   }, [ready]);
   const navigate = (v) => {
+    resetScope();
     setView(v);
     if (!collection) setCollection('unfiled');
-    setSelection([]); setSelecting(false); setGallery(null);
-    setSelectedTags([]);
-    setQuery("");
-    setMobile(false);
   };
   const toggleTag = (t) => {
     if (!selectedTags.includes(t) && selectedTags.length >= 30) {
@@ -409,7 +438,8 @@ export default function Workspace({
     collection === "unfiled"
       ? "未分类"
       : activeCollection?.name || labels[view];
-  const newNote = () =>
+  const newNote = () => {
+    closeDetail();
     setSelected({
       kind: "note",
       title: "",
@@ -418,6 +448,7 @@ export default function Workspace({
       collection_id: actualCollection,
       favorite: false,
     });
+  };
   if (!ready)
     return (
       <div className="center-screen">
@@ -1045,7 +1076,7 @@ export default function Workspace({
           item={selected}
           collections={collections}
           suggestions={tags}
-          onClose={() => { setSelected(null); if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search); }}
+          onClose={closeDetail}
           onSaved={refresh}
           onDelete={remove}
           onRestore={restore}
@@ -1056,7 +1087,11 @@ export default function Workspace({
             navigate("all");
             setQuery(q);
           }}
-          onOpen={setSelected}
+          onOpen={item => {
+            if (actualCollection !== item.collection_id) chooseCollection(item.collection_id || 'unfiled');
+            else closeDetail();
+            setGallery(item.kind === 'image' ? [item] : []); setSelected(item);
+          }}
           onStep={stepImage}
           previousAvailable={galleryIndex > 0}
           nextAvailable={galleryIndex >= 0 && galleryIndex < galleryItems.length - 1}

@@ -40,7 +40,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.9.0",
+    version: "0.9.1",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },

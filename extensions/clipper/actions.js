@@ -4,7 +4,7 @@ export async function record(operation) {
   try {
     const item = await operation();
     await chrome.storage.local.set({ lastResult: { ok: true, message: item.duplicate ? '此知识库已收录，已补充来源' : '已保存到知识库', itemId: item.id, time: Date.now() } });
-    await chrome.action.setBadgeBackgroundColor({ color: '#287464' }); await chrome.action.setBadgeText({ text: '✓' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#5865ce' }); await chrome.action.setBadgeText({ text: '✓' });
     return item;
   } catch (error) {
     await chrome.storage.local.set({ lastResult: { ok: false, message: error.message, time: Date.now() } });

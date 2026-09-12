@@ -53,3 +53,4 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
   .help-tooltip { max-width: min(300px, calc(100vw - 16px)); }
 }
 @media (prefers-reduced-motion: reduce) { .item-card { transition: none; } }
+.note-image-error{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:20px;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:var(--muted)}.note-image-error button{font:inherit;padding:6px 12px}
