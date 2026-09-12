@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>ZNote 媒体预览与保存</title
+  ><link rel="stylesheet" href="media.css" />
+  <body>
+    <main>
+      <header>
+        <strong>ZNote <span>媒体预览与保存</span></strong
+        ><a id="source" target="_blank" rel="noreferrer">打开来源页面 ↗</a>
+      </header>
+      <h1 id="title">正在读取资源…</h1>
+      <div class="viewer">
+        <img id="image" hidden alt="原始图片预览" /><video
+          id="video"
+          hidden
+          controls
+          playsinline
+        ></video>
+      </div>
+      <div class="toolbar">
+        <button id="download">下载</button
+        ><button id="save" class="primary">保存到知识库</button
+        ><button id="cancel" hidden>取消处理</button
+        ><button id="settings">连接设置</button
+        ><a id="saved" hidden target="_blank">打开已保存资源</a>
+      </div>
+      <label id="quality-label" hidden
+        >保存清晰度<select id="quality">
+          <option value="-1">最高可用清晰度</option>
+        </select></label
+      >
+      <p id="status" role="status"></p>
+      <p class="hint" id="hint"></p>
+    </main>
+    <script src="vendor/hls.min.js"></script>
+    <script type="module" src="media.js"></script>
+  </body>
+</html>

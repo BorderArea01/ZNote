@@ -1,0 +1,10 @@
+.import-body { padding: 0 24px 24px; }
+.import-form { display: grid; gap: 14px; margin: 20px 0; }
+.import-form label { display: grid; gap: 7px; font-size: 13px; }
+.import-form input, .import-form select { width: 100%; min-width: 0; }
+.import-jobs { display: grid; gap: 12px; }
+.import-job { border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.import-job a { display: block; overflow-wrap: anywhere; font-size: 12px; }
+.import-job p { font-size: 13px; line-height: 1.6; }
+.import-body > .muted { font-size: 12px; line-height: 1.7; }
+.import-dialog { width: min(640px, calc(100vw - 24px)); }

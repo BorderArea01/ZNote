@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.webp binary
+*.jpg binary
+*.mp4 binary
+*.webm binary
+tests/fixtures/**/*.ts binary

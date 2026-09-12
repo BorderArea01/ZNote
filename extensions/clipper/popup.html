@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><title>ZNote 媒体采集</title
+  ><link rel="stylesheet" href="style.css" />
+  <body class="popup">
+    <main>
+      <div class="brand">ZNote <small>媒体采集</small></div>
+      <p>
+        <span id="shortcut-help">悬停图片预览大图</span><br />浮窗汇总图片、MP4 与 m3u8 视频。
+      </p>
+      <button id="discover" class="primary">发现本页图片与视频</button
+      ><button id="article">保存页面正文（Markdown）</button
+      ><button id="video">平台视频链接解析</button
+      ><button id="capture">截图当前页面</button>
+      <p id="status" role="status"></p>
+      <a id="open" hidden target="_blank">打开已保存的资源</a>
+      <div id="video-status" role="status"></div>
+      <a id="video-open" hidden target="_blank">打开已保存的视频</a
+      ><button id="cancel-video" hidden>取消视频采集</button>
+      <div class="actions"><button id="settings">连接设置</button></div>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

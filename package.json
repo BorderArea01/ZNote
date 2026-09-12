@@ -1,0 +1,49 @@
+{
+  "name": "znote",
+  "version": "0.8.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "test": "node --test tests/*.test.js",
+    "test:ui": "node tests/browser.mjs",
+    "test:features": "node tests/features.mjs",
+    "storage:optimize": "node scripts/optimize-storage.mjs --service-stopped",
+    "media:setup": "node scripts/setup-media.mjs",
+    "clipper:build": "node scripts/build-clipper.mjs",
+    "pretest": "node scripts/prepare-tests.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "0.6.0",
+    "archiver": "^7.0.1",
+    "express": "^5.1.0",
+    "hls.js": "1.6.15",
+    "lucide-react": "^0.468.0",
+    "mediainfo.js": "^0.3.7",
+    "multer": "^2.0.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "sharp": "^0.35.4",
+    "swagger-ui-dist": "^5.28.1",
+    "turndown": "7.2.4",
+    "turndown-plugin-gfm": "1.0.2",
+    "yauzl": "^3.4.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.2",
+    "esbuild": "0.28.2",
+    "playwright": "^1.55.0",
+    "vite": "^7.1.4"
+  },
+  "optionalDependencies": {
+    "ffmpeg-static": "5.3.0"
+  }
+}

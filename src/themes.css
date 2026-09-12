@@ -1,0 +1,145 @@
+/* Theme tokens are shared by content, dialogs and authentication screens. */
+:root[data-style] {
+  --tone: 163; --accent-light: #287464; --accent-dark: #82ccb6;
+  --canvas: hsl(var(--tone) 18% 98%); --surface: #fff;
+  --surface-2: hsl(var(--tone) 20% 95%); --surface-3: hsl(var(--tone) 22% 91%);
+  --ink: hsl(var(--tone) 17% 19%); --muted: hsl(var(--tone) 10% 40%);
+  --border: hsl(var(--tone) 15% 84%); --green: var(--accent-light);
+  --accent-ink: #fff; --accent-soft: hsl(var(--tone) 33% 92%);
+  --panel-radius: 12px; --control-radius: 8px; --panel-shadow: none;
+  --shade: #10201b85; --stage-a: #edf0ef; --stage-b: #e2e6e4;
+  color: var(--ink); background: var(--canvas); color-scheme: light;
+}
+:root[data-palette="ocean"] { --tone: 213; --accent-light: #2867af; --accent-dark: #91bfff; }
+:root[data-palette="violet"] { --tone: 264; --accent-light: #7553b3; --accent-dark: #c7a9f9; }
+:root[data-palette="rose"] { --tone: 338; --accent-light: #ac4d70; --accent-dark: #f4aac4; }
+:root[data-palette="amber"] { --tone: 32; --accent-light: #a36520; --accent-dark: #efbc7e; }
+:root[data-palette="slate"] { --tone: 216; --accent-light: #566478; --accent-dark: #bcc9db; }
+:root[data-style][data-theme="dark"] {
+  --canvas: hsl(var(--tone) 18% 9%); --surface: hsl(var(--tone) 16% 13%);
+  --surface-2: hsl(var(--tone) 16% 17%); --surface-3: hsl(var(--tone) 16% 22%);
+  --ink: hsl(var(--tone) 20% 92%); --muted: hsl(var(--tone) 13% 72%);
+  --border: hsl(var(--tone) 15% 30%); --green: var(--accent-dark);
+  --accent-ink: #111a18; --accent-soft: hsl(var(--tone) 28% 23%);
+  --shade: #030708b8; --stage-a: #232629; --stage-b: #2d3033; color-scheme: dark;
+}
+html[data-style] body { background: var(--canvas); color: var(--ink); }
+html[data-style] :is(button, .button, input, textarea, select) { color: var(--ink); border-color: var(--border); background-color: var(--surface); border-radius: var(--control-radius); }
+html[data-style] :is(button, .button):hover { background-color: var(--surface-2); }
+html[data-style] :is(input, textarea)::placeholder { color: var(--muted); }
+html[data-style] :is(input, textarea, select):focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--accent-soft); }
+html[data-style] a { color: var(--green); }
+html[data-style] .primary { background: var(--green); border-color: var(--green); color: var(--accent-ink); }
+html[data-style] .primary:hover { background: var(--green); box-shadow: 0 0 0 3px var(--accent-soft); }
+html[data-style] :is(.icon-button, .text-button) { background: transparent; border-color: transparent; color: var(--muted); }
+html[data-style] :is(.icon-button, .text-button):hover { background: var(--surface-2); color: var(--ink); }
+html[data-style] :is(.sidebar, .topbar) { background: var(--surface-2); border-color: var(--border); }
+html[data-style] .brand { color: var(--ink); }
+html[data-style] :is(.workspace-label, .tag-browser, .library-card, .item-card, .dialog, .empty) { background: var(--surface); border-color: var(--border); color: var(--ink); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); }
+html[data-style] :is(.sidebar-bottom, .card-meta, .detail-dialog > .dialog-header) { border-color: var(--border); }
+html[data-style] .detail-dialog > .dialog-header { background: var(--surface); }
+html[data-style] :is(.sidebar nav button, .sidebar-bottom > button) { color: var(--muted); background: transparent; }
+html[data-style] :is(.sidebar nav button, .sidebar-bottom > button):hover { background: var(--surface-3); }
+html[data-style] :is(.sidebar nav button.active, .sidebar-bottom > button.active) { background: var(--accent-soft); color: var(--green); }
+html[data-style] :is(.sidebar-tags button, .tag-options button, .tag-selection button, .tag-pill) { color: var(--ink); background: var(--surface-2); border-color: var(--border); }
+html[data-style] :is(.sidebar-tags .selected, .tag-options button[aria-pressed="true"], .theme-choices .selected, .editor-toolbar button.selected, .export-modes .selected) { color: var(--green); background: var(--accent-soft); border-color: var(--green); }
+html[data-style] :is(.nav-caption, .local-status, .private-label, .eyebrow, .breadcrumbs, .breadcrumbs strong, .page-heading p, .results-caption, .content-footer, .workspace-label small, .sidebar-tags small, .sidebar nav button span:last-child, .sidebar-bottom > button span, .sidebar nav button.active span, .card-meta, .note-type, .feature-field, .metadata-fields label, .description-label, .backlinks > span, .detail-bottom > span, .muted) { color: var(--muted); }
+html[data-style] :is(.brand .beta, .avatar, .count-badge, .card-tags > span, .card-tags > span:nth-child(2), .kind-chip, .banner-icon) { color: var(--green); background: var(--accent-soft); border-color: var(--border); }
+html[data-style] :is(.card-main, .card-main:hover) { color: var(--ink); background: transparent; }
+html[data-style] :is(.card-preview, .note .card-preview, .note:nth-child(3n) .card-preview, .image-detail .copy-reference) { background: var(--surface-2); border-color: var(--border); }
+html[data-style] :is(.note .card-preview h3, .library-card h2, .empty h2, .intro-banner h3, .storage-metrics strong, .token-list strong) { color: var(--ink); }
+html[data-style] :is(.note .card-preview p, .library-card p, .empty p, .intro-banner p, .card-tags > span.no-tags, .settings-body p, .settings-body small, .export-modes small, .upload-row small, .feature-actions small) { color: var(--muted); }
+html[data-style] .card-tags > span.no-tags { background: transparent; }
+html[data-style] :is(.search-box, .intro-banner, .view-switch, .editor-toolbar > div, .address, .storage-metrics > div, .upload-drop, .tag-input, .selection-bar, .backlinks button, .copy-reference, .export-modes > button, .empty-art svg) { background: var(--surface-2); color: var(--ink); border-color: var(--border); }
+html[data-style] :is(.search-box input, .title-input, .toolbar-options select, .metadata-fields input, .metadata-fields select, .editor-toolbar button, .intro-banner button) { background: transparent; color: var(--ink); }
+html[data-style] .search-box kbd { color: var(--muted); border-color: var(--border); }
+html[data-style] .view-switch .chosen { color: var(--green); background: var(--surface); }
+html[data-style] .settings-title { color: var(--green); }
+html[data-style] .dialog-shade { background: var(--shade); }
+html[data-style] :is(.description-label textarea, .markdown-editor) { color: var(--ink); background: var(--surface-2); border-color: var(--border); }
+html[data-style] :is(.markdown-preview pre, .markdown-preview code) { color: var(--ink); background: var(--surface-2); }
+html[data-style] .markdown-preview blockquote { color: var(--muted); border-color: var(--green); }
+html[data-style] .image-stage { background: repeating-conic-gradient(var(--stage-a) 0% 25%, var(--stage-b) 0% 50%) 50% / 20px 20px; }
+html[data-style] .image-stage > button { background: transparent; }
+html[data-style] .lightbox { background: #090b10f0; }
+html[data-style] .lightbox .icon-button { color: #fff; }
+html[data-style] .auth-page { background: var(--canvas); }
+html[data-style] .auth-art { background: var(--surface-2); }
+html[data-style] .auth-heading h1 { color: var(--ink); }
+html[data-style] :is(.auth-heading p, .auth-form > p, .auth-tiles span) { color: var(--muted); }
+html[data-style] .auth-tiles > div { color: var(--green); background: var(--surface-3); border-color: var(--border); }
+html[data-style] .drop-overlay { color: var(--ink); background: var(--surface); border-color: var(--green); }
+html[data-style] .toast { background: var(--ink); color: var(--canvas); }
+html[data-style] .toast .icon-button { color: inherit; }
+html[data-style] input[type="checkbox"] { accent-color: var(--green); }
+
+/* Frost only large navigation/dialog surfaces; image pixels are never filtered. */
+:root[data-style="glass"] { --panel-radius: 20px; --control-radius: 11px; --panel-shadow: 0 12px 40px #16243b0a; }
+html[data-style="glass"] body {
+  background: radial-gradient(ellipse at 10% 18%, hsl(var(--tone) 68% 81% / .65), transparent 52%), radial-gradient(ellipse at 92% 8%, hsl(calc(var(--tone) + 65) 80% 86% / .8), transparent 48%), radial-gradient(ellipse at 72% 90%, hsl(calc(var(--tone) - 40) 60% 87% / .75), transparent 60%), var(--canvas);
+  background-attachment: fixed;
+}
+html[data-style="glass"][data-theme="dark"] body {
+  background: radial-gradient(ellipse at 10% 18%, hsl(var(--tone) 55% 22% / .65), transparent 52%), radial-gradient(ellipse at 92% 8%, hsl(calc(var(--tone) + 65) 50% 25% / .55), transparent 48%), var(--canvas); background-attachment: fixed;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-style="glass"] :is(.sidebar, .topbar, .dialog) { background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); }
+  html[data-style="glass"] :is(.tag-browser, .item-card, .library-card, .workspace-label) { background: color-mix(in srgb, var(--surface) 80%, transparent); }
+}
+
+/* Cyber's dedicated cyan/magenta palette supports both day and night. */
+:root[data-style="cyber"] { --tone: 252; --accent-light: #006c82; --accent-dark: #65f5ed; --panel-radius: 3px; --control-radius: 3px; --neon: #b42594; --panel-shadow: 3px 3px 0 #9654ce13; }
+:root[data-style="cyber"][data-theme="dark"] { --canvas: #0b0c18; --surface: #131428; --surface-2: #1a1d35; --surface-3: #272840; --ink: #e6ebff; --muted: #a8b4d0; --border: #3c4265; --accent-soft: #173a43; --neon: #f88ad8; --accent-ink: #09222a; --panel-shadow: 0 0 22px #3dd6dd08; }
+html[data-style="cyber"] body { background-image: linear-gradient(90deg, #7782bc0b 1px, transparent 1px), linear-gradient(#7782bc0b 1px, transparent 1px); background-size: 32px 32px; }
+html[data-style="cyber"] .page-heading h1 { color: var(--green); text-shadow: 2px 1px var(--accent-soft); letter-spacing: 1px; }
+html[data-style="cyber"] .eyebrow { color: var(--neon); font-family: Consolas, monospace; letter-spacing: 3px; }
+html[data-style="cyber"] :is(.topbar, .dialog-header) { border-bottom-color: var(--green); }
+html[data-style="cyber"] .sidebar { border-right-color: var(--green); }
+html[data-style="cyber"] .sidebar nav button.active { box-shadow: inset 3px 0 var(--green); }
+html[data-style="cyber"] .primary { box-shadow: 3px 3px 0 var(--neon); }
+html[data-style="cyber"] .item-card:hover { border-color: var(--green); }
+
+/* Paper changes the reading surface, not the contents or original media. */
+:root[data-style="paper"] { --tone: 34; --accent-light: #895a34; --accent-dark: #e8bd8e; --canvas: #f4eee2; --surface: #fffaf0; --surface-2: #eee6d7; --surface-3: #e6dbc8; --ink: #42382d; --muted: #796854; --border: #d3c6ae; --accent-soft: #ede0cb; --panel-radius: 5px; --panel-shadow: 0 3px 0 #6d553610; }
+:root[data-style="paper"][data-theme="dark"] { --canvas: #201c18; --surface: #29241e; --surface-2: #332c24; --surface-3: #423729; --ink: #eee3d2; --muted: #c1af96; --border: #66543d; --accent-soft: #463620; }
+html[data-style="paper"] body { background-image: repeating-linear-gradient(0deg, #92714005 0 1px, transparent 1px 4px); }
+html[data-style="paper"] :is(.page-heading h1, .markdown-preview h1, .markdown-preview h2, .note .card-preview h3) { font-family: Georgia, 'Noto Serif SC', 'Songti SC', SimSun, serif; }
+
+/* Presets are actual controls with independent miniature previews. */
+html[data-style] .appearance-label { margin: 18px 0 10px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.style-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+html[data-style] .style-preset { display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: 8px; min-width: 0; text-align: left; }
+.preset-title { display: flex; justify-content: space-between; gap: 4px; font-weight: 600; font-size: 12px; }
+html[data-style] .style-preset small { font-size: 10px; line-height: 1.6; color: var(--muted); }
+html[data-style] :is(.style-preset, .palette-presets button)[aria-pressed="true"] { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); background: var(--accent-soft); }
+.style-sample { display: flex; height: 68px; border-radius: 4px; overflow: hidden; background: #f6f8f5; border: 1px solid #dee6e1; }
+.style-sample > i { width: 25%; background: #e1ebe5; border-right: 1px solid #d4e1d9; }
+.style-sample > span { flex: 1; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.style-sample b { grid-column: 1/-1; height: 5px; width: 70%; background: #4b7c68; border-radius: 2px; }
+.style-sample em { background: #d0dfd5; border: 1px solid #bed0c4; border-radius: 3px; }
+.sample-glass { background: linear-gradient(130deg, #b2d9dd, #e8d0fb 65%, #cce6ed); border-color: #bcb4db; }
+.sample-glass > i { background: #ffffff70; border-color: #ffffff80; }
+.sample-glass b { background: #8274b3; }
+.sample-glass em { background: #ffffff70; border-color: #ffffffc0; border-radius: 5px; }
+.sample-cyber { background: #0d1023; border-color: #426f85; }
+.sample-cyber > i { background: #191c37; border-color: #51e0df; }
+.sample-cyber b { background: #57e4e3; }
+.sample-cyber em { background: #293048; border-color: #f778cc; border-radius: 0; }
+.sample-paper { background: #f6eedd; border-color: #d6c6aa; }
+.sample-paper > i { background: #e9ddc5; border-color: #d6c6aa; }
+.sample-paper b { background: #947653; }
+.sample-paper em { background: #fff9ef; border-color: #d8c4a7; }
+.palette-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+html[data-style] .palette-presets button { justify-content: flex-start; padding: 9px 10px; font-size: 12px; }
+.palette-dot { width: 15px; height: 15px; flex-shrink: 0; border-radius: 50%; border: 1px solid #ffffff60; }
+.palette-presets button > svg { margin-left: auto; }
+@media (max-width: 600px) {
+  .style-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .palette-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-style="glass"] :is(.sidebar, .topbar, .dialog, .tag-browser, .item-card, .library-card, .workspace-label) { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-style] :is(button, .button, .item-card) { transition: none; }
+}

@@ -1,0 +1,12 @@
+node_modules
+dist
+data
+artifacts
+.git
+.env
+.env.*
+*.log
+tools/media
+VERIFICATION*.md
+DEVELOPMENT-v*.md
+PLAN-v*.md

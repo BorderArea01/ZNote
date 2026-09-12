@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>保存网页正文 · ZNote</title
+  ><link rel="stylesheet" href="style.css" />
+  <body class="options">
+    <main>
+      <div class="brand">ZNote <small>网页正文</small></div>
+      <h1>保存为图文笔记</h1>
+      <p><a id="source" target="_blank" rel="noreferrer">打开来源页面</a></p>
+      <label>标题<input id="title" maxlength="200" /></label>
+      <label
+        >知识库<select id="collection">
+          <option value="">未分类</option>
+        </select></label
+      >
+      <label
+        >标签<input id="tags" placeholder="逗号分隔，自动附加来源网站"
+      /></label>
+      <label
+        >正文（Markdown，可修改）<textarea
+          id="content"
+          rows="20"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            font: 13px/1.6 monospace;
+            resize: vertical;
+          "
+        ></textarea>
+      </label>
+      <label
+        ><input
+          id="archive-images"
+          type="checkbox"
+          checked
+          style="width: auto"
+        />
+        将正文配图一并保存到知识库</label
+      >
+      <p class="hint">
+        保留文字链接、标题、列表、引用、代码及表格。默认归档最多 30 张配图、合计
+        100
+        MB；未能归档的图片会保留原网址并明确列出。图片独立入库，可在图片素材中找到。
+      </p>
+      <button id="save" class="primary" disabled>保存图文笔记</button>
+      <a id="open" hidden target="_blank">打开已保存的笔记</a>
+      <p id="status" role="status">正在提取正文…</p>
+    </main>
+    <script type="module" src="article.js"></script>
+  </body>
+</html>

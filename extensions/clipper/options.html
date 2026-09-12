@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>ZNote 采集连接设置</title
+  ><link rel="stylesheet" href="style.css" />
+  <body class="options">
+    <main>
+      <div class="brand">ZNote <small>媒体工具</small></div>
+      <h1>浏览器媒体工具</h1>
+      <form id="behavior">
+        <label
+          ><input id="hover-enabled" type="checkbox" /> 悬停预览高清图片</label
+        ><label
+          ><input id="dock-enabled" type="checkbox" />
+          显示页面常驻媒体浮窗</label
+        >
+        <label>下载图片快捷键<input id="download-key" maxlength="1" pattern="[A-Za-z0-9]" required autocomplete="off" /></label>
+        <label>保存知识库快捷键<input id="save-key" maxlength="1" pattern="[A-Za-z0-9]" required autocomplete="off" /></label>
+        <label>预览最大宽度（像素）<input id="preview-width" type="number" min="240" max="1200" step="40" required /></label>
+        <p class="hint">预览图旁也可直接调节大小。预览会避开正在悬停的图片或视频封面，空间不足时自动缩小。</p>
+        <p class="hint">各设一个字母或数字，不能相同。仅在大图预览展开时生效，输入文字时不会触发。默认 S 下载、K 入库。</p>
+        <button type="submit">保存浏览器行为</button>
+      </form>
+      <h2>连接你的知识库</h2>
+      <p>
+        推荐：在安装了本扩展的浏览器打开并登录 ZNote，进入「设置与连接」，点击「一键连接扩展」。无需复制地址或 API 令牌。
+      </p>
+      <p class="hint">0.8 起使用固定扩展 ID，正常更新会保留连接和偏好。由旧版首次升级时请移除旧扩展后加载新版，再在 ZNote 点一次“一键连接”。以后更新无需重新填写；卸载导致配置清空时也可一键重新连接。</p>
+      <h3>手动连接（可选）</h3>
+      <form id="settings">
+        <label
+          >服务器地址<input
+            id="server"
+            type="url"
+            required
+            placeholder="http://localhost:3741" /></label
+        ><label
+          >API 写入令牌<input
+            id="token"
+            type="password"
+            required
+            autocomplete="off"
+            placeholder="zn_…"
+        /></label>
+        <div class="actions">
+          <button type="button" id="connect">验证连接并读取知识库</button>
+        </div>
+        <label
+          >默认保存到<select id="collection">
+            <option value="">未分类</option>
+          </select></label
+        ><label>默认标签<input id="tags" placeholder="参考, 灵感" /></label
+        ><button class="primary" type="submit">保存设置</button>
+      </form>
+      <p id="status" role="status"></p>
+      <p class="hint">
+        扩展会在你点击采集时读取目标图片或截图，并上传到所填服务器。令牌仅保存在此浏览器的扩展存储中，不同步到云端。
+      </p>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

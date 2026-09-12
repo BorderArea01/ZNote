@@ -1,0 +1,45 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Dialog } from './ui.jsx';
+import { api, send } from './api.js';
+import './imports.css';
+
+export function ImportsDialog({ collections, currentCollection, onClose, onComplete, onOpen }) {
+  const [url, setUrl] = useState(''), [collection, setCollection] = useState(currentCollection || ''), [tags, setTags] = useState('');
+  const [jobs, setJobs] = useState([]), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const seen = useRef(new Set()), complete = useRef(onComplete); complete.current = onComplete;
+  useEffect(() => {
+    let disposed = false, timer;
+    const poll = async () => {
+      try { const result = await api('/api/imports'); if (disposed) return; setJobs(result.jobs);
+        for (const job of result.jobs) if (job.status === 'completed' && !seen.current.has(job.id)) { seen.current.add(job.id); complete.current(); }
+      } catch (e) { if (!disposed) setError(e.message); }
+      finally { if (!disposed) timer = setTimeout(poll, 2000); }
+    }; poll(); return () => { disposed = true; clearTimeout(timer); };
+  }, []);
+  async function submit(e) {
+    e.preventDefault(); setError(''); setBusy(true);
+    try { const job = await send('/api/imports', { url: url.trim(), collection_id: collection || null, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }); setJobs(old => [job, ...old.filter(j => j.id !== job.id)]); setUrl(''); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
+  return <Dialog title="网络视频采集" onClose={onClose} className="import-dialog">
+    <div className="import-body">
+      <p className="muted">粘贴哔哩哔哩、抖音、小红书或 X 的单条视频链接。来源会自动写进备注。</p>
+      <form onSubmit={submit} className="import-form">
+        <label>视频页面链接<input required type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.bilibili.com/video/…" /></label>
+        <label>存入知识库<select value={collection} onChange={e => setCollection(e.target.value)}><option value="">未分类</option>{collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label>标签（用逗号分隔）<input value={tags} onChange={e => setTags(e.target.value)} placeholder="参考，灵感" /></label>
+        <button className="primary" disabled={busy || !url.trim()}>{busy ? '正在提交…' : '开始采集'}</button>
+      </form>
+      <p className="muted">单条最多 500 MB，优先获取公开可下载的清晰版本，合并音视频时不重新编码。需要平台登录或验证的资源可能无法获取。图片可用浏览器扩展右键采集。</p>
+      {error && <p role="alert" className="error">{error}</p>}
+      <h3>采集记录</h3>
+      <p className="muted">关闭窗口后继续处理；服务重启会清空记录并中止未完成任务，已入库内容保留。</p>
+      {!jobs.length && <p className="muted">还没有采集任务</p>}
+      <div className="import-jobs">{jobs.map(job => <article key={job.id} className="import-job">
+        <a href={job.source_url} target="_blank" rel="noreferrer">{job.source_url}</a>
+        <p role="status">{job.message}</p>
+        {job.status === 'completed' ? <button onClick={() => onOpen(job.item_id)}>打开视频</button> : ['queued','running'].includes(job.status) ? <button onClick={async () => { try { await send('/api/imports/' + job.id, {}, 'DELETE'); } catch (e) { setError(e.message); } }}>取消采集</button> : ['failed','cancelled'].includes(job.status) ? <button onClick={() => setUrl(job.source_url)}>重新填写此链接</button> : null}
+      </article>)}</div>
+    </div>
+  </Dialog>;
+}

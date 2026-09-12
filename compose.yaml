@@ -1,0 +1,15 @@
+services:
+  znote:
+    build: .
+    ports:
+      - "3741:3741"
+    volumes:
+      - znote-data:/data
+    environment:
+      # First container setup only: set ALLOW_REMOTE_SETUP=true in .env,
+      # initialize the password, then remove it and recreate the container.
+      ALLOW_REMOTE_SETUP: ${ALLOW_REMOTE_SETUP:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    restart: unless-stopped
+volumes:
+  znote-data:

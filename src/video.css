@@ -1,0 +1,7 @@
+.video-card-preview { display: flex; flex-direction: column; height: 100%; align-items: center; justify-content: center; gap: 12px; background: var(--surface-2, #edf2ef); color: var(--green); }
+.video-card-preview strong { font-size: 14px; }
+.video-card-preview small { font-size: 11px; color: var(--muted); }
+.video-stage { padding: 20px; background: var(--surface-2, #f0f2ef); min-width: 0; align-self: stretch; }
+.video-stage video { display: block; width: 100%; max-height: 65vh; background: #111; border-radius: 8px; }
+.video-stage p { font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.video-stage a { font-size: 13px; }
