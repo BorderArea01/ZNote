@@ -72,7 +72,7 @@ export function createTrashManager({app,db,dataDir,transaction,event,maintenance
       transaction(()=>{
         preserve(state.notes,state.media);
         for(const item of state.targets){
-          if(item.kind==='note')for(const page of db.prepare('SELECT id FROM items WHERE group_key=?').all('note:'+item.id)){db.prepare('UPDATE items SET group_key=NULL,group_index=0,group_order=NULL,group_title=NULL,version=version+1,updated_at=? WHERE id=?').run(date,page.id);event('item.updated',page.id)}
+          if(item.kind==='note')for(const page of db.prepare('SELECT id FROM items WHERE group_key=?').all('note:'+item.id)){db.prepare('UPDATE items SET group_key=?,version=version+1,updated_at=? WHERE id=?').run('album:'+item.id,date,page.id);event('item.updated',page.id)}
           for(const key of [item.file_key,item.thumbnail_key].filter(Boolean))db.prepare('INSERT OR IGNORE INTO pending_file_deletions(file_key) VALUES(?)').run(key);
           db.prepare('DELETE FROM items WHERE id=?').run(item.id);event('item.deleted',item.id);
         }
