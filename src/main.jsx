@@ -791,6 +791,8 @@ function SettingsPanel({
 
           <div className="connection-actions"><a className="button" href="/api/clipper/download"><Download size={16} />下载扩展</a><button className="primary" data-znote-connect onClick={() => notify('请先安装新版扩展并刷新本页，再点击一键连接')}>一键连接扩展</button></div>
           <p id="znote-connect-status" role="status" className="muted"></p>
+          <div className="settings-title"><h3>Pixiv 增强版</h3><HelpHint label="Pixiv 增强版">基于 Powerful Pixiv Downloader，保留作者、收藏、搜索、排行榜抓取及筛选、动图转换、小说下载等功能。新增独立的 ZNote 入库队列，支持原图、漫画、APNG 动图及 Markdown 小说。首次在增强版任务 / 设置中填写写入令牌，之后更新保留连接。</HelpHint></div>
+          <div className="connection-actions"><a className="button" href="/api/clipper/pixiv/download"><Download size={16} />下载 Pixiv 增强版</a><a className="button" href="/api/clipper/pixiv/source">GPL 完整源码</a></div>
 
         </section>
         <WebhookSettings />

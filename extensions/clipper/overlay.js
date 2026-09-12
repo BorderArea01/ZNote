@@ -576,6 +576,9 @@
       (e) => {
         if (!e.isTrusted) return;
         pointer = { x: e.clientX, y: e.clientY };
+        // The companion retains Pixiv's own enhanced preview and wheel controls.
+        // Avoid two hover viewers competing when both ZNote extensions are loaded.
+        if (location.hostname === 'www.pixiv.net' && document.getElementById('znote-pixiv-entry')) { if (hovered || pendingTarget) hide(); return; }
         if (own(e) || !hoverAllowed) return;
         if (hoverBusy) { if (!sourceUnderPointer()) scheduleHide(); return; }
         const target = globalThis.ZNoteImageTarget(e);

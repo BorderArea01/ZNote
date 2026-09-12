@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { createApp } from '../server/app.js';
+test('Pixiv novels: canonical source/library deduplication, concurrent retry, local edits, images and authorization', async t => {
+  const dataDir = await mkdtemp(resolve('artifacts/pixiv-notes-')), runtime = createApp({ dataDir });
+  const server = runtime.app.listen(0,'127.0.0.1'); await new Promise(r=>server.once('listening',r));
+  t.after(async()=>{await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();});
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const setup = await fetch(base+'/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'0059'})});
+  const cookie=setup.headers.get('set-cookie').split(';')[0];
+  const request=(path,body,headers={Cookie:cookie})=>fetch(base+path,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const a=await(await request('/api/collections',{name:'小说 A'})).json(), b=await(await request('/api/collections',{name:'小说 B'})).json();
+  const input={title:'小说',content:'## 第一章\n\n正文 [作者](https://www.pixiv.net/users/1)',tags:['阅读'],collection_id:a.id,source_url:'https://www.pixiv.net/novel/show.php?id=12345&ref=test'};
+  const responses=await Promise.all(Array.from({length:3},()=>request('/api/pixiv/notes',input)));
+  const items=await Promise.all(responses.map(async r=>{assert.ok(r.ok,await r.clone().text());return r.json();}));
+  assert.equal(new Set(items.map(i=>i.id)).size,1);
+  assert.equal(items[0].source_url,'https://www.pixiv.net/novel/show.php?id=12345');assert.ok(items[0].tags.includes('Pixiv'));
+  const second=await(await request('/api/pixiv/notes',{...input,collection_id:b.id})).json();assert.notEqual(second.id,items[0].id);
+  const modified=await fetch(base+'/api/items/'+items[0].id,{method:'PATCH',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({version:items[0].version,content:'用户编辑的正文'})});assert.ok(modified.ok);
+  const retry=await(await request('/api/pixiv/notes',input)).json();assert.equal(retry.duplicate,true);assert.equal(retry.content,'用户编辑的正文');
+  const bad=await request('/api/pixiv/notes',{...input,source_url:'https://evil.example/novel/show.php?id=1'});assert.equal(bad.status,400);
+  const external=await request('/api/pixiv/notes',{...input,source_url:'https://www.pixiv.net/novel/show.php?id=34567',content:'![未归档](http://127.0.0.1/private.png)'});assert.equal(external.status,400);assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE source_url LIKE '%34567'").get().n,0);
+  const reader=await(await request('/api/tokens',{name:'只读',scope:'read'})).json();assert.equal((await request('/api/pixiv/notes',input,{Authorization:'Bearer '+reader.token})).status,403);
+  await fetch(base+'/api/items/'+items[0].id,{method:'DELETE',headers:{Cookie:cookie}});
+  assert.equal((await request('/api/pixiv/notes',input)).status,409);
+});

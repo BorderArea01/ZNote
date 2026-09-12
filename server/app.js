@@ -204,7 +204,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.8.7" }),
+    res.json({ status: "ok", version: "0.9.0" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -304,7 +304,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.8.7",
+      version: "0.9.0",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -524,6 +524,26 @@ export function createApp({
     const result=archive?await noteArchiveQueue.run(randomUUID(),()=>archiveNoteImages(input,{download:imageDownload,save:saveAsset})):null;
     if(result)input.content=result.content;
     res.status(201).json({...insert(input),...(result?{image_archive:result.report}:{})});
+  });
+  // Canonical Pixiv novel + library identity makes retries after a lost upload
+  // response safe, without overwriting notes the user may have edited locally.
+  app.post('/api/pixiv/notes', async (req, res) => {
+    const input = itemInput.parse(req.body); validateCollection(input.collection_id);
+    const source = new URL(input.source_url || 'https://invalid');
+    const id = source.searchParams.get('id');
+    if (source.origin !== 'https://www.pixiv.net' || source.pathname !== '/novel/show.php' || !/^\d{1,12}$/.test(id || '') || source.username || source.password)
+      throw fail(400, '请提供 Pixiv 小说详情链接');
+    input.source_url = `https://www.pixiv.net/novel/show.php?id=${id}`;
+    const item = await noteArchiveQueue.run('pixiv:' + id + ':' + input.collection_id, async () => {
+      const existing = db.prepare("SELECT * FROM items WHERE kind='note' AND source_url=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL").get(input.source_url, input.collection_id);
+      if (existing?.deleted_at) throw fail(409, '此小说已在回收站，请先恢复');
+      if (existing) return { ...serialize(existing), duplicate: true };
+      const archived = await archiveNoteImages(input, { download: imageDownload, save: saveAsset });
+      input.content = archived.content;
+      if (archived.report.failures.length) throw fail(400, '小说配图未能完整归档，请重试');
+      return { ...insert(input), image_archive: archived.report };
+    });
+    res.status(item.duplicate ? 200 : 201).json(item);
   });
   const imageReference = (item) => ({
     kind: item.kind, duration: item.duration, codecName: item.video_codec,

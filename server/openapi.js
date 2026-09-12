@@ -40,7 +40,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.8.7",
+    version: "0.9.0",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -576,4 +576,10 @@ spec.paths['/api/items/batch-trash']={post:operation('当前知识库批量回�
     items:{type:'array',minItems:1,maxItems:100,items:{type:'object',required:['id','version'],properties:{id:str,version:{type:'integer',minimum:1}}}}}})})};
 spec.components.schemas.Item.allOf[1].properties.image_archive={type:'object',description:'笔记保存时的配图归档结果',properties:{total:{type:'integer'},archived:{type:'integer'},failures:{type:'array',items:{type:'object',properties:{url:str,error:str}}}}};
 spec.paths['/api/clipper/pair'] = {post:{summary:'已登录网页创建扩展一次性连接凭据',description:'仅管理员浏览器会话可用，同源写入；凭据 2 分钟内单次有效，不返回 API 令牌。',responses:{200:{description:'一次性 code，禁止缓存'},...errorResponses}}};
+spec.paths['/api/pixiv/notes'] = { post: operation('Pixiv 小说入库（write）', ref('Item'), {
+  description: 'source_url 必须为 https://www.pixiv.net/novel/show.php?id=数字。按小说来源与知识库去重，重试返回已有笔记并附 duplicate:true，不覆盖本地编辑。配图必须完成归档，归档失败返回 400；回收站中已有同篇返回 409。',
+  requestBody: body({ ...input, required: ['title', 'source_url'] }),
+  responses: { 200: response(ref('Item')), 201: response(ref('Item')), ...errorResponses },
+}) };
+for (const artifact of ['download', 'source']) spec.paths['/api/clipper/pixiv/' + artifact] = { get: { summary: artifact === 'download' ? '下载 Pixiv 增强版安装包' : '下载 Pixiv 增强版完整 GPL 对应源码', responses: { 200: { description: 'application/zip' }, 503: { description: '服务端尚未运行 npm run pixiv:build' }, ...errorResponses } } };
 spec.paths['/api/clipper/redeem'] = {post:{summary:'扩展兑换一次性连接凭据',description:'要求 chrome-extension 来源及有效 code；兑换为 write 令牌。不可重放，发起连接的管理员会话注销或过期后失效。',security:[],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['code'],properties:{code:{type:'string',minLength:64,maxLength:64}}}}}},responses:{200:{description:'扩展写入令牌，禁止缓存'},...errorResponses}}};
