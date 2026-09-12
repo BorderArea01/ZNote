@@ -2,8 +2,8 @@
 <header><div><span class="brand">ZNote × Pixiv</span><h1>把喜欢的作品，留在自己的知识库</h1><p>基于 Powerful Pixiv Downloader · 原抓取、筛选与下载功能保留</p></div><a href="https://github.com/BorderArea01/ZNote/tree/main/integrations/pixiv" target="_blank" rel="noreferrer">说明与源码 ↗</a></header>
 <main><aside><section><h2>连接知识库 <span class="help" tabindex="0" title="第一次填写 ZNote 写入 API 令牌。覆盖同一目录并重新加载增强版时，连接会保留。此增强版与普通 ZNote 扩展分别保存设置。">?</span></h2>
 <form id="connection"><label for="server">知识库地址</label><input id="server" type="url" required placeholder="http://localhost:3741"><label for="token">写入令牌</label><input id="token" type="password" autocomplete="off" placeholder="已连接时留空可复用原令牌"><button id="connect">连接 / 保存</button></form><p id="connection-status" role="status"></p></section>
-<section><h2>入库任务 <button id="refresh" class="quiet" title="刷新任务列表">↻</button></h2><div id="jobs"></div><p class="muted">在 Pixiv 完成抓取与筛选后，点击「保存抓取结果到 ZNote」。</p></section></aside>
-<article><section id="empty"><h2>等待你选中的作品</h2><p>作者页、收藏、搜索结果、排行榜等抓取方式继续使用原插件；ZNote 会接收最终筛选后的结果。</p><p>入库任务保存在本机，关闭浏览器后可继续。</p></section>
+<section><h2>入库任务 <button id="refresh" class="quiet" title="刷新任务列表">↻</button></h2><div id="jobs"></div><p class="muted">在 Pixiv 作品旁点击「入库」，或在目录页点击「当前范围入库」。</p></section></aside>
+<article><section id="empty"><h2>等待你选中的作品</h2><p>回到 Pixiv 浏览，作品旁的「入库」按钮或 Z 键会保存整部作品。目录入库沿用原插件范围和筛选，进度直接显示在 Pixiv 页面。</p><p>已排队的任务在后台保存；浏览器重启后继续。本页用于首次连接和查看详细记录。</p></section>
 <section id="task" hidden><div class="heading"><h2 id="title"></h2><a id="source" target="_blank" rel="noreferrer">回到来源 ↗</a></div>
 <div class="destination"><label>目标知识库<select id="collection" disabled></select></label><label>附加标签<input id="tags" placeholder="多个标签用逗号分隔"></label><label class="check"><input type="checkbox" id="include-tags" checked>导入 Pixiv 标签</label></div>
 <div class="actions"><button id="start" disabled>保存到知识库</button><button id="stop" hidden>停止</button><button id="delete" class="quiet">删除任务记录</button><span class="help" tabindex="0" title="入库开始后固定知识库与标签。成功项会跳过，失败项可重试。停止时等待当前上传确认。动图生成 APNG（最多 500 帧、解码总像素 3200 万），小说保存 Markdown 并归档配图；ZIP / EPUB 原文件仍用原插件下载。">?</span></div>

@@ -59,7 +59,7 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4].includes(version)) throw fail(400, '备份版本不兼容，需要 ZNote v0.1–v0.4 完整备份');
+    if (![1, 2, 3, 4, 5].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
       const table = snapshot.prepare('SELECT type,sql FROM sqlite_master WHERE name=?').get(name);

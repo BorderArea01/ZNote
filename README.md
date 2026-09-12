@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.1-287464?style=flat-square" alt="Version 0.9.1" />
+    <img src="https://img.shields.io/badge/version-0.9.2-287464?style=flat-square" alt="Version 0.9.2" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -116,7 +116,7 @@ docker compose up -d --build
 
 **漫画与多图作品**：在 Pixiv 作者 / 推荐页、Pawchive 列表的小封面上，也能展开对应作品并滚轮翻页。预览优先使用网站提供的较轻大图，提前加载相邻页；「查看原图」可切换完整画质。鼠标留在原缩略图或展开预览上都能翻页。点击「批量下载 N 张」按页序保存到 `下载目录/ZNote/作品标题/001.png…`，点击「批量入库 N 张」可选择知识库与多个标签，整组原图带上来源链接、网站标签和页码。下载和入库分别记录进度，始终使用原文件，支持停止、继续、失败重试和刷新恢复。其他网站按当前文章或明确图库中可识别的图片分组，每组最多 200 张。
 
-**Pixiv 增强版**：需要作者、收藏、搜索、排行榜等完整抓取与筛选时，可在设置页下载基于 Powerful Pixiv Downloader 的独立增强版。保留原插件功能，筛选后点击「保存抓取结果到 ZNote」，即可归档原图、漫画、APNG 动图和 Markdown 小说，并带上作者、来源和标签。入库进度可跨浏览器重启继续。首次连接填写一次写入令牌；增强版更新后保留连接。安装与动图 / 小说边界见 [增强版说明](integrations/pixiv/README.md)，完整对应源码也可从设置页下载。
+**Pixiv 增强版**：需要作者、收藏、搜索、排行榜等完整抓取与筛选时，可在设置页下载基于 Powerful Pixiv Downloader 的独立增强版。保留原插件功能；作品封面旁点击「入库」或按 **Z**，就地选择「按作品分组」或「逐张入库」（快捷键沿用上次选择）。自动加入作者姓名标签，并沿用原插件下载后自动收藏、附带标签及公开 / 私密设置。作者、收藏等目录点击「当前范围入库」，沿用原插件的整目录范围与筛选，一次排队数百部作品。知识库选择、标签、进度、停止和重试都在 Pixiv 页内操作，无需跳转。后台归档原图、漫画、APNG 动图与 Markdown 小说，并保留作者、来源和标签；已排队任务离开页面仍继续，浏览器重启后恢复。首次连接填写一次写入令牌；增强版更新后保留连接。安装与动图 / 小说边界见 [增强版说明](integrations/pixiv/README.md)，完整对应源码也可从设置页下载。
 
 **图文笔记的配图默认本地归档**：普通 Markdown 外链图片也会在保存时尝试入库，成功后改为内部地址。已有笔记可点击「归档外部配图」；无法下载时保留来源和失败说明。每次最多 200 张 / 500 MB，单张 25 MB，可再次保存继续处理。
 

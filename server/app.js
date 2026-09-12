@@ -60,6 +60,9 @@ const itemInput = z.object({
   tags: cleanTags.default([]),
   collection_id: z.string().nullable().default(null),
   favorite: z.boolean().default(false),
+  group_key: z.string().max(200).nullable().optional().transform(v => v === '' ? null : v),
+  group_index: z.coerce.number().int().min(0).max(10000).default(0),
+  group_title: z.string().max(200).nullable().optional(),
   source_url: z.url().max(4096).refine(v => /^https?:\/\//i.test(v), '仅支持 HTTP(S) 来源网址').nullable().default(null),
   captured_at: z.iso.datetime().nullable().default(null),
 });
@@ -204,7 +207,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.1" }),
+    res.json({ status: "ok", version: "0.9.2" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -304,7 +307,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.1",
+      version: "0.9.2",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -415,6 +418,8 @@ export function createApp({
         limit: z.coerce.number().int().min(1).max(100).default(60),
         offset: z.coerce.number().int().min(0).default(0),
         gallery: z.enum(['true', 'false']).default('false'),
+        grouped: z.enum(['true','false']).default('false'),
+        group_key: z.string().max(200).optional(),
       })
       .parse(req.query);
     const where = [
@@ -463,13 +468,18 @@ export function createApp({
       }
     }
     if (q.favorite === "true") where.push("favorite=1");
+    if (q.group_key) { where.push('group_key=?'); args.push(q.group_key); }
     const clause = where.join(" AND ");
     const sort = {
       updated: "updated_at DESC, id",
       created: "created_at DESC, id",
       title: "title COLLATE NOCASE, id",
     }[q.sort];
-    if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${sort}`).all(...args).map(item => item.id) });
+    if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'group_index, id' : sort}`).all(...args).map(item => item.id) });
+    if(q.grouped==='true') {
+      const grouped=`SELECT *, MIN(group_index) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
+      return res.json({items:db.prepare(`${grouped} ORDER BY ${sort} LIMIT ? OFFSET ?`).all(...args,q.limit,q.offset).map(serialize),total:db.prepare(`SELECT count(*) n FROM (${grouped})`).get(...args).n,offset:q.offset,limit:q.limit});
+    }
     res.json({
       items: db
         .prepare(
@@ -513,6 +523,7 @@ export function createApp({
         image?.storedBytes ?? null,
       );
       db.prepare('UPDATE items SET source_url=?,captured_at=? WHERE id=?').run(input.source_url ?? null, input.captured_at ?? null, id);
+      if(image && input.group_key !== undefined) db.prepare('UPDATE items SET group_key=?,group_index=?,group_title=? WHERE id=?').run(input.group_key,input.group_index,input.group_title??null,id);
       if (image?.kind === 'video') db.prepare('UPDATE items SET duration=?,video_codec=? WHERE id=?').run(image.duration, image.codecName, id);
       event("item.created", id);
     });
@@ -550,14 +561,28 @@ export function createApp({
     key: item.file_key, mime: item.mime, bytes: item.bytes, width: item.width,
     height: item.height, hash: item.hash, codec: item.storage_codec, storedBytes: item.stored_bytes,
   });
+  const mediaCollision = (source, collection) => {
+    const indexed = source.group_key || /^https:\/\/www\.pixiv\.net\/artworks\/\d+$/.test(source.source_url || '');
+    return indexed
+      ? db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND source_url IS ? AND group_index=? AND deleted_at IS NULL AND id!=?').get(source.hash,collection,source.source_url,source.group_index,source.id)
+      : db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND deleted_at IS NULL AND id!=?').get(source.hash,collection,source.id);
+  };
   app.post('/api/items/:id/copy', (req, res) => {
     const source = getItem(req.params.id);
     if (!['image', 'video'].includes(source.kind) || source.deleted_at) throw fail(409, '只能复用未删除的图片或视频');
     const input = itemInput.parse({ ...serialize(source), ...req.body });
     validateCollection(input.collection_id);
-    const existing = db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND deleted_at IS NULL').get(source.hash, input.collection_id);
+    const existing = source.collection_id === input.collection_id ? source : mediaCollision(source,input.collection_id);
     if (existing) return res.json({ ...serialize(existing), duplicate: true });
     res.status(201).json({ ...insert(input, imageReference(source)), shared: true });
+  });
+  app.post('/api/item-groups/favorite', (req,res) => {
+    const input=z.object({group_key:z.string().min(1).max(200),collection_id:z.string().nullable(),favorite:z.boolean()}).parse(req.body);
+    validateCollection(input.collection_id);
+    const items=db.prepare('SELECT id FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL').all(input.group_key,input.collection_id);
+    if(!items.length) throw fail(404,'图片组不存在');
+    transaction(()=>{for(const item of items){db.prepare('UPDATE items SET favorite=?,updated_at=?,version=version+1 WHERE id=?').run(+input.favorite,now(),item.id);event('item.updated',item.id);}});
+    res.json({count:items.length});
   });
   app.post('/api/items/batch-organize', (req, res) => {
     const input = z.object({
@@ -570,7 +595,7 @@ export function createApp({
       const old = getItem(value.id);
       if (old.deleted_at || old.version !== value.version) throw fail(409, '部分内容已被修改或删除，请刷新后重试');
       const target = input.collection_id === undefined ? old.collection_id : input.collection_id;
-      if (old.hash && target !== old.collection_id && db.prepare('SELECT id FROM items WHERE hash=? AND collection_id IS ? AND deleted_at IS NULL AND id!=?').get(old.hash, target, old.id))
+      if (old.hash && target !== old.collection_id && mediaCollision(old,target))
         throw fail(409, '目标知识库已有同一图片；请保留独立记录或先整理目标条目');
       db.prepare('UPDATE items SET collection_id=?,favorite=?,updated_at=?,version=version+1 WHERE id=?')
         .run(target, input.favorite === undefined ? old.favorite : +input.favorite, now(), old.id);
@@ -645,7 +670,7 @@ export function createApp({
     if(archived)item.content=archived.content;
     const current=getItem(old.id);
     if(current.deleted_at || current.version!==old.version) throw fail(409,'归档期间内容已在其他设备变更，请重新打开后保存');
-    if (old.hash && old.collection_id !== item.collection_id && db.prepare('SELECT id FROM items WHERE hash=? AND collection_id IS ? AND deleted_at IS NULL AND id!=?').get(old.hash, item.collection_id, old.id))
+    if (old.hash && old.collection_id !== item.collection_id && mediaCollision(old,item.collection_id))
       throw fail(409, '目标知识库已存在同一图片');
     transaction(() => {
       db.prepare(
@@ -729,6 +754,7 @@ export function createApp({
       collection_id: fields.collection_id || null,
       source_url: fields.source_url || null,
       captured_at: fields.source_url ? (fields.captured_at || now()) : (fields.captured_at || null),
+      group_key: fields.group_key, group_index: fields.group_index, group_title: fields.group_title,
     });
     validateCollection(input.collection_id);
     const buffer = file.buffer || (await readFile(file.path));
@@ -752,7 +778,9 @@ export function createApp({
     )
       throw fail(415, "暂不支持此图片格式");
     const digest = hash(buffer);
-    const existing = db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL').get(digest, input.collection_id);
+    const existing = input.group_key !== undefined
+      ? db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND source_url IS ? AND group_index=? ORDER BY deleted_at IS NOT NULL').get(digest,input.collection_id,input.source_url,input.group_index)
+      : db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL').get(digest,input.collection_id);
     if (existing?.deleted_at) throw fail(409, '这张图片已在此知识库的回收站中，请先恢复');
     if (existing) return sourceDuplicate(existing, input);
     const old = db.prepare('SELECT * FROM items WHERE hash=?').get(digest);
@@ -808,7 +836,7 @@ export function createApp({
     limits: {
       fileSize: 25 * 1024 * 1024,
       files: 1,
-      fields: 8,
+      fields: 11,
       fieldSize: 512000,
     },
   });
@@ -824,7 +852,7 @@ export function createApp({
     limits: {
       fileSize: 25 * 1024 * 1024,
       files: 20,
-      fields: 8,
+      fields: 11,
       fieldSize: 512000,
     },
   });
@@ -864,6 +892,15 @@ export function createApp({
       .json({ results });
   });
   function sourceDuplicate(existing, input) {
+    if (input.group_key !== undefined || input.tags?.some(tag=>!JSON.parse(existing.tags).includes(tag))) {
+      const tags=[...new Set([...JSON.parse(existing.tags), ...(input.tags||[])])];
+      if(tags.length>30) throw fail(400,'已有图片的标签已满，请整理标签后重试；原内容未覆盖');
+      transaction(()=>{
+        db.prepare('UPDATE items SET tags=?,group_key=?,group_index=?,group_title=?,updated_at=?,version=version+1 WHERE id=?').run(JSON.stringify(tags),input.group_key===undefined?existing.group_key:input.group_key,input.group_key===undefined?existing.group_index:input.group_index,input.group_key===undefined?existing.group_title:input.group_title??null,now(),existing.id);
+        event('item.updated',existing.id);
+      });
+      existing=getItem(existing.id);
+    }
     if (input.source_url) {
       const updated = withSource({ ...existing, tags: JSON.parse(existing.tags), source_url: input.source_url });
       if (updated.content === existing.content && JSON.stringify(updated.tags) === existing.tags && existing.source_url) return { ...serialize(existing), duplicate: true };

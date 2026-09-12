@@ -30,11 +30,15 @@ export function description(html) {
 }
 const mdText = s => String(s || '').replace(/[\\[\]]/g, '\\$&');
 export function details(record, target) {
-  const tags = [...new Set(['Pixiv', ...target.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean), ...(target.includeTags ? record.tags : [])])];
+  // Reserve the author before optional tags so the 30-tag cap never drops it.
+  // Keep the complete display name and stable author ID in the note below.
+  const authorTag = String(record.author || '').trim().slice(0, 40).replace(/[\uD800-\uDBFF]$/, '');
+  const tags = [...new Set(['Pixiv', ...(authorTag ? [authorTag] : []), ...target.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean), ...(target.includeTags ? record.tags : [])])];
   const fields = {
     title: `${record.title || record.id}${record.type < 2 ? ' · ' + String(record.index + 1).padStart(3, '0') : ''}`.slice(0,200),
     collection_id: target.collection_id || null, tags: tags.filter(t => t.length <= 40).slice(0,30), source_url: record.source,
     captured_at: new Date().toISOString(),
+    ...(target.groupMode && record.type < 2 ? {group_key:target.groupMode === 'work' ? `pixiv:art:${record.id}` : '',group_index:record.index,group_title:record.title} : {}),
     content: [record.authorId ? `作者：[${mdText(record.author || record.authorId)}](https://www.pixiv.net/users/${record.authorId})` : `作者：${record.author || '未知'}`, `Pixiv ID：${record.id}`, record.type < 2 ? `页码：${record.index + 1} / ${record.pages}` : '', `作品标签：${record.tags.join('、')}`, record.date ? `发布日期：${record.date}` : '', description(record.description), `来源链接：${record.source}`, record.original ? `原文件：${record.original}` : ''].filter(Boolean).join('\n\n'),
   };
   return fields;

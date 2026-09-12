@@ -56,9 +56,11 @@ async function zipNames(bytes) {
   return new Promise((resolve,reject)=>yauzl.fromBuffer(bytes,{lazyEntries:true},(e,z)=>{if(e)return reject(e);const names=[];z.on('entry',entry=>{names.push(entry.fileName);z.readEntry();});z.on('end',()=>resolve(names));z.on('error',reject);z.readEntry();}));
 }
 async function openCapture() {
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('closeSettingsPanel')));
   const entry=page.locator('#znote-pixiv-entry');
+  if(await entry.locator('#panel').isHidden())await entry.locator('#toggle').click();
   await entry.locator('#save:not([disabled])').waitFor();
-  const opened=context.waitForEvent('page');await entry.locator('#save').click();
+  const opened=context.waitForEvent('page');await entry.locator('#review').click();
   const target=await opened;target.on('pageerror',e=>errors.push(e.message));await target.locator('#task').waitFor();return target;
 }
 try {
@@ -68,11 +70,11 @@ try {
   const collection=await(await context.request.post(base+'/api/collections',{data:{name:'Pixiv 收藏'}})).json();
   await worker.evaluate(()=>chrome.storage.local.set({xzSetting:{autoStartDownload:false,autoStartDownloadForQuickDownload:false}}));
   page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));const cdp=await context.newCDPSession(page);await cdp.send('Browser.setDownloadBehavior',{behavior:'default'});
-  await page.goto('https://www.pixiv.net/artworks/12345');await page.locator('#znote-pixiv-entry').waitFor();await closeNotices();
+  await page.goto('https://www.pixiv.net/artworks/12345');await page.locator('#znote-pixiv-entry').waitFor({state:'attached'});await closeNotices();
   await page.locator('[data-znote-overlay]').waitFor({state:'attached'});await page.locator('main img').hover();await page.waitForTimeout(450);
   assert.ok(await page.locator('[data-znote-overlay]').locator('.preview').isHidden(),'Universal clipper yields hover preview to companion on Pixiv');
   await page.locator('#quickCrawlBtn').click();
-  await page.locator('#znote-pixiv-entry').getByText('保存抓取结果到 ZNote（2）',{exact:true}).waitFor();await closeNotices();
+  await page.locator('#znote-pixiv-entry').getByText('保存抓取结果到 ZNote（2）',{exact:true}).waitFor({state:'attached'});await closeNotices();
   const target=await openCapture();
   await target.locator('#server').fill(base);await target.locator('#token').fill(token.token);
   await target.locator('#connect').click();await target.locator('#connection-status').filter({hasText:'已连接'}).waitFor();console.log('Connected through extension UI');
@@ -84,21 +86,22 @@ try {
   assert.equal(await restored.locator('#collection').inputValue(),collection.id);assert.ok(await restored.locator('#collection').isDisabled());
   await restored.locator('#start').click();await restored.getByRole('button',{name:'全部已入库',exact:true}).waitFor();
   rows=runtime.db.prepare("SELECT * FROM items WHERE kind='image'").all();assert.equal(rows.length,2);
-  for(const row of rows){assert.equal(row.collection_id,collection.id);assert.equal(row.source_url,'https://www.pixiv.net/artworks/12345');for(const tag of ['Pixiv','风景','参考','漫画'])assert.ok(JSON.parse(row.tags).includes(tag));}
+  for(const row of rows){assert.equal(row.collection_id,collection.id);assert.equal(row.source_url,'https://www.pixiv.net/artworks/12345');for(const tag of ['Pixiv','测试作者','风景','参考','漫画'])assert.ok(JSON.parse(row.tags).includes(tag));}
   await restored.locator('#status').filter({hasText:'已入库 2 / 2。'}).waitFor();await restored.screenshot({path:resolve('artifacts/pixiv-enhanced-library.png'),fullPage:true});
-  page=await context.newPage();await page.goto('https://www.pixiv.net/artworks/12345');await page.locator('#znote-pixiv-entry').waitFor();await closeNotices();
+  page=await context.newPage();await page.goto('https://www.pixiv.net/artworks/12345');await page.locator('#znote-pixiv-entry').waitFor({state:'attached'});await closeNotices();
   const template={idNum:12345,id:'12345',index:0,original,type:0,ext:'png',pageCount:1,title:'原插件导入测试',description:'',user:'测试作者',userId:'1',fullWidth:800,fullHeight:600,tags:['测试'],tagsWithTransl:['测试'],aiType:1,isOriginal:true,bmk:120,bookmarked:false,date:'2026-01-01T00:00:00Z',xRestrict:0,regular:original,thumb:original,small:original};
   const records=[{...template,idNum:23456,id:'23456',title:'两帧动图',type:2,ext:'zip',original:'https://i.pximg.net/img-zip-ugoira/23456.zip',ugoiraInfo:{frames:[{file:'000000.jpg',delay:100},{file:'000001.jpg',delay:200}] }},{...template,idNum:34567,id:'34567',title:'晨间小说',type:3,ext:'txt',original:'',novelMeta:{content:'[chapter:第一章]\n正文 [[jumpuri:作者>https://www.pixiv.net/users/1]]\n[uploadedimage:9]',coverUrl:original,embeddedImages:{'9':original.replace('p0','p1')}}}];
   const choose=page.waitForEvent('filechooser');await page.evaluate(()=>window.dispatchEvent(new CustomEvent('importResult')));const chooser=await choose;
   await chooser.setFiles({name:'pixiv-results.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(records))});
-  await page.locator('#znote-pixiv-entry').getByText('保存抓取结果到 ZNote（2）',{exact:true}).waitFor();
+  await page.locator('#znote-pixiv-entry').getByText('保存抓取结果到 ZNote（2）',{exact:true}).waitFor({state:'attached'});
   const mixed=await openCapture();await mixed.locator('#connection-status').filter({hasText:'已连接'}).waitFor();await mixed.locator('#collection').selectOption(collection.id);
   loseNoteResponse=true;await mixed.locator('#start').click();await mixed.locator('#status').filter({hasText:'已入库 1 / 2，1 项失败'}).waitFor();
   let novels=runtime.db.prepare("SELECT * FROM items WHERE kind='note'").all();assert.equal(novels.length,1,'Novel committed despite dropped response');
   await mixed.locator('#start').click();await mixed.getByRole('button',{name:'全部已入库',exact:true}).waitFor();
-  novels=runtime.db.prepare("SELECT * FROM items WHERE kind='note'").all();assert.equal(novels.length,1,'Retry must not duplicate novels');
+  novels=runtime.db.prepare("SELECT * FROM items WHERE kind='note'").all();assert.equal(novels.length,1,'Retry must not duplicate novels');assert.ok(JSON.parse(novels[0].tags).includes('测试作者'));
   assert.ok(novels[0].content.includes('## 第一章'));assert.ok(novels[0].content.includes('[作者](<https://www.pixiv.net/users/1>)'));assert.ok(novels[0].content.includes('/media/'));assert.ok(!/!\[[^\]]*\]\(https?:/.test(novels[0].content));
   const animated=runtime.db.prepare("SELECT * FROM items WHERE source_url='https://www.pixiv.net/artworks/23456'").get();assert.ok(animated);
+  assert.ok(JSON.parse(animated.tags).includes('测试作者'));
   const apng=await originalBuffer(join(dir,'data'),animated);
   const extensionOrigin='chrome-extension://'+new URL(mixed.url()).host;
   await mixed.addScriptTag({url:extensionOrigin+'/lib/pako.min.js'});await mixed.addScriptTag({url:extensionOrigin+'/lib/UPNG.js'});
@@ -143,4 +146,4 @@ try {
   }finally{await restoredRuntime.imports.stop();await restoredRuntime.backups.stop();await restoredRuntime.webhooks.stop();restoredRuntime.db.close();}
   assert.deepEqual(errors,[]);
   console.log('PASS: actual upstream quick crawl/result import and original downloads; native ZNote entry and companion hover coexistence; original bytes, source/tags/library isolation; restart resume; APNG frame pixels/timing; Markdown/local novel images; dropped-response deduplication; no token leaks; mobile layout; install/source packages; backup restoration of images, animation and novels');
-} finally {await context?.close();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();}
+} catch(e){if(page&&!page.isClosed()){await page.screenshot({path:resolve('artifacts/pixiv-regression-failure.png'),timeout:5000});console.log('overlap',await page.locator('#settingsPanelSummaryStart').boundingBox(),await page.locator('#znote-pixiv-entry').boundingBox());}throw e;} finally {await context?.close();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();}

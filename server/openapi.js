@@ -30,6 +30,7 @@ const errorResponses = {
   404: { description: "资源不存在" },
   409: { description: "版本冲突或名称重复" },
 };
+// Group metadata is returned on each item; creation is supported by asset uploads.
 const operation = (summary, schema, extra = {}) => ({
   summary,
   responses: { 200: response(schema), ...errorResponses },
@@ -40,7 +41,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.9.1",
+    version: "0.9.2",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -228,6 +229,9 @@ export const spec = {
                   collection_id: str,
                   source_url: { ...str, description: 'HTTP(S) 来源网址；提供时自动记录采集时间' },
                   captured_at: { ...str, format: 'date-time' },
+                  group_key: { ...str, maxLength: 200, description: '可选作品组标识，例如 pixiv:art:12345；空串切换为逐张展示。按知识库隔离。提供时以原文件哈希、来源、页序联合去重。' },
+                  group_index: { type: 'integer', minimum: 0, maximum: 10000, description: '作品内从 0 开始的页序，相同原文件的不同页保留独立记录并共享文件' },
+                  group_title: { ...str, maxLength: 200, description: '分组封面标题' },
                 },
               },
             },
@@ -546,6 +550,12 @@ spec.paths['/api/backups'] = {
 };
 spec.paths['/api/clipper/download'] = { get: { summary: '下载浏览器采集扩展 ZIP（需要登录或 API 令牌）', responses: { 200: { description: '可在 Chrome/Edge 加载的 MV3 扩展', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
 spec.paths['/api/items'].get.parameters.push({ name: 'gallery', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'false' }, description: 'true 返回当前过滤范围内按排序冻结的图片 ID 列表 {ids:[]}，忽略 limit/offset；不读取图片二进制，用于连续整理时保持顺序' });
+spec.paths['/api/items'].get.parameters.push(
+  {name:'grouped',in:'query',schema:{type:'string',enum:['true','false'],default:'false'},description:'按作品组折叠，封面为首个匹配页，返回 group_count；total 为折叠后数量。默认保持逐条 API 行为。'},
+  {name:'group_key',in:'query',schema:str,description:'限定作品组；与 collection 配合，gallery=true 时按 group_index 返回各页 ID。'}
+);
+Object.assign(spec.components.schemas.Item.allOf[1].properties, {group_key:{...str,nullable:true},group_index:{type:'integer'},group_title:{...str,nullable:true},group_count:{type:'integer',description:'仅折叠查询返回当前过滤范围内的组页数'}});
+spec.paths['/api/item-groups/favorite']={post:operation('收藏或取消收藏当前知识库的整组图片',{type:'object',properties:{count:{type:'integer'}}},{requestBody:body({type:'object',required:['group_key','collection_id','favorite'],properties:{group_key:str,collection_id:{...str,nullable:true},favorite:{type:'boolean'}}})})};
 spec.paths['/api/backups/policy'] = { patch: operation('更新自动备份策略（管理员）；默认每天一次保留 7 份', { type: 'object' }, { requestBody: body({ type: 'object', required: ['enabled', 'interval_hours', 'keep'], properties: {
   enabled: { type: 'boolean' }, interval_hours: { type: 'integer', minimum: 1, maximum: 720 }, keep: { type: 'integer', minimum: 1, maximum: 100 },
 } }) }) };

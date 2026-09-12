@@ -49,8 +49,21 @@ if (!npm) throw Error('Run this builder using npm run pixiv:build');
 const installed = spawnSync(process.execPath, [npm, 'install', '--prefix', deps, '--ignore-scripts', '--no-audit', '--no-fund'], { windowsHide: true, encoding: 'utf8' });
 if (installed.status) throw Error(installed.stderr); console.log('Pinned upstream and bridge dependencies ready');
 const src = join(work, 'src/ts'), bridge = join(src, 'znote'); await mkdir(bridge, { recursive: true });
-for (const name of ['store.js','records.js','background.js']) await cp(join(base, 'bridge', name), join(bridge, name));
+for (const name of ['store.js','records.js','background.js','routing.ts']) await cp(join(base, 'bridge', name), join(bridge, name));
 await cp(join(base, 'bridge/capture.ts'), join(bridge, 'Capture.ts'));
+// Only suppress native auto-download for the exact result array explicitly
+// routed to the library. Ordinary native actions keep their saved behavior.
+for (const [file, signature, addition] of [
+  ['download/DownloadControl.ts', '    // 是否自动开始下载', '\n    if (libraryRouting.handled(store.result)) return'],
+  ['crawl/InitPageBase.ts', '  protected confirmRecrawl() {', '\n    if (libraryRouting.handled(store.result)) return true'],
+  ['download/Resume.ts', '  private async saveDataInner() {', '\n    if (libraryRouting.handled(store.result)) return'],
+  ['download/Resume.ts', '  private bindEvents() {', '\n    window.addEventListener(EVT.list.downloadStart, () => {\n      if (libraryRouting.handled(store.result)) { libraryRouting.release(store.result); this.saveData() }\n    })'],
+]) {
+  const path = join(src, file), source = await readFile(path, 'utf8');
+  if (source.split(signature).length !== 2) throw Error('Pinned upstream routing hook changed: ' + file);
+  const header = "import { libraryRouting } from '../znote/routing'\n";
+  await writeFile(path, (source.startsWith(header) ? '' : header) + source.replace(signature, signature + addition));
+}
 for (const [file, addition] of [['content.ts', "\nimport './znote/Capture'\n"], ['serviceWorker/background.ts', "\nimport '../znote/background.js'\n"]]) {
   const path = join(src, file); await writeFile(path, await readFile(path, 'utf8') + addition);
 }
@@ -62,12 +75,14 @@ if (!Number.isInteger(spec.extensionRevision) || spec.extensionRevision < 1 || s
 manifest.version = spec.version + '.' + spec.extensionRevision; manifest.version_name = `${spec.version} + ZNote ${spec.bridgeVersion}`;
 manifest.key = (await readFile(join(base, 'public-key.txt'), 'utf8')).trim();
 manifest.optional_host_permissions = ['http://*/*', 'https://*/*'];
+manifest.permissions = [...new Set([...manifest.permissions, 'offscreen'])];
 manifest.options_ui = { page: 'znote/index.html', open_in_tab: true };
 delete manifest.browser_specific_settings; delete manifest.background.scripts; delete manifest.background.preferred_environment;
 await writeFile(join(dist, 'manifest.json'), JSON.stringify(manifest, null, 2));
 await build({ entryPoints: { content: join(src, 'content.ts'), injectScript: join(src, 'injectScript.ts'), background: join(src, 'serviceWorker/background.ts') }, outdir: join(dist, 'js'), bundle: true, platform: 'browser', target: 'chrome120', format: 'iife', loader: { '.html': 'text' }, nodePaths: [join(deps, 'node_modules')], legalComments: 'eof', sourcemap: true });
 await cp(join(base, 'bridge'), join(dist, 'znote'), { recursive: true });
 await build({ entryPoints: [join(base, 'bridge/index.js')], outfile: join(dist, 'znote/index.js'), bundle: true, format: 'esm', platform: 'browser', target: 'chrome120', legalComments: 'eof', sourcemap: true });
+await build({ entryPoints: [join(base, 'bridge/runner.js')], outfile: join(dist, 'znote/runner.js'), bundle: true, format: 'esm', platform: 'browser', target: 'chrome120', legalComments: 'eof', sourcemap: true });
 await cp(join(root, 'node_modules/turndown/LICENSE'), join(dist, 'znote/turndown-LICENSE'));
 await cp(join(base, 'LICENSE'), join(dist, 'LICENSE'));
 await cp(join(base, 'README.md'), join(dist, 'ZNOTE-README.md'));

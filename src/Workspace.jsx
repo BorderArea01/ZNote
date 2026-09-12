@@ -193,6 +193,7 @@ export default function Workspace({
         sort,
         offset: String(offset),
         limit: "60",
+        grouped: selecting ? 'false' : 'true',
       });
       if (search) p.set("q", search);
       p.set("collection", collection || 'unfiled');
@@ -207,7 +208,7 @@ export default function Workspace({
       if (view === "trash") p.set("trash", "true");
       return p.toString();
     },
-    [sort, search, collection, selectedTags, tagMode, view],
+    [sort, search, collection, selectedTags, tagMode, view, selecting],
   );
   async function openItem(item) {
     const current = ++detailGeneration.current;
@@ -218,7 +219,10 @@ export default function Workspace({
     try {
       // Freeze only lightweight IDs; editing a title or sort timestamp cannot
       // move the page boundary and skip an image during continuous organizing.
-      const result = await api(`/api/items?${params(0)}&gallery=true`);
+      const groupParams = item.group_key && item.group_count
+        ? new URLSearchParams({collection:item.collection_id||'unfiled',group_key:item.group_key,gallery:'true'})
+        : `${params(0)}&gallery=true`;
+      const result = await api(`/api/items?${groupParams}`);
       if (current !== detailGeneration.current) return;
       setGallery(result.ids.map(id => ({ id, thumbnail_url: `/media/${id}/thumbnail` })));
     } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
@@ -375,6 +379,9 @@ export default function Workspace({
   }, [view]);
   async function favorite(item) {
     try {
+      if(item.group_key && item.group_count) {
+        await send('/api/item-groups/favorite',{group_key:item.group_key,collection_id:item.collection_id,favorite:!item.favorite});refresh();return;
+      }
       await send(
         `/api/items/${item.id}`,
         { favorite: !item.favorite, version: item.version },
@@ -819,6 +826,7 @@ export default function Workspace({
                     {items.length > 100 ? '前 100 项' : '当前页'}
                   </label>
                   <span>已选 {selection.length} 项（每次最多 100 项）</span>
+                  <HelpHint label="图片组选择">选择模式会展开图片组，按单张图片选择、移动、加标签或删除。</HelpHint>
                   <button
                     onClick={() => setBatchTags(true)}
                     disabled={!selection.length || view === "trash"}
@@ -897,7 +905,7 @@ export default function Workspace({
                       <button
                         className="card-main"
                         onClick={() => openItem(item)}
-                        aria-label={`打开 ${item.title}`}
+                        aria-label={`打开 ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
                           {item.kind === "image" ? (
@@ -923,8 +931,8 @@ export default function Workspace({
                               </p>
                             </>
                           )}
-                          <span className="kind-chip">
-                            {item.kind === "image" ? (
+                          <span className={`kind-chip${item.group_key && item.group_count ? ' group-chip' : ''}`}>
+                            {item.group_key && item.group_count ? <><Layers size={13} /> {item.group_count} 张</> : item.kind === "image" ? (
                               <Image size={13} />
                             ) : (
                               item.kind === 'video' ? <Film size={13} /> : <FileText size={13} />
@@ -932,7 +940,7 @@ export default function Workspace({
                           </span>
                         </div>
                         <div className="card-body">
-                          <h3>{item.title}</h3>
+                          <h3>{item.group_key && item.group_count ? item.group_title || item.title : item.title}</h3>
                           <div className="card-tags">
                             {item.tags.slice(0, 3).map((t) => (
                               <span key={t}># {t}</span>

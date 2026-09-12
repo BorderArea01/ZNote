@@ -6,7 +6,7 @@ export function openDatabase(dir) {
   mkdirSync(join(dir, "media"), { recursive: true });
   const db = new DatabaseSync(join(dir, "znote.sqlite"));
   const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
-  if (schemaVersion > 4) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
+  if (schemaVersion > 5) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT UNIQUE NOT NULL, scope TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT);
@@ -28,8 +28,9 @@ export function openDatabase(dir) {
       .map((c) => c.name),
   );
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version === 4) return db;
-  if (version === 3) { migrateVideo(db); return db; }
+  if (version === 5) return db;
+  if (version === 4) { migrateGroups(db); return db; }
+  if (version === 3) { migrateVideo(db); migrateGroups(db); return db; }
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!columns.has("storage_codec"))
@@ -64,7 +65,19 @@ export function openDatabase(dir) {
     throw e;
   }
   migrateVideo(db);
+  migrateGroups(db);
   return db;
+}
+
+function migrateGroups(db) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`ALTER TABLE items ADD COLUMN group_key TEXT;
+      ALTER TABLE items ADD COLUMN group_index INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE items ADD COLUMN group_title TEXT;
+      CREATE INDEX items_group ON items(collection_id,group_key,deleted_at,group_index);
+      PRAGMA user_version=5; COMMIT;`);
+  } catch(e) { db.exec('ROLLBACK'); db.close(); throw e; }
 }
 
 function migrateVideo(db) {
