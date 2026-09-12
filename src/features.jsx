@@ -1,3 +1,4 @@
+import { HelpHint } from './HelpHint.jsx';
 import React, { useEffect, useRef, useState } from "react";
 import {
   Sun,
@@ -206,9 +207,9 @@ export function UploadDialog({
       className="upload-dialog"
     >
       <div className="feature-body">
-        <p className="muted">
+        <div className="upload-guidance"><span>{kind === 'video' ? '单个文件 ≤ 500 MB' : '单张图片 ≤ 25 MB'}</span><HelpHint label="批量上传">
           {kind === 'video' ? '支持 MP4、WebM、MOV，每个不超过 500 MB。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '一次选择多张图片，统一放入知识库并添加多个标签。每张不超过 25 MB。'}
-        </p>
+        </HelpHint></div>
         <div
           className="upload-drop"
           onDragOver={(e) => e.preventDefault()}
@@ -511,7 +512,7 @@ export function PreferencesSections({
       <section>
         <div className="settings-title">
           <Moon size={20} />
-          <h3>外观</h3>
+          <h3>外观</h3><HelpHint label="外观设置">主题、色调和明暗模式保存在当前设备，刷新后仍然生效。</HelpHint>
         </div>
         <AppearanceSettings />
         <p className="appearance-label">明暗模式</p>
@@ -532,14 +533,14 @@ export function PreferencesSections({
             </button>
           ))}
         </div>
-        <small>外观保存在当前设备，刷新页面后仍然生效。</small>
+
       </section>
       <section>
         <div className="settings-title">
           <Home size={20} />
-          <h3>默认展示的知识库</h3>
+          <h3>默认展示的知识库</h3><HelpHint label="默认知识库">登录或打开首页时只展示选定知识库。未指定时显示知识库入口；此设置适用于你的所有设备。</HelpHint>
         </div>
-        <p>登录或打开首页时只展示选定知识库。未指定时先显示知识库入口。</p>
+
         <select
           aria-label="默认展示的知识库"
           value={preferences.default_collection_id || ""}
@@ -565,13 +566,13 @@ export function PreferencesSections({
             </option>
           ))}
         </select>
-        <small>默认知识库设置保存在服务端，适用于你的所有设备。</small>
+
         {error && <div className="error">{error}</div>}
       </section>
       <section>
         <div className="settings-title">
           <HardDrive size={20} />
-          <h3>存储占用</h3>
+          <h3>存储占用</h3><HelpHint label="存储统计">原图按字节无损保存，仅压缩后更小时才采用压缩。缩略图在内存按需生成，视频保留原文件。统计包含回收站、数据库及日志，不含程序和备份；数据库有额外开销，不能保证总空间小于直接存文件。</HelpHint>
         </div>
         {storage ? (
           <>
@@ -598,11 +599,7 @@ export function PreferencesSections({
               {storage.total_saved_bytes >= 0 ? "总计节省" : "额外占用"}{" "}
               {bytes(Math.abs(storage.total_saved_bytes))}。
             </p>
-            <small>
-              原图按字节无损保存，只有压缩后更小才采用压缩；缩略图按需生成，内存缓存上限
-              32
-              MB，不长期写入磁盘。视频保留原文件，不重新压缩。数据库有固定开销，无法保证每个图库都比直接存文件更小。统计包含回收站，不含程序和备份。
-            </small>
+
           </>
         ) : (
           <p>正在读取存储信息…</p>

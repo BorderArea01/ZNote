@@ -28,10 +28,12 @@
     downloadButton,
     saveButton,
     downloadKey = 's',
-    saveKey = 'k',
+    saveKey = 'z',
     previewWidth = 720,
     sizeInput,
     hideTimer,
+    hideDelay,
+    pointer = { x: -1, y: -1 },
     pollTimer,
     hoverAllowed = true,
     dockAllowed = true;
@@ -42,7 +44,7 @@
       const config = await send({type: 'media-settings'});
       hoverAllowed = config.hover; dockAllowed = config.dock;
       downloadKey = /^[a-z0-9]$/.test(config.downloadKey) ? config.downloadKey : 's';
-      saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'k' ? 's' : 'k');
+      saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'z' ? 's' : 'z');
       downloadButton.textContent = `${downloadKey.toUpperCase()} 下载`;
       saveButton.textContent = `${saveKey.toUpperCase()} 保存知识库`;
       previewLabel.textContent = shortcutHelp();
@@ -226,12 +228,31 @@
     hoverURL = "";
     hoverToken++;
   }
+  function inPreviewBridge() {
+    if (!hovered || preview.classList.contains('hidden')) return false;
+    const a = (hovered.closest('a') || hovered).getBoundingClientRect(), b = preview.getBoundingClientRect();
+    const { x, y } = pointer;
+    // Keep the narrow gap between the source and controls traversable without
+    // delaying dismissal everywhere else on the page.
+    if (a.right <= b.left || b.right <= a.left) {
+      const left = a.right <= b.left ? a : b, right = left === a ? b : a;
+      return x >= left.right && x <= right.left && y >= Math.min(a.top, b.top) && y <= Math.max(a.bottom, b.bottom);
+    }
+    if (a.bottom <= b.top || b.bottom <= a.top) {
+      const top = a.bottom <= b.top ? a : b, bottom = top === a ? b : a;
+      return y >= top.bottom && y <= bottom.top && x >= Math.min(a.left, b.left) && x <= Math.max(a.right, b.right);
+    }
+    return false;
+  }
   function scheduleHide() {
+    const delay = inPreviewBridge() ? 650 : 150;
+    if (hideTimer && hideDelay === delay) return;
     clearTimeout(hideTimer);
+    hideDelay = delay;
     hideTimer = setTimeout(() => {
       hideTimer = null;
-      if (!hoverBusy && !preview.matches(':hover')) hide();
-    }, 1000);
+      if (!preview.matches(':hover') && !hovered?.matches(':hover')) hide();
+    }, delay);
   }
   function placePreview() {
     if (!hovered || !previewImage.naturalWidth || preview.classList.contains('hidden')) return;
@@ -300,8 +321,10 @@
         action,
       });
       previewLabel.textContent = result.message;
+      if (preview.classList.contains('hidden')) notify(result.message);
     } catch (e) {
       previewLabel.textContent = e.message;
+      if (preview.classList.contains('hidden')) notify(e.message);
     } finally {
       hoverBusy = false;
       downloadButton.disabled = false; saveButton.disabled = false;
@@ -424,7 +447,7 @@
     bar.style.pointerEvents = 'auto';
     bar.style.fontSize = '13px';
     downloadButton = button('S 下载', () => hoverAction('download'));
-    saveButton = button('K 保存知识库', () => hoverAction('save'));
+    saveButton = button('Z 保存知识库', () => hoverAction('save'));
     bar.append(downloadButton, saveButton, button('关闭', hide));
     bar.querySelectorAll('button').forEach(b=>b.style.padding='5px 7px');
     const sizing = element('label', '展示大小 ', {class:'bar'});
@@ -442,15 +465,19 @@
       clearTimeout(hideTimer); hideTimer = null;
       clearTimeout(hoverTimer); pendingTarget = null;
     });
-    preview.addEventListener("mouseleave", () => {
+    preview.addEventListener("mouseleave", (e) => {
+      pointer = { x: e.clientX, y: e.clientY };
       scheduleHide();
     });
     document.addEventListener(
       "mousemove",
       (e) => {
-        if (!e.isTrusted || own(e) || !hoverAllowed || hoverBusy) return;
+        if (!e.isTrusted) return;
+        pointer = { x: e.clientX, y: e.clientY };
+        if (own(e) || !hoverAllowed) return;
+        if (hoverBusy) { if (!hovered?.matches(':hover')) scheduleHide(); return; }
         const target = globalThis.ZNoteImageTarget(e);
-        if (!target) { if ((hovered || pendingTarget) && !hideTimer) scheduleHide(); return; }
+        if (!target) { if (hovered || pendingTarget) scheduleHide(); return; }
         clearTimeout(hideTimer); hideTimer = null;
         if (target === hovered || target === pendingTarget) return;
         clearTimeout(hoverTimer); pendingTarget = target;
@@ -466,6 +493,7 @@
       "mouseout",
       (e) => {
         if (own(e)) return;
+        pointer = { x: e.clientX, y: e.clientY };
         if (hovered || pendingTarget) scheduleHide();
       },
       true,

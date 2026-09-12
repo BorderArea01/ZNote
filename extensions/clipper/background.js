@@ -3,7 +3,7 @@ import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 let directVideoBusy = false;
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'previewWidth'].some(key => key in changes)) return;
+  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth'].some(key => key in changes)) return;
   chrome.tabs.query({url: ['http://*/*', 'https://*/*']}).then(tabs => Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {type: 'media-settings-changed'})))).catch(() => {});
 });
 chrome.runtime.onInstalled.addListener(() => {

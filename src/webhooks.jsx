@@ -1,3 +1,4 @@
+import { HelpHint } from './HelpHint.jsx';
 import React, { useState, useEffect } from 'react';
 import { api, send } from './api.js';
 import { Dialog } from './ui.jsx';
@@ -21,8 +22,7 @@ export function WebhookSettings() {
     finally { setBusy(false); }
   }
   return <section className="webhook-settings">
-    <div className="settings-title"><h3>Webhook 事件订阅</h3></div>
-    <p>内容创建、修改、删除和恢复时，向接收地址推送带签名的事件。失败会自动重试，投递记录可查看和手动重试。</p>
+    <div className="settings-title"><h3>Webhook 事件订阅</h3><HelpHint label="事件订阅">内容创建、修改、删除和恢复时，向接收地址推送带签名的事件。失败会自动重试，投递记录可查看和手动重试。</HelpHint></div>
     <div className="feature-field"><label>订阅名称<input aria-label="Webhook 名称" value={name} maxLength={80} onChange={e => setName(e.target.value)} placeholder="例如：本地图片处理服务" /></label></div>
     <div className="feature-field"><label>接收地址<input aria-label="Webhook 接收地址" type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="http://192.168.1.10:4000/events" /></label></div>
     <button disabled={busy || !name.trim() || !url.trim()} onClick={() => action(async () => {

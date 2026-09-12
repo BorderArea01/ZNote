@@ -1,5 +1,12 @@
-export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'k', previewWidth: 720 };
-export async function settings() { return { ...defaults, ...await chrome.storage.local.get(Object.keys(defaults)) }; }
+export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720 };
+export async function settings() {
+  const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
+  const config = { ...defaults, ...stored };
+  // The original S/K pair was also persisted when changing preview size or visibility.
+  // Interpret that legacy default as S/Z; explicit choices saved by this version stay intact.
+  if (!stored.shortcutVersion && config.downloadKey === 's' && config.saveKey === 'k') config.saveKey = 'z';
+  return config;
+}
 export function serverUrl(value) {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('请输入 HTTP(S) 服务器地址');

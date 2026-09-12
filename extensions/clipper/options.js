@@ -14,7 +14,7 @@ $('behavior').addEventListener('submit', async event => {
     if (downloadKey === saveKey) throw new Error('下载和入库快捷键不能相同');
     const previewWidth = Number($('preview-width').value);
     if (!Number.isInteger(previewWidth) || previewWidth < 240 || previewWidth > 1200) throw new Error('预览宽度应为 240～1200');
-    await chrome.storage.local.set({ hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, previewWidth });
+    await chrome.storage.local.set({ hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, shortcutVersion: 1, previewWidth });
     $('status').textContent = '浏览器行为已保存，已打开网页同步生效';
   } catch (e) { $('status').textContent = e.message; }
 });

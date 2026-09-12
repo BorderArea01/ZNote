@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.8.1-287464?style=flat-square" alt="Version 0.8.1" />
+    <img src="https://img.shields.io/badge/version-0.8.2-287464?style=flat-square" alt="Version 0.8.2" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -38,6 +38,8 @@
 ## 选一种喜欢的外观
 
 简约、毛玻璃、赛博朋克、纸感四种风格，支持浅色、夜间和跟随系统。简约与毛玻璃可选松林绿、海湾蓝、鸢尾紫、玫瑰粉、琥珀橙、石墨灰六种色调。
+
+操作说明收进问号提示：鼠标悬停、键盘聚焦或手机点击时查看，平时把空间留给内容。
 
 | 毛玻璃 · 柔和通透 | 赛博朋克 · 夜间霓虹 |
 | :---: | :---: |
@@ -97,7 +99,7 @@ docker compose up -d --build
 
 | 采集对象 | 操作 |
 | :--- | :--- |
-| 图片 | 悬停展开大图，直接点击下方 **下载 / 保存知识库**；也可使用默认 `S` / `K` 快捷键 |
+| 图片 | 悬停展开大图，直接点击下方 **下载 / 保存知识库**；也可使用默认 `S` / `Z` 快捷键 |
 | 预览大小 | 使用大图下方滑杆调节；窗口自动避开正在操作的封面，兼容视频封面悬停播放 |
 | 视频资源 | 打开常驻「媒体」浮窗，发现并筛选图片、MP4 和 m3u8，选择预览、下载或入库 |
 | 网页正文 | 点击「保存页面正文」，提取为可编辑 Markdown，默认将配图一并归档 |
@@ -106,6 +108,8 @@ docker compose up -d --build
 网络采集自动保留**来源网址和网站标签**，例如「小红书」「b站」「抖音」「X」。同一文件从多个页面采集，会合并来源，方便回看出处。
 
 更多操作、权限和格式支持见 **[扩展使用说明](extensions/clipper/README.md)**。m3u8 合并及平台视频链接解析需要媒体组件，可运行 `npm run media:setup` 安装。
+
+离开原图和预览区域后约 150 毫秒收起；移向按钮时保留穿过间隙的时间。旧版默认 S/K 会改为 S/Z，其他自定义组合保留；需要 K 时可在新版设置中重新指定。
 
 ## 原文件可恢复，数据可迁移
 

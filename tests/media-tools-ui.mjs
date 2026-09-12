@@ -129,11 +129,15 @@ try {
         .shadowRoot.querySelector(".preview img").naturalWidth === 2400,
   );
   await page.screenshot({ path: resolve("artifacts/v07-hover-preview.png") });
+  await page.mouse.move(1420, 12);
+  await page.waitForTimeout(300);
+  assert.equal(await preview.isVisible(), false, 'Leaving the image dismisses within 300 ms');
+  await page.locator('#sample').hover(); await preview.waitFor({state:'visible'});
   const thumbBox=await page.locator('#sample').boundingBox(),previewBox=await preview.boundingBox();
   const gapX=(thumbBox.x+thumbBox.width+previewBox.x)/2;
   await page.mouse.move(gapX,thumbBox.y+thumbBox.height/2);await page.waitForTimeout(450);assert.ok(await preview.isVisible());
-  await preview.getByRole('button',{name:'K 保存知识库',exact:true}).hover();await page.waitForTimeout(1100);assert.ok(await preview.isVisible());
-  await preview.getByRole('button',{name:'K 保存知识库',exact:true}).click();
+  await preview.getByRole('button',{name:'Z 保存知识库',exact:true}).hover();await page.waitForTimeout(1100);assert.ok(await preview.isVisible());
+  await preview.getByRole('button',{name:'Z 保存知识库',exact:true}).click();
   await preview.getByText("已保存到知识库", { exact: true }).waitFor();
   const items = await (
     await context.request.get(base + "/api/items?kind=image")
@@ -145,6 +149,8 @@ try {
     await (await context.request.get(base + items.items[0].url)).body(),
     large,
   );
+  await page.keyboard.press('z');
+  await preview.getByText('已收录，保留原备注并补充来源', {exact:true}).waitFor();
   await preview.getByRole('button',{name:'S 下载',exact:true}).click();
   await preview.getByText("已交给浏览器下载", { exact: true }).waitFor();
   let downloads;
@@ -162,6 +168,11 @@ try {
   assert.ok(items.items[0].tags.includes('127.0.0.1'));
   const options = await context.newPage();
   await options.goto('chrome-extension://' + id + '/options.html');
+  await options.getByRole('button',{name:'预览与快捷键说明',exact:true}).hover();
+  await options.getByRole('tooltip').waitFor();
+  assert.ok((await options.getByRole('tooltip').textContent()).includes('Z 入库'));
+  await options.keyboard.press('Escape'); assert.equal(await options.getByRole('tooltip').count(),0);
+  await options.screenshot({path:resolve('artifacts/v082-extension-settings.png'),fullPage:true});
   await options.waitForFunction(()=>document.body.dataset.ready === 'true');
   await options.locator('#download-key').fill('D'); await options.locator('#save-key').fill('D');
   await options.getByRole('button',{name:'保存浏览器行为'}).click();
@@ -317,7 +328,7 @@ try {
   assert.ok(requests.every((r) => !r.auth));
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: mouse crosses preview gap and lingers over buttons; real save/download button clicks; custom D/Q settings, masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; K exact library save; S real download; input guard; mixed MIME sniffing behind blob player; HLS playback, remux save/download; source; navigation isolation; no source token leakage",
+    "PASS: fast dismissal within 300 ms; mouse crosses preview gap and lingers over buttons; real save/download button clicks; default Z and custom D/Q; settings help; masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; S real download; input guard; mixed MIME sniffing behind blob player; HLS playback, remux save/download; source; navigation isolation; no source token leakage",
   );
 } catch (e) {
   await page.screenshot({ path: resolve("artifacts/v07-tools-failure.png") });

@@ -44,6 +44,8 @@ import "./themes.css";
 import './video.css';
 import { AppearanceProvider } from './appearance.jsx';
 import { api, send, bytes } from "./api.js";
+import { HelpHint } from './HelpHint.jsx';
+import './polish.css';
 import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import { OrganizeDialog } from './organize.jsx';
@@ -472,7 +474,7 @@ function Detail({
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一张 →</button>
             </div>
-            <small className="muted">← → 翻图 · F 收藏；翻图时自动保存修改</small>
+            <HelpHint label="翻图快捷键">← → 翻图，F 收藏；翻图时自动保存修改。</HelpHint>
           </div>
         )}
         <div className="detail-editor">
@@ -777,18 +779,17 @@ function SettingsPanel({
         />
         <BackupSettings />
         <section>
-          <div className="settings-title"><h3>浏览器媒体工具</h3></div>
-          <p>悬停图片预览高清大图，默认 S 下载、K 保存知识库，可在扩展设置自定义快捷键。页面常驻浮窗一起发现图片、MP4 和 m3u8，支持预览、下载、入库；自动保留来源。</p>
-          <a href="/api/clipper/download">下载采集扩展 ZIP</a>
-          <p><button data-znote-connect onClick={() => notify('请先安装新版扩展并刷新本页，再点击一键连接')}>一键连接扩展</button></p>
-          <p id="znote-connect-status" role="status" className="muted">安装新版扩展后点此连接，无需复制服务器地址和 API 令牌。</p>
-          <p className="muted">Chrome / Edge 安装后刷新本页，点击“一键连接扩展”。0.8 起固定扩展 ID，更新保留连接与偏好；从旧版首次升级请移除旧扩展、加载新版，再点一次连接。支持调节大图展示大小、避让视频封面，以及保存网页正文为 Markdown 图文笔记。m3u8 合并使用本机 ZNote 服务。</p>
+          <div className="settings-title"><h3>浏览器媒体工具</h3><HelpHint label="浏览器采集">悬停看高清大图，默认 S 下载、Z 入库，支持自定义快捷键。媒体浮窗可发现图片、MP4 和 m3u8，也可将网页正文保存为 Markdown；采集自动保留来源。</HelpHint><HelpHint label="扩展安装与更新">Chrome / Edge 安装后刷新本页，再点击一键连接。更新时覆盖同一目录、重新加载扩展，连接和偏好会保留。0.7 及更早版本首次升级需移除旧版并重新连接一次。m3u8 合并使用本机 ZNote 服务。</HelpHint></div>
+
+          <div className="connection-actions"><a className="button" href="/api/clipper/download"><Download size={16} />下载扩展</a><button className="primary" data-znote-connect onClick={() => notify('请先安装新版扩展并刷新本页，再点击一键连接')}>一键连接扩展</button></div>
+          <p id="znote-connect-status" role="status" className="muted"></p>
+
         </section>
         <WebhookSettings />
         <section>
           <div className="settings-title">
             <Globe size={20} />
-            <h3>随处访问，同一个空间</h3>
+            <h3>局域网访问</h3><HelpHint label="局域网访问">设备需保持开机；无法连接时，请检查路由器隔离和系统防火墙的 3741 端口。</HelpHint>
           </div>
           <p>
             手机、平板和电脑连接同一个局域网，在浏览器打开以下地址，输入访问密码即可。
@@ -811,26 +812,20 @@ function SettingsPanel({
           {info && !info.addresses.length && (
             <p>没有检测到局域网地址，请检查设备的网络连接。</p>
           )}
-          <small>
-            设备需保持开机；如无法连接，请检查路由器隔离和系统防火墙的 3741
-            端口。剪贴板复制已兼容局域网 HTTP。
-          </small>
+
         </section>
         <section>
           <div className="settings-title">
             <Code2 size={20} />
-            <h3>开放 API</h3>
+            <h3>开放 API</h3><HelpHint label="API 令牌">使用独立令牌接入脚本、自动化和其他平台，可选择只读或读写权限，也可随时撤销。增量事件可从 GET /api/events?after=0 读取。</HelpHint>
             <a href="/api-docs" target="_blank" rel="noreferrer">
               接口文档 <ArrowUpRight size={15} />
             </a>
           </div>
-          <p>
-            创建独立令牌，让脚本、自动化和其他平台读写你的知识库。令牌可随时撤销。
-          </p>
-          <pre>
+          <details className="code-example"><summary>查看调用示例</summary><pre>
             curl {window.location.origin}/api/items \ -H "Authorization: Bearer
             YOUR_TOKEN"
-          </pre>
+          </pre></details>
           <form
             className="token-form"
             onSubmit={async (e) => {
@@ -917,19 +912,14 @@ function SettingsPanel({
               </div>
             ))}
           </div>
-          <small>
-            变更事件：GET /api/events?after=0，可按返回的 cursor
-            增量读取。外部插件通过服务 API 接入。
-          </small>
+
         </section>
         <section>
           <div className="settings-title">
             <Download size={20} />
-            <h3>数据由你掌握</h3>
+            <h3>数据导出</h3><HelpHint label="导出格式">支持图片、Markdown、JSON、离线网页、资料包，以及可完整恢复的备份 ZIP。</HelpHint>
           </div>
-          <p>
-            可选择图片、Markdown、JSON、离线网页、资料包或可完整恢复的备份 ZIP。
-          </p>
+
           <button onClick={onExport}>
             <Download size={16} />
             选择导出方式

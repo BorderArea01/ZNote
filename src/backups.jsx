@@ -1,3 +1,4 @@
+import { HelpHint } from './HelpHint.jsx';
 import React, { useState, useEffect, useRef } from 'react';
 import { api, send, bytes } from './api.js';
 import { Dialog } from './ui.jsx';
@@ -28,8 +29,7 @@ export function BackupSettings() {
     await action('取消预览…', async () => { await api(`/api/backups/preview/${preview.id}`, { method: 'DELETE' }); setPreview(null); });
   }
   return <section className="backup-settings">
-    <div className="settings-title"><h3>自动备份与恢复</h3></div>
-    <p>完整备份包含知识库、笔记、原图和访问设置。备份保存在服务器 data/backups，也可以下载到其他设备保存。</p>
+    <div className="settings-title"><h3>自动备份与恢复</h3><HelpHint label="备份策略">完整备份包含知识库、笔记、原图和访问设置。备份保存在服务器 data/backups，也可以下载到其他设备保存。</HelpHint></div>
     {status && <>
       <div className="backup-policy">
         <label><input type="checkbox" checked={status.enabled} onChange={e => editPolicy({ enabled: e.target.checked })} /> 自动备份</label>

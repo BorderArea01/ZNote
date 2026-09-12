@@ -31,6 +31,7 @@ import {
   Film,
 } from "lucide-react";
 import { api, send, uploadFile } from "./api.js";
+import { HelpHint } from './HelpHint.jsx';
 import { IconButton } from "./ui.jsx";
 import { UploadDialog, ExportDialog, BatchTagsDialog } from "./features.jsx";
 import { OrganizeDialog } from './organize.jsx';
@@ -441,7 +442,7 @@ export default function Workspace({
           <span className="avatar">我</span>
           <div>
             <strong>我的知识空间</strong>
-            <small>每一份灵感，都有归处</small>
+
           </div>
         </div>
         <span className="nav-caption">内容空间</span>
@@ -592,14 +593,12 @@ export default function Workspace({
         <div className="main-content">
           <section className="page-heading">
             <div>
-              <span className="eyebrow">COLLECT. CONNECT. CREATE.</span>
               <h1>
                 {title}
                 <span className="count-badge">
                   {view === "home" ? collections.length : total}
                 </span>
-              </h1>
-              <p>
+                <HelpHint label="当前视图">
                 {view === "home"
                   ? "先选择一个知识库，专注于一个主题。"
                   : view === "trash"
@@ -607,7 +606,8 @@ export default function Workspace({
                     : activeCollection
                       ? "这里只展示当前知识库的内容。"
                       : "收好每一份灵感，连接属于你的知识。"}
-              </p>
+                </HelpHint>
+              </h1>
             </div>
             <div className="heading-actions">
               <button onClick={() => setExporting(true)}>
@@ -633,8 +633,7 @@ export default function Workspace({
                   <BookOpen size={27} />
                 </div>
                 <div>
-                  <h3>每一个知识库，都是独立的灵感空间</h3>
-                  <p>在设置中选择默认知识库，下次直接进入。</p>
+                  <div className="inline-heading"><h3>从喜欢的知识库开始</h3><HelpHint label="默认知识库">在设置中选择默认知识库，下次直接进入；其他知识库仍可从侧栏切换。</HelpHint></div>
                 </div>
                 <button onClick={() => setSettings(true)}>
                   设置默认知识库
@@ -736,7 +735,7 @@ export default function Workspace({
                 busy={loading || galleryBusy || query !== search || !!loadError} />
               <div className="results-caption">
                 <span>
-                  {query ? `“${query}” 的搜索结果` : "点滴积累，渐成体系"}
+                  {query ? `“${query}” 的搜索结果` : ""}
                   <b>{total} 项内容</b>
                 </span>
                 <div className="result-actions">

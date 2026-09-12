@@ -1,3 +1,4 @@
+import { HelpHint } from './HelpHint.jsx';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 
@@ -35,12 +36,12 @@ export function AppearanceProvider({ children }) {
 export function AppearanceSettings() {
   const { appearance, setAppearance } = useContext(AppearanceContext);
   return <div className="appearance-settings">
-    <p className="appearance-label">界面风格</p>
+    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">简约侧重留白，毛玻璃使用通透光晕，赛博朋克采用霓虹青紫，纸感采用暖纸墨棕。简约和毛玻璃可自选色调。</HelpHint></div>
     <div className="style-presets" role="group" aria-label="界面风格">
       {styles.map(style => <button key={style.id} className="style-preset" aria-label={`风格：${style.name}`} aria-pressed={appearance.style === style.id} onClick={() => setAppearance(a => ({ ...a, style: style.id }))}>
         <span className={`style-sample sample-${style.id}`} aria-hidden="true"><i /><span><b /><em /><em /></span></span>
         <span className="preset-title">{style.name}{appearance.style === style.id && <Check size={14} />}</span>
-        <small>{style.description}</small>
+
       </button>)}
     </div>
     {['minimal', 'glass'].includes(appearance.style) ? <>
@@ -50,6 +51,6 @@ export function AppearanceSettings() {
           <span className="palette-dot" style={{ backgroundColor: palette.color }} aria-hidden="true" />{palette.name}{appearance.palette === palette.id && <Check size={13} />}
         </button>)}
       </div>
-    </> : <p>{appearance.style === 'cyber' ? '赛博朋克采用独立的霓虹青紫配色。' : '纸感采用独立的暖纸与墨棕配色。'}切回简约或毛玻璃后保留原先的色调。</p>}
+    </> : null}
   </div>;
 }

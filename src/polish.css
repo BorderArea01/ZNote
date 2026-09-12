@@ -1,0 +1,53 @@
+/* Keep secondary guidance on demand; use theme tokens for every surface. */
+.inline-heading { display: flex; align-items: center; gap: 6px; }
+.upload-guidance { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+html[data-style] button.help-trigger { display: inline-flex; flex: 0 0 28px; align-items: center; justify-content: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; box-shadow: none; vertical-align: middle; }
+html[data-style] button.help-trigger:hover, html[data-style] button.help-trigger:focus-visible { background: var(--accent-soft); color: var(--green); }
+.help-tooltip { position: fixed; z-index: 20000; width: max-content; max-width: min(320px, calc(100vw - 16px)); padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 28px #0002; font-size: 14px; font-weight: 400; line-height: 1.75; overflow-wrap: anywhere; }
+.help-tooltip strong { display: block; margin-bottom: 5px; font-size: 13px; color: var(--green); }
+.main-content { padding-top: 28px; }
+.page-heading { margin-bottom: 22px; }
+.page-heading h1 { margin: 5px 0; font-size: 28px; }
+.heading-actions { gap: 8px; }
+.toolbar { gap: 16px; }
+.tag-browser { margin-top: 18px; padding: 14px 18px; }
+.tag-browser-tools { margin-top: 10px; }
+.tag-options { margin: 12px 0 0; }
+.tag-selection { margin-top: 12px; font-size: 12px; }
+.tag-browser-heading strong { font-size: 14px; }
+.tag-browser-tools select, .tag-options button { font-size: 13px; }
+.results-caption { margin-top: 18px; margin-bottom: 14px; font-size: 13px; }
+.results-caption b { font-size: 13px; margin-left: 0; font-weight: 500; }
+.item-card { transition: border-color .15s, box-shadow .15s; }
+html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; }
+.workspace-label { min-height: 60px; }
+.intro-banner h3 { margin: 0; }
+.settings-title { margin-bottom: 15px; gap: 8px; }
+.settings-title h3 { font-size: 16px; }
+.settings-body p, .settings-body small { font-size: 13px; }
+.settings-body .appearance-label { font-size: 13px; margin: 10px 0; }
+.settings-body .inline-heading { margin-top: 8px; }
+.settings-body section { padding: 24px 0; }
+.settings-body section > select { width: 100%; }
+.connection-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+#znote-connect-status:empty { display: none; }
+.code-example { margin: 0 0 14px; font-size: 13px; }
+.code-example summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
+.code-example pre { white-space: pre-wrap; }
+.settings-body .storage-metrics small { font-size: 12px; }
+.preset-title { font-size: 14px; }
+.card-meta, .card-tags span, .sidebar .nav-caption { font-size: 12px; }
+@media (max-width: 760px) {
+  .main-content { padding-top: 18px; }
+  .page-heading { align-items: stretch; gap: 14px; margin-bottom: 18px; }
+  .page-heading h1 { font-size: 25px; }
+  .heading-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .heading-actions button { white-space: nowrap; padding: 10px 6px; font-size: 13px; gap: 5px; }
+  .heading-actions button svg { flex-shrink: 0; }
+  .tag-browser { padding: 12px; }
+  .tag-browser-heading strong { font-size: 13px; }
+  .tag-browser-heading { gap: 8px; }
+  .tag-browser-heading > button { padding: 9px; font-size: 12px; }
+  .help-tooltip { max-width: min(300px, calc(100vw - 16px)); }
+}
+@media (prefers-reduced-motion: reduce) { .item-card { transition: none; } }
