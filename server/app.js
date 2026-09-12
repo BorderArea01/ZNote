@@ -1,4 +1,6 @@
 import express from "express";
+import { archiveNoteImages } from './note-images.js';
+import { fetchRemoteImage } from './remote-images.js';
 import multer from "multer";
 import sharp from "sharp";
 import { z } from "zod";
@@ -84,9 +86,11 @@ export function createApp({
   backupOptions = {},
   webhookOptions = {},
   importOptions = {},
+  imageDownload = fetchRemoteImage,
 } = {}) {
   const db = openDatabase(dataDir);
   const uploadQueue = new WorkQueue(1, 32);
+  const noteArchiveQueue = new WorkQueue(1, 8);
   const thumbnailQueue = new WorkQueue(2, 128);
   const app = express();
   const maintenance = maintenanceGate(app);
@@ -200,7 +204,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.8.2" }),
+    res.json({ status: "ok", version: "0.8.3" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -300,7 +304,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.8.2",
+      version: "0.8.3",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -325,18 +329,22 @@ export function createApp({
     ).run("default_collection_id", input.default_collection_id || "");
     res.json(preferences());
   });
+  const collectionScope = (value, prefix = '') => value === undefined ? { sql: '', args: [] } :
+    value === 'unfiled' ? { sql: ` AND ${prefix}collection_id IS NULL`, args: [] } :
+    { sql: ` AND ${prefix}collection_id=?`, args: [z.string().max(100).parse(value)] };
   app.get("/api/stats", (req, res) => {
+    const scope = collectionScope(req.query.collection);
     const counts = db
       .prepare(
-        `SELECT count(*) total, coalesce(sum(kind='image'),0) images, coalesce(sum(kind='video'),0) videos, coalesce(sum(kind='note'),0) notes, coalesce(sum(favorite),0) favorites, coalesce(sum(bytes),0) bytes FROM items WHERE deleted_at IS NULL`,
+        `SELECT count(*) total, coalesce(sum(kind='image'),0) images, coalesce(sum(kind='video'),0) videos, coalesce(sum(kind='note'),0) notes, coalesce(sum(favorite),0) favorites, coalesce(sum(bytes),0) bytes FROM items WHERE deleted_at IS NULL${scope.sql}`,
       )
-      .get();
+      .get(...scope.args);
     res.json({
       ...counts,
       collections: db.prepare("SELECT count(*) n FROM collections").get().n,
       trash: db
-        .prepare("SELECT count(*) n FROM items WHERE deleted_at IS NOT NULL")
-        .get().n,
+        .prepare(`SELECT count(*) n FROM items WHERE deleted_at IS NOT NULL${scope.sql}`)
+        .get(...scope.args).n,
     });
   });
   app.get("/api/collections", (req, res) =>
@@ -382,15 +390,16 @@ export function createApp({
     });
     res.status(204).end();
   });
-  app.get("/api/tags", (req, res) =>
+  app.get("/api/tags", (req, res) => {
+    const scope = collectionScope(req.query.collection, 'items.');
     res.json(
       db
         .prepare(
-          `SELECT j.value name, count(*) count FROM items, json_each(items.tags) j WHERE deleted_at IS NULL GROUP BY j.value ORDER BY count DESC, name`,
+          `SELECT j.value name, count(*) count FROM items, json_each(items.tags) j WHERE deleted_at IS NULL${scope.sql} GROUP BY j.value ORDER BY count DESC, name`,
         )
-        .all(),
-    ),
-  );
+        .all(...scope.args),
+    );
+  });
   app.get("/api/items", (req, res) => {
     const q = z
       .object({
@@ -509,9 +518,13 @@ export function createApp({
     });
     return serialize(getItem(id));
   };
-  app.post("/api/items", (req, res) =>
-    res.status(201).json(insert(itemInput.parse(req.body))),
-  );
+  app.post("/api/items", async (req, res) => {
+    const input=itemInput.parse(req.body); validateCollection(input.collection_id);
+    const archive=z.boolean().default(true).parse(req.body.archive_images);
+    const result=archive?await noteArchiveQueue.run(randomUUID(),()=>archiveNoteImages(input,{download:imageDownload,save:saveAsset})):null;
+    if(result)input.content=result.content;
+    res.status(201).json({...insert(input),...(result?{image_archive:result.report}:{})});
+  });
   const imageReference = (item) => ({
     kind: item.kind, duration: item.duration, codecName: item.video_codec,
     key: item.file_key, mime: item.mime, bytes: item.bytes, width: item.width,
@@ -545,6 +558,19 @@ export function createApp({
       return serialize(getItem(old.id));
     }));
     res.json({ items: result });
+  });
+  app.post('/api/items/batch-trash', (req, res) => {
+    const input = z.object({ items: z.array(z.object({id:z.string(),version:z.number().int().positive()})).min(1).max(100),
+      collection_id:z.string().nullable(), restore:z.boolean().default(false) }).parse(req.body);
+    if(new Set(input.items.map(i=>i.id)).size!==input.items.length) throw fail(400,'内容 ID 不可重复');
+    const result=transaction(()=>input.items.map(value=>{
+      const item=getItem(value.id);
+      if(item.version!==value.version || item.collection_id!==input.collection_id || Boolean(item.deleted_at)!==input.restore)
+        throw fail(409,'部分内容已变更或不属于当前知识库，请刷新后重试');
+      db.prepare('UPDATE items SET deleted_at=?,updated_at=?,version=version+1 WHERE id=?').run(input.restore?null:now(),now(),item.id);
+      event(input.restore?'item.restored':'item.deleted',item.id); return serialize(getItem(item.id));
+    }));
+    res.json({items:result});
   });
   app.post("/api/items/batch-tags", (req, res) => {
     const input = z
@@ -586,7 +612,7 @@ export function createApp({
   app.get("/api/items/:id", (req, res) =>
     res.json(serialize(getItem(req.params.id))),
   );
-  app.patch("/api/items/:id", (req, res) => {
+  app.patch("/api/items/:id", async (req, res) => {
     const patch = patchInput.parse(req.body);
     const old = getItem(req.params.id);
     if (old.deleted_at) throw fail(409, "请先从回收站恢复");
@@ -594,6 +620,11 @@ export function createApp({
       throw fail(409, "内容已在其他设备更新，请重新打开后编辑");
     const item = { ...serialize(old), ...patch };
     validateCollection(item.collection_id);
+    const archive=z.boolean().default(true).parse(req.body.archive_images);
+    const archived=old.kind==='note' && patch.content!==undefined && archive ? await noteArchiveQueue.run(randomUUID(),()=>archiveNoteImages(item,{download:imageDownload,save:saveAsset})):null;
+    if(archived)item.content=archived.content;
+    const current=getItem(old.id);
+    if(current.deleted_at || current.version!==old.version) throw fail(409,'归档期间内容已在其他设备变更，请重新打开后保存');
     if (old.hash && old.collection_id !== item.collection_id && db.prepare('SELECT id FROM items WHERE hash=? AND collection_id IS ? AND deleted_at IS NULL AND id!=?').get(old.hash, item.collection_id, old.id))
       throw fail(409, '目标知识库已存在同一图片');
     transaction(() => {
@@ -610,7 +641,7 @@ export function createApp({
       );
       event("item.updated", old.id);
     });
-    res.json(serialize(getItem(old.id)));
+    res.json({...serialize(getItem(old.id)),...(archived?{image_archive:archived.report}:{})});
   });
   app.delete("/api/items/:id", (req, res) => {
     const item = getItem(req.params.id);
@@ -636,9 +667,9 @@ export function createApp({
     const item = getItem(req.params.id);
     const candidates = db
       .prepare(
-        "SELECT * FROM items WHERE kind='note' AND deleted_at IS NULL AND id!=?",
+        "SELECT * FROM items WHERE kind='note' AND deleted_at IS NULL AND id!=? AND collection_id IS ?",
       )
-      .all(item.id);
+      .all(item.id, item.collection_id);
     res.json(
       candidates
         .filter(

@@ -1,3 +1,4 @@
+import { markdownImages, replaceMarkdownImages } from '../../shared/markdown-images.js';
 import { api, settings, serverUrl, limitedImage } from "./client.js";
 const $ = (id) => document.getElementById(id);
 let article, saved;
@@ -44,68 +45,46 @@ $("save").addEventListener("click", async () => {
     if (tags.length >= 30) throw new Error("请为来源网站标签留出一个位置");
     let content = $("content").value;
     if (content.length > 480000) throw new Error("正文过长，请分段保存");
-    const warnings = [];
-    let bytes = 0,
-      archived = 0;
+    let archived = 0, bytes = 0; const started=Date.now();
     if ($("archive-images").checked) {
-      const selected = article.images.filter((url) => content.includes(url));
-      for (const [index, url] of selected.entries()) {
-        if (index >= 30) {
-          warnings.push(`超过配图数量上限：${url}`);
-          continue;
-        }
-        $("status").textContent =
-          `正在保存配图 ${index + 1} / ${selected.length}…`;
+      const refs=markdownImages(content), selected=[...new Set(refs.map(i=>i.url))], replacements=new Map();
+      for(const [index,url] of selected.entries()) {
+        if(index>=200 || bytes>=500*1024*1024 || Date.now()-started>120000) break;
+        $("status").textContent=`正在保存配图 ${index+1} / ${selected.length}…`;
         try {
-          const blob = await limitedImage(url);
-          bytes += blob.size;
-          if (bytes > 100 * 1024 * 1024) {
-            warnings.push(
-              ...selected
-                .slice(index)
-                .map((value) => `超过配图容量上限：${value}`),
-            );
-            break;
-          }
-          const form = new FormData();
-          form.set("file", blob, "正文配图");
-          form.set("title", `${title} · 配图 ${index + 1}`.slice(0, 200));
-          form.set("content", `正文配图\n\n图片地址：${url}`);
-          form.set("source_url", article.source_url);
-          form.set("tags", JSON.stringify(tags));
-          if (collection_id) form.set("collection_id", collection_id);
-          const item = await api("/api/assets", { method: "POST", body: form });
-          content = content.replaceAll(
-            `(<${url.replace(/>/g, "%3E")}>)`,
-            `(${item.url})`,
-          );
-          archived++;
-        } catch (e) {
-          warnings.push(`${url}：${e.message}`);
-        }
+          const blob=await limitedImage(url);bytes+=blob.size;if(bytes>500*1024*1024)break;
+          const form=new FormData();form.set('file',blob,'正文配图');
+          form.set('title',`${title} · 配图 ${index+1}`.slice(0,200));form.set('tags',JSON.stringify(tags));
+          form.set('content','正文配图\n\n图片地址：'+(url.startsWith('data:')?'内嵌图片':url));
+          form.set('source_url',article.source_url);if(collection_id)form.set('collection_id',collection_id);
+          const item=await api('/api/assets',{method:'POST',body:form});replacements.set(url,item.url);archived++;
+        } catch { /* The server will try remaining URLs, including Pixiv CDN referrers. */ }
       }
+      content=replaceMarkdownImages(content,refs,replacements);
     }
-    if (warnings.length)
-      content +=
-        "\n\n---\n\n配图归档提示（未归档图片保留原网址）：\n" +
-        warnings.map((s) => "- " + s).join("\n");
     $("content").value = content;
+    $("status").textContent='正在保存笔记，服务器会继续尝试归档剩余配图…';
     saved = await api("/api/items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(180000),
       body: JSON.stringify({
         title,
         content,
         tags,
         collection_id,
         source_url: article.source_url,
+        archive_images: $("archive-images").checked,
       }),
     });
+    $("content").value=saved.content;
+    archived+=saved.image_archive?.archived||0;
+    const failures=saved.image_archive?.failures||[];
     $("open").href =
       serverUrl((await settings()).server) + "/#item/" + saved.id;
     $("open").hidden = false;
     $("status").textContent =
-      `图文笔记已保存，${archived} 张配图已归档${warnings.length ? "；部分配图未归档，原因已写入备注" : ""}`;
+      `图文笔记已保存，${archived} 张配图已归档${failures.length ? "；"+failures.length+" 张未归档，可在笔记中再次归档："+failures[0].error : ""}`;
     $("save").textContent = "已保存";
   } catch (e) {
     $("status").textContent = e.message;

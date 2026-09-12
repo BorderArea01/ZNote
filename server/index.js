@@ -5,7 +5,7 @@ backups.start();
 webhooks.start();
 const server = app.listen(port, process.env.HOST || "0.0.0.0", () =>
     console.log(
-      `ZNote 0.8.2 listening on port ${port}; open http://localhost:${port}`,
+      `ZNote 0.8.3 listening on port ${port}; open http://localhost:${port}`,
     ),
 );
 for (const signal of ["SIGINT", "SIGTERM"])

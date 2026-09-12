@@ -97,6 +97,7 @@ export default function Workspace({
     searchInput = useRef(),
     generation = useRef(0);
   const [organizing, setOrganizing] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
   const galleryItems = gallery || items.filter(i => i.kind === 'image');
@@ -121,6 +122,7 @@ export default function Workspace({
     notify = setToast;
   const actualCollection = collection === "unfiled" ? null : collection;
   const chooseCollection = (id) => {
+    ++generation.current; setItems([]); setTags([]); setStats({}); setTotal(0); setLoading(true); setSelected(null); setGallery(null);
     setCollection(id);
     setView("all");
     setSelectedTags([]);
@@ -178,7 +180,7 @@ export default function Workspace({
         limit: "60",
       });
       if (search) p.set("q", search);
-      if (collection) p.set("collection", collection);
+      p.set("collection", collection || 'unfiled');
       if (selectedTags.length) {
         p.set("tags", JSON.stringify(selectedTags));
         p.set("tag_mode", tagMode);
@@ -229,9 +231,9 @@ export default function Workspace({
       view === "home"
         ? Promise.resolve({ items: [], total: 0 })
         : api(`/api/items?${params(0)}`),
-      api("/api/stats"),
+      api(`/api/stats?collection=${encodeURIComponent(collection || 'unfiled')}`),
       api("/api/collections"),
-      api("/api/tags"),
+      view === 'home' ? Promise.resolve([]) : api(`/api/tags?collection=${encodeURIComponent(collection || 'unfiled')}`),
     ])
       .then(([result, stats, libs, tags]) => {
         if (current !== generation.current) return;
@@ -265,14 +267,15 @@ export default function Workspace({
     if (!ready) return;
     const openLink = () => {
       const id = window.location.hash.match(/^#item\/([a-f0-9-]{36})$/i)?.[1];
-      if (id) api(`/api/items/${id}`).then(item => { setGallery(item.kind === 'image' ? [item] : []); setSelected(item); }).catch(e => setToast(e.message));
+      if (id) api(`/api/items/${id}`).then(item => { chooseCollection(item.collection_id || 'unfiled'); setGallery(item.kind === 'image' ? [item] : []); setSelected(item); }).catch(e => setToast(e.message));
     };
     openLink(); window.addEventListener('hashchange', openLink);
     return () => window.removeEventListener('hashchange', openLink);
   }, [ready]);
   const navigate = (v) => {
     setView(v);
-    if (v === "all" || v === "trash") setCollection(null);
+    if (!collection) setCollection('unfiled');
+    setSelection([]); setSelecting(false); setGallery(null);
     setSelectedTags([]);
     setQuery("");
     setMobile(false);
@@ -363,6 +366,16 @@ export default function Workspace({
       notify(e.message);
     }
   }
+  async function batchTrash() {
+    if(batchBusy || !selection.length) return;
+    setBatchBusy(true);
+    try {
+      const chosen=items.filter(i=>selection.includes(i.id));
+      if(chosen.length!==selection.length) throw new Error('选择内容已变化，请重新选择');
+      await send('/api/items/batch-trash',{items:chosen.map(({id,version})=>({id,version})),collection_id:actualCollection,restore:view==='trash'});
+      setSelection([]); refresh(); notify(view==='trash'?`已恢复 ${chosen.length} 项内容`:`已将 ${chosen.length} 项移至当前知识库回收站，可随时恢复`);
+    } catch(e) { notify(e.message); } finally {setBatchBusy(false);}
+  }
   async function restore(item) {
     try {
       await send(`/api/items/${item.id}/restore`, {});
@@ -445,7 +458,7 @@ export default function Workspace({
 
           </div>
         </div>
-        <span className="nav-caption">内容空间</span>
+        <span className="nav-caption">{view==='home'?'内容分类':`${activeCollection?.name||'未分类'} · 内容`}</span>
         <nav>
           <button className={view === "home" ? "active" : ""} onClick={goHome}>
             <Home size={18} />
@@ -456,7 +469,7 @@ export default function Workspace({
             return (
               <button
                 key={v}
-                className={!collection && view === v ? "active" : ""}
+                className={view === v ? "active" : ""}
                 onClick={() => navigate(v)}
               >
                 <Icon size={18} />
@@ -783,6 +796,9 @@ export default function Workspace({
                     批量标签
                   </button>
                   <button onClick={() => setOrganizing(true)} disabled={!selection.length || view === 'trash'}>移动 / 收藏</button>
+                  <button className={view==='trash'?'':'danger'} disabled={!selection.length || batchBusy} onClick={batchTrash}>
+                    {view==='trash'?<RefreshCw size={15}/>:<Trash2 size={15}/>} {batchBusy?'正在处理…':view==='trash'?'恢复所选':'删除所选'}
+                  </button>
                 </div>
               )}
               {loadError ? (

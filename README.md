@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.8.2-287464?style=flat-square" alt="Version 0.8.2" />
+    <img src="https://img.shields.io/badge/version-0.8.3-287464?style=flat-square" alt="Version 0.8.3" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -30,7 +30,7 @@
 | ✍️ 图文笔记 | 编辑和预览 Markdown，插入图片，保留文字链接、表格与代码，使用 `[[双向链接]]` |
 | 🎬 视频收藏 | 保存 MP4、WebM、MOV，在浏览器预览、拖动进度、全屏播放 |
 | 🧩 浏览器采集 | 悬停看大图，点按钮或按快捷键下载/入库；浮窗发现图片、视频和 m3u8；提取网页正文 |
-| 🏷️ 有序归类 | 多知识库、多标签交集/并集筛选；指定默认知识库，首页不混杂所有图片 |
+| 🏷️ 有序归类 | 所有分类、标签与回收站按知识库隔离；多标签筛选、批量删除与恢复 |
 | 🔌 开放接口 | REST API、OpenAPI、读写令牌、增量事件与 Webhook，方便工具和插件接入 |
 | 📦 数据可带走 | 六种导出、自动备份、网页恢复；原文件按字节保留，同内容去重 |
 | 🌐 随处访问 | 一个服务，电脑、手机和平板通过浏览器访问；适合家庭或个人局域网 |
@@ -106,6 +106,12 @@ docker compose up -d --build
 | 网页截图 | 使用扩展弹窗或右键菜单截图当前可见页面 |
 
 网络采集自动保留**来源网址和网站标签**，例如「小红书」「b站」「抖音」「X」。同一文件从多个页面采集，会合并来源，方便回看出处。
+
+**Pixiv / Pawchive**：在单个作品页采集正文。Pixiv 读取全部页的原图和作品说明；Pawchive 从正文文件链接获取原图，排除头像、推荐卡片和缩略图。
+
+**图文笔记的配图默认本地归档**：普通 Markdown 外链图片也会在保存时尝试入库，成功后改为内部地址。已有笔记可点击「归档外部配图」；无法下载时保留来源和失败说明。每次最多 200 张 / 500 MB，单张 25 MB，可再次保存继续处理。
+
+**批量删除**：按标签筛选 →「选择内容」→ 勾选当前页或指定图片 →「删除所选」。内容进入当前知识库回收站，支持批量恢复。
 
 更多操作、权限和格式支持见 **[扩展使用说明](extensions/clipper/README.md)**。m3u8 合并及平台视频链接解析需要媒体组件，可运行 `npm run media:setup` 安装。
 

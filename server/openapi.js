@@ -18,6 +18,7 @@ const input = {
     tags: { type: "array", items: str },
     collection_id: { type: "string", nullable: true },
     favorite: { type: "boolean" },
+    archive_images: { type: 'boolean', default: true, description: '保存笔记时归档外部配图；返回 image_archive 结果。设为 false 保留外链。' },
     source_url: { type: 'string', format: 'uri', nullable: true, description: 'HTTP(S) 采集来源' },
     captured_at: { type: 'string', format: 'date-time', nullable: true },
   },
@@ -39,7 +40,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.8.2",
+    version: "0.8.3",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -568,5 +569,11 @@ spec.paths['/api/webhooks/{id}'] = {
 };
 spec.paths['/api/webhooks/{id}/deliveries'] = { get: operation('查看投递状态、尝试次数、最近错误；每页 50 条（管理员）', { type: 'object' }, { parameters: [id, { name: 'offset', in: 'query', schema: { type: 'integer', minimum: 0, default: 0 } }] }) };
 spec.paths['/api/webhooks/{id}/deliveries/{delivery}/retry'] = { post: operation('重新排队投递；沿用投递 ID，尝试次数归零（管理员）', { type: 'object' }, { parameters: [id, { name: 'delivery', in: 'path', required: true, schema: str }] }) };
+const collectionParameter={name:'collection',in:'query',schema:str,description:'知识库 ID；unfiled 为未分类，省略为全局'};
+for(const path of ['/api/stats','/api/tags'])spec.paths[path].get.parameters=[collectionParameter];
+spec.paths['/api/items/batch-trash']={post:operation('当前知识库批量回收或恢复，版本冲突时整体回滚',{type:'object'},
+  {requestBody:body({type:'object',required:['items','collection_id'],properties:{collection_id:{type:'string',nullable:true},restore:{type:'boolean',default:false},
+    items:{type:'array',minItems:1,maxItems:100,items:{type:'object',required:['id','version'],properties:{id:str,version:{type:'integer',minimum:1}}}}}})})};
+spec.components.schemas.Item.allOf[1].properties.image_archive={type:'object',description:'笔记保存时的配图归档结果',properties:{total:{type:'integer'},archived:{type:'integer'},failures:{type:'array',items:{type:'object',properties:{url:str,error:str}}}}};
 spec.paths['/api/clipper/pair'] = {post:{summary:'已登录网页创建扩展一次性连接凭据',description:'仅管理员浏览器会话可用，同源写入；凭据 2 分钟内单次有效，不返回 API 令牌。',responses:{200:{description:'一次性 code，禁止缓存'},...errorResponses}}};
 spec.paths['/api/clipper/redeem'] = {post:{summary:'扩展兑换一次性连接凭据',description:'要求 chrome-extension 来源及有效 code；兑换为 write 令牌。不可重放，发起连接的管理员会话注销或过期后失效。',security:[],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['code'],properties:{code:{type:'string',minLength:64,maxLength:64}}}}}},responses:{200:{description:'扩展写入令牌，禁止缓存'},...errorResponses}}};

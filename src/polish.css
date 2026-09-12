@@ -1,6 +1,8 @@
 /* Keep secondary guidance on demand; use theme tokens for every surface. */
 .inline-heading { display: flex; align-items: center; gap: 6px; }
 .upload-guidance { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.note-archive-status { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:16px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--surface-2); }
+.selection-bar { position:sticky; top:0; z-index:4; background:var(--surface); }
 html[data-style] button.help-trigger { display: inline-flex; flex: 0 0 28px; align-items: center; justify-content: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; box-shadow: none; vertical-align: middle; }
 html[data-style] button.help-trigger:hover, html[data-style] button.help-trigger:focus-visible { background: var(--accent-soft); color: var(--green); }
 .help-tooltip { position: fixed; z-index: 20000; width: max-content; max-width: min(320px, calc(100vw - 16px)); padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 28px #0002; font-size: 14px; font-weight: 400; line-height: 1.75; overflow-wrap: anywhere; }

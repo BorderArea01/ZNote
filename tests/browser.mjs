@@ -58,6 +58,8 @@ try {
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await wait(page.getByRole("status").filter({ hasText: "已保存" }));
   await page.getByRole("button", { name: "关闭窗口" }).click();
+  // The image was moved out of 未分类; open its destination library explicitly.
+  await page.locator('.sidebar').getByRole('button',{name:/^设计灵感 \d+$/,exact:false}).click();
   await wait(page.getByRole("button", { name: "打开 视觉配色研究" }));
   checkpoint("actual image upload and metadata editing");
   await page.getByRole("button", { name: "新建笔记", exact: true }).click();
@@ -145,6 +147,8 @@ try {
     "token generation, read-only enforcement, interactive OpenAPI docs",
   );
   // Representative, explicitly test-only content used to inspect a populated grid.
+  const library = (await (await context.request.get(base + "/api/collections")).json()).find(c => c.name === "设计灵感");
+  assert.ok(library);
   for (const [title, color, color2] of [
     ["测试素材 · 森林色彩", "#d8e2ce", "#6e8964"],
     ["测试素材 · 暖色空间", "#efe2d0", "#b28f70"],
@@ -161,6 +165,7 @@ try {
     const r = await context.request.post(base + "/api/assets", {
       multipart: {
         title,
+        collection_id: library.id,
         tags: '["测试素材"]',
         file: { name: "fixture.png", mimeType: "image/png", buffer },
       },

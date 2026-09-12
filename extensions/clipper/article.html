@@ -41,14 +41,12 @@
         将正文配图一并保存到知识库</label
       >
       <p class="hint">
-        保留文字链接、标题、列表、引用、代码及表格。默认归档最多 30 张配图、合计
-        100
-        MB；未能归档的图片会保留原网址并明确列出。图片独立入库，可在图片素材中找到。
+        配图默认存入本地，单张最多 25 MB，每次最多 200 张、合计 500 MB。未完成的配图会明确提示，可在笔记中继续归档；原文件与笔记一起参与备份。
       </p>
       <button id="save" class="primary" disabled>保存图文笔记</button>
       <a id="open" hidden target="_blank">打开已保存的笔记</a>
       <p id="status" role="status">正在提取正文…</p>
     </main>
-    <script type="module" src="article.js"></script>
+    <script type="module" src="vendor/article-page.js"></script>
   </body>
 </html>

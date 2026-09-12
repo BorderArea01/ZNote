@@ -1,13 +1,15 @@
 import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
+import { siteArticle } from './site-articles.js';
 
-function extract() {
+async function extract() {
   if (document.getElementsByTagName("*").length > 50000)
     throw new Error("此页面内容过多，请打开单篇文章后采集");
-  const clone = document.cloneNode(true);
+  const site = await siteArticle(document,location);
+  const clone = site?.document || document.cloneNode(true);
   const originals = [...document.images];
-  [...clone.images].forEach((img, index) => {
+  if(!site) [...clone.images].forEach((img, index) => {
     const original = originals[index];
     if (
       original?.currentSrc &&
@@ -51,12 +53,13 @@ function extract() {
     if (href) link.setAttribute("href", href);
     else link.removeAttribute("href");
   }
-  const article = new Readability(clone, {
+  const siteRoot=site && clone.querySelector(site.selector);
+  const article = siteRoot ? {title:site.title,content:siteRoot.innerHTML,textContent:siteRoot.textContent,byline:site.byline} : new Readability(clone, {
     charThreshold: 100,
     maxElemsToParse: 50000,
     keepClasses: false,
   }).parse();
-  if (!article?.textContent?.trim())
+  if (!article?.textContent?.trim() && !article?.content?.includes('<img'))
     throw new Error(
       "未找到可采集的正文，请打开文章详情页；动态页面需先展开正文",
     );
@@ -107,9 +110,6 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     message.type !== "extract-article"
   )
     return;
-  try {
-    reply({ ok: true, article: extract() });
-  } catch (e) {
-    reply({ ok: false, error: e.message });
-  }
+  extract().then(article=>reply({ok:true,article}),e=>reply({ok:false,error:e.message}));
+  return true;
 });

@@ -1,5 +1,7 @@
 # 第三方组件
 
+正文配图解析使用 unified / remark-parse 及其 Markdown 解析依赖（MIT）；扩展随附汇总许可文件 `extensions/clipper/vendor/markdown-LICENSES.txt`。源码：[unified](https://github.com/unifiedjs/unified)、[remark](https://github.com/remarkjs/remark)。Pawchive 选择器依据用户提供的 PawPreviewer 项目结构适配，未包含其中的个人作者列表、配置或数据。
+
 下表列出主要组件。第三方组件分别遵循其许可证；本文件不替代依赖包或可执行文件随附的完整许可文本，也不为本项目自有代码指定许可证。
 
 | 组件 | 用途 | 许可证 / 来源 |

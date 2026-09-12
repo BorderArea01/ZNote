@@ -37,6 +37,7 @@ curl http://localhost:3741/api/items \
 | `GET /api/tags` | 标签及计数 |
 | `POST /api/items/batch-tags` | 批量添加、移除或替换标签 |
 | `POST /api/items/batch-organize` | 批量移动和收藏 |
+| `POST /api/items/batch-trash` | 按知识库批量移入回收站或恢复 |
 | `POST /api/items/:id/copy` | 跨库复用，共享原文件 |
 | `GET /api/events?after=0` | 持久化增量事件 |
 | `GET /api/export?mode=markdown` | 按模式导出，需要管理员会话 |
@@ -50,9 +51,17 @@ curl http://localhost:3741/api/items \
 
 ### 多标签与连续浏览
 
+`GET /api/stats` 与 `GET /api/tags` 同样支持 `collection`，前端始终传入当前知识库；省略参数仍可供脚本获取全局统计。`unfiled` 表示未分类。
+
 `GET /api/items` 支持 `kind=image|video|note`、`collection`、`q`、`tags`、`tag_mode` 等查询。`tags` 为 URL 编码后的 JSON 数组；`tag_mode=all` 表示交集，`any` 表示并集。`collection=unfiled` 仅查看未分类。
 
 `gallery=true` 返回当前筛选与排序范围的图片 ID 顺序，支持前端连续翻图。
+
+### 配图归档与批量删除
+
+创建笔记或更新笔记 `content` 时默认尝试归档外部配图，返回 `image_archive: { total, archived, failures }`。成功图片使用 `/media/...` 内部地址；失败保留网址与提示，可再次保存重试。`archive_images: false` 可显式保留外链。单次最多 200 张 / 500 MB，服务器尝试约两分钟后返回剩余失败项；单张最多 25 MB。服务器不获取本机、内网或凭据 URL，浏览器扩展可利用用户已有站点访问状态上传配图。
+
+批量回收站接口接收 `{ items: [{ id, version }], collection_id, restore: false }`；`restore: true` 为恢复，`collection_id: null` 为未分类。每次最多 100 项，要求所有条目属于指定知识库、版本及删除状态一致，失败时整体回滚。
 
 ### HLS 分片
 

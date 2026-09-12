@@ -34,6 +34,12 @@ export async function saveImage(blob, details, signal) {
 }
 export async function limitedImage(url, signal) {
   if (!/^(https?:|data:image\/)/i.test(url)) throw new Error('此图片地址无法直接获取，可使用页面截图');
+  if(/^https:\/\/[^/]*\.pximg\.net\//i.test(url)) {
+    await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[8301],addRules:[{
+      id:8301,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'Referer',operation:'set',value:'https://www.pixiv.net/'}]},
+      condition:{requestDomains:['pximg.net'],initiatorDomains:[chrome.runtime.id],resourceTypes:['xmlhttprequest']}
+    }]});
+  }
   const response = await fetch(url, { credentials: 'include', signal: signal || AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(`读取图片失败 ${response.status}，可改用页面截图`);
   const mime = response.headers.get('content-type') || '';

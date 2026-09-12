@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
+import { markdownImages } from '../shared/markdown-images.js';
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -357,6 +358,7 @@ function Detail({
   const [error, setError] = useState("");
   const [lightbox, setLightbox] = useState(false);
   const [copying, setCopying] = useState(false);
+  const externalImages = React.useMemo(()=>item.kind==='note'?markdownImages(content):[],[item.kind,content]);
   const input = useRef();
   const textarea = useRef();
   const dirty =
@@ -411,7 +413,9 @@ function Detail({
       setTags(result.tags);
       setCollection(result.collection_id || "");
       onSaved();
-      notify("已保存");
+      const failures=result.image_archive?.failures||[];
+      if(failures.length)setError(`${failures.length} 张配图暂未归档：${failures[0].error}。可再次点击归档重试。`);
+      notify(failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存');
       return true;
     } catch (e) {
       setError(e.message);
@@ -478,6 +482,10 @@ function Detail({
           </div>
         )}
         <div className="detail-editor">
+          {externalImages.length>0 && !item.deleted_at && <div className="note-archive-status" role="status">
+            <span>{new Set(externalImages.map(i=>i.url)).size} 张配图尚未归档到本地</span>
+            <button disabled={busy} onClick={save}><Download size={15}/>{busy?'正在归档…':'归档外部配图'}</button>
+          </div>}
           <div className="detail-title-row">
             <span className="eyebrow">
               {item.kind === "image"

@@ -167,7 +167,7 @@ try {
   assert.equal(notes.total, 1);
   const note = notes.items[0];
   assert.ok(note.content.includes("/media/"));
-  assert.ok(note.content.includes("读取图片失败 404"));
+  assert.ok(note.content.includes("未归档"));
   assert.ok(note.tags.includes("127.0.0.1"));
   assert.equal(note.source_url, sourceUrl + "/article");
   const images = await (
@@ -199,7 +199,7 @@ try {
   const upgrade = join(dir, "different-download-directory");
   await cp(extension, upgrade, { recursive: true });
   const manifest = JSON.parse(await readFile(join(upgrade, "manifest.json")));
-  manifest.version = "0.8.3";
+  manifest.version = "0.8.4";
   await writeFile(join(upgrade, "manifest.json"), JSON.stringify(manifest));
   context = await launch(upgrade);
   worker =

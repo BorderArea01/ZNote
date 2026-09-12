@@ -7,6 +7,8 @@ const sites = [
   ['知乎', ['zhihu.com']],
   ['YouTube', ['youtube.com', 'youtu.be']],
   ['Pinterest', ['pinterest.com', 'pin.it']],
+  ['Pixiv', ['pixiv.net']],
+  ['Pawchive', ['pawchive.pw', 'pawchive.st']],
 ];
 export function sourceSite(value) {
   try {

@@ -60,6 +60,8 @@ node tests/media-tools-ui.mjs
 node tests/clipper-ui.mjs
 node tests/clipper-v08-ui.mjs
 node tests/themes-ui.mjs
+node tests/knowledge-v083-ui.mjs
+node tests/site-articles-ui.mjs
 ```
 
 `tests/clipper-v08-ui.mjs` 验证一键连接、升级保留设置、预览避让和正文归档。其他历史浏览器脚本的默认构建目录见文件顶部；支持 `UI_DIST` 的脚本可统一指定 `dist`。
