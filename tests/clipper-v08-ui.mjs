@@ -199,7 +199,7 @@ try {
   const upgrade = join(dir, "different-download-directory");
   await cp(extension, upgrade, { recursive: true });
   const manifest = JSON.parse(await readFile(join(upgrade, "manifest.json")));
-  manifest.version = "0.8.5";
+  manifest.version = manifest.version.replace(/\d+$/, patch => String(Number(patch) + 1));
   await writeFile(join(upgrade, "manifest.json"), JSON.stringify(manifest));
   context = await launch(upgrade);
   worker =

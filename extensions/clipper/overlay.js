@@ -28,7 +28,7 @@
     downloadButton,
     saveButton,
     groupBar, groupCounter, previousButton, nextButton, batchButton,
-    imageGroup = null, groupIndex = 0, pageToken = 0, pageBusy = false, lastWheel = 0,
+    imageGroup = null, groupIndex = 0, requestedIndex = 0, pageToken = 0, pageBusy = false, pageLoad, lastWheel = 0,
     downloadKey = 's',
     saveKey = 'z',
     previewWidth = 720,
@@ -229,7 +229,7 @@
     hovered = null;
     hoverURL = "";
     hoverToken++;
-    pageToken++; imageGroup = null; pageBusy = false; drawGroup();
+    pageToken++; pageLoad?.(); pageLoad=null; imageGroup = null; pageBusy = false; drawGroup();
   }
   function inPreviewBridge() {
     if (!hovered || preview.classList.contains('hidden')) return false;
@@ -278,7 +278,7 @@
       candidates = globalThis.ZNoteCandidates(target);
     if (!candidates.length) return;
     hovered = target;
-    imageGroup = null; pageToken++; pageBusy = false; drawGroup();
+    imageGroup = null; pageToken++; pageLoad?.(); pageLoad=null; pageBusy = false; lastWheel=0; drawGroup();
     hoverURL = '';
     preview.classList.add('hidden');
     for (const c of candidates) {
@@ -316,8 +316,8 @@
     downloadButton.disabled=pageBusy||hoverBusy;saveButton.disabled=pageBusy||hoverBusy;
     if (!imageGroup) return;
     groupCounter.textContent = `${groupIndex + 1} / ${imageGroup.images.length}`;
-    previousButton.disabled = pageBusy || groupIndex === 0;
-    nextButton.disabled = pageBusy || groupIndex === imageGroup.images.length - 1;
+    previousButton.disabled = requestedIndex === 0;
+    nextButton.disabled = requestedIndex === imageGroup.images.length - 1;
     batchButton.textContent = `批量下载 ${imageGroup.images.length} 张`;
   }
   async function loadGroup(target, token) {
@@ -328,29 +328,32 @@
       const pixivPage = hoverURL.match(/\/(\d+_p\d+)/)?.[1];
       const index = group.images.findIndex(url => url === hoverURL || (pixivPage && url.includes('/' + pixivPage + '.')));
       if(index<0)return;
-      imageGroup = group; groupIndex = index; drawGroup(); placePreview();
+      imageGroup = group; requestedIndex = groupIndex = index; drawGroup(); placePreview();
       if(hoverURL!==group.images[index])turnPage(0);
     } catch(e) { if(token===hoverToken)previewLabel.textContent = e.message; }
   }
   async function turnPage(delta) {
     if(imageGroup && imageGroup.source_url!==location.href){hide();return;}
-    if (!imageGroup || pageBusy || hoverBusy) return;
-    const index = groupIndex + delta;
+    if (!imageGroup || hoverBusy) return;
+    const index = requestedIndex + delta;
     if (index < 0 || index >= imageGroup.images.length) return;
     const group = imageGroup, token = ++pageToken, hover = hoverToken;
-    pageBusy = true; drawGroup(); previewLabel.textContent = '正在加载原图…';
+    pageLoad?.();
+    requestedIndex=index; pageBusy = true; drawGroup(); previewLabel.textContent = `正在加载第 ${index+1} / ${group.images.length} 张原图…`;
     const img = new Image(); img.referrerPolicy = previewImage.referrerPolicy;
     const ok = await new Promise(resolve => {
-      const timer=setTimeout(()=>resolve(false),15000);
-      img.onload=()=>{clearTimeout(timer);resolve(true);};img.onerror=()=>{clearTimeout(timer);resolve(false);};img.src=group.images[index];
+      const finish=value=>{clearTimeout(timer);img.onload=null;img.onerror=null;resolve(value);};
+      const timer=setTimeout(()=>{finish(false);img.src='';},15000);
+      pageLoad=()=>{finish(false);img.src='';};
+      img.onload=()=>finish(true);img.onerror=()=>finish(false);img.src=group.images[index];
     });
     if(token!==pageToken || hover!==hoverToken)return;
-    pageBusy = false;
+    pageBusy = false; pageLoad=null;
     if(ok) {
       groupIndex=index; hoverURL=group.images[index]; previewImage.src=hoverURL;
       previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · 滚轮翻页`;
       previewImage.onload=placePreview; requestAnimationFrame(placePreview);
-    } else previewLabel.textContent='这张原图暂时无法加载，可再次翻页重试';
+    } else {requestedIndex=groupIndex;previewLabel.textContent='这张原图暂时无法加载，可再次翻页重试';}
     drawGroup();
   }
   async function hoverAction(action) {
@@ -519,13 +522,20 @@
       finally {batchButton.disabled=false;}
     });
     groupBar.append(previousButton,groupCounter,nextButton,batchButton);
-    groupBar.title='鼠标放在预览区域，向下滚动看下一张，向上滚动看上一张';
+    groupBar.title='鼠标停在原缩略图或展开预览上，向下滚动看下一张，向上滚动看上一张';
     preview.append(previewImage, previewLabel, groupBar, bar, sizing);
-    preview.addEventListener('wheel',e=>{
-      if(!e.isTrusted || !imageGroup || e.ctrlKey || !e.deltaY || /INPUT|SELECT/.test(e.target.tagName))return;
-      e.preventDefault();e.stopPropagation();
+    // Capture wheel on either the source thumbnail or our preview. Never hijack
+    // scrolling elsewhere on the page, the size slider, or browser zoom gestures.
+    document.addEventListener('wheel',e=>{
+      if(!e.isTrusted || !imageGroup || preview.classList.contains('hidden') || e.ctrlKey || e.altKey || e.metaKey || !e.deltaY)return;
+      const path=e.composedPath();
+      if(path.some(el=>el?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName)))return;
+      if(!path.includes(preview) && globalThis.ZNoteImageTarget(e)!==hovered)return;
+      if(imageGroup.source_url!==location.href){hide();return;}
+      e.preventDefault();e.stopImmediatePropagation();
+      clearTimeout(hideTimer);hideTimer=null;
       if(Date.now()-lastWheel<220)return;lastWheel=Date.now();turnPage(Math.sign(e.deltaY));
-    },{passive:false});
+    },{passive:false,capture:true});
     window.addEventListener('resize', placePreview);
     window.addEventListener('scroll', () => { if (hovered) hide(); }, {passive:true});
     root.append(preview);

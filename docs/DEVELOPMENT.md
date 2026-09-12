@@ -43,6 +43,8 @@ npm run clipper:build
 
 `node tests/gallery-ui.mjs` 验证悬停滚轮、页序原文件、失败重试、停止继续和刷新恢复；`node tests/work-images-ui.mjs` 验证 Pixiv / Pawchive 作品分组。下载文件保存在各测试自己的 `artifacts/` 子目录。
 
+`node tests/hover-wheel-ui.mjs` 保持鼠标在原缩略图上验证滚轮翻页，并覆盖展开预览中央、慢速连续翻页、当前页下载及外部区域滚动。交互调查参考了 [Powerful Pixiv Downloader 的 PreviewWork](https://github.com/xuejianxianzun/PixivBatchDownloader/blob/master/src/ts/PreviewWork.ts)，本项目独立实现事件范围判断与异步翻页，不包含该项目源码。
+
 ## 验证
 
 ```bash
