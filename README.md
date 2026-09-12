@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.3-287464?style=flat-square" alt="Version 0.9.3" />
+    <img src="https://img.shields.io/badge/version-0.9.4-287464?style=flat-square" alt="Version 0.9.4" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -42,6 +42,8 @@
 在图片组预览中修改 **「知识库 · 整组」** 并保存，会移动整组图片；笔记配图组会连同笔记一起移动。目标存在冲突时整次取消。需要单页整理时，使用「选择内容」。配图记录独立管理，相同原图共享文件，不重复占用原图空间。
 
 图片说明支持 Markdown，作者和来源保留可点击链接，原图地址与重复来源不再堆在说明中。筛选、上传和编辑时的标签建议均来自所选知识库。
+
+**操作更顺手**：点击弹窗外空白或按 Esc 关闭当前窗口；嵌套预览只退出最上层，未保存的图文编辑会提示。选择模式下，点击图片、标题、卡片正文或勾选框都能选中 / 取消，键盘和手机触摸同样适用。
 
 ## 外观与主题
 

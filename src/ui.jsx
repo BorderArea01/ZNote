@@ -16,6 +16,7 @@ export function IconButton({ label, children, ...props }) {
 
 export function Dialog({ title, onClose, children, className = "" }) {
   const ref = useRef();
+  const backdropPress = useRef(false);
   useEffect(() => {
     const previous = document.activeElement;
     ref.current?.focus();
@@ -41,11 +42,16 @@ export function Dialog({ title, onClose, children, className = "" }) {
         first?.focus();
       }
     };
-    ref.current?.addEventListener("keydown", listener);
-    return () => previous?.focus();
+    const element=ref.current;
+    element?.addEventListener("keydown", listener);
+    return () => { element?.removeEventListener('keydown',listener);if(previous?.isConnected)previous.focus(); };
   }, []);
   return (
-    <div className="dialog-shade">
+    <div className="dialog-shade"
+      onPointerDown={e=>{backdropPress.current=e.target===e.currentTarget&&e.button===0;}}
+      onPointerCancel={()=>{backdropPress.current=false;}}
+      onClick={e=>{const outside=backdropPress.current&&e.target===e.currentTarget;backdropPress.current=false;if(outside){e.stopPropagation();ref.current?.focus({preventScroll:true});onClose();}}}
+    >
       <section
         ref={ref}
         tabIndex={-1}
@@ -53,6 +59,7 @@ export function Dialog({ title, onClose, children, className = "" }) {
         aria-modal="true"
         aria-label={title}
         className={`dialog ${className}`}
+        onKeyDown={e=>{if(e.key==='Escape'&&!e.nativeEvent.isComposing&&e.target.closest('[role="dialog"]')===ref.current){e.preventDefault();e.stopPropagation();onClose();}}}
       >
         <header className="dialog-header">
           <h2>{title}</h2>

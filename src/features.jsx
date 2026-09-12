@@ -379,7 +379,7 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
     }
   }
   return (
-    <Dialog title="导出知识库" onClose={onClose} className="export-dialog">
+    <Dialog title="导出知识库" onClose={()=>!busy&&onClose()} className="export-dialog">
       <div className="feature-body">
         <div className="export-modes">
           {Object.entries(exportModes).map(([key, [name, description]]) => (
@@ -449,7 +449,7 @@ export function BatchTagsDialog({ items, suggestions, onClose, onSaved }) {
   return (
     <Dialog
       title={`批量标签 · ${items.length} 项内容`}
-      onClose={onClose}
+      onClose={()=>!busy&&onClose()}
       className="small-dialog"
     >
       <div className="feature-body">

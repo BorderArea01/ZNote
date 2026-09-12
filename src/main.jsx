@@ -280,7 +280,7 @@ function CollectionDialog({ value, onClose, onSave }) {
   return (
     <Dialog
       title={value.id ? "管理知识库" : "创建知识库"}
-      onClose={onClose}
+      onClose={()=>!busy&&onClose()}
       className="small-dialog"
     >
       <form
@@ -394,6 +394,7 @@ function Detail({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
   const close = () => {
+    if (busy) return;
     if (!dirty || confirm("有尚未保存的修改，确定关闭吗？")) onClose();
   };
   const insertImages = (images) => {

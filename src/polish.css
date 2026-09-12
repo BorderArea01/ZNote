@@ -15,6 +15,9 @@ html[data-theme=dark] select{color-scheme:dark}
 html[data-theme=light] select{color-scheme:light}
 html[data-style] input[type=checkbox]{appearance:auto;accent-color:var(--green);width:16px;height:16px;flex:none;margin:0;vertical-align:middle}
 html[data-style] .card-select{box-shadow:0 2px 8px #0003;border:1px solid var(--border);background:var(--surface);color:var(--ink)}
+html[data-style] .item-card.is-selected,html[data-style] .item-card.is-selected:hover{border-color:var(--green);box-shadow:0 0 0 2px var(--green)}
+html[data-style] .item-card.is-selected .card-body{background:var(--accent-soft)}
+html[data-style] .item-card.is-selected .card-select{border-color:var(--green)}
 .zoom-viewer{padding:0!important;z-index:10000;overflow:hidden}
 .zoom-surface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;outline:none}
 .zoom-surface:active{cursor:grabbing}
@@ -64,6 +67,11 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .preset-title { font-size: 14px; }
 .card-meta, .card-tags span, .sidebar .nav-caption { font-size: 12px; }
 @media (max-width: 760px) {
+  .selection-bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}
+  .selection-bar>label{white-space:nowrap}
+  .selection-bar>span{font-size:12px}
+  .selection-bar>button:not(.help-trigger){white-space:nowrap;justify-content:center;padding:9px 6px;font-size:12px;gap:4px}
+  .selection-bar>button svg{flex-shrink:0}
   .main-content { padding-top: 18px; }
   .page-heading { align-items: stretch; gap: 14px; margin-bottom: 18px; }
   .page-heading h1 { font-size: 25px; }

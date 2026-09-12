@@ -127,6 +127,9 @@ export default function Workspace({
   const refresh = () => setRevision((n) => n + 1),
     notify = setToast;
   const actualCollection = collection === "unfiled" ? null : collection;
+  const toggleSelection = id => setSelection(previous => previous.includes(id)
+    ? previous.filter(value => value !== id)
+    : previous.length < 100 ? [...previous,id] : previous);
   const closeDetail = () => {
     ++detailGeneration.current;
     setSelected(null); setGallery(null); setGalleryBusy(false);
@@ -815,6 +818,7 @@ export default function Workspace({
                     <input
                       type="checkbox"
                       aria-label="选择当前页全部内容"
+                      disabled={batchBusy}
                       checked={
                         !!items.length && items.slice(0, 100).every(i => selection.includes(i.id))
                       }
@@ -827,7 +831,7 @@ export default function Workspace({
                     {items.length > 100 ? '前 100 项' : '当前页'}
                   </label>
                   <span>已选 {selection.length} 项（每次最多 100 项）</span>
-                  <HelpHint label="图片组选择">选择模式会展开图片组，按单张图片选择、移动、加标签或删除。</HelpHint>
+                  <HelpHint label="图片组选择">点击图片、标题或勾选框即可选择 / 取消。图片组会展开，支持按单张图片移动、加标签或删除。</HelpHint>
                   <button
                     onClick={() => setBatchTags(true)}
                     disabled={!selection.length || view === "trash"}
@@ -885,28 +889,24 @@ export default function Workspace({
               ) : (
                 <div className={`items ${layout}`}>
                   {items.map((item) => (
-                    <article className={`item-card ${item.kind}`} key={item.id}>
+                    <article className={`item-card ${item.kind}${selecting&&selection.includes(item.id)?' is-selected':''}`} key={item.id}>
                       {selecting && (
                         <label className="card-select">
                           <input
                             type="checkbox"
                             aria-label={`选择 ${item.title}`}
                             checked={selection.includes(item.id)}
-                            disabled={selection.length >= 100 && !selection.includes(item.id)}
-                            onChange={(e) =>
-                              setSelection((previous) =>
-                                e.target.checked
-                                  ? [...previous, item.id]
-                                  : previous.filter((id) => id !== item.id),
-                              )
-                            }
+                            disabled={batchBusy || (selection.length >= 100 && !selection.includes(item.id))}
+                            onChange={() => toggleSelection(item.id)}
                           />
                         </label>
                       )}
                       <button
                         className="card-main"
-                        onClick={() => openItem(item)}
-                        aria-label={`打开 ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
+                        onClick={() => selecting ? toggleSelection(item.id) : openItem(item)}
+                        aria-pressed={selecting ? selection.includes(item.id) : undefined}
+                        disabled={selecting && (batchBusy || (selection.length >= 100 && !selection.includes(item.id)))}
+                        aria-label={`${selecting ? selection.includes(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
                           {item.kind === "image" ? (
