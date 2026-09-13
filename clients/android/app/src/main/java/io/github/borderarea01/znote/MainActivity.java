@@ -28,8 +28,10 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullScreenCallback;
     private final java.util.concurrent.ExecutorService network=Executors.newSingleThreadExecutor();
     private int attempt=0;
+    private boolean backBusy=false;
+    private android.window.OnBackInvokedCallback backCallback;
     private static final int PICK=20,SAVE=21;
-    @Override public void onCreate(Bundle state){super.onCreate(state);showConnect("");}
+    @Override public void onCreate(Bundle state){super.onCreate(state);if(Build.VERSION.SDK_INT>=33){backCallback=this::handleBack;getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}showConnect("");}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private TextView text(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setPadding(0,dp(8),0,dp(8));return v;}
     private Button button(String title,Runnable run){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setOnClickListener(v->run.run());return b;}
@@ -55,7 +57,7 @@ public class MainActivity extends Activity {
     private void open(String target){
         origin=target;root.removeAllViews();root.setBackgroundColor(Color.WHITE);
         LinearLayout toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setPadding(dp(8),0,dp(8),0);root.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(48)));
-        toolbar.addView(button("‹",()->{if(web.canGoBack())web.goBack();}));TextView title=text("ZNote",16,Color.rgb(35,45,62));toolbar.addView(title,new LinearLayout.LayoutParams(0,-2,1));toolbar.addView(button("连接",()->new AlertDialog.Builder(this).setMessage("切换前请保存当前编辑。").setNegativeButton("取消",null).setPositiveButton("切换",(d,w)->showConnect("")).show()));
+        Button back=button("‹",this::handleBack);back.setContentDescription("返回上一层");toolbar.addView(back);TextView title=text("ZNote",16,Color.rgb(35,45,62));toolbar.addView(title,new LinearLayout.LayoutParams(0,-2,1));toolbar.addView(button("连接",()->new AlertDialog.Builder(this).setMessage("切换前请保存当前编辑。").setNegativeButton("取消",null).setPositiveButton("切换",(d,w)->showConnect("")).show()));
         web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(true);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setMediaPlaybackRequiresUserGesture(true);s.setSupportMultipleWindows(false);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);web.addJavascriptInterface(new DraftDownload(),"ZNoteDownloads");
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){if(same(request.getUrl().toString()))return false;if(request.isForMainFrame())external(request.getUrl().toString());return true;}
@@ -63,6 +65,7 @@ public class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view,String url){CookieManager.getInstance().flush();if(!same(url))return;view.evaluateJavascript("if(!window.__znoteDownloads){window.__znoteDownloads=true;document.addEventListener('click',async e=>{const a=e.target.closest?.('a[download]');if(!a||!a.href.startsWith('blob:')||!a.download.endsWith('.md'))return;e.preventDefault();try{const b=await(await fetch(a.href)).blob();if(b.size>2000000)return;ZNoteDownloads.markdown(a.download,await b.text())}catch{}},true)}",null);}
         });
         web.setWebChromeClient(new WebChromeClient(){
+            @Override public boolean onJsConfirm(WebView view,String url,String message,JsResult result){if(!same(url)){result.cancel();return true;}new AlertDialog.Builder(MainActivity.this).setTitle("ZNote").setMessage(message).setPositiveButton("确定",(d,w)->result.confirm()).setNegativeButton("取消",(d,w)->result.cancel()).setOnCancelListener(d->result.cancel()).show();return true;}
             @Override public boolean onShowFileChooser(WebView view,ValueCallback<Uri[]> callback,FileChooserParams params){if(chooser!=null)chooser.onReceiveValue(null);chooser=callback;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");String[] accept=params.getAcceptTypes();if(accept.length>0&&java.util.Arrays.stream(accept).allMatch(t->t.contains("/")))i.putExtra(Intent.EXTRA_MIME_TYPES,accept);i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,params.getMode()==FileChooserParams.MODE_OPEN_MULTIPLE);try{startActivityForResult(i,PICK);}catch(Exception e){chooser.onReceiveValue(null);chooser=null;}return true;}
             @Override public void onShowCustomView(View view,CustomViewCallback callback){if(fullScreen!=null){callback.onCustomViewHidden();return;}fullScreen=view;fullScreenCallback=callback;((android.widget.FrameLayout)getWindow().getDecorView()).addView(view,new android.widget.FrameLayout.LayoutParams(-1,-1));root.setVisibility(View.GONE);}
             @Override public void onHideCustomView(){hideVideo();}
@@ -74,7 +77,19 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void markdown(String name,String contents){if(contents==null||contents.length()>500000||name==null)return;runOnUiThread(()->{if(web==null||!same(web.getUrl())||draft!=null)return;draft=contents;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/markdown");String safe=name.replaceAll("[\\\\/:*?\"<>|]","_");i.putExtra(Intent.EXTRA_TITLE,safe.substring(0,Math.min(80,safe.length())).replaceAll("(?i)\\.md$","")+".md");try{startActivityForResult(i,SAVE);}catch(Exception e){draft=null;Toast.makeText(MainActivity.this,"无法打开保存窗口",Toast.LENGTH_SHORT).show();}});}
     }
     private void hideVideo(){if(fullScreen!=null){((android.view.ViewGroup)fullScreen.getParent()).removeView(fullScreen);fullScreen=null;if(root!=null)root.setVisibility(View.VISIBLE);if(fullScreenCallback!=null){fullScreenCallback.onCustomViewHidden();fullScreenCallback=null;}}}
-    @Override public void onBackPressed(){if(fullScreen!=null){hideVideo();return;}if(web!=null&&web.canGoBack()){web.goBack();return;}super.onBackPressed();}
+    void handleBack(){
+        if(fullScreen!=null){hideVideo();return;}
+        if(backBusy)return;
+        final WebView current=web;
+        if(current==null){moveTaskToBack(true);return;}
+        if(!same(current.getUrl())){if(current.canGoBack())current.goBack();else showConnect("");return;}
+        backBusy=true;
+        current.evaluateJavascript("(()=>{if(window.ZNoteNavigation?.back)return window.ZNoteNavigation.back();const dialogs=[...document.querySelectorAll('[role=dialog]')];if(dialogs.length){(document.activeElement||dialogs.at(-1)).dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));return true;}return false;})()",handled->{
+            backBusy=false;if(web!=current||isFinishing()||isDestroyed())return;
+            if(!"true".equals(handled)){if(current.canGoBack())current.goBack();else moveTaskToBack(true);}
+        });
+    }
+    @Override public void onBackPressed(){handleBack();}
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==PICK&&chooser!=null){Uri[] values=null;if(result==RESULT_OK&&data!=null){if(data.getClipData()!=null){int n=data.getClipData().getItemCount();values=new Uri[n];for(int i=0;i<n;i++)values[i]=data.getClipData().getItemAt(i).getUri();}else if(data.getData()!=null)values=new Uri[]{data.getData()};}chooser.onReceiveValue(values);chooser=null;}if(request==SAVE){String text=draft;draft=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&text!=null)try(OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(text.getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Markdown 已保存",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,"保存失败，原笔记仍保留",Toast.LENGTH_LONG).show();}}}
-    @Override protected void onDestroy(){attempt++;network.shutdownNow();if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}if(web!=null)web.destroy();super.onDestroy();}
+    @Override protected void onDestroy(){if(Build.VERSION.SDK_INT>=33&&backCallback!=null)getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);attempt++;network.shutdownNow();if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}if(web!=null)web.destroy();super.onDestroy();}
 }

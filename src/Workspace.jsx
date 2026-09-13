@@ -8,6 +8,8 @@ import { extendPageWindow } from './page-window.js';
 import { changeSelection, collectSelection } from './selection.js';
 import { SelectionBar } from './SelectionBar.jsx';
 import { SelectionEntry } from './SelectionEntry.jsx';
+import {useAppBack} from './back-navigation.js';
+import {ExternalAssistantLink} from './ExternalAssistant.jsx';
 import './selection.css';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
@@ -161,6 +163,11 @@ export default function Workspace({
   const pagingRequest = useRef(null), restoreAnchor = useRef(null), pendingBrowse = useRef(null);
   const selectionAnchor = useRef(null), browsing = useRef(null), previousParams = useRef(null);
   const eventCursor = useRef(0);
+  const routeTrail = useRef([]);
+  function rememberRoute(nextCollection,nextView) {
+    if(collection===nextCollection&&view===nextView)return;
+    routeTrail.current.push({collection,view});
+  }
   browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, layout, loading };
   function rememberBrowse() {
     const state = browsing.current;
@@ -349,6 +356,7 @@ export default function Workspace({
     pendingBrowse.current = null; setUpdatesAvailable(false); setRevision(n => n + 1);
   };
   const chooseCollection = (id) => {
+    if(id!==collection)rememberRoute(id,'all');
     resetScope(); setStats({});
     setCollection(id);
     restoreBrowse(id);
@@ -357,6 +365,7 @@ export default function Workspace({
     if (preferences.default_collection_id)
       chooseCollection(preferences.default_collection_id);
     else {
+      rememberRoute(null,'home');
       resetScope();
       setView("home");
       setCollection(null);
@@ -559,10 +568,30 @@ export default function Workspace({
     return () => window.removeEventListener('hashchange', openLink);
   }, [ready]);
   const navigate = (v) => {
+    rememberRoute(collection||'unfiled',v);
     resetScope();
     restoreBrowse(collection || 'unfiled', v);
     if (!collection) setCollection('unfiled');
   };
+  useAppBack(()=>{
+    if(document.querySelector('[role="dialog"]'))return true;
+    if(mobile){setMobile(false);return true;}
+    if(selecting){
+      if(batchBusy||groupSelecting)return true;
+      if(selectionProgress)cancelSelectionRequest();
+      else if(selection.length)clearSelection();
+      else toggleSelectionMode();
+      return true;
+    }
+    let previous;
+    while(routeTrail.current.length){
+      const entry=routeTrail.current.pop();
+      if(!entry.collection||entry.collection==='unfiled'||collections.some(c=>c.id===entry.collection)){previous=entry;break;}
+    }
+    if(previous){resetScope();setStats({});setCollection(previous.collection);if(previous.view==='home')setView('home');else restoreBrowse(previous.collection||'unfiled',previous.view);return true;}
+    if(view!=='home'){resetScope();setView('home');setCollection(null);return true;}
+    return false;
+  },ready);
   const toggleTag = (t) => {
     if (!selectedTags.includes(t) && selectedTags.length >= 30) {
       notify('最多同时筛选 30 个标签'); return;
@@ -926,6 +955,7 @@ export default function Workspace({
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
+            {view!=='home'&&<ExternalAssistantLink collection={actualCollection}/>}
             <TaskButton onClick={()=>setTasksOpen(true)}/>
             <IconButton
               label={resolvedTheme === "dark" ? "切换浅色模式" : "切换夜间模式"}

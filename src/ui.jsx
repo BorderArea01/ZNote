@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import {useAppBack} from './back-navigation.js';
 export function IconButton({ label, children, ...props }) {
   return (
     <button
@@ -17,6 +18,10 @@ export function IconButton({ label, children, ...props }) {
 export function Dialog({ title, onClose, children, className = "" }) {
   const ref = useRef();
   const backdropPress = useRef(false);
+  useAppBack(()=>{
+    if([...document.querySelectorAll('[role="dialog"]')].at(-1)!==ref.current)return false;
+    return Promise.resolve(onClose());
+  },true,100);
   useEffect(() => {
     const previous = document.activeElement;
     ref.current?.focus();

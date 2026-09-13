@@ -1,7 +1,9 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {X,RotateCcw,Minus,Plus} from 'lucide-react';
 import {ZoomGesture,initialZoom,zoomAt} from './image-gestures.js';
+import {useAppBack} from './back-navigation.js';
 export function ZoomViewer({src,alt,onClose}) {
+  useAppBack(()=>{onClose();},true,200);
   const root=useRef(),area=useRef(),picture=useRef(),frame=useRef(),closing=useRef(onClose);closing.current=onClose;
   const model=useRef(new ZoomGesture({width:1,height:1,imageWidth:0,imageHeight:0}));
   const [view,setView]=useState(initialZoom),[failed,setFailed]=useState(false),[attempt,setAttempt]=useState(0);

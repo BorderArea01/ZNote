@@ -35,6 +35,20 @@ public class SmokeRunner extends Instrumentation {
         until("document.body.innerText.includes('android-smoke.png')&&!!document.querySelector('.item-card img')&&document.querySelector('.item-card img').complete&&document.querySelector('.item-card img').naturalWidth>0");
         // Verify renderer and native upload/download hooks coexist with the actual app.
         until("typeof ZNoteDownloads.markdown==='function'&&!!document.querySelector('input[type=file]')");
+        js("document.querySelector('.card-main').click();true");
+        until("!!document.querySelector('.detail-dialog')");
+        js("document.querySelector('.image-stage button').click();true");
+        until("!!document.querySelector('.zoom-viewer')");
+        getUiAutomation().executeShellCommand("input keyevent 4").close();
+        until("!document.querySelector('.zoom-viewer')&&!!document.querySelector('.detail-dialog')");
+        checkpoint("System Back closes zoom while retaining image detail");
+        getUiAutomation().executeShellCommand("input keyevent 4").close();
+        until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
+        checkpoint("System Back closes image detail while retaining library");
+        js("document.querySelector('.card-main').click();true");until("!!document.querySelector('.detail-dialog')");
+        runOnMainSync(()->button(activity.getWindow().getDecorView(),"‹").performClick());
+        until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
+        if(activity.isFinishing()||activity.isDestroyed())throw new Exception("Back destroyed the client");
         screenshot();
         report.putString("stream","\nZNOTE_ANDROID_SMOKE_PASS\n");finish(Activity.RESULT_OK,report);
     }catch(Throwable e){String[] nativeState={""};if(activity!=null)runOnMainSync(()->nativeState[0]=nativeText(activity.getWindow().getDecorView()));String failure="\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\nNative UI: "+nativeState[0]+"\n";checkpoint(failure);screenshot();report.putString("stream",failure);finish(Activity.RESULT_CANCELED,report);}}

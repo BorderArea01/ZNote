@@ -1,10 +1,12 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleHelp } from 'lucide-react';
+import {useAppBack} from './back-navigation.js';
 
 export function HelpHint({ label = '帮助', children }) {
   const id = useId(), trigger = useRef(null), bubble = useRef(null), timer = useRef(), pointerType = useRef('mouse');
   const [open, setOpen] = useState(false), [position, setPosition] = useState({ left: 8, top: 8 });
+  useAppBack(()=>setOpen(false),open,300);
   const show = () => { clearTimeout(timer.current); setOpen(true); };
   const leave = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(false), 120); };
   useEffect(() => () => clearTimeout(timer.current), []);
