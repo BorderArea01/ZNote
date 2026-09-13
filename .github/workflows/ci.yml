@@ -23,6 +23,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Install Linux media runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: npm ci
       - run: npm test
       - run: npm run build

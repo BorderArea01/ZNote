@@ -17,6 +17,7 @@ await writeFile(resolve(dir, 'VERSION'), version + '\n');
 await writeFile(resolve(dir, 'README.txt'), 'yt-dlp official release: ' + base + '\nLicense and source: https://github.com/yt-dlp/yt-dlp\nFFmpeg binary sources/license: node_modules/ffmpeg-static/README.md and ffmpeg executable LICENSE/README files.\n');
 const system = spawnSync(process.env.ZNOTE_FFMPEG || 'ffmpeg', ['-version'], { windowsHide: true, stdio: 'ignore' });
 if (system.status !== 0) {
+  if (process.platform === 'linux') throw new Error('请先用系统包管理器安装 FFmpeg（Debian/Ubuntu：sudo apt install ffmpeg），或设置 ZNOTE_FFMPEG 为有效可执行文件路径');
   const result = spawnSync(process.execPath, ['node_modules/ffmpeg-static/install.js'], { windowsHide: true, stdio: 'inherit' });
   if (result.status !== 0) throw new Error('请安装 ffmpeg 或设置 ZNOTE_FFMPEG 为可执行文件路径');
 }

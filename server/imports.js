@@ -32,7 +32,9 @@ export function importAuthor(metadata){
 export function mediaTools() {
   const local = resolve('tools/media', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
   let ffmpeg = process.env.ZNOTE_FFMPEG;
-  if (!ffmpeg) { try { ffmpeg = createRequire(import.meta.url)('ffmpeg-static'); } catch {} }
+  // Linux uses the distribution-maintained FFmpeg. Some bundled 7.0.2 static
+  // binaries crash while demuxing MPEG-TS; the container already uses /usr/bin/ffmpeg.
+  if (!ffmpeg && process.platform !== 'linux') { try { ffmpeg = createRequire(import.meta.url)('ffmpeg-static'); } catch {} }
   return { downloader: process.env.ZNOTE_YTDLP || (existsSync(local) ? local : 'yt-dlp'), ffmpeg: ffmpeg && existsSync(ffmpeg) ? ffmpeg : 'ffmpeg' };
 }
 async function resolveShareLink(value, signal) {

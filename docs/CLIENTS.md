@@ -83,6 +83,8 @@ npm run desktop:build
 
 使用 Node.js 24，在目标 Windows / macOS 芯片上构建。输出位于 `clients/desktop/release/`；`runtime/BUILD.json` 记录 Node、平台和版本。桌面包包含单独的 Node 运行时及依赖，保留第三方许可。不要把你自己的 `data/` 或用户配置复制进运行时。
 
+Linux 自托管使用发行版维护的 FFmpeg，例如 Debian / Ubuntu 先运行 `sudo apt install ffmpeg`，再运行 `npm run media:setup` 获取 yt-dlp。若安装到自定义位置，设置 `ZNOTE_FFMPEG` 为完整路径。Docker 镜像已配置系统 FFmpeg。
+
 Android 使用 JDK 21、Android SDK 36、Gradle Wrapper 8.13：
 
 ```bash
