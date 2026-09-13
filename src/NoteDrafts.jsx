@@ -25,9 +25,17 @@ export function DraftsDialog({ library, collections, onClose, onOpen }) {
 }
 
 export function DraftConflict({ draft, current, onUse, onDiscard }) {
-  const [review, setReview] = useState(false);
+  const [review, setReview] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  useEffect(() => { setReview(false); setError(''); }, [draft?.id]);
+  async function act(operation) {
+    if (busy) return;
+    setBusy(true); setError('');
+    try { if (await operation()) setReview(false); else setError('操作未完成，草稿仍保留，请重试。'); }
+    catch { setError('操作未完成，草稿仍保留，请重试。'); }
+    finally { setBusy(false); }
+  }
   if (!draft) return null;
   return <><div className="draft-conflict" role="status"><span>发现本地草稿，当前笔记已有其他修改。</span><button onClick={() => setReview(true)}>对照草稿</button></div>
-    {review && <Dialog title="对照本地草稿" className="draft-compare" onClose={() => setReview(false)}><div className="draft-compare-body"><p>选择草稿后可继续编辑，点击保存才会替换当前笔记；保存时仍会检查版本冲突。</p><div className="draft-columns"><label>知识库当前内容<strong>{current.title}</strong><textarea aria-label="知识库当前正文" readOnly value={current.content}/></label><label>本地草稿<strong>{draft.fields.title}</strong><textarea aria-label="本地草稿正文" readOnly value={draft.fields.content}/></label></div><div className="feature-actions"><button onClick={async () => { await onDiscard(); setReview(false); }}>丢弃这份草稿</button><button className="primary" onClick={async () => { if (await onUse()) setReview(false); }}>用草稿继续编辑</button></div></div></Dialog>}
+    {review && <Dialog title="对照本地草稿" className="draft-compare" onClose={() => !busy && setReview(false)}><div className="draft-compare-body"><p>选择草稿后可继续编辑，点击保存才会替换当前笔记；保存时仍会检查版本冲突。</p><div className="draft-columns"><label>知识库当前内容<strong>{current.title}</strong><textarea aria-label="知识库当前正文" readOnly value={current.content}/></label><label>本地草稿<strong>{draft.fields.title}</strong><textarea aria-label="本地草稿正文" readOnly value={draft.fields.content}/></label></div>{error && <p className="error" role="alert">{error}</p>}<div className="feature-actions"><button disabled={busy} onClick={() => act(onDiscard)}>丢弃这份草稿</button><button disabled={busy} className="primary" onClick={() => act(onUse)}>用草稿继续编辑</button></div></div></Dialog>}
   </>;
 }

@@ -71,7 +71,7 @@ export function useNoteDraft({ initial, item, fields, dirty, textarea, apply }) 
     requestAnimationFrame(() => { node.setSelectionRange(Math.min(saved.start || 0, node.value.length), Math.min(saved.end || 0, node.value.length)); node.scrollTop = saved.scroll || 0; });
   }
   function rememberPosition() { rememberedPosition.current = position(); clearTimeout(positionTimer.current); if (item.id && rememberedPosition.current) positionTimer.current = setTimeout(() => { void putPosition(item.id, rememberedPosition.current).catch(() => {}); }, 300); }
-  async function discardCandidate() { try { await deleteDraft(candidate.id, candidate.stamp); setCandidate(null); } catch { setStatus('草稿删除失败，请重试'); } }
+  async function discardCandidate() { try { await deleteDraft(candidate.id, candidate.stamp); setCandidate(null); setStatus(''); return true; } catch { setStatus('草稿删除失败，请重试'); return false; } }
   async function keepCurrent() {
     if (!latest.current.dirty) return true;
     const row = { ...snapshot(), id: draftId() };

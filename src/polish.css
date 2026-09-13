@@ -159,9 +159,9 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .undo-row > button { flex:none; }
 .undo-empty { text-align:center; padding:32px 0; color:var(--muted); }
 .toast.above-undo { bottom:110px; }
-.draft-conflict { display:flex; align-items:center; gap:8px; padding:8px 0; font-size:12px; }
-.draft-conflict > span { flex:1; }
-.draft-conflict button { padding:5px 10px; flex:none; }
+.draft-conflict { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; padding:10px 12px; font-size:12px; line-height:1.65; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); }
+.draft-conflict > span { flex:1 1 190px; min-width:0; overflow-wrap:anywhere; }
+.draft-conflict button { padding:6px 10px; min-height:34px; flex:none; margin-left:auto; }
 .draft-compare { width:min(1000px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; }
 .draft-compare-body { padding:20px; min-height:0; overflow:auto; }
 .draft-compare-body > p { font-size:13px; color:var(--muted); line-height:1.6; }
