@@ -95,7 +95,12 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 | `POST /api/items/batch-trash` | 按知识库批量移入回收站或恢复 |
 | `POST /api/items/:id/copy` | 跨库复用，共享原文件 |
 | `GET /api/events?after=0` | 持久化增量事件 |
-| `GET /api/export?mode=markdown` | 按模式导出，需要管理员会话 |
+| `GET /api/export?mode=markdown` | 按模式导出，需要管理员会话；兼容原有流式响应 |
+| `POST /api/export-jobs` | 创建原生下载回执，JSON 参数与 export 查询参数一致 |
+| `GET /api/export-jobs` | 查看服务器导出队列和结束记录 |
+| `GET /api/export-jobs/:id/file` | 用回执直接流式下载，每个回执仅启动一次；HEAD 不消费回执 |
+| `DELETE /api/export-jobs/:id` | 取消等待或正在传送的导出，不删除知识库内容 |
+| `POST /api/export-jobs/:id/retry` | 按原格式与范围创建后续导出，返回新的下载地址 |
 | `POST /api/imports` | 平台视频采集任务，返回 202 与任务 ID |
 | `GET/DELETE /api/imports/:id` | 查询或取消任务 |
 | `POST /api/streams` | 合并浏览器采集的 HLS 文件 |
@@ -103,6 +108,12 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 内容包括 `title`、Markdown `content`、`tags`、`collection_id`、`favorite`、`source_url` 和 `captured_at`。更新时提供当前 `version`，冲突时返回错误以避免覆盖其他设备编辑。
 
 上传提供 `source_url` 会在备注中追加来源，并附加网站标签。相同文件的重复采集保留原说明，补充新的来源。
+
+### 原生流式导出
+
+管理员会话先 `POST /api/export-jobs`，例如 `{"mode":"portable","collection":"知识库 UUID","include_trash":"false"}`，再用返回的 `download_url` 发起浏览器下载。网页不读取整份 Blob，服务器不保留额外 ZIP。状态包含 `ready / queued / running / completed / failed / cancelled`、已打包字节、文件数量、目标知识库和创建时间；`completed` 只表示服务器传送完成，客户端是否保存成功由浏览器确认。
+
+同一回执仅开始一次下载。失败、取消或完成后可重试原参数；原记录的 `retried_as` 指向后续回执，后续记录保留时重复请求原 ID 返回同一回执，再次重试请使用后续 ID。每次重新生成文件，内容取执行时的数据，不提供 ZIP 的 Range 续传。等待与执行中合计至多 20 项，5 分钟未开始的下载会过期；结束记录至多 50 条 / 24 小时，服务重启或完整恢复清空。回执地址仍需管理员会话，不是公开分享链接。
 
 ### 采集任务重试
 

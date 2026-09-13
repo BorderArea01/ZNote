@@ -1,6 +1,6 @@
 import { HelpHint } from './HelpHint.jsx';
 import { useTagPage } from './useTagPage.js';
-import {useTaskStore,useTaskSnapshot,queueUploads} from './Tasks.jsx';
+import {useTaskStore,useTaskSnapshot,queueUploads,startExport} from './Tasks.jsx';
 import React, { useEffect, useRef, useState } from "react";
 import {
   Sun,
@@ -342,6 +342,7 @@ const exportModes = {
 };
 export function ExportDialog({ collections, currentCollection, onClose }) {
   const taskStore=useTaskStore();
+  const [submitted,setSubmitted]=useState(false);
   const [mode, setMode] = useState("portable");
   const [scope, setScope] = useState(currentCollection || "all");
   const [trash, setTrash] = useState(false);
@@ -349,6 +350,7 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
   const [error, setError] = useState("");
   async function download() {
     setBusy(true);
+    setSubmitted(false);
     setError("");
     try {
       const params = new URLSearchParams({
@@ -356,12 +358,8 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
         include_trash: String(trash),
       });
       if (scope !== "all" && mode !== "backup") params.set("collection", scope);
-      const [ticket]=taskStore.enqueue([{type:'export',lane:'export',title:exportModes[mode][0],global:scope==='all'||mode==='backup',collection_id:scope==='unfiled'?null:scope,cancellable:true,start_message:'正在打包并接收导出文件',done_message:'已交给浏览器下载',run:async({signal,update})=>{
-        const response=await fetch(`/api/export?${params}`,{signal});if(!response.ok)throw Error((await response.json()).error||'导出失败');
-        update({message:'正在接收导出文件'});const blob=await response.blob();
-        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`znote-${mode}.${mode==='json'?'json':'zip'}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
-      }}]);
-      const result=await ticket.promise;if(!result.ok)throw result.error;
+      await startExport(taskStore,Object.fromEntries(params));
+      setSubmitted(true);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -417,7 +415,7 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
             : "图文包会附带笔记引用的图片，即使图片位于其他知识库，以保持阅读完整。"}
         </p>
         {error && <div className="error">{error}</div>}
-        {busy&&<p className="muted">可关闭此窗口，导出会继续；请保持网页打开。</p>}
+        {submitted?<p role="status">导出已提交，可在「任务」或浏览器下载列表查看。</p>:<p className="muted">浏览器直接接收下载文件，无需在网页中暂存整包。右上角「任务」可查看导出状态。</p>}
         <div className="feature-actions">
           <button className="primary" onClick={download} disabled={busy}>
             {busy ? (

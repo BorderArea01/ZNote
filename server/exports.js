@@ -3,6 +3,7 @@ import { backup, DatabaseSync } from "node:sqlite";
 import { mkdtemp, unlink, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
+import { finished } from 'node:stream/promises';
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
@@ -38,14 +39,20 @@ const escape = (text) =>
 const fileName = (item) => `${item.id}.${ext(item)}`;
 export const safeName = (value) => String(value).normalize('NFC').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/^[. ]+|[. ]+$/g, '').slice(0, 60).replace(/[. ]+$/g, '') || '未命名';
 const urlPath = path => path.split('/').map(part => part === '..' ? part : encodeURIComponent(part).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16))).join('/');
-export async function exportContent({ db, dir, req, res, serialize }) {
+export function validateExportQuery(db, input) {
+  const query = exportQuery.parse(input);
+  if (query.mode === 'backup' && query.collection) throw Object.assign(Error('完整备份不支持按知识库筛选'), {status:400});
+  if (query.collection && query.collection !== 'unfiled' && !db.prepare('SELECT id FROM collections WHERE id=?').get(query.collection)) throw Object.assign(Error('知识库不存在'), {status:404});
+  return query;
+}
+export async function exportContent({ db, dir, req, res, serialize, progress = () => {}, readOriginal = originalStream }) {
   const query = exportQuery.parse(req.query);
   if (query.mode === "backup" && query.collection)
     throw Object.assign(new Error("完整备份不支持按知识库筛选"), {
       status: 400,
     });
-  const all = db.prepare("SELECT * FROM items").all();
-  const allCollections = db.prepare("SELECT * FROM collections").all();
+  const all = query.mode === 'backup' ? [] : db.prepare("SELECT * FROM items").all();
+  const allCollections = query.mode === 'backup' ? [] : db.prepare("SELECT * FROM collections").all();
   if (
     query.collection &&
     query.collection !== "unfiled" &&
@@ -65,12 +72,14 @@ export async function exportContent({ db, dir, req, res, serialize }) {
       (query.include_trash === "true" || !i.deleted_at),
   );
   const notes = selected.filter((i) => i.kind === "note");
+  const selectedIds = new Set(selected.map(i => i.id));
+  const referencedIds = new Set(notes.flatMap(n => [...n.content.matchAll(/\/media\/([^/\s]+)\//g)].map(m => m[1])));
   const images = all.filter(
     (i) =>
       ['image', 'video'].includes(i.kind) &&
-      (selected.includes(i) ||
+      (selectedIds.has(i.id) ||
         (query.mode !== "images" &&
-          notes.some((n) => n.content.includes(`/media/${i.id}/`)))),
+          referencedIds.has(i.id))),
   );
   const items = [
     ...new Map([...selected, ...images].map((i) => [i.id, i])).values(),
@@ -97,7 +106,7 @@ export async function exportContent({ db, dir, req, res, serialize }) {
     collections,
     items: items.map(item => ({ ...serialize(item), file: paths.get(item.id) })),
     attachment_ids: images
-      .filter((i) => !selected.includes(i))
+      .filter((i) => !selectedIds.has(i.id))
       .map((i) => i.id),
   };
   if (query.mode === "json") {
@@ -108,10 +117,13 @@ export async function exportContent({ db, dir, req, res, serialize }) {
     `znote-${query.mode}-${new Date().toISOString().slice(0, 10)}.zip`,
   );
   const archive = archiver("zip", { zlib: { level: 6 } });
+  const delivered=finished(res);delivered.catch(()=>{});
+  let processedEntries=0;
+  archive.on('entry',()=>processedEntries++);
   let rejectFailure;
   const failure = new Promise((resolve, reject) => { rejectFailure = reject; });
   failure.catch(() => {});
-  const streams = [];
+  const streams = new Set();
   const stopStreams = () => {
     for (const stream of streams) stream.destroy();
   };
@@ -122,6 +134,19 @@ export async function exportContent({ db, dir, req, res, serialize }) {
   });
   // A missing file must fail the download, never yield a silently incomplete backup.
   archive.on("warning", error => archive.destroy(error));
+  archive.on('progress', value => progress({entries:value.entries.processed, bytes:archive.pointer()}));
+  const appendMedia = async (stream, name) => {
+    streams.add(stream);
+    let done;
+    const entry = new Promise(resolve => { done = value => { if(value.name === name) resolve(); }; archive.on('entry', done); });
+    stream.on('error', error => archive.destroy(error));
+    try {
+      // Archiver pipes appended streams immediately. Wait for each entry before
+      // appending another, so decompression and open originals remain bounded.
+      archive.append(stream, {name});
+      await Promise.race([entry, failure]);
+    } finally { archive.off('entry', done); stream.destroy(); streams.delete(stream); }
+  };
   res.on("close", () => {
     if (!res.writableFinished) rejectFailure(Object.assign(new Error('Export stream closed before completion'), { status: 499 }));
     stopStreams();
@@ -180,14 +205,12 @@ export async function exportContent({ db, dir, req, res, serialize }) {
       const imageItems =
         query.mode === "markdown"
           ? images.filter((i) =>
-              notes.some((n) => n.content.includes(`/media/${i.id}/`)),
+              referencedIds.has(i.id),
             )
           : images;
       for (const item of imageItems) {
-        const stream = originalStream(dir, item);
-        streams.push(stream);
-        stream.on("error", (error) => archive.destroy(error));
-        archive.append(stream, { name: imagePath(item) });
+        const stream = readOriginal(dir, item);
+        await appendMedia(stream, imagePath(item));
         if (query.layout === 'readable') archive.append(JSON.stringify({ ...serialize(item), file: imagePath(item) }, null, 2), { name: imagePath(item) + '.json' });
       }
       if (["portable", "markdown"].includes(query.mode))
@@ -261,6 +284,8 @@ export async function exportContent({ db, dir, req, res, serialize }) {
     // Archiver may leave finalize() pending after destroy()/abort(). Always
     // observe the error/closed stream too, so callers release their job locks.
     await Promise.race([archive.finalize(), failure]);
+    await Promise.race([delivered, failure]);
+    progress({entries:processedEntries,bytes:archive.pointer()});
   } finally {
     if (temp) {
       await unlink(join(temp, "znote.sqlite")).catch(() => {});

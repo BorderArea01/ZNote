@@ -5,7 +5,7 @@ const cancelled=()=>Object.assign(new Error('已停止请求；已入库内容�
 export class TaskStore {
   constructor({limit=1000,history=100}={}) {
     this.limit=limit;this.history=history;this.jobs=new Map();this.listeners=new Set();this.lanes=new Set();this.closed=false;this.changes=0;
-    this.remote={imports:[],backup:null,error:null,loaded:false};this.watchers=0;this.refreshRemote=()=>{};
+    this.remote={imports:[],exports:[],backup:null,error:null,loaded:false};this.watchers=0;this.refreshRemote=()=>{};
     this.snapshot={jobs:[],changes:0,remote:this.remote};
   }
   subscribe=fn=>{this.listeners.add(fn);return()=>this.listeners.delete(fn)};

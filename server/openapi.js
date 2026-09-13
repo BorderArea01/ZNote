@@ -704,3 +704,16 @@ spec.paths['/api/reading-progress']={
  post:operation('保存图片查看位置（write）',readingState,{requestBody:body({...readingWrite,required:[...readingWrite.required,'item_id'],properties:{...readingWrite.properties,item_id:{type:'string',format:'uuid'}}}),description:'同组仅保留最后一张，只接受当前库活动图片，不修改内容、更新时间和内容事件。version/epoch 必须匹配；冲突返回 409。丢失响应时完全相同的请求可重试，仍为最后操作时返回 replayed:true，已有更新则拒绝旧版本。完整恢复更换 epoch。'}),
  delete:operation('清除当前知识库浏览记录，不删除图片（write）',readingState,{requestBody:body(readingWrite),description:'检查 version/epoch，请求 UUID 支持最后一次操作重试。清除后版本递增，旧待同步请求不能重新填回记录。'})
 };
+
+const exportJobInput={type:'object',properties:{mode:{type:'string',enum:['portable','images','markdown','json','html','backup'],default:'portable'},collection:{type:'string',description:'知识库 UUID 或 unfiled；省略为所有库，backup 不允许此参数'},include_trash:{type:'string',enum:['true','false'],default:'true'},layout:{type:'string',enum:['readable','legacy'],default:'readable'}}};
+const exportJobRow={type:'object',properties:{id:str,type:{type:'string',enum:['export']},title:str,mode:str,collection_id:{type:'string',nullable:true},global:{type:'boolean'},status:{type:'string',enum:['ready','queued','running','completed','failed','cancelled']},message:str,bytes:{type:'integer',description:'已生成的归档字节，不代表文件已保存到客户端'},entries:{type:'integer'},created_at:{type:'string',format:'date-time'},finished_at:{type:'string',format:'date-time'},retried_as:str,download_url:str}};
+spec.paths['/api/export-jobs']={
+ get:operation('查看原生导出任务（管理员）',{type:'object',properties:{jobs:list(exportJobRow)}},{description:'活动上限 20，结束记录至多 50 条、24 小时。未开始接收的 ready 回执 5 分钟过期。重启或完整恢复清空记录，不额外保存 ZIP。'}),
+ post:operation('创建原生导出回执（管理员）',exportJobRow,{requestBody:body(exportJobInput),responses:{201:response(exportJobRow),...errorResponses,429:{description:'导出队列已满'}},description:'创建回执后，用 download_url 发起浏览器原生下载。文件按真正执行时的数据导出；POST 本身不打包、不返回完整文件。'})
+};
+spec.paths['/api/export-jobs/{id}/file']={
+ head:{summary:'检查回执存在，不消费回执（管理员）',parameters:[id],responses:{204:{description:'回执存在'},...errorResponses}},
+ get:{summary:'用回执开始原生流式下载（管理员）',parameters:[id],responses:{200:{description:'原始下载文件，Content-Disposition: attachment',content:{'application/zip':{schema:{type:'string',format:'binary'}},'application/json':{schema:{type:'object'}}}},...errorResponses},description:'每个回执只能启动一次；串行生成，断线即失败，不提供 Range 断点续传。completed 仅表示服务器传送结束，不能证明客户端磁盘保存成功。'}
+};
+spec.paths['/api/export-jobs/{id}']={delete:operation('取消导出，不删除内容（管理员）',exportJobRow,{parameters:[id]})};
+spec.paths['/api/export-jobs/{id}/retry']={post:operation('沿用原参数重新导出（管理员）',exportJobRow,{parameters:[id],requestBody:body({type:'object'}),responses:{200:response(exportJobRow),201:response(exportJobRow),...errorResponses,429:{description:'导出队列已满'}},description:'失败、取消或完成可重新导出，返回新回执。后续回执仍保留时，重复请求旧 ID 返回同一后续任务；再次重试应使用后续 ID。每次重试重新读取当前数据。'})};

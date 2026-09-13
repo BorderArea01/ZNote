@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.23-287464?style=flat-square" alt="Version 0.9.23" />
+    <img src="https://img.shields.io/badge/version-0.9.24-287464?style=flat-square" alt="Version 0.9.24" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -39,7 +39,9 @@
 
 右上角 **「任务」** 汇总上传、网络采集、导出与备份。上传和导出时可以关闭弹窗继续浏览，任务中心可查看状态、重试失败任务、取消尚未开始的任务或打开已入库内容。任务按知识库筛选，完整备份明确标为全部知识库。
 
-上传和导出仍需要保持整个网页打开；刷新或关闭网页后，本地文件需重新选择。网络采集和备份由服务器执行，采集记录在服务重启后清空，已经入库的内容保留。清除本地任务记录不会删除素材或服务器备份。
+上传仍需保持整个网页打开；刷新后本地文件需重新选择。**导出由浏览器直接接收下载流**，不在网页中暂存整包；下载开始后刷新页面，任务中心仍能找回服务器状态。最终保存位置、进度与取消操作可在浏览器下载列表查看。服务器传送完成不等于确认文件已保存到磁盘。
+
+网络采集、导出和备份由服务器执行。采集与导出记录在服务重启后清空，已保存文件保留；导出至多保留最近 50 条结束记录、最长 24 小时，不额外存储 ZIP 副本。浏览器未开始接收时，任务中心可点击「开始下载」；5 分钟未开始会提示重试。清除本地任务记录不会删除素材或服务器备份。
 
 ## 成组浏览与整理
 

@@ -35,6 +35,7 @@ import {
   storageStats,
 } from "./storage.js";
 import { exportContent } from "./exports.js";
+import { registerExportJobs } from './export-jobs.js';
 import { WorkQueue } from "./work-queue.js";
 import { maintenanceGate } from './maintenance.js';
 import { createBackupManager, registerBackupRoutes } from './backups.js';
@@ -1120,22 +1121,24 @@ export function createApp({
       .all(after);
     res.json({ events, cursor: events.at(-1)?.id ?? after });
   });
-  app.get("/api/export", admin, async (req, res) => {
+  const streamExport = async (req, res, progress) => {
     const full = req.query.mode === "backup";
     if (full && snapshotting)
       throw fail(409, "另一份完整备份正在生成，请稍后重试");
     if (full) snapshotting = true;
     try {
-      await exportContent({ db, dir: dataDir, req, res, serialize });
+      await exportContent({ db, dir: dataDir, req, res, serialize, progress });
     } finally {
       if (full) snapshotting = false;
     }
-  });
+  };
+  app.get('/api/export', admin, (req,res)=>streamExport(req,res));
+  const exportJobs=registerExportJobs({app,db,admin,streamExport});
   app.get("/api/openapi.json", (req, res) => res.json(spec));
   const webhooks = createWebhookManager({ db, maintenance, ...webhookOptions });
   registerWebhookRoutes(app, webhooks, admin);
   registerClipper(app);
-  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
+  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { exportJobs.clear(); trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
