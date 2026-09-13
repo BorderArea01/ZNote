@@ -433,11 +433,15 @@ export function createApp({
         limit: z.coerce.number().int().min(1).max(100).default(60),
         offset: z.coerce.number().int().min(0).default(0),
         anchor: z.string().max(100).optional(),
+        summary: z.enum(['true', 'false']).default('false'),
+        cursor: z.coerce.number().int().nonnegative().optional(),
         gallery: z.enum(['true', 'false']).default('false'),
         grouped: z.enum(['true','false']).default('false'),
         group_key: z.string().max(200).optional(),
       })
       .parse(req.query);
+    const listCursor = db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor;
+    if (q.cursor !== undefined && q.cursor !== listCursor) throw fail(409, '内容已变化，请刷新后继续浏览');
     const where = [
       q.trash === "true" ? "deleted_at IS NOT NULL" : "deleted_at IS NULL",
     ];
@@ -492,7 +496,11 @@ export function createApp({
       title: "title COLLATE NOCASE, id",
     }[q.sort];
     if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...args).map(item => item.id) });
-    const groupedQuery = `SELECT *, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
+    const projection = q.summary === 'true'
+      ? db.prepare('PRAGMA table_info(items)').all().map(({name}) => name === 'content' ? "CASE WHEN kind='note' THEN substr(content,1,1000) ELSE '' END AS content" : name).join(',') + ',length(content) AS content_length'
+      : '*';
+    const listSerialize = row => q.summary === 'true' ? { ...serialize(row), summary: true } : serialize(row);
+    const groupedQuery = `SELECT ${projection}, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
     let offset = q.offset;
     if (q.anchor) {
       // Seek within the same filtered and grouped result, never fetch every
@@ -503,15 +511,15 @@ export function createApp({
     }
     if(q.grouped==='true') {
       const grouped=groupedQuery;
-      return res.json({items:db.prepare(`${grouped} ORDER BY ${sort} LIMIT ? OFFSET ?`).all(...args,q.limit,offset).map(serialize),total:db.prepare(`SELECT count(*) n FROM (${grouped})`).get(...args).n,offset,limit:q.limit,event_cursor:db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor});
+      return res.json({items:db.prepare(`${grouped} ORDER BY ${sort} LIMIT ? OFFSET ?`).all(...args,q.limit,offset).map(listSerialize),total:db.prepare(`SELECT count(*) n FROM (${grouped})`).get(...args).n,offset,limit:q.limit,event_cursor:listCursor});
     }
     res.json({
       items: db
         .prepare(
-          `SELECT * FROM items WHERE ${clause} ORDER BY ${sort} LIMIT ? OFFSET ?`,
+          `SELECT ${projection} FROM items WHERE ${clause} ORDER BY ${sort} LIMIT ? OFFSET ?`,
         )
         .all(...args, q.limit, offset)
-        .map(serialize),
+        .map(listSerialize),
       total: db
         .prepare(`SELECT count(*) n FROM items WHERE ${clause}`)
         .get(...args).n,

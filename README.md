@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.18-287464?style=flat-square" alt="Version 0.9.18" />
+    <img src="https://img.shields.io/badge/version-0.9.19-287464?style=flat-square" alt="Version 0.9.19" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -56,6 +56,10 @@
 **操作更顺手**：点击弹窗外空白或按 Esc 关闭当前窗口；嵌套预览只退出最上层，笔记先保存本地草稿；写入失败或其他未保存编辑会提示。选择模式下，点击图片、标题、卡片正文或勾选框都能选中 / 取消，键盘和手机触摸同样适用。
 
 ## 常用条件，一键找回
+
+大图库滚动接近底部时会自动续页，也可在列表下方关闭 **「滚动自动加载」**。页面只保留附近最多 600 项摘要，远处卡片不挂载；已选内容仍然保留。向前查找可点击「加载前面的内容」，打开笔记或媒体时读取完整详情。
+
+续页保持当前图片的位置。网络失败时点击「重试加载」；有内容更新时先刷新，避免新旧分页混合。当前浏览范围会显示在列表下方，偏好保存在此浏览器。
 
 选好分类、搜索关键词、标签组合、排序和布局后，点击搜索栏右侧的 **「保存当前筛选」**。命名后，它会出现在当前知识库的 **「常用筛选」** 中；下次点击即可重新筛选，新入库的匹配内容也会自动出现。
 

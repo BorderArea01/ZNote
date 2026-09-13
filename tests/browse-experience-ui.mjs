@@ -13,6 +13,9 @@ const base = 'http://127.0.0.1:' + server.address().port;
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 const page = await context.newPage(), errors = [], report = {};
+// This regression exercises explicit previous/next controls and Shift ranges;
+// automatic traversal has its own long-session test.
+await context.addInitScript(() => localStorage.setItem('znote:auto-pages', 'false'));
 page.on('pageerror', e => errors.push(e.message));
 const post = async (path, data) => { const r = await context.request.post(base + path, { data }); assert.ok(r.ok(), await r.text()); return r.json(); };
 const get = async path => { const r = await context.request.get(base + path); assert.ok(r.ok(), await r.text()); return r.json(); };

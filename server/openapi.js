@@ -689,3 +689,9 @@ spec.components.schemas.Item.allOf[1].properties.group_origin_id={type:'string',
 spec.paths['/api/item-groups/selection'].get.responses[200].content['application/json'].schema.properties.items.items.properties.kind={type:'string',enum:['image']};
 
 Object.assign(spec.paths['/api/item-groups/organize'].post.responses,{410:{description:'预览已过期'},413:{description:'数量或容量超限，未修改内容'}});
+spec.paths['/api/items'].get.parameters.push(
+ {name:'summary',in:'query',schema:{type:'string',enum:['true','false'],default:'false'},description:'轻量列表：笔记正文仅前 1000 个字符，图片和视频说明为空；content_length 保留完整字符数，summary=true 标记摘要。完整详情请 GET /api/items/{id}，勿以摘要覆盖原文。'},
+ {name:'cursor',in:'query',schema:{type:'integer',minimum:0},description:'续页时提交首次列表响应的 event_cursor。服务内容有新事件则返回 409，需重新读取列表，避免偏移分页遗漏。省略保留旧接口行为。'}
+);
+spec.components.schemas.Item.allOf[1].properties.summary={type:'boolean',description:'true 表示列表摘要，不能当作完整正文编辑'};
+spec.components.schemas.Item.allOf[1].properties.content_length={type:'integer',description:'完整正文字符数，仅摘要模式提供'};

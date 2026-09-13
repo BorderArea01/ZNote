@@ -90,6 +90,19 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .browse-update > span { flex:1; }
 .browse-update > button { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
 .items[data-virtual] .item-card { align-self:stretch; }
+.browse-pagination { display:flex; flex-direction:column; align-items:center; gap:14px; margin-top:24px; color:var(--muted); font-size:12px; overflow-anchor:none; }
+.content-footer, .load-more { overflow-anchor:none; }
+.browse-pagination-meta { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; }
+.browse-pagination-meta label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.browse-pagination-meta input { accent-color:var(--green); width:15px; height:15px; margin:0; }
+.browse-pagination .load-more { margin:0; min-width:150px; justify-content:center; }
+.browse-page-error { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px; color:var(--text); }
+.card-opening { position:absolute; z-index:2; left:10px; top:10px; display:flex; align-items:center; gap:6px; padding:7px 10px; border-radius:8px; background:var(--surface); color:var(--ink); box-shadow:0 2px 10px #0002; font-size:12px; }
+@media(max-width:760px) {
+  .results-caption { flex-direction:column; align-items:stretch; gap:10px; }
+  .result-actions { display:flex; flex-wrap:wrap; gap:6px 12px; }
+  .result-actions .text-button { white-space:nowrap; flex-shrink:0; min-height:36px; }
+}
 @media(max-width:600px) { .browse-update { gap:6px; font-size:11px; } }
 .undo-notice { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:90; display:flex; flex-wrap:wrap; align-items:center; gap:12px; max-width:calc(100vw - 24px); padding:12px 16px; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--ink); box-shadow:0 10px 32px #0003; font-size:13px; }
 .undo-notice > span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

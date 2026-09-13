@@ -4,6 +4,10 @@
 
 运行服务后，登录打开 `/api-docs` 查看可交互接口；完整 OpenAPI 描述位于 `/api/openapi.json`。以运行版本的 OpenAPI 为准。
 
+列表 `GET /api/items` 可传 `summary=true`：笔记 content 只返回前 1000 个字符，图片/视频说明为空，同时返回 `summary:true` 和完整 `content_length`。搜索仍匹配完整正文。打开或编辑前须通过 `/api/items/:id` 读取完整内容，不能将列表摘要作为原文保存。省略参数时保留完整响应。
+
+连续翻页可将首个列表响应的 `event_cursor` 作为下一页的 `cursor` 参数。出现新内容事件时返回 409，客户端应暂停、让用户刷新同一筛选后继续；此检查按服务整体事件进行，其他库的内容修改也可能触发。省略 cursor 沿用原有偏移分页语义。
+
 ## 鉴权
 
 在「设置与连接」创建 `read` 或 `write` 令牌，通过 `Authorization: Bearer …` 调用。原始令牌仅显示一次，可随时撤销。管理员会话使用 HttpOnly Cookie。

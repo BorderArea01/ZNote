@@ -1,6 +1,8 @@
 import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { VirtualItems } from './VirtualItems.jsx';
+import { PageLoader, readAutoPages, saveAutoPages } from './PageLoader.jsx';
+import { extendPageWindow } from './page-window.js';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
 import { DraftsDialog } from './NoteDrafts.jsx';
@@ -119,11 +121,14 @@ export default function Workspace({
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
+  const [openingItem, setOpeningItem] = useState(null);
   const [undoReceipt, setUndoReceipt] = useState(null), [undoOpen, setUndoOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
   const recordUndo = result => { if (result?.undo) { setToast(''); setUndoReceipt(result.undo); } };
   const saved = result => { recordUndo(result); refresh(); };
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
+  const [autoPages, setAutoPages] = useState(readAutoPages), [pageError, setPageError] = useState(null);
+  const selectedRowsRef = useRef(chosenItems); selectedRowsRef.current = chosenItems;
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
   const pagingRequest = useRef(null), restoreAnchor = useRef(null), pendingBrowse = useRef(null);
   const selectionAnchor = useRef(null), browsing = useRef(null), previousParams = useRef(null);
@@ -228,12 +233,12 @@ export default function Workspace({
   };
   const closeDetail = () => {
     ++detailGeneration.current;
-    setSelected(null); setGallery(null); setGalleryBusy(false);
+    setSelected(null); setGallery(null); setGalleryBusy(false); setOpeningItem(null);
     if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
   };
   const resetScope = () => {
     rememberBrowse(); selectionAnchor.current = null;
-    pagingRequest.current = null; setPaging(false); setPageOffset(0);
+    pagingRequest.current = null; setPaging(false); setPageOffset(0); setPageError(null);
     ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
     ++generation.current;
     listRequest.current?.abort();
@@ -296,6 +301,7 @@ export default function Workspace({
         sort,
         offset: String(offset),
         limit: "60",
+        summary: 'true',
         grouped: selecting || view==='trash' ? 'false' : 'true',
       });
       if (search) p.set("q", search);
@@ -315,9 +321,21 @@ export default function Workspace({
   );
   async function openItem(item) {
     const current = ++detailGeneration.current;
-    if (item.kind === 'note') {
+    let hydrated = false;
+    if (item.summary) {
+      setOpeningItem(item.id);
       try {
         const fresh = await api(`/api/items/${item.id}`);
+        if (current !== detailGeneration.current) return;
+        if (fresh.collection_id !== item.collection_id || !!fresh.deleted_at !== !!item.deleted_at) throw Error('内容已移动或删除，请刷新后打开');
+        item = { ...fresh, group_count: item.group_count };
+        hydrated = true;
+      } catch (e) { if (current === detailGeneration.current) notify(e.message); return; }
+      finally { if (current === detailGeneration.current) setOpeningItem(null); }
+    }
+    if (item.kind === 'note') {
+      try {
+        const fresh = hydrated ? item : await api(`/api/items/${item.id}`);
         if (current !== detailGeneration.current) return;
         if (fresh.collection_id !== item.collection_id || !!fresh.deleted_at !== !!item.deleted_at) throw Error('笔记已移动或删除，请刷新列表后打开');
         setSelected(fresh); setGallery(null); setGalleryBusy(false);
@@ -367,7 +385,7 @@ export default function Workspace({
     previousParams.current = signature;
     const anchor = pendingBrowse.current; pendingBrowse.current = null;
     restoreAnchor.current = anchor || { id: '', top: 0 };
-    pagingRequest.current = null; setPaging(false);
+    pagingRequest.current = null; setPaging(false); setPageError(null);
     const read = path => api(path, { signal: controller.signal });
     setLoading(true);
     setLoadError("");
@@ -458,22 +476,24 @@ export default function Workspace({
     );
     setMobile(false);
   };
-  async function loadPage(previous = false) {
-    if (pagingRequest.current || loading) return;
+  async function loadPage(previous = false, automatic = false) {
+    if (pagingRequest.current || loading || query !== search || (previous ? !pageOffset : pageOffset + items.length >= total)) return;
+    const focused = document.activeElement?.closest('.item-card')?.dataset.itemId;
+    if (automatic && items.length >= 600 && items.slice(0, 60).some(item => item.id === focused)) return;
     const current = generation.current, request = Symbol('page');
-    pagingRequest.current = request; setPaging(true);
+    pagingRequest.current = request; setPaging(true); setPageError(null);
     const offset = previous ? Math.max(0, pageOffset - 60) : pageOffset + items.length;
-    const anchor = previous ? captureAnchor() : null;
     try {
-      const result = await api(`/api/items?${params(offset)}`, { signal: listRequest.current?.signal });
+      const result = await api(`/api/items?${params(offset)}&cursor=${eventCursor.current}`, { signal: listRequest.current?.signal });
       if (current !== generation.current || pagingRequest.current !== request) return;
-      if (previous) { restoreAnchor.current = anchor; setPageOffset(offset); }
-      setItems(old => {
-        const known = new Set(old.map(i => i.id)), added = result.items.filter(i => !known.has(i.id));
-        return previous ? [...added, ...old] : [...old, ...added];
-      });
+      const window = extendPageWindow(items, pageOffset, result, previous);
+      // Preserve the visible card even when the browser would otherwise anchor
+      // to the footer and pull it downward, continuously triggering more pages.
+      restoreAnchor.current = captureAnchor();
+      setSelectionRows(Object.fromEntries(selectedRowsRef.current.map(row => [row.id, row])));
+      setPageOffset(window.offset); setItems(window.items);
       setTotal(result.total);
-    } catch (e) { if (current === generation.current && e.name !== 'AbortError') notify(e.message); }
+    } catch (e) { if (current === generation.current && e.name !== 'AbortError') { const changed = e.status === 409 || e.message.includes('分页已变化'); setPageError({ message: e.message, previous, changed }); if (changed) setUpdatesAvailable(true); } }
     finally { if (pagingRequest.current === request) { pagingRequest.current = null; setPaging(false); } }
   }
   async function uploadFiles(files, insertInNote, targetCollection) {
@@ -1073,12 +1093,14 @@ export default function Workspace({
                       )}
                       <button
                         className="card-main"
+                        aria-busy={openingItem === item.id || undefined}
                         onClick={(e) => selecting ? toggleSelection(item.id, e) : openItem(item)}
                         aria-pressed={selecting ? selectedIds.has(item.id) : undefined}
                         disabled={selecting && (batchBusy || groupSelecting || (selection.length >= 10000 && !selectedIds.has(item.id)))}
                         aria-label={`${selecting ? selectedIds.has(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
+                          {openingItem === item.id && <span className="card-opening"><Loader2 size={16} className="spin"/>正在打开…</span>}
                           {item.kind === "image" ? (
                             <img
                               src={item.thumbnail_url}
@@ -1135,7 +1157,7 @@ export default function Workspace({
                             <span>
                               {item.kind !== "note"
                                 ? `${item.width} × ${item.height}`
-                                : `${item.content.length} 字符`}
+                                : `${item.content_length ?? item.content.length} 字符`}
                             </span>
                           </div>
                         </div>
@@ -1171,15 +1193,10 @@ export default function Workspace({
                 </VirtualItems>
                 </>
               )}
-              {pageOffset + items.length < total && !loading && (
-                <button
-                  className="load-more"
-                  disabled={paging}
-                  onClick={() => loadPage()}
-                >
-                  {paging ? '正在加载…' : '加载更多内容'}
-                </button>
-              )}
+              {!!items.length && !loading && <div className="browse-pagination" data-window-size={items.length} data-window-offset={pageOffset}>
+                <div className="browse-pagination-meta"><span>显示 {pageOffset + 1}–{pageOffset + items.length} / {total} 项</span><label><input type="checkbox" checked={autoPages} onChange={e => { setAutoPages(e.target.checked); saveAutoPages(e.target.checked); }}/>滚动自动加载</label><HelpHint label="连续浏览">列表只保留附近 600 项摘要，向前可加载之前的内容；已选内容保留。打开详情再读取完整正文。网络失败或内容更新时暂停加载。</HelpHint></div>
+                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
+              </div>}
             </>
           )}
           <footer className="content-footer">
