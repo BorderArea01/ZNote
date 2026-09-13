@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.28-287464?style=flat-square" alt="Version 0.9.28" />
+    <img src="https://img.shields.io/badge/version-0.9.29-287464?style=flat-square" alt="Version 0.9.29" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -218,6 +218,10 @@ docker compose up -d --build
 | 完整备份 | 恢复整个实例，包含所有知识库及回收站 |
 
 数据库、备份会有额外占用，因此**不承诺每个素材库的总大小都小于直接存文件**。具体存储结构、容量统计和恢复步骤见 [存储与迁移](docs/STORAGE.md)。
+
+## 微信收件箱
+
+在「设置与连接 → 微信收件箱」扫码绑定个人微信收集入口，选择默认知识库后，发文字保存为笔记，发图片保存为本地素材，同条图文消息保存为带本地配图组的笔记。自动加入微信标签，支持暂停、失败重试和重启恢复；无需把知识库开放到公网。需要当前微信账号可使用 ClawBot 通道，真实连接由本人扫码确认。用法与支持范围见 [微信接入说明](integrations/weixin/README.md)。
 
 ## 为你的工作流留出接口
 

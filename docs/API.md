@@ -229,3 +229,14 @@ mode 为 create / append / detach。create 需非空组名（最多 200 字）�
 响应含规范化 input、revision、operation_id、prepared_at、实际数量及至多 60 张预览。提交 `POST /api/item-groups/organize` 时原样带回这四个字段（将 input 展开到请求体），加 `undo:true` 可撤销。响应含 changed_count、copied_count、group_key、ids、item 和 undo。相关组或版本变化返回 409，整次不修改；只有用户明确重读时，预览请求才传 `refresh:true` 更新所选版本。
 
 响应丢失时须使用完全相同的请求与 operation_id 重试，返回 `replayed:true`；已撤销则同时返回 `already_undone:true`，不会重做。预览超过 24 小时返回 410；每个调用者回执压缩总量至多 32 MiB，超限返回 413 并回滚。完整恢复后旧回执失效。需要 write 权限，且所有图片及目标必须属于指定库、未删除。关联组总量和结果组至多 10000 张；复制配图元数据至多 16 MiB，均不复制原图文件。
+
+## 微信收件箱（管理员）
+
+- `GET /api/weixin`：连接状态、收件设置、最近 30 条处理记录；不返回账号令牌、游标或原始消息。
+- `PATCH /api/weixin`：提交 `{enabled, collection_id, tags}`；知识库可为 null，标签最多 20 个、每个最多 40 字。
+- `POST /api/weixin/login`：创建二维码会话，后端等待扫码；状态由 GET 接口读取。
+- `POST /api/weixin/verify`：提交 `{id, code}` 完成手机验证码确认。
+- `DELETE /api/weixin/login`：断开当前连接，移除本地凭据，保留入库内容和接收记录。
+- `POST /api/weixin/jobs/:id/retry`、`POST /api/weixin/jobs/:id/skip`：重试或忽略失败消息。
+
+以上接口仅管理员会话可调用，普通读写令牌不可调用。无需向公网开放微信回调地址；只接收绑定账号发给收集入口的文字与图片。见 [微信收件箱说明](../integrations/weixin/README.md)。

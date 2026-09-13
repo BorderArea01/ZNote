@@ -1,6 +1,6 @@
 {
   "name": "znote",
-  "version": "0.9.28",
+  "version": "0.9.29",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,6 +27,7 @@
     "lucide-react": "^0.468.0",
     "mediainfo.js": "^0.3.7",
     "multer": "^2.0.2",
+    "qrcode": "1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",

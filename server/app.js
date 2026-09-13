@@ -42,6 +42,7 @@ import { WorkQueue } from "./work-queue.js";
 import { maintenanceGate } from './maintenance.js';
 import { createBackupManager, registerBackupRoutes } from './backups.js';
 import { createWebhookManager, registerWebhookRoutes } from './webhooks.js';
+import {createWeixinInbox,registerWeixinRoutes} from './weixin.js';
 import { registerClipper } from './clipper.js';
 import { createClipperPairing } from './clipper-pair.js';
 import { withSource } from './source.js';
@@ -104,6 +105,7 @@ export function createApp({
   backupOptions = {},
   trashOptions = {},
   webhookOptions = {},
+  weixinClient,
   importOptions = {},
   imageDownload = fetchRemoteImage,
 } = {}) {
@@ -524,10 +526,10 @@ export function createApp({
       event_cursor: db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor,
     });
   });
-  const insert = (input, image = null) => {
+  const insert = (input, image = null, fixedId = null) => {
     if (input.source_url) input = withSource(input);
     validateCollection(input.collection_id);
-    const id = randomUUID();
+    const id = fixedId || randomUUID();
     const date = now();
     transaction(() => {
       if (!image) input=groupNoteImages(input,id);
@@ -850,7 +852,8 @@ export function createApp({
       previewCache.delete(first);
     }
   };
-  const saveAsset = (file, fields) => uploadQueue.run(randomUUID(), async () => {
+  const saveAsset = (file, fields, fixedId = null) => uploadQueue.run(randomUUID(), async () => {
+    if(fixedId){const prior=db.prepare('SELECT * FROM items WHERE id=?').get(fixedId);if(prior)return serialize(prior);}
     let tags;
     try {
       tags = JSON.parse(fields.tags || "[]");
@@ -888,17 +891,17 @@ export function createApp({
     )
       throw fail(415, "暂不支持此图片格式");
     const digest = hash(buffer);
-    let existing = input.group_key !== undefined
+    let existing = fixedId ? null : input.group_key !== undefined
       ? db.prepare("SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_index=? AND ((? IS NOT NULL AND group_key=?) OR (source_url IS ? AND (? IS NULL OR group_key IS NULL OR group_manual=1 OR group_key LIKE 'note:%'))) ORDER BY deleted_at IS NOT NULL").get(digest,input.collection_id,input.group_index,input.group_key??null,input.group_key??null,input.source_url,input.group_key??null)
       : db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL').get(digest,input.collection_id);
-    if(!existing&&input.group_key){
+    if(!fixedId&&!existing&&input.group_key){
       const candidates=db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_key IS NULL AND deleted_at IS NULL').all(digest,input.collection_id).filter(row=>{const old=legacyGalleryPage(row);return old?.group_key===input.group_key&&old.group_index===input.group_index;});
       if(candidates.length===1)existing=candidates[0];
     }
     if (existing?.deleted_at) throw fail(409, '这张图片已在此知识库的回收站中，请先恢复');
     if (existing) return sourceDuplicate(existing, input);
     const old = db.prepare('SELECT * FROM items WHERE hash=?').get(digest);
-    if (old) return { ...insert(input, imageReference(old)), shared: true };
+    if (old) return { ...insert(input, imageReference(old), fixedId), shared: true };
     const [extension, mime] = formats[metadata.format];
     const preview = await sharp(buffer, { limitInputPixels: 80000000 })
       .rotate()
@@ -928,7 +931,7 @@ export function createApp({
         hash: digest,
         codec: packed.codec,
         storedBytes: packed.buffer.length,
-      });
+      }, fixedId);
       cachePreview(item.hash || digest, preview);
       return item;
     } catch (e) {
@@ -1171,6 +1174,12 @@ export function createApp({
         '<!doctype html><html><head><title>ZNote API</title><link rel="stylesheet" href="/docs/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="/docs/swagger-ui-bundle.js"></script><script src="/docs-init.js"></script></body></html>',
       ),
   );
+  const weixin=createWeixinInbox({db,client:weixinClient,validateCollection,work:operation=>maintenance.work(operation),
+    exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
+    saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:'微信图片',size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),
+    saveNote:({id,...fields})=>insert(itemInput.parse(fields),null,id),
+  });
+  registerWeixinRoutes(app,admin,weixin);
   app.use("/api", (req, res) => res.status(404).json({ error: "接口不存在" }));
   app.use(express.static(staticDir));
   app.get("/", (req, res) => res.sendFile(resolve(staticDir, "index.html")));
@@ -1214,5 +1223,5 @@ export function createApp({
     }
     db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('note_groups_v1','true');
   });
-  return { app, db, backups, webhooks, imports, trash, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
+  return { app, db, backups, webhooks, imports, trash, weixin, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
 }
