@@ -39,6 +39,18 @@ async function fixture(t){
   return {r,client,base,dir,a,b,account,image,state,store,update,tick,text,photo,message,deliver,note,notes,json,request,queue:(...messages)=>incoming.push(...messages),downloads:()=>downloads,fail:value=>{failing=value}};
 }
 
+test('merged messages retain original newlines and use Markdown separators exactly once',async t=>{
+  const f=await fixture(t),text='第一行\r\n第二行\n\n[参考链接](https://example.com/)\n**保留强调**';
+  const first=f.message(text),photo=f.message([f.photo]),caption=f.message('图片说明\n下一行');
+  await f.deliver(first,photo,caption);
+  const note=f.notes()[0];
+  assert.ok(note.content.startsWith(text+'\n\n---\n\n![微信配图'));
+  assert.ok(note.content.endsWith('\n\n---\n\n图片说明\n下一行'));
+  assert.equal(note.content.split('\n\n---\n\n').length,3);
+  await f.deliver(first,photo,caption);
+  assert.equal(f.note(note.id).content,note.content);
+});
+
 test('daily text and separate images append locally; edits, cover, duplicate replay and midnight are preserved',async t=>{
   const f=await fixture(t),first=f.message('**灵感标题** [参考](https://example.com/)'),picture=f.message([f.photo]),caption=f.message('这是图片说明');
   await f.deliver(first,picture,caption);

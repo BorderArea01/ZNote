@@ -7,6 +7,7 @@ import { VideoHistory } from './VideoProgress.jsx';
 import { extendPageWindow } from './page-window.js';
 import { changeSelection, collectSelection } from './selection.js';
 import { SelectionBar } from './SelectionBar.jsx';
+import { SelectionEntry } from './SelectionEntry.jsx';
 import './selection.css';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
@@ -1100,13 +1101,8 @@ export default function Workspace({
                   <button className="text-button" onClick={() => setDraftsOpen(true)}>本地草稿</button>
                   <button className="text-button" onClick={() => setUndoOpen(true)}><History size={15}/>最近操作</button>
                   {view==='trash'&&<button className="text-button danger" disabled={!stats.trash} onClick={()=>openPurge(null)}><Trash2 size={14}/>清空回收站</button>}
-                  <button
-                    className="text-button"
-                    disabled={batchBusy||groupSelecting||loading}
-                    onClick={()=>toggleSelectionMode()}
-                  >
-                    {selecting ? "退出选择" : "选择内容"}
-                  </button>
+                  <SelectionEntry key={`${actualCollection}:${view}`} selecting={selecting}
+                    disabled={batchBusy||groupSelecting||loading} onToggle={()=>toggleSelectionMode()}/>
                   <button
                     className="text-button"
                     onClick={() => markdownInput.current.click()}

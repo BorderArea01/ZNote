@@ -1183,7 +1183,7 @@ export function createApp({
       const old=db.prepare('SELECT * FROM items WHERE id=?').get(id);
       if(!old)return insert(itemInput.parse(fields),null,id,commit);
       if(old.kind!=='note'||old.deleted_at||old.collection_id!==fields.collection_id)throw fail(409,'收件笔记已移动或删除，请恢复原归属后重试；新消息会使用新篇');
-      const content=old.content+(old.content?'\n\n':'')+fields.content;
+      const content=old.content+(old.content?'\n\n---\n\n':'')+fields.content;
       if(content.length>500000)throw fail(400,'收件笔记超过 50 万字符，请缩短原笔记后重试；后续内容可使用“开始新篇”');
       const tags=[...new Set([...JSON.parse(old.tags),...fields.tags])];
       if(tags.length>30)throw fail(400,'收件笔记超过 30 个标签，请整理标签后重试');

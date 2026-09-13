@@ -1,4 +1,8 @@
 /* Specificity keeps batch surfaces consistent across all existing themes. */
+.main .result-actions .floating-selection-entry { position:fixed; right:28px; bottom:calc(28px + env(safe-area-inset-bottom,0px)); z-index:9; display:flex; align-items:center; gap:8px; min-height:46px; padding:12px 18px; border:1px solid var(--border); border-radius:24px; background:var(--surface); color:var(--ink); box-shadow:0 4px 24px #0003; font-size:14px; font-weight:600; }
+.main .result-actions .floating-selection-entry:hover { border-color:var(--green); background:var(--accent-soft); color:var(--green); }
+.main .result-actions .floating-selection-entry:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
+@media(max-width:760px) { .main .result-actions .floating-selection-entry { right:16px; bottom:calc(96px + env(safe-area-inset-bottom,0px)); } }
 .selection-bar.batch-toolbar { display:flex; flex-direction:column; align-items:stretch; gap:0; position:sticky; top:8px; z-index:8; padding:0; margin:0 0 20px; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--ink); box-shadow:0 6px 22px #00000012; font-size:13px; }
 .batch-toolbar .selection-summary { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px 14px; border-bottom:1px solid var(--border); }
 .batch-toolbar .selection-summary label { color:var(--muted); font-size:12px; white-space:nowrap; cursor:pointer; }

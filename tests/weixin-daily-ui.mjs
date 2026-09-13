@@ -23,10 +23,14 @@ try{
  await context.request.patch(base+'/api/preferences',{data:{default_collection_id:lib.id}});
  await page.goto(base);await page.getByRole('button',{name:'设置与连接',exact:true}).click();await section.getByLabel('微信归档方式').waitFor();assert.equal(await section.getByLabel('微信归档方式').inputValue(),'daily');
  await section.getByRole('button',{name:'恢复接收',exact:true}).click();
- enqueue('## 今天的建筑灵感\n\n[参考链接](https://example.com/)');await completed(1);
+ enqueue('## 今天的建筑灵感\n\n第一行\n第二行\r\n第三行\n\n[参考链接](https://example.com/)\n\n```text\n代码第一行\n代码第二行\n```');await completed(1);
  enqueue([{type:2,image_item:{media:{}}}]);await completed(2);enqueue('这张图的留白很适合作为布局参考。');await completed(3);
  assert.equal(notes().length,1);assert.ok(notes()[0].content.indexOf('建筑灵感')<notes()[0].content.indexOf('/media/'));assert.ok(notes()[0].content.indexOf('/media/')<notes()[0].content.indexOf('留白'));
  await section.getByRole('button',{name:'打开笔记',exact:true}).click();const note=page.getByRole('dialog',{name:'图文笔记',exact:true});await note.waitFor();await note.getByRole('button',{name:'预览',exact:true}).click();await note.locator('.markdown-preview img').waitFor();assert.equal(await note.locator('.markdown-preview a').getAttribute('href'),'https://example.com/');
+ assert.equal(await note.locator('.markdown-preview hr').count(),2);
+ assert.equal(await note.locator('.markdown-preview p').filter({hasText:'第一行'}).locator('br').count(),2);
+ assert.equal(await note.locator('.markdown-preview pre br').count(),0);
+ const divider=await note.locator('.markdown-preview hr').first().evaluate(el=>({height:el.offsetHeight,margin:parseFloat(getComputedStyle(el).marginTop)}));assert.ok(divider.height>=1&&divider.margin>=24);
  await page.screenshot({path:resolve('artifacts/v0931-weixin-note.png')});
  await note.getByRole('button',{name:'关闭窗口',exact:true}).click();await page.getByRole('button',{name:'设置与连接',exact:true}).click();await section.getByLabel('微信新篇标题').fill('周末旅行参考');await section.getByRole('button',{name:'开始新篇',exact:true}).click();await section.getByText('周末旅行参考 · 等待收件',{exact:true}).waitFor();
  enqueue('新话题的文字');enqueue([{type:2,image_item:{media:{}}}]);await completed(5);assert.equal(notes().length,2);assert.ok(notes().some(n=>n.title==='周末旅行参考'&&n.content.includes('新话题')&&n.content.includes('/media/')));

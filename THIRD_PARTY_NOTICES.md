@@ -7,6 +7,7 @@
 | 组件 | 用途 | 许可证 / 来源 |
 | --- | --- | --- |
 | React | 网页界面 | [MIT](https://github.com/facebook/react) |
+| remark-breaks | 笔记预览保留回车换行 | [MIT](https://github.com/remarkjs/remark-breaks) |
 | Electron / Chromium | 桌面窗口与浏览器运行时 | [Electron MIT 与 Chromium 第三方许可](https://github.com/electron/electron/blob/main/LICENSE)；安装包保留 LICENSE / LICENSES.chromium.html |
 | Node.js | 内置本机服务运行时 | [Node 及其捆绑组件许可](https://github.com/nodejs/node/blob/main/LICENSE)；runtime/NODE-LICENSE 对应实际打包版本 |
 | electron-builder | 桌面安装包构建 | [MIT](https://github.com/electron-userland/electron-builder) |

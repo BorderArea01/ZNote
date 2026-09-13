@@ -51,6 +51,20 @@ try {
  // Restore batch move through the existing undo UI.
  await page.locator('.undo-notice').getByRole('button',{name:'撤销',exact:true}).click();await ready();assert.equal(runtime.db.prepare('SELECT count(*) n FROM items WHERE collection_id=?').get(a.id).n,125);
  await page.keyboard.press('Escape');await page.locator('.batch-toolbar').waitFor({state:'hidden'});await ready();
+ // The floating entry works at the current scroll position on desktop and mobile.
+ for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
+   await page.setViewportSize(viewport);await page.locator('.card-main').nth(20).scrollIntoViewIfNeeded();
+   const entry=page.getByRole('button',{name:'在当前位置多选',exact:true});await entry.waitFor();
+   const anchor=await page.locator('.card-main').nth(20).evaluate(el=>({id:el.closest('.item-card').dataset.itemId,top:el.getBoundingClientRect().top}));
+   await page.screenshot({path:resolve(`artifacts/selection-entry-${viewport.width}.png`)});
+   await entry.click();await count(0);await ready();
+   const card=page.locator(`[data-item-id="${anchor.id}"] .card-main`);const after=await card.evaluate(el=>el.getBoundingClientRect().top);
+   assert.ok(Math.abs(anchor.top-after)<12,`Floating entry moved the card: ${anchor.top} -> ${after}`);
+   const bar=await page.locator('.selection-bar').boundingBox();assert.ok(bar.y>=0&&bar.y+bar.height<viewport.height);
+   await card.click();await count(1);await page.locator('.selection-operations').getByRole('button',{name:/^(收藏所选|取消收藏)$/}).click();await count(1);await page.waitForFunction(()=>!document.querySelector('.selection-working')&&!document.querySelector('.selection-exit')?.disabled);
+   await page.keyboard.press('Escape');await count(0);await page.keyboard.press('Escape');await page.locator('.batch-toolbar').waitFor({state:'hidden'});await ready();
+ }
+ await page.setViewportSize({width:1440,height:900});
  // Enter and leave selection from a scrolled card using the keyboard.
  const card=page.locator('.card-main').nth(20);await card.scrollIntoViewIfNeeded();await card.focus();const before=await card.evaluate(el=>el.getBoundingClientRect().top);
  await page.keyboard.press('Control+Enter');await count(1);await ready();

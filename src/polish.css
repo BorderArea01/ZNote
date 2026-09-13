@@ -71,6 +71,15 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .settings-body section { padding: 24px 0; }
 .settings-body section > select { width: 100%; }
 .connection-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.settings-body .settings-title { margin-bottom:16px; min-height:24px; }
+.settings-body section > p { margin:12px 0 16px; }
+.settings-body section > p:empty { display:none; }
+.settings-body section > .settings-title:not(:first-child) { margin-top:24px; }
+.settings-body section > details { margin-top:18px; padding:14px 16px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); }
+.settings-body section > details > summary { cursor:pointer; line-height:1.6; }
+.settings-body section > details[open] > summary { margin-bottom:12px; }
+.settings-body section > details > p:last-child { margin-bottom:0; }
+.markdown-preview hr { border:0; height:1px; background:var(--border); margin:28px 0; }
 #znote-connect-status:empty { display: none; }
 .code-example { margin: 0 0 14px; font-size: 13px; }
 .code-example summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
