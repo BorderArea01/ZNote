@@ -9,6 +9,20 @@ import { mediaTools, runMediaCommand } from "./imports.js";
 import { MAX_VIDEO_BYTES } from "./videos.js";
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const filename = /^(?:index|video|audio)\.m3u8$|^part-\d{1,4}\.bin$/;
+const hlsCapabilities = new Map();
+async function localSegmentOptions(command, signal) {
+  if (hlsCapabilities.has(command)) return hlsCapabilities.get(command);
+  const help = await runMediaCommand(command, ['-hide_banner', '-h', 'demuxer=hls'], {signal, timeout:10000});
+  const options = [];
+  // Our validated packages deliberately use synthetic .bin names. FFmpeg 7.1+
+  // added suffix/format matching; keep the media-format and local-file whitelists below.
+  // https://ffmpeg.org/pipermail/ffmpeg-cvslog/2025-February/147263.html
+  if (/\bextension_picky\b/.test(help)) options.push('-extension_picky', '0');
+  if (/\ballowed_segment_extensions\b/.test(help)) options.push('-allowed_segment_extensions', 'ALL');
+  if (hlsCapabilities.size >= 4) hlsCapabilities.clear();
+  hlsCapabilities.set(command, options);
+  return options;
+}
 export function validatePlaylist(text, names, name = "index.m3u8") {
   if (!text.startsWith("#EXTM3U") || text.length > 2 * 1024 * 1024)
     throw fail(400, "播放列表格式不正确");
@@ -158,9 +172,11 @@ export function registerStreamRoutes(app, { dataDir, saveVideo }) {
           file.path = target;
         }
         const output = join(dir, "output.mp4");
+        const ffmpeg = mediaTools().ffmpeg;
+        const segmentOptions = await localSegmentOptions(ffmpeg, abort.signal);
         try {
           await runMediaCommand(
-            mediaTools().ffmpeg,
+            ffmpeg,
             [
               "-hide_banner",
               "-loglevel",
@@ -170,6 +186,7 @@ export function registerStreamRoutes(app, { dataDir, saveVideo }) {
               "file,crypto",
               "-allowed_extensions",
               "ALL",
+              ...segmentOptions,
               "-seg_format_options",
               "format_whitelist=mpegts,mov,aac,mp3,ac3,eac3,flac",
               "-i",

@@ -29,8 +29,8 @@ ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。
 
 内置本机服务使用系统用户数据目录下的 `data`：
 
-- Windows：`%APPDATA%/znote-desktop/data`
-- macOS：`~/Library/Application Support/znote-desktop/data`
+- Windows：`%APPDATA%/ZNote/data`
+- macOS：`~/Library/Application Support/ZNote/data`
 
 可从菜单 / 托盘「本机数据目录」打开实际位置。不要直接复制正在写入的 SQLite 数据库；使用设置中的完整备份 / 恢复迁移。更新或正常卸载客户端保留数据；手动删除用户数据目录会删除本机知识库。ZIP 版也使用用户数据目录，不是把资料写进 ZIP 的解压目录。
 

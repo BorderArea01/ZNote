@@ -43,7 +43,7 @@
         "zip"
       ],
       "icon": "build/icons/icon.ico",
-      "signAndEditExecutable": false
+      "signExecutable": false
     },
     "nsis": {
       "oneClick": false,
