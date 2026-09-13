@@ -1,4 +1,4 @@
-const {app,BrowserWindow,Menu,Tray,ipcMain,shell,dialog,nativeImage}=require('electron');
+const {app,BrowserWindow,Menu,Tray,ipcMain,shell,dialog,nativeImage,net}=require('electron');
 const {join}=require('node:path');const {pathToFileURL}=require('node:url');const {readFile,writeFile,mkdir}=require('node:fs/promises');const {spawn}=require('node:child_process');
 const media=require('./media.cjs');
 const {normalizeAddress,sameOrigin,externalLink}=require('./policy.cjs');
@@ -22,7 +22,7 @@ async function startLocal(){if(localOrigin){await health(localOrigin);return loc
 function handle(name,fn){ipcMain.handle(name,async(event,...args)=>{if(event.senderFrame?.url!==launcherUrl||event.sender!==launcher?.webContents)throw Error('Invalid sender');try{return await fn(...args)}catch(e){return {error:e.message||'操作失败'}}})}
 if(!app.requestSingleInstanceLock()){app.quit()}else{
  app.on('second-instance',()=>{if(library&&!library.isDestroyed()){reveal(library);library.focus()}else showLauncher()});
- app.whenReady().then(async()=>{app.setAppUserModelId('io.github.borderarea01.znote');handle('launcher:state',async()=>({address:(await config()).address||'',version:app.getVersion()}));handle('launcher:connect',async value=>{await openLibrary(normalizeAddress(value));return {ok:true}});handle('launcher:local',async()=>{await openLibrary(await startLocal());return {ok:true}});handle('launcher:media',async()=>{if(ownsService)return {error:'请先从托盘退出 ZNote，重新打开后安装组件，再启动本机库。'};await media.install(appData());return {message:'视频组件已安装，打开本机知识库即可使用。'}});handle('launcher:feedback',feedback);
+ app.whenReady().then(async()=>{app.setAppUserModelId('io.github.borderarea01.znote');handle('launcher:state',async()=>({address:(await config()).address||'',version:app.getVersion()}));handle('launcher:connect',async value=>{await openLibrary(normalizeAddress(value));return {ok:true}});handle('launcher:local',async()=>{await openLibrary(await startLocal());return {ok:true}});handle('launcher:media',async()=>{if(ownsService)return {error:'请先从托盘退出 ZNote，重新打开后安装组件，再启动本机库。'};await media.install(appData(),(url,options)=>net.fetch(url,options));return {message:'视频组件已安装，打开本机知识库即可使用。'}});handle('launcher:feedback',feedback);
   const icon=nativeImage.createFromPath(join(__dirname,'launcher/icon.png'));if(!icon.isEmpty()){tray=new Tray(icon.resize({width:20,height:20}));tray.setToolTip('ZNote · 关闭窗口后继续收件');tray.on('double-click',()=>{if(library&&!library.isDestroyed())reveal(library);else showLauncher()})}menu();showLauncher();
  });
  app.on('activate',()=>{if(library&&!library.isDestroyed())reveal(library);else showLauncher()});app.on('window-all-closed',()=>{if(!tray)app.quit()});
