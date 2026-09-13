@@ -1,16 +1,22 @@
 /* Keep secondary guidance on demand; use theme tokens for every surface. */
-/* Favorite is anchored independently from optional group actions. */
-html[data-style] .item-card .card-favorite-button{position:absolute;right:10px;bottom:10px;width:36px;height:36px;min-height:36px;padding:8px;display:grid;place-items:center;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 2px 6px #00000014}
+/* Share footer measurements so metadata and the independent button align. */
+.item-card{--card-footer-button:36px;--card-inset-x:16px;--card-inset-bottom:12px}
+html[data-style] .item-card .card-favorite-button{position:absolute;right:var(--card-inset-x);bottom:var(--card-inset-bottom);width:var(--card-footer-button);height:var(--card-footer-button);min-height:var(--card-footer-button);padding:8px;display:grid;place-items:center;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 2px 6px #00000014}
 html[data-style] .item-card .card-favorite-button:hover{background:var(--surface-2);border-color:var(--muted)}
 html[data-style] .item-card .card-favorite-button[aria-pressed=true]{background:#fff1cc;color:#895600;border-color:#c9963a}
 html[data-style][data-theme=dark] .item-card .card-favorite-button[aria-pressed=true]{background:#493718;color:#ffd27a;border-color:#a68341}
 html[data-style] .item-card .card-favorite-button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
-.item-card:has(.card-favorite-button) .card-meta{min-height:36px;align-items:center;padding-right:44px;gap:6px;flex-wrap:wrap}
-.list .item-card:has(.card-favorite-button) .card-body{padding-right:64px}
+.item-card:has(.card-favorite-button) .card-body{padding-right:var(--card-inset-x);padding-left:var(--card-inset-x);padding-bottom:var(--card-inset-bottom)}
+.item-card .card-meta-text{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;width:100%;min-width:0}
+.item-card .card-meta-text>span{white-space:nowrap}
+.item-card:has(.card-favorite-button) .card-meta{height:calc(var(--card-footer-button) + 13px);min-height:calc(var(--card-footer-button) + 13px);padding:12px calc(var(--card-footer-button) + 12px) 0 0;align-items:center;flex-wrap:nowrap;gap:0}
+.list .item-card:has(.card-favorite-button) .card-body{display:flex;flex-direction:column;align-items:stretch;align-self:stretch;gap:8px;min-height:112px}
+.list .item-card:has(.card-favorite-button) .card-body h3{margin-right:90px}
 .list .item-card:has(.card-favorite-button) .card-main{min-height:112px}
 .list.is-selecting .item-card:has(.card-favorite-button) .card-main{min-height:144px}
-.list .item-card:has(.card-favorite-button) .card-meta{min-height:0;padding-right:0}
-@media(pointer:coarse){html[data-style] .item-card .card-favorite-button{width:44px;height:44px}.item-card:has(.card-favorite-button) .card-meta{min-height:44px;padding-right:52px}.list .item-card:has(.card-favorite-button) .card-meta{min-height:0;padding-right:0}}
+.list .item-card:has(.card-favorite-button) .card-meta{height:var(--card-footer-button);min-height:var(--card-footer-button);margin-top:auto;padding-top:0}
+@media(max-width:760px){.item-card{--card-inset-x:10px;--card-inset-bottom:10px}.list .item-card:has(.card-favorite-button) .card-body{padding-top:44px}.list .item-card:has(.card-favorite-button) .card-body h3{margin-right:0}.list.is-selecting .item-card:has(.card-favorite-button) .card-body{padding-top:76px}}
+@media(pointer:coarse){.item-card{--card-footer-button:44px}}
 .inline-heading { display: flex; align-items: center; gap: 6px; }
 .upload-guidance { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
 .note-archive-status { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:16px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--surface-2); }

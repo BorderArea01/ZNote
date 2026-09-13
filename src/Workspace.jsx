@@ -1289,12 +1289,14 @@ export default function Workspace({
                             )}
                           </div>
                           <div className="card-meta">
+                            <div className="card-meta-text">
                             <span>{date(item.updated_at)}</span>
                             <span>
                               {item.kind !== "note"
                                 ? `${item.width} × ${item.height}`
                                 : `${item.content_length ?? item.content.length} 字符`}
                             </span>
+                            </div>
                           </div>
                         </div>
                       </button>
