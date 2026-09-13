@@ -6,7 +6,7 @@ import sharp from 'sharp';
 await mkdir('artifacts',{recursive:true});
 const data=await mkdtemp(resolve('artifacts/desktop-smoke-'));
 const exe=process.env.ZNOTE_DESKTOP_EXE||resolve('clients/desktop/node_modules/electron/dist',process.platform==='win32'?'electron.exe':process.platform==='darwin'?'Electron.app/Contents/MacOS/Electron':'electron');
-const launch=()=>electron.launch({executablePath:exe,args:process.env.ZNOTE_DESKTOP_EXE?[]:[resolve('clients/desktop')],env:{...process.env,ZNOTE_DESKTOP_TEST_DATA:data,ZNOTE_DESKTOP_HEADLESS:'1'},timeout:60000});
+const launch=()=>electron.launch({executablePath:exe,args:process.env.ZNOTE_DESKTOP_EXE?[]:[resolve('clients/desktop')],env:{...process.env,ZNOTE_DESKTOP_TEST_DATA:data,ZNOTE_DESKTOP_HEADLESS:process.env.CI?'0':'1'},timeout:60000});
 let app=await launch(),origin;
 try{
  const launcher=await app.firstWindow();await launcher.locator('#local').waitFor();await launcher.screenshot({path:join(data,'launcher.png')});

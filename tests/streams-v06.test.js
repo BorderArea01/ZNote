@@ -57,7 +57,7 @@ test("real HLS fetch, master selection, remux download, save with source, auth a
   if (process.platform !== 'win32') {
     const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
     const executable = mediaTools().ffmpeg, wrapper = join(dir, 'ffmpeg-test');
-    await writeFile(wrapper, '#!/bin/sh\nexec ' + quote(executable) + ' "$@" 2>>' + quote(diagnostics) + '\n');
+    await writeFile(wrapper, '#!/bin/bash\nset -o pipefail\n' + quote(executable) + ' "$@" 2>&1 | tee -a ' + quote(diagnostics) + '\n');
     await chmod(wrapper, 0o755);
     process.env.ZNOTE_FFMPEG = wrapper;
   }
@@ -123,7 +123,7 @@ test("real HLS fetch, master selection, remux download, save with source, auth a
       );
     };
     const download = await get({ download: true });
-    assert.equal(download.status, 200, download.status === 200 ? '' : await download.clone().text() + '\n' + await readFile(diagnostics, 'utf8').catch(()=>''));
+    assert.equal(download.status, 200, download.status === 200 ? '' : await download.clone().text() + '\ncommand: ' + mediaTools().ffmpeg + '\n' + await readFile(diagnostics, 'utf8').catch(e=>e.message));
     const bytes = Buffer.from(await download.arrayBuffer());
     assert.ok(bytes.length > 2000);
     for(const variant of ['encrypted.m3u8','split/master.m3u8']){
