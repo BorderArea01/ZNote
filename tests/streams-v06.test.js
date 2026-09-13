@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile, mkdtemp, readdir } from "node:fs/promises";
+import { readFile, mkdtemp, readdir, writeFile, chmod } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { createServer, request as httpRequest } from "node:http";
 import { createCipheriv } from 'node:crypto';
 import { createApp } from "../server/app.js";
 import { packageHls } from "../extensions/clipper/hls-package.js";
 import { validatePlaylist } from "../server/streams.js";
+import { mediaTools } from '../server/imports.js';
 import {
   mediaKind,
   addResource,
@@ -51,6 +52,15 @@ test("HLS package rejects external paths and unsupported encrypted references", 
 });
 test("real HLS fetch, master selection, remux download, save with source, auth and malformed packages", async () => {
   const dir = await mkdtemp(resolve("artifacts/hls-api-"));
+  const previousFfmpeg = process.env.ZNOTE_FFMPEG;
+  const diagnostics = join(dir, 'ffmpeg-stderr.log');
+  if (process.platform !== 'win32') {
+    const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+    const executable = mediaTools().ffmpeg, wrapper = join(dir, 'ffmpeg-test');
+    await writeFile(wrapper, '#!/bin/sh\nexec ' + quote(executable) + ' "$@" 2>>' + quote(diagnostics) + '\n');
+    await chmod(wrapper, 0o755);
+    process.env.ZNOTE_FFMPEG = wrapper;
+  }
   const runtime = createApp({ dataDir: dir });
   const server = runtime.app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
@@ -113,7 +123,7 @@ test("real HLS fetch, master selection, remux download, save with source, auth a
       );
     };
     const download = await get({ download: true });
-    assert.equal(download.status, 200, await download.clone().text());
+    assert.equal(download.status, 200, download.status === 200 ? '' : await download.clone().text() + '\n' + await readFile(diagnostics, 'utf8').catch(()=>''));
     const bytes = Buffer.from(await download.arrayBuffer());
     assert.ok(bytes.length > 2000);
     for(const variant of ['encrypted.m3u8','split/master.m3u8']){
@@ -153,6 +163,7 @@ test("real HLS fetch, master selection, remux download, save with source, auth a
     await new Promise((r) => setTimeout(r, 40));
     assert.equal((await readdir(join(dir, "uploads"))).length, 0);
   } finally {
+    if (previousFfmpeg === undefined) delete process.env.ZNOTE_FFMPEG; else process.env.ZNOTE_FFMPEG = previousFfmpeg;
     await runtime.imports.stop();
     await runtime.backups.stop();
     await runtime.webhooks.stop();
