@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {reorderLocalImages} from '../shared/markdown-images.js';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
-export function registerGroupOrderRoutes({app,db,transaction,getItem,serialize,event,groupNoteImages}) {
+export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,groupNoteImages}) {
   app.get('/api/item-groups/selection',(req,res)=>{
     const anchor=getItem(z.string().min(1).parse(req.query.id));
     const key=anchor.kind==='note'?'note:'+anchor.id:anchor.group_key;
@@ -26,7 +26,7 @@ export function registerGroupOrderRoutes({app,db,transaction,getItem,serialize,e
   app.get('/api/item-groups/order',(req,res)=>res.json(publicState(snapshot(z.string().min(1).parse(req.query.id)))));
   app.post('/api/item-groups/order',(req,res)=>{
     const input=z.object({id:z.string(),revision:z.string().length(64),ids:z.array(z.string()).min(1).max(10000),sync_note:z.boolean().default(true)}).parse(req.body);
-    const result=transaction(()=>{
+    const {result,undo:receipt}=undo.run(req,'整组排序',()=>{
       const state=snapshot(input.id),ids=new Set(input.ids);
       if(input.revision!==state.revision||ids.size!==input.ids.length||ids.size!==state.rows.length||state.rows.some(r=>!ids.has(r.id)))throw fail(409,'图片组已被修改，请重新打开排序后重试');
       if(state.rows.every((row,index)=>row.id===input.ids[index]))return {...publicState(state),item:serialize(state.anchor)};
@@ -39,6 +39,6 @@ export function registerGroupOrderRoutes({app,db,transaction,getItem,serialize,e
         db.prepare('UPDATE items SET content=?,version=version+1,updated_at=? WHERE id=?').run(grouped.content,date,state.note.id);event('item.updated',state.note.id);
       }
       return {...publicState(snapshot(input.id)),item:serialize(getItem(input.id))};
-    });res.json(result);
+    },{guardGroups:true,guardOrder:true});res.json({...result,undo:receipt});
   });
 }

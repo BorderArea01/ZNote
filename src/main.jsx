@@ -46,6 +46,7 @@ import {
   Eye,
   Sparkles,
   MoreHorizontal,
+  Undo2,
 } from "lucide-react";
 import "./style.css";
 import "./features.css";
@@ -382,6 +383,7 @@ function Detail({
   const [lightbox, setLightbox] = useState(false);
   const [copying, setCopying] = useState(false);
   const [sorting,setSorting] = useState(false);
+  const [orderUndo,setOrderUndo] = useState(null);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const openSorting=async()=>{if(!dirty||await save())setSorting(true)};
   const externalImages = React.useMemo(()=>item.kind==='note'?markdownImages(content):[],[item.kind,content]);
@@ -468,6 +470,24 @@ function Detail({
     if (busy || galleryBusy || copying || sorting) return;
     if (dirty && !(await save())) return;
     onStep?.(delta);
+  }
+  async function undoOrder() {
+    if (busy || dirty || !orderUndo) return;
+    const submitted = latestFields.current;
+    setBusy(true); setError('');
+    try {
+      await send('/api/undo/' + orderUndo.id, {});
+      const [fresh, order] = await Promise.all([api('/api/items/' + item.id), api('/api/item-groups/order?id=' + encodeURIComponent(item.id))]);
+      setItem(fresh);
+      const pending = latestFields.current;
+      if (pending.title === submitted.title) setTitle(fresh.title);
+      if (pending.content === submitted.content) setContent(fresh.content);
+      if (JSON.stringify(pending.tags) === JSON.stringify(submitted.tags)) setTags(fresh.tags);
+      if (pending.collection_id === submitted.collection_id) setCollection(fresh.collection_id || '');
+      setNoteIndex(null); setOrderUndo(null);
+      onGroupOrdered?.({...order,item:fresh}); onSaved(); notify('已恢复排序和封面');
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
   }
   async function toggleFavorite() {
     if (busy || item.deleted_at) return;
@@ -732,7 +752,7 @@ function Detail({
           )}
           <div className="detail-bottom">
             <span>
-              {item.kind === 'note' && draft.status ? <span role="status">{draft.status}</span> :
+              {orderUndo ? <button className="order-undo" disabled={busy||dirty} title={dirty?'请先保存当前修改，再撤销排序':'恢复本次排序前的顺序和封面'} onClick={undoOrder}><Undo2 size={15}/>撤销排序</button> : item.kind === 'note' && draft.status ? <span role="status">{draft.status}</span> :
               (item.id
                 ? `更新于 ${date(item.updated_at)}`
                 : "新的灵感，即将入库")}
@@ -784,7 +804,7 @@ function Detail({
       {lightbox && <ZoomViewer src={lightbox} alt={title} onClose={()=>setLightbox(false)}/>}
       {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
       {versionsOpen && <React.Suspense fallback={null}><NoteVersions item={{...item,title,content}} onClose={() => setVersionsOpen(false)} onUse={async value => { if (!(await draft.keepCurrent())) return false; applyDraft({...value,collection_id:collection||null}); return true; }}/></React.Suspense>}
-      {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);onGroupOrdered?.(result);onSaved();notify('顺序已保存，第一张为封面');}}/>}
+      {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify('顺序已保存，第一张为封面',result.undo);}}/>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
     </Dialog>
   );

@@ -18,6 +18,7 @@
 .order-footer nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 8px; }
 .order-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .order-footer .error { max-height: 60px; overflow: auto; }
+.detail-bottom .order-undo { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; font-size: 12px; white-space: nowrap; }
 html[data-style] .group-order-dialog button:not(.primary):not(.icon-button) { background: var(--surface-2); color: var(--ink); border-color: var(--border); }
 html[data-style] .group-order-dialog .order-card-actions button { background: transparent; }
 html[data-style] .group-order-dialog button.primary { background: var(--green); color: var(--accent-ink); border-color: var(--green); }

@@ -684,7 +684,6 @@ export function createApp({
       return {...serialize(getItem(anchor.id)),moved_count:group.length};
     });res.json({...result,undo:receipt});
   });
-  registerGroupOrderRoutes({app,db,transaction,getItem,serialize,event,groupNoteImages});
   app.post('/api/items/batch-organize', (req, res) => {
     const input = z.object({
       items: z.array(z.object({ id: z.string(), version: z.number().int().positive() })).min(1).max(10000),
@@ -1147,6 +1146,7 @@ export function createApp({
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
+  registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,groupNoteImages});
   registerGroupOrganize({app,db,undo,getItem,event,serialize,validateCollection});
   noteHistory=createNoteHistory({app,db});
   transaction(() => noteHistory.seed());

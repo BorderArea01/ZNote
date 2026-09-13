@@ -70,7 +70,7 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 
 ## 常用接口
 
-批量整理、标签、回收站操作、整组移动 / 收藏和 `PATCH /api/items/:id` 可传入 `undo: true`，返回 `undo` 操作摘要（没有实际字段变化时为 `null`）。未传入时保持原行为。
+批量整理、标签、回收站操作、图片组排序、整组移动 / 收藏和 `PATCH /api/items/:id` 可传入 `undo: true`，返回 `undo` 操作摘要（没有实际字段变化时为 `null`）。未传入时保持原行为。
 
 `GET /api/undo` 查询当前会话或 API 令牌的最近操作；`POST /api/undo/:id` 撤销该操作。重复撤销同一记录不会重复写入，返回 `already_undone: true`。相关字段冲突返回 409，过期或其他会话的记录返回 410。永久删除不提供撤销。记录保留 24 小时、至多 50 条，压缩总量上限 32 MB；完整备份恢复后作废。
 
@@ -129,6 +129,8 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 `GET /api/item-groups/order?id=条目ID` 获取同一知识库内完整图片组的 `items`、`cover_id`、`note_id` 和 `revision`。条目可为组内图片或所属笔记。
 
 `POST /api/item-groups/order` 接收 `{ id, revision, ids: [按展示顺序排列的全部图片ID], sync_note: true }`。第一张为封面；必须提交同组全部有效图片且不重复，组成员或版本变化返回 409，所有修改回滚。笔记配图默认同步正文图片位置（文字和链接保留），`sync_note: false` 仅调整素材库组顺序。成功返回新快照及更新后的锚点 `item`。需要 write 权限。
+
+加 `undo:true` 时响应包含 `undo` 摘要；未记录或未改变顺序时为 `null`。使用 `POST /api/undo/:id` 可恢复排序及本次同步的正文。撤销核对整组当前成员、知识库与顺序（含未移动成员），及本次修改的正文字段；冲突整次返回 409，其他字段的新修改保留。连续排序须先撤销后一次。记录遵循最近操作的保留、会话隔离及完整恢复失效规则。排序保存的网络响应丢失时，重新读取当前排序与最近操作；原 revision 不能再次应用。
 
 `group_order` 为可空的展示顺序，空值沿用 `group_index` 原始页序；上传仍使用原始 `group_index`，不要用展示顺序覆盖来源页码。`gallery=true&group_key=...&collection=...` 返回展示顺序，手动排序不破坏再次采集的去重。
 

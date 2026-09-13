@@ -46,6 +46,18 @@ export function Dialog({ title, onClose, children, className = "" }) {
     element?.addEventListener("keydown", listener);
     return () => { element?.removeEventListener('keydown',listener);if(previous?.isConnected)previous.focus(); };
   }, []);
+  useEffect(() => {
+    // A disabled or removed action button may return focus to the page body.
+    // Escape must still dismiss only the topmost dialog in that case.
+    const escape = e => {
+      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented || e.target.closest?.('[role="dialog"]')) return;
+      const dialogs = document.querySelectorAll('.dialog[role="dialog"]');
+      if (dialogs[dialogs.length - 1] !== ref.current) return;
+      e.preventDefault(); onClose();
+    };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [onClose]);
   return (
     <div className="dialog-shade"
       onPointerDown={e=>{backdropPress.current=e.target===e.currentTarget&&e.button===0;}}

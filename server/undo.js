@@ -27,7 +27,7 @@ export function createUndoManager({ app, db, transaction, event, mediaCollision,
     let bytes = 0;
     for (const row of rows) { bytes += row.bytes; if (bytes > MAX_BYTES) db.prepare('DELETE FROM undo_actions WHERE id=?').run(row.id); }
   }
-  function run(req, label, fn, { guardGroups = false, actionId } = {}) {
+  function run(req, label, fn, { guardGroups = false, guardOrder = false, actionId } = {}) {
     if (req.body?.undo !== true) return { result: transaction(fn), undo: null };
     return transaction(() => {
       const sourceId = req.params?.id || req.body?.id || req.body?.items?.[0]?.id;
@@ -67,10 +67,15 @@ export function createUndoManager({ app, db, transaction, event, mediaCollision,
         const groups = new Map();
         for (const entry of changes.values()) {
           const current = get.get(entry.id);
-          for (const key of [entry.before.group_key, entry.after.group_key].filter(Boolean)) {
+          for (const key of [entry.before.group_key, entry.after.group_key, current.group_key].filter(Boolean)) {
             const scope = JSON.stringify([key, current.collection_id]);
             if (!groups.has(scope)) groups.set(scope, { key, collection: current.collection_id, ids: db.prepare("SELECT id FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id").all(key, current.collection_id).map(r => r.id) });
           }
+        }
+        if (guardOrder) for (const group of groups.values()) {
+          // Include stationary members: a later sort can change one whose fields
+          // were not captured by this operation's field-difference journal.
+          group.order = db.prepare("SELECT id,group_order,group_index FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id").all(group.key, group.collection);
         }
         changes.values().next().value.groups = [...groups.values()];
       }
@@ -95,6 +100,10 @@ export function createUndoManager({ app, db, transaction, event, mediaCollision,
       for (const group of changes[0]?.groups || []) {
         const ids = db.prepare("SELECT id FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id").all(group.key, group.collection).map(r => r.id);
         if (JSON.stringify(ids) !== JSON.stringify(group.ids)) throw fail(409, '图片组成员已变化，无法完整撤销；未修改任何内容');
+        if (group.order) {
+          const order = db.prepare("SELECT id,group_order,group_index FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id").all(group.key, group.collection);
+          if (JSON.stringify(order) !== JSON.stringify(group.order)) throw fail(409, '图片组顺序已变化，无法撤销这次排序；未修改任何内容');
+        }
       }
       const affected = new Map(), removed = new Set(changes.filter(c => c.created).map(c => c.id));
       for (const entry of changes) {

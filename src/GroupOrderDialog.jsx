@@ -10,7 +10,7 @@ export function GroupOrderDialog({id,onClose,onDone}) {
   const dirty=!!snapshot&&items.some((item,i)=>item.id!==snapshot.items[i]?.id);
   const close=()=>{if(!busy&&(!dirty||confirm('排序尚未保存，确定关闭吗？')))onClose()};
   function move(fromId,toId){if(busy||fromId===toId)return;setItems(old=>{const next=[...old],from=next.findIndex(i=>i.id===fromId),to=next.findIndex(i=>i.id===toId);if(from<0||to<0)return old;next.splice(to,0,next.splice(from,1)[0]);return next})}
-  async function save(){setBusy(true);setError('');try{const result=await send('/api/item-groups/order',{id,revision:snapshot.revision,ids:items.map(i=>i.id),sync_note:sync});onDone(result);onClose()}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function save(){setBusy(true);setError('');try{const result=await send('/api/item-groups/order',{id,revision:snapshot.revision,ids:items.map(i=>i.id),sync_note:sync,undo:true});onDone(result);onClose()}catch(e){setError(e.message)}finally{setBusy(false)}}
   return <Dialog title="调整图片顺序" className="group-order-dialog" onClose={close}>
     <div className="order-summary"><span>拖动排序 · 第一张为封面</span><span>{items.length} 张</span></div>
     {!snapshot&&!error&&<p role="status">正在加载图片组…</p>}

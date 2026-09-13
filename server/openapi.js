@@ -667,7 +667,7 @@ const undoAction={type:'object',properties:{id:str,label:str,count:{type:'intege
 spec.components.schemas.UndoAction=undoAction;
 spec.paths['/api/undo']={get:operation('当前会话最近 24 小时的可撤销操作（最多 50 条）',{type:'object',properties:{actions:list(undoAction)}})};
 spec.paths['/api/undo/{id}']={post:operation('撤销操作；重复请求不会重复写入',{...undoAction,properties:{...undoAction.properties,already_undone:{type:'boolean'}}},{parameters:[id],description:'仅调用者本人会话或令牌可用。字段、引用关系、知识库或永久删除发生冲突时返回 409，过期或不可访问返回 410；失败不做部分修改。'})};
-for(const [path,method] of [['/api/items/batch-organize','post'],['/api/items/batch-tags','post'],['/api/items/batch-trash','post'],['/api/item-groups/move','post'],['/api/item-groups/favorite','post'],['/api/items/{id}','patch']]){
+for(const [path,method] of [['/api/items/batch-organize','post'],['/api/items/batch-tags','post'],['/api/items/batch-trash','post'],['/api/item-groups/move','post'],['/api/item-groups/favorite','post'],['/api/items/{id}','patch'],['/api/item-groups/order','post']]){
   const endpoint=spec.paths[path][method];
   endpoint.requestBody.content['application/json'].schema.properties.undo={type:'boolean',default:false,description:'记录完整关联变化，响应返回 undo 摘要；原文件不复制'};
   const response=endpoint.responses[200]?.content?.['application/json']?.schema;
