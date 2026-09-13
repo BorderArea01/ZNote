@@ -1,4 +1,5 @@
 import {localMediaReferences} from '../shared/local-media.js';
+import {legacyGalleryPage} from '../shared/gallery-group.js';
 import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
 import { createNoteHistory } from './note-history.js';
@@ -887,9 +888,13 @@ export function createApp({
     )
       throw fail(415, "暂不支持此图片格式");
     const digest = hash(buffer);
-    const existing = input.group_key !== undefined
-      ? db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND source_url IS ? AND group_index=? ORDER BY deleted_at IS NOT NULL').get(digest,input.collection_id,input.source_url,input.group_index)
+    let existing = input.group_key !== undefined
+      ? db.prepare("SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_index=? AND ((? IS NOT NULL AND group_key=?) OR (source_url IS ? AND (? IS NULL OR group_key IS NULL OR group_manual=1 OR group_key LIKE 'note:%'))) ORDER BY deleted_at IS NOT NULL").get(digest,input.collection_id,input.group_index,input.group_key??null,input.group_key??null,input.source_url,input.group_key??null)
       : db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL').get(digest,input.collection_id);
+    if(!existing&&input.group_key){
+      const candidates=db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_key IS NULL AND deleted_at IS NULL').all(digest,input.collection_id).filter(row=>{const old=legacyGalleryPage(row);return old?.group_key===input.group_key&&old.group_index===input.group_index;});
+      if(candidates.length===1)existing=candidates[0];
+    }
     if (existing?.deleted_at) throw fail(409, '这张图片已在此知识库的回收站中，请先恢复');
     if (existing) return sourceDuplicate(existing, input);
     const old = db.prepare('SELECT * FROM items WHERE hash=?').get(digest);
@@ -969,9 +974,10 @@ export function createApp({
     if (!req.files?.length) throw fail(400, "请选择图片");
     const results = [];
     try {
-      for (const file of req.files) {
+      for (const [index,file] of req.files.entries()) {
         try {
-          const item = await saveAsset(file, req.body);
+          const fields=req.body.group_key?{...req.body,group_index:Number(req.body.group_index??0)+index}:req.body;
+          const item = await saveAsset(file, fields);
           results.push({
             filename: filenameText(file.originalname),
             status: item.duplicate ? "duplicate" : "created",

@@ -278,7 +278,7 @@ export const spec = {
                   collection_id: str,
                   source_url: { ...str, description: 'HTTP(S) 来源网址；提供时自动记录采集时间' },
                   captured_at: { ...str, format: 'date-time' },
-                  group_key: { ...str, maxLength: 200, description: '可选作品组标识，例如 pixiv:art:12345；空串切换为逐张展示。按知识库隔离。提供时以原文件哈希、来源、页序联合去重。' },
+                  group_key: { ...str, maxLength: 200, description: '可选作品组标识，例如 pixiv:art:12345 或 paw:fanbox:1:2；空串切换为逐张展示。按知识库隔离，以作品身份、原文件哈希及原始页序去重，保留手工组与笔记归属。' },
                   group_index: { type: 'integer', minimum: 0, maximum: 10000, description: '作品内从 0 开始的页序，相同原文件的不同页保留独立记录并共享文件' },
                   group_title: { ...str, maxLength: 200, description: '分组封面标题' },
                 },
@@ -491,6 +491,9 @@ spec.paths["/api/assets/batch"] = {
                   items: { type: "string", format: "binary" },
                 },
                 collection_id: str,
+                group_key: {...str,maxLength:200,description:'非空时将本批文件放入该作品组'},
+                group_index: {type:'integer',minimum:0,maximum:10000,default:0,description:'组内起始页序；按本批文件顺序递增，失败项不改变后续页序'},
+                group_title: {...str,maxLength:200},
                 tags: {
                   ...str,
                   description: "JSON 数组字符串，统一设置上传文件的多个标签",

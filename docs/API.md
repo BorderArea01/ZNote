@@ -162,6 +162,10 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 
 `group_order` 为可空的展示顺序，空值沿用 `group_index` 原始页序；上传仍使用原始 `group_index`，不要用展示顺序覆盖来源页码。`gallery=true&group_key=...&collection=...` 返回展示顺序，手动排序不破坏再次采集的去重。
 
+上传 `POST /api/assets` 时，`group_key`、`group_index`、`group_title` 必须作为结构化字段传入，仅在备注中写页码不会成组。相同知识库内用作品身份、原文件哈希和原始页序识别重复页面，相同内容的不同页共享文件但保留独立记录。Paw 标识为 `paw:fanbox:用户ID:作品ID`（Patreon 对应 `paw:patreon:...`），Pixiv 沿用 `pixiv:art:作品ID`。
+
+`POST /api/assets/batch` 提供非空 `group_key` 时，`group_index` 为起始序号，默认 0，后续按 multipart 文件顺序递增；失败项占据原来的页序，重试单页时继续提交该序号。未提供分组标识时不自动建组。不同自动图集不会因共用来源和文件互相覆盖，既有手工组与笔记配图关系保留。
+
 `POST /api/item-groups/move` 接收 `{ id, version, collection_id, move_note: true }`。`id` 是组内任意图片，`version` 是当前版本，`collection_id: null` 表示未分类。移动同一源知识库中的整组图片；笔记配图同时移动所属笔记。可附带当前图片的 `title/content/tags` 编辑，成功返回图片对象和 `moved_count`。目标已有同组或重复内容时返回 409，所有更新一起回滚。
 
 保存笔记时，本地配图自动归入 `note:笔记ID`；共享原文件但保留每篇笔记独立的分组与顺序。更新笔记知识库或通过 `batch-organize` 移动笔记，也会一起移动配图。普通单图片移动接口仍可用于单页整理。

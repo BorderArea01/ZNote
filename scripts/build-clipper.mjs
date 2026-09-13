@@ -29,6 +29,7 @@ for (const [src, dest] of [
   await copyFile("node_modules/" + src, "extensions/clipper/vendor/" + dest);
 
 await copyFile('shared/video-details.js','extensions/clipper/video-details.js');
+await copyFile('shared/gallery-group.js','extensions/clipper/gallery-group.js');
 // Keep the page-world parser and observer in one entry, independent of the
 // isolated-world loader and its globals.
 await writeFile('extensions/clipper/vendor/douyin-network.js',

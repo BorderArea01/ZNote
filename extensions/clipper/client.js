@@ -31,6 +31,7 @@ export async function saveImage(blob, details, signal, config = null) {
   data.set('tags', JSON.stringify(config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean)));
   if (config.collection_id) data.set('collection_id', config.collection_id);
   if (/^https?:\/\//i.test(details.source_url || '')) data.set('source_url', details.source_url);
+  for(const field of ['group_key','group_index','group_title'])if(details[field]!==undefined)data.set(field,details[field]);
   data.set('captured_at', new Date().toISOString());
   return api('/api/assets', { method: 'POST', body: data, signal }, config);
 }

@@ -1,5 +1,6 @@
 import { api, settings, serverUrl, limitedImage, saveImage } from './client.js';
 import { imageFilename } from './gallery-download.js';
+import { galleryGrouping } from './gallery-group.js';
 
 // The gallery page owns the sequential job. Only progress and destination are
 // stored with its ticket; API credentials stay in the existing connection settings.
@@ -7,7 +8,7 @@ export function libraryBatch(group, persist, changed, downloading) {
   const $ = id => document.getElementById(id);
   let running = false, ready = false, controller, connection, uploading = false;
   const states = group.saveStates = group.images.map((_, i) =>
-    ['done', 'duplicate', 'failed'].includes(group.saveStates?.[i]) ? group.saveStates[i] : 'pending');
+    group.saveSchema===1&&['done', 'duplicate', 'failed'].includes(group.saveStates?.[i]) ? group.saveStates[i] : 'pending');
   const complete = state => state === 'done' || state === 'duplicate';
   const count = () => states.filter(complete).length;
   function draw() {
@@ -48,6 +49,8 @@ export function libraryBatch(group, persist, changed, downloading) {
       if (serverUrl(latest.server) !== serverUrl(connection.server)) throw Error('连接地址已更改，请点击重新连接');
       const target = group.saveTarget ||= { server: serverUrl(connection.server), collection_id: $('collection').value, tags: $('tags').value.trim() };
       const config = { ...latest, ...target };
+      const grouping=await galleryGrouping(group);
+      group.saveSchema=1;
       await persist(); changed();
       let lastError = '';
       for (let i = 0; i < states.length; i++) {
@@ -65,7 +68,7 @@ export function libraryBatch(group, persist, changed, downloading) {
           const item = await saveImage(blob, {
             filename: imageFilename(group.title, i, group.images[i], blob.type).split('/').pop(),
             title: `${group.title.slice(0, 175)} · ${String(i + 1).padStart(3, '0')}`,
-            source_url: group.source_url, image_url: group.images[i],
+            ...grouping, group_index:i, image_url: group.images[i],
             capture_note: `作品：${group.title}\n页码：${i + 1} / ${states.length}`,
           }, AbortSignal.timeout(30000), config);
           states[i] = item.duplicate ? 'duplicate' : 'done';

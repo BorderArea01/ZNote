@@ -20,13 +20,16 @@ const errors = [], sourceHeaders = [];
 let failThird = true, slowSecond = false, loseResponse = false, posts = 0, uploadGate;
 await context.route('https://**/*', async route => {
   const u = new URL(route.request().url()); sourceHeaders.push(route.request().headers());
-  if (u.hostname === 'i.pximg.net') {
+  if (u.hostname === 'i.pximg.net'||/^(img|file)\.pawchive\.(pw|st)$/.test(u.hostname)) {
     const i = Number(u.pathname.match(/_p(\d)/)?.[1] || 0);
+    if(u.hostname.startsWith('file.pawchive'))return route.fulfill({contentType:'image/png',body:images[i===1?0:i]});
     if (!u.pathname.includes('original')) return route.fulfill({ contentType: 'image/jpeg', body: small });
     if (i === 2 && failThird) return route.fulfill({ status: 404 });
     if (i === 1 && slowSecond) await new Promise(r => setTimeout(r, 2000));
     return route.fulfill({ contentType: 'image/png', body: images[i] }).catch(() => {});
   }
+  if(u.hostname==='example.org')return route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><title>通用图集</title><article>'+[0,1,2].map(i=>`<img id="${i===0?'cover':'page'+i}" style="width:180px;height:120px" src="https://file.pawchive.pw/data/work_p${i}.png">`).join('')+'</article>'});
+  if(/^pawchive\./.test(u.hostname))return route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><main><h1>Paw 顺序图集</h1>'+[0,1,2].map(i=>`<figure><a href="https://file.pawchive.pw/data/work_p${i}.png"><img id="${i===0?'cover':'page'+i}" style="width:180px;height:120px" src="https://img.pawchive.pw/thumbnail/work_p${i}.png"></a></figure>`).join('')+'</main>'});
   if (u.pathname.startsWith('/ajax/illust/')) return route.fulfill({ json: { body: u.pathname.endsWith('/pages') ? [0, 1, 2].map(i => ({ urls: { original: `https://i.pximg.net/img-original/12345_p${i}.png`, regular: `https://i.pximg.net/img-master/12345_p${i}.jpg` } })) : { title: '晨间色彩 · 三页作品', pageCount: 3 } } });
   return route.fulfill({ contentType: 'text/html', body: '<!doctype html><style>body{margin:40px}img{width:48px;height:48px}</style><h1>作者作品</h1><a href="/artworks/12345"><img id="cover" src="https://i.pximg.net/tiny/12345_p0.jpg"></a>' });
 });
@@ -71,6 +74,7 @@ try {
   failThird = false;
   await gallery.locator('#save').click(); await gallery.getByRole('button', { name: '全部已入库', exact: true }).waitFor();
   assert.equal(posts, 3); assert.equal(rows(b.id).length, 3); assert.equal(rows(a.id).length, 0);
+  assert.ok(rows(b.id).every(r=>r.group_key==='pixiv:art:12345'));assert.deepEqual(rows(b.id).map(r=>r.group_index).sort(),[0,1,2]);
   for (const row of rows(b.id)) {
     const i = Number(row.title.match(/(\d{3})$/)[1]) - 1;
     assert.deepEqual(await originalBuffer(join(dir, 'data'), row), images[i]);
@@ -110,8 +114,16 @@ try {
   release();
   await stopped.locator('#save-status').filter({ hasText: '已停止。已入库 1 / 3' }).waitFor();
   assert.equal(rows(c.id).length, 1, 'Stop confirms the active upload and never starts the next image');
+  const pawLibrary=await(await context.request.post(base+'/api/collections',{data:{name:'Paw 图集'}})).json();
+  await page.goto('https://pawchive.pw/fanbox/user/1/post/2?from=creator');await page.locator('[data-znote-overlay]').waitFor({state:'attached'});
+  const paw=await openSave();await paw.locator('#collection').selectOption(pawLibrary.id);await paw.locator('#save').click();await paw.getByRole('button',{name:'全部已入库',exact:true}).waitFor();
+  const pawRows=rows(pawLibrary.id).sort((a,b)=>a.group_index-b.group_index);assert.equal(pawRows.length,3);assert.ok(pawRows.every(r=>r.group_key==='paw:fanbox:1:2'));assert.deepEqual(pawRows.map(r=>r.group_index),[0,1,2]);assert.equal(pawRows[0].hash,pawRows[1].hash);assert.notEqual(pawRows[0].id,pawRows[1].id);
+  const grouped=await(await context.request.get(base+'/api/items?collection='+pawLibrary.id+'&grouped=true')).json();assert.equal(grouped.total,1);assert.equal(grouped.items[0].group_count,3);assert.equal(grouped.items[0].id,pawRows[0].id);
+  await page.goto('https://pawchive.st/fanbox/user/1/post/2?from=another');await page.locator('[data-znote-overlay]').waitFor({state:'attached'});const mirror=await openSave();await mirror.locator('#collection').selectOption(pawLibrary.id);await mirror.locator('#save').click();await mirror.getByRole('button',{name:'全部已入库',exact:true}).waitFor();assert.equal(rows(pawLibrary.id).length,3,'Mirror and tracking parameters do not duplicate the work');
+  const genericLibrary=await(await context.request.post(base+'/api/collections',{data:{name:'通用网页'}})).json();await page.goto('https://example.org/article?id=2');await page.locator('[data-znote-overlay]').waitFor({state:'attached'});const generic=await openSave();await generic.locator('#collection').selectOption(genericLibrary.id);await generic.locator('#save').click();await generic.getByRole('button',{name:'全部已入库',exact:true}).waitFor();assert.equal(rows(genericLibrary.id).length,3);assert.equal(new Set(rows(genericLibrary.id).map(r=>r.group_key)).size,1);assert.ok(rows(genericLibrary.id).every(r=>r.group_key.startsWith('web:gallery:')));
+  await paw.screenshot({path:resolve('artifacts/v0927-paw-batch.png'),fullPage:true});
   assert.deepEqual(errors, []);
-  console.log('PASS: hover bulk-save entry; explicit destination and tags; original bytes, Pixiv source and page numbers; library isolation; partial failure, stop, refresh and retry; ambiguous response deduplication; no automatic downloads or token leakage; mobile layout');
+  console.log('PASS: real Edge extension bulk-save; Pixiv and Paw grouped with source order and first-page cover; identical pages retained; mirror reimport deduplicates; library isolation, partial failure, stop, refresh and retry; original bytes and token isolation; mobile layout');
 } finally {
   await context.close(); await runtime.imports.stop(); await runtime.backups.stop(); await runtime.webhooks.stop();
   await new Promise(r => server.close(r)); runtime.db.close();
