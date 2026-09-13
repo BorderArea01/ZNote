@@ -26,6 +26,9 @@ html[data-style] .item-card.is-selected .card-select{border-color:var(--green)}
 .zoom-tools button,.zoom-close{color:#f0f3ff!important;background:#283246!important;border-color:#65748f!important}
 .zoom-close{position:absolute;right:22px;top:20px;border-radius:12px}
 .zoom-tools output{min-width:48px;text-align:center;font-size:13px}
+.zoom-nav{position:absolute;top:50%;transform:translateY(-50%);min-width:40px;min-height:44px;color:#f0f3ff!important;background:#171d2dcc!important;border:1px solid #6d7890!important;border-radius:12px;padding:8px;}
+.zoom-previous{left:12px}.zoom-next{right:12px}.zoom-nav:disabled{opacity:.25;cursor:default}
+.zoom-position{position:absolute;top:20px;left:50%;transform:translateX(-50%);color:#f0f3ff;background:#171d2dcc;border-radius:12px;padding:8px 14px;font-size:13px;pointer-events:none}
 .note-gallery-stage{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in}
 .detail-dialog .metadata-fields select{margin-left:0}
 .image-stage .gallery-strip img{object-fit:cover;width:100%;height:100%;max-height:none}
@@ -34,6 +37,9 @@ html[data-style] button.help-trigger { display: inline-flex; flex: 0 0 28px; ali
 html[data-style] button.help-trigger:hover, html[data-style] button.help-trigger:focus-visible { background: var(--accent-soft); color: var(--green); }
 .help-tooltip { position: fixed; z-index: 20000; width: max-content; max-width: min(320px, calc(100vw - 16px)); padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 28px #0002; font-size: 14px; font-weight: 400; line-height: 1.75; overflow-wrap: anywhere; }
 .help-tooltip strong { display: block; margin-bottom: 5px; font-size: 13px; color: var(--green); }
+.field-help-label{display:inline-flex;align-items:center;gap:4px}
+.help-tooltip { max-height:calc(100dvh - 16px); overflow:auto; overscroll-behavior:contain; }
+@media(pointer:coarse){html[data-style] button.help-trigger { min-width:36px; min-height:36px; flex-basis:36px; }}
 .main-content { padding-top: 28px; }
 .page-heading { margin-bottom: 22px; }
 .page-heading h1 { margin: 5px 0; font-size: 28px; }

@@ -349,6 +349,8 @@ function CollectionDialog({ value, onClose, onSave }) {
 
 function Detail({
   item: initial,
+  expandedImage = false,
+  onExpandedImageChange,
   collections,
   suggestions,
   onClose,
@@ -390,7 +392,8 @@ function Detail({
   const [busy, setBusy] = useState(false);
   const [backlinks, setBacklinks] = useState([]);
   const [error, setError] = useState("");
-  const [lightbox, setLightbox] = useState(false);
+  const [lightbox, setLightboxValue] = useState(initial.kind==='image'&&expandedImage?initial.url:false);
+  const setLightbox=value=>{setLightboxValue(value);if(initial.kind==='image')onExpandedImageChange?.(!!value);};
   const [copying, setCopying] = useState(false);
   const [sorting,setSorting] = useState(false);
   const [orderUndo,setOrderUndo] = useState(null);
@@ -480,7 +483,7 @@ function Detail({
   async function step(delta) {
     if (busy || galleryBusy || copying || sorting) return;
     if (dirty && !(await save())) return;
-    onStep?.(delta);
+    return onStep?.(delta);
   }
   const swipeDisabled=busy||galleryBusy||copying||sorting||!!lightbox;
   const imageSwipe=useImageSwipe({identity:item.id,disabled:swipeDisabled,onTap:()=>setLightbox(item.url),onSwipe:delta=>{if(delta<0?previousAvailable:nextAvailable)void step(delta);}});
@@ -824,7 +827,10 @@ function Detail({
           setBusy(false);
         }}
       />
-      {lightbox && <ZoomViewer src={lightbox} alt={title} onClose={()=>setLightbox(false)}/>}
+      {lightbox && <ZoomViewer src={lightbox} alt={noteIndex!==null?noteImages[noteIndex]?.alt:title} onClose={()=>setLightbox(false)} busy={busy||galleryBusy}
+        previousAvailable={noteIndex!==null?noteIndex>0:previousAvailable} nextAvailable={noteIndex!==null?noteIndex<noteImages.length-1:nextAvailable}
+        position={noteIndex!==null?`第 ${noteIndex+1} / ${noteImages.length} 张`:galleryPosition}
+        onStep={delta=>{if(noteIndex!==null){const index=noteIndex+delta;if(noteImages[index]){setNoteIndex(index);setLightbox(noteImages[index].url);}}else return step(delta);}}/>}
       {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} {...noteSwipe} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
       {versionsOpen && <React.Suspense fallback={null}><NoteVersions item={{...item,title,content}} onClose={() => setVersionsOpen(false)} onUse={async value => { if (!(await draft.keepCurrent())) return false; applyDraft({...value,collection_id:collection||null}); return true; }}/></React.Suspense>}
       {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify('顺序已保存，第一张为封面',result.undo);}}/>}

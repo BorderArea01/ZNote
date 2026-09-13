@@ -1,3 +1,4 @@
+import {HelpHint} from './HelpHint.jsx';
 import React,{useState} from 'react';
 import {Sparkles} from 'lucide-react';
 const key='znote.external-assistant';
@@ -9,5 +10,5 @@ export function ExternalAssistantLink({collection}){
 }
 export function ExternalAssistantSettings(){
   const [value,setValue]=useState(read),[message,setMessage]=useState('');
-  return <section><div className="settings-title"><h3>外部知识库助手</h3></div><p>通过独立服务使用当前知识库。连接时仅传递知识库编号，不在链接中传递访问密码或令牌。</p><label className="feature-field">助手地址<input aria-label="外部助手地址" type="url" placeholder={defaultUrl()} value={value} onChange={e=>setValue(e.target.value)}/></label><div className="connection-actions"><button onClick={()=>{try{value.trim()?localStorage.setItem(key,normalize(value.trim())):localStorage.removeItem(key);setMessage('已保存此浏览器的助手地址')}catch(e){setMessage(e.message)}}}>保存地址</button></div>{message&&<p role="status">{message}</p>}</section>;
+  return <section><div className="settings-title"><h3>外部知识库助手</h3><HelpHint label="外部知识库助手">通过独立服务使用当前知识库。连接时仅传递知识库编号，不在链接中传递访问密码或令牌。</HelpHint></div><label className="feature-field">助手地址<input aria-label="外部助手地址" type="url" placeholder={defaultUrl()} value={value} onChange={e=>setValue(e.target.value)}/></label><div className="connection-actions"><button onClick={()=>{try{value.trim()?localStorage.setItem(key,normalize(value.trim())):localStorage.removeItem(key);setMessage('已保存此浏览器的助手地址')}catch(e){setMessage(e.message)}}}>保存地址</button></div>{message&&<p role="status">{message}</p>}</section>;
 }

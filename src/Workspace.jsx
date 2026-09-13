@@ -215,6 +215,7 @@ export default function Workspace({
     window.addEventListener('scroll',scrolled,{passive:true});
     return () => { cancelAnimationFrame(frame); stop(); inputs.forEach(type=>window.removeEventListener(type,stop,true)); window.removeEventListener('scroll',scrolled); };
   }, [loading, items]);
+  const [imageExpanded,setImageExpanded] = useState(false);
   const galleryItems = gallery || items.filter(i => i.kind === 'image');
   const galleryIndex = galleryItems.findIndex(i => i.id === selected?.id);
   async function stepImage(delta) {
@@ -917,7 +918,7 @@ export default function Workspace({
             <Trash2 size={17} />
             回收站<span>{stats.trash || ""}</span>
           </button>
-          <button onClick={() => setSettings(true)}>
+          <button onClick={() => {setMobile(false);setSettings(true);}}>
             <Settings size={17} />
             设置与连接
             <ArrowUpRight size={15} />
@@ -1398,9 +1399,11 @@ export default function Workspace({
         <Detail
           key={selected.id || "new"}
           item={selected}
+          expandedImage={imageExpanded}
+          onExpandedImageChange={setImageExpanded}
           collections={collections}
           suggestions={tags}
-          onClose={closeDetail}
+          onClose={()=>{setImageExpanded(false);closeDetail();}}
           onSaved={saved}
           onSelectGroup={selectGroup}
           groupSelecting={groupSelecting}

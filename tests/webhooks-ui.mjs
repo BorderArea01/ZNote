@@ -7,7 +7,7 @@ import { createApp } from '../server/app.js';
 
 const dir = await mkdtemp(resolve('artifacts/webhooks-ui-')); let reply = 503, received = 0;
 const receiver = createServer(async (req, res) => { for await (const chunk of req) {} received++; res.writeHead(reply).end(); }); receiver.listen(0, '127.0.0.1'); await new Promise(r => receiver.once('listening', r));
-const runtime = createApp({ dataDir: dir, staticDir: resolve('artifacts/build-v03') }); const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+const runtime = createApp({ dataDir: dir, staticDir: resolve(process.env.UI_DIST || 'dist') }); const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: 'msedge', headless: true }); const context = await browser.newContext({ viewport: { width: 1360, height: 1000 } }); const page = await context.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message));

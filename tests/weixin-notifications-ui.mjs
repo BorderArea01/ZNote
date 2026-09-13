@@ -7,7 +7,7 @@ import {createApp} from '../server/app.js';
 const dir=await mkdtemp(resolve('artifacts/weixin-notify-ui-'));
 let calls=0,mode='accept';
 const client={updates:async()=>({msgs:[]}),sendText:async()=>{calls++;if(mode==='reject')throw Object.assign(Error('do not expose this'),{weixinCode:-2});return {accepted:true}}};
-const runtime=createApp({dataDir:dir,weixinClient:client}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+const runtime=createApp({dataDir:dir,weixinClient:client,staticDir:resolve(process.env.UI_DIST||'dist')}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
 const base='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({channel:'msedge',headless:true}),context=await browser.newContext({viewport:{width:1366,height:1000}}),page=await context.newPage(),errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 const a={base:'https://ilinkai.weixin.qq.com',token:'fake-token',user:'fake-owner',bot:'fake-bot'};

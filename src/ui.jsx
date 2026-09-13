@@ -24,7 +24,8 @@ export function Dialog({ title, onClose, children, className = "" }) {
   },true,100);
   useEffect(() => {
     const previous = document.activeElement;
-    ref.current?.focus();
+    // A nested viewer may have already claimed focus during the same mount.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const listener = (e) => {
       if (e.target.closest('[role="dialog"]') !== ref.current) return;
       if (e.key !== "Tab") return;

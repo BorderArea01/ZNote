@@ -41,7 +41,7 @@ export function WebhookSettings() {
     {!hooks.length && <p className="muted">尚未配置事件接收端。可使用项目中的 Webhook 示例启动本地接收器。</p>}
     {selected && <Dialog title={`${selected.name} · 投递记录`} onClose={() => setSelected(null)} className="settings-dialog">
       <div className="feature-body">
-        <p className="muted">每次投递最多等待 5 秒，失败最多自动尝试 8 次。同一事件重试沿用相同投递 ID，接收端应据此去重。</p>
+        <div className="inline-heading"><span>投递与重试</span><HelpHint label="投递规则">每次投递最多等待 5 秒，失败最多自动尝试 8 次。同一事件重试沿用相同投递 ID，接收端应据此去重。</HelpHint></div>
         {deliveries.items.map(item => <div key={item.id} className="webhook-entry">
           <strong>{JSON.parse(item.payload).type} · {labels[item.status]}</strong>
           <small>{new Date(item.created_at).toLocaleString()} · 已尝试 {item.attempts} 次{item.last_status ? ` · HTTP ${item.last_status}` : ''}</small>

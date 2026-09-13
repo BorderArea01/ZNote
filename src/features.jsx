@@ -323,7 +323,7 @@ export function UploadDialog({
             <button onClick={onClose}>完成</button>
           )}
         </div>
-        {running&&<p className="muted">可关闭此窗口，上传会继续；右上角「任务」可查看进度。</p>}
+        {running&&<div className="inline-heading"><span>后台上传中</span><HelpHint label="后台上传">可关闭此窗口，上传会继续；右上角「任务」可查看进度。</HelpHint></div>}
         {runError&&<p role="alert" className="error">{runError}</p>}
       </div>
     </Dialog>
@@ -409,13 +409,13 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
           />
           包含回收站
         </label>
-        <p className="muted">
+        <div className="inline-heading"><span>导出内容</span><HelpHint label="导出范围">
           {mode === "backup"
             ? "可在备份设置中上传并预览恢复；完整备份包含全部知识库和访问设置。"
             : "图文包会附带笔记引用的图片，即使图片位于其他知识库，以保持阅读完整。"}
-        </p>
+        </HelpHint></div>
         {error && <div className="error">{error}</div>}
-        {submitted?<p role="status">导出已提交，可在「任务」或浏览器下载列表查看。</p>:<p className="muted">浏览器直接接收下载文件，无需在网页中暂存整包。右上角「任务」可查看导出状态。</p>}
+        {submitted?<p role="status">导出已提交，可在「任务」或浏览器下载列表查看。</p>:<div className="inline-heading"><span>下载方式</span><HelpHint label="导出下载">浏览器直接接收下载文件，无需在网页中暂存整包。右上角「任务」可查看导出状态。</HelpHint></div>}
         <div className="feature-actions">
           <button className="primary" onClick={download} disabled={busy}>
             {busy ? (
