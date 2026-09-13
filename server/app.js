@@ -1,4 +1,5 @@
 import {localMediaReferences} from '../shared/local-media.js';
+import { VERSION } from './version.js';
 import {createTrashManager} from './trash.js';
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
@@ -213,7 +214,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.13" }),
+    res.json({ status: "ok", version: VERSION }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -313,7 +314,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.13",
+      version: VERSION,
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -423,6 +424,7 @@ export function createApp({
         sort: z.enum(["updated", "created", "title"]).default("updated"),
         limit: z.coerce.number().int().min(1).max(100).default(60),
         offset: z.coerce.number().int().min(0).default(0),
+        anchor: z.string().max(100).optional(),
         gallery: z.enum(['true', 'false']).default('false'),
         grouped: z.enum(['true','false']).default('false'),
         group_key: z.string().max(200).optional(),
@@ -482,22 +484,32 @@ export function createApp({
       title: "title COLLATE NOCASE, id",
     }[q.sort];
     if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...args).map(item => item.id) });
+    const groupedQuery = `SELECT *, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
+    let offset = q.offset;
+    if (q.anchor) {
+      // Seek within the same filtered and grouped result, never fetch every
+      // preceding page merely to restore a browser's reading position.
+      const source = q.grouped === 'true' ? groupedQuery : `SELECT * FROM items WHERE ${clause}`;
+      const position = db.prepare(`SELECT position FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY ${sort}) - 1 AS position FROM (${source})) WHERE id=?`).get(...args, q.anchor)?.position;
+      offset = position === undefined ? 0 : Math.floor(position / q.limit) * q.limit;
+    }
     if(q.grouped==='true') {
-      const grouped=`SELECT *, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
-      return res.json({items:db.prepare(`${grouped} ORDER BY ${sort} LIMIT ? OFFSET ?`).all(...args,q.limit,q.offset).map(serialize),total:db.prepare(`SELECT count(*) n FROM (${grouped})`).get(...args).n,offset:q.offset,limit:q.limit});
+      const grouped=groupedQuery;
+      return res.json({items:db.prepare(`${grouped} ORDER BY ${sort} LIMIT ? OFFSET ?`).all(...args,q.limit,offset).map(serialize),total:db.prepare(`SELECT count(*) n FROM (${grouped})`).get(...args).n,offset,limit:q.limit,event_cursor:db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor});
     }
     res.json({
       items: db
         .prepare(
           `SELECT * FROM items WHERE ${clause} ORDER BY ${sort} LIMIT ? OFFSET ?`,
         )
-        .all(...args, q.limit, q.offset)
+        .all(...args, q.limit, offset)
         .map(serialize),
       total: db
         .prepare(`SELECT count(*) n FROM items WHERE ${clause}`)
         .get(...args).n,
-      offset: q.offset,
+      offset,
       limit: q.limit,
+      event_cursor: db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor,
     });
   });
   const insert = (input, image = null) => {
@@ -1080,6 +1092,7 @@ export function createApp({
     res.status(204).end();
   });
   app.get("/api/events", (req, res) => {
+    if (req.query.latest === 'true') return res.json({ events: [], cursor: db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor });
     const after = z.coerce
       .number()
       .int()

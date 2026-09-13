@@ -57,6 +57,9 @@ try {
   // Hold a gallery response after it has left the API. Switching libraries must
   // invalidate both this response and any subsequent detail request.
   await choose('摄影'); await loaded();
+  // Each library now resumes its own previous query; clear it to browse all.
+  await page.getByPlaceholder('搜索标题、正文或标签…').fill('');
+  await page.getByRole('button', { name: '打开 摄影笔记 · 配图', exact: true }).waitFor();
   let release, arrived;
   const ready = new Promise(r => arrived = r), gate = new Promise(r => release = r);
   const delayed = async route => { const response = await route.fetch(); arrived(); await gate; await route.fulfill({ response }).catch(() => {}); };

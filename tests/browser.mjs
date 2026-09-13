@@ -109,7 +109,7 @@ try {
     () => document.querySelectorAll(".item-card").length === 2,
   );
   checkpoint("favorite preserves body; Chinese body search");
-  await page.getByRole("button", { name: "打开 视觉配色研究" }).click();
+  await page.getByRole("button", { name: "打开 从图像开始的知识整理 · 配图", exact: true }).click();
   await wait(
     page
       .locator(".backlinks button")

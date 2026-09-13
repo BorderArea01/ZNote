@@ -1,3 +1,4 @@
+import { VERSION } from './version.js';
 const str = { type: "string" };
 const ref = (name) => ({ $ref: `#/components/schemas/${name}` });
 const body = (schema) => ({
@@ -41,7 +42,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.9.13",
+    version: VERSION,
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -147,6 +148,7 @@ export const spec = {
             total: { type: "integer" },
             limit: { type: "integer" },
             offset: { type: "integer" },
+            event_cursor: { type: "integer", description: "查询时的最新变更游标，用于非打断式更新提示" },
           },
         },
         {
@@ -551,9 +553,11 @@ spec.paths['/api/backups'] = {
 spec.paths['/api/clipper/download'] = { get: { summary: '下载浏览器采集扩展 ZIP（需要登录或 API 令牌）', responses: { 200: { description: '可在 Chrome/Edge 加载的 MV3 扩展', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
 spec.paths['/api/items'].get.parameters.push({ name: 'gallery', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'false' }, description: 'true 返回当前过滤范围内按排序冻结的图片 ID 列表 {ids:[]}，忽略 limit/offset；不读取图片二进制，用于连续整理时保持顺序' });
 spec.paths['/api/items'].get.parameters.push(
+  {name:'anchor',in:'query',schema:{type:'string',maxLength:100},description:'定位当前筛选和分组结果中该内容所在分页，返回实际 offset；不存在时回到第一页。gallery=true 时忽略。'},
   {name:'grouped',in:'query',schema:{type:'string',enum:['true','false'],default:'false'},description:'按作品组折叠，封面为首个匹配页，返回 group_count；total 为折叠后数量。默认保持逐条 API 行为。'},
   {name:'group_key',in:'query',schema:str,description:'限定作品组；与 collection 配合，gallery=true 时按 group_order 展示顺序返回各页 ID，未排序时沿用 group_index。'}
 );
+spec.paths['/api/events'].get.parameters.push({name:'latest',in:'query',schema:{type:'string',enum:['true','false']},description:'true 只返回最新 cursor 和空 events，用于轻量检查更新；默认沿用 after 增量读取。'});
 Object.assign(spec.components.schemas.Item.allOf[1].properties, {group_key:{...str,nullable:true},group_index:{type:'integer'},group_title:{...str,nullable:true},group_count:{type:'integer',description:'仅折叠查询返回当前过滤范围内的组页数'}});
 spec.paths['/api/item-groups/favorite']={post:operation('收藏或取消收藏当前知识库的整组图片',{type:'object',properties:{count:{type:'integer'}}},{requestBody:body({type:'object',required:['group_key','collection_id','favorite'],properties:{group_key:str,collection_id:{...str,nullable:true},favorite:{type:'boolean'}}})})};
 spec.paths['/api/backups/policy'] = { patch: operation('更新自动备份策略（管理员）；默认每天一次保留 7 份', { type: 'object' }, { requestBody: body({ type: 'object', required: ['enabled', 'interval_hours', 'keep'], properties: {

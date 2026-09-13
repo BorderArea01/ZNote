@@ -850,8 +850,6 @@
 .gallery-controls button { padding:8px 12px; }
 .image-stage .gallery-controls { justify-content:center; }
 .source-info { font-size:12px; overflow-wrap:anywhere; }
-.item-card { content-visibility:auto; contain-intrinsic-size:auto 320px; }
-.items.list .item-card { contain-intrinsic-size:auto 90px; }
 @media (max-width: 700px) {
   .image-stage { max-height:none; min-height:0; gap:12px; }
   .image-stage > button { flex:none; }

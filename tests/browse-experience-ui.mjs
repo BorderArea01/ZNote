@@ -1,0 +1,125 @@
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
+import { createApp } from '../server/app.js';
+
+const dir = await mkdtemp(resolve('artifacts/browse-experience-'));
+const runtime = createApp({ dataDir: dir, staticDir: resolve(process.env.UI_DIST || 'dist') });
+const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+const base = 'http://127.0.0.1:' + server.address().port;
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const page = await context.newPage(), errors = [], report = {};
+page.on('pageerror', e => errors.push(e.message));
+const post = async (path, data) => { const r = await context.request.post(base + path, { data }); assert.ok(r.ok(), await r.text()); return r.json(); };
+const get = async path => { const r = await context.request.get(base + path); assert.ok(r.ok(), await r.text()); return r.json(); };
+const choose = name => page.locator('.collections-nav').getByRole('button', { name: new RegExp('^' + name + ' ') }).click();
+const loaded = () => page.waitForFunction(() => !document.querySelector('.loading-state') && document.querySelector('.item-card'));
+const position = () => page.evaluate(() => { for (const el of document.querySelectorAll('.item-card')) { const r = el.getBoundingClientRect(); if (r.bottom > 0 && r.top < innerHeight) return { id: el.dataset.itemId, top: r.top }; } });
+try {
+  await post('/api/auth/setup', { password: '0914' });
+  const a = await post('/api/collections', { name: '万图测试库' }), b = await post('/api/collections', { name: '独立笔记库' });
+  const buffer = await sharp({ create: { width: 160, height: 120, channels: 3, background: '#798cad' } }).png().toBuffer();
+  const upload = await context.request.post(base + '/api/assets', { multipart: { collection_id: a.id, file: { name: 'fixture.png', mimeType: 'image/png', buffer } } });
+  assert.ok(upload.ok()); const sample = await upload.json();
+  const original = runtime.db.prepare('SELECT * FROM items WHERE id=?').get(sample.id);
+  const columns = Object.keys(original), insert = runtime.db.prepare(`INSERT INTO items (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`);
+  const ids = [];
+  runtime.db.exec('BEGIN');
+  for (let i = 0; i < 10000; i++) {
+    const row = { ...original, id: randomUUID(), title: '图片 ' + String(i).padStart(5, '0'), tags: JSON.stringify(i % 2 ? ['插画', '参考'] : ['摄影']) };
+    insert.run(...columns.map(c => row[c])); ids.push(row.id);
+  }
+  runtime.db.exec('COMMIT');
+  await post('/api/items', { collection_id: b.id, title: '独立笔记', content: '另一知识库的内容' });
+  await context.request.patch(base + '/api/preferences', { data: { default_collection_id: a.id } });
+  // Server seeks late records in a single bounded page, respecting library,
+  // compound tags and grouping; absent / foreign anchors fall back safely.
+  const t = performance.now();
+  const seek = await get(`/api/items?collection=${a.id}&sort=title&grouped=true&anchor=${ids[9001]}`);
+  assert.equal(seek.items.length, 60); assert.equal(seek.offset, 9000); assert.ok(seek.items.some(i => i.id === ids[9001]));
+  report.seek9001Ms = Math.round(performance.now() - t);
+  const filtered = await get(`/api/items?collection=${a.id}&sort=title&grouped=true&tags=${encodeURIComponent(JSON.stringify(['插画', '参考']))}&anchor=${ids[9001]}`);
+  assert.equal(filtered.total, 5000); assert.ok(filtered.items.some(i => i.id === ids[9001]));
+  assert.equal((await get(`/api/items?collection=${b.id}&anchor=${ids[9001]}`)).offset, 0);
+  await page.goto(base); await loaded(); await page.getByRole('combobox', { name: '排序方式' }).selectOption('title'); await loaded();
+  for (let n = 0; n < 5; n++) { await page.getByRole('button', { name: '加载更多内容', exact: true }).click(); await page.getByRole('button', { name: '加载更多内容', exact: true }).waitFor(); }
+  await page.waitForFunction(() => document.querySelector('[data-virtual]'));
+  report.mountedCardsFor360 = await page.locator('.item-card').count(); assert.ok(report.mountedCardsFor360 < 60);
+  await page.evaluate(() => window.scrollTo(0, 17000)); await page.waitForTimeout(450);
+  const anchor = await position(); assert.ok(anchor);
+  await choose('独立笔记库'); await loaded(); assert.equal(await page.locator('.item-card').count(), 1);
+  await page.getByRole('button', { name: '列表视图', exact: true }).click();
+  await choose('万图测试库'); await loaded(); await page.waitForTimeout(450);
+  const restored = await position(); assert.equal(restored.id, anchor.id); assert.ok(Math.abs(restored.top - anchor.top) < 5);
+  assert.ok(await page.locator('.items.grid').count());
+  await page.getByRole('button', { name: '加载前面的内容', exact: true }).waitFor();
+  await page.reload(); await loaded(); await page.waitForTimeout(350);
+  assert.equal((await position()).id, anchor.id);
+  for (let i = 0; i < 2; i++) {
+    // Trigger without scrolling the target out of view; prepending pages must
+    // retain its position even when the list crosses the virtualization limit.
+    const response = page.waitForResponse(r => r.url().includes('/api/items?') && r.status() === 200);
+    await page.getByRole('button', { name: '加载前面的内容', exact: true }).evaluate(el => el.click());
+    await response; await page.waitForTimeout(350);
+    assert.equal((await position()).id, anchor.id); assert.ok(Math.abs((await position()).top - anchor.top) < 5);
+  }
+  await page.getByRole('button', { name: '选择内容', exact: true }).click(); await loaded();
+  await page.evaluate(() => scrollTo(0, 0));
+  const cards = page.locator('.card-main');
+  await cards.nth(1).click(); await cards.nth(7).click({ modifiers: ['Shift'] });
+  await page.getByText('已选 7 项', { exact: true }).waitFor();
+  await page.locator('.card-select input').nth(4).click({ modifiers: ['Shift'] });
+  await page.getByText('已选 3 项', { exact: true }).waitFor();
+  // Preserve off-page row versions too, so actions after a refresh still work.
+  await page.getByRole('button', { name: '加载更多内容', exact: true }).click();
+  await page.getByRole('button', { name: '加载更多内容', exact: true }).waitFor();
+  await page.locator('.card-main').nth(70).click();
+  await page.getByText('已选 4 项', { exact: true }).waitFor();
+  await page.evaluate(() => scrollTo(0, 0));
+  const beforeFocus = await page.locator('.item-card').first().getAttribute('data-item-id');
+  await post('/api/items', { collection_id: a.id, title: '新增笔记', content: '来自其他设备' });
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await page.locator('.browse-update').waitFor();
+  await page.getByText('已选 4 项', { exact: true }).waitFor();
+  assert.equal(await page.locator('.item-card').first().getAttribute('data-item-id'), beforeFocus);
+  await page.locator('.browse-update').getByRole('button', { name: '刷新内容', exact: true }).click(); await loaded();
+  await page.getByText('已选 4 项', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '移动 / 收藏', exact: true }).click();
+  const organize = page.getByRole('dialog', { name: '批量整理 4 项内容', exact: true });
+  await organize.getByRole('combobox', { name: '批量收藏状态' }).selectOption('yes');
+  await organize.getByRole('button', { name: '确认整理', exact: true }).click();
+  await organize.waitFor({ state: 'hidden' });
+  assert.equal(runtime.db.prepare('SELECT count(*) n FROM items WHERE favorite=1 AND collection_id=?').get(a.id).n, 4);
+  await page.getByRole('button', { name: '退出选择', exact: true }).click(); await loaded();
+  await page.getByRole('textbox', { name: '搜索内容', exact: true }).fill('图片 09');
+  await page.getByRole('button', { name: '筛选标签：插画', exact: true }).click();
+  await page.getByRole('button', { name: '筛选标签：参考', exact: true }).click();
+  await page.getByRole('combobox', { name: '标签匹配方式', exact: true }).selectOption('any');
+  await loaded();
+  await choose('独立笔记库'); await loaded(); assert.ok(await page.locator('.items.list').count());
+  assert.equal(await page.locator('.selection-bar').count(), 0);
+  assert.equal(await page.getByRole('textbox', { name: '搜索内容', exact: true }).inputValue(), '');
+  await choose('万图测试库'); await loaded();
+  assert.equal(await page.getByRole('textbox', { name: '搜索内容', exact: true }).inputValue(), '图片 09');
+  assert.equal(await page.getByRole('combobox', { name: '标签匹配方式', exact: true }).inputValue(), 'any');
+  assert.equal(await page.locator('.tag-options [aria-pressed=true]').count(), 2);
+  assert.equal(await page.getByRole('combobox', { name: '排序方式' }).inputValue(), 'title');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: resolve('artifacts/v0914-browse-desktop.png') });
+  await choose('独立笔记库'); await loaded();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; document.documentElement.dataset.palette = 'slate'; });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: resolve('artifacts/v0914-browse-mobile.png') });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  assert.deepEqual(errors, []);
+  report.checks = ['10,000 records', 'bounded DOM', 'filtered anchor seek', 'library isolation', 'position after switching and reload', 'Shift range and deselection', 'focus preserves selection', 'explicit refresh', 'mobile list'];
+  await writeFile('artifacts/v0914-browse-verification.json', JSON.stringify(report, null, 2));
+  console.log('PASS', JSON.stringify(report));
+} finally {
+  await browser.close(); await runtime.trash.stop(); await runtime.imports.stop(); await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(r => server.close(r)); runtime.db.close();
+}

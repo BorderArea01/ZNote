@@ -5,6 +5,7 @@ import { resolve, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import sharp from "sharp";
 import { createApp } from "../server/app.js";
+import packageInfo from '../package.json' with { type: 'json' };
 
 function unzip(buffer) {
   const files = new Map();
@@ -56,6 +57,7 @@ test("ZNote real API lifecycle, permissions, media, export and restart", async (
       body: data ? JSON.stringify(data) : undefined,
     });
   await t.test("requires authentication and initializes once", async () => {
+    assert.equal((await (await request('/api/health')).json()).version, packageInfo.version);
     assert.equal((await request("/api/items")).status, 401);
     assert.equal(
       (await request("/api/auth/setup", "POST", { password: "123" })).status,

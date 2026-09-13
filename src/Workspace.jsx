@@ -1,5 +1,7 @@
 import {TrashDialog} from './TrashDialog.jsx';
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+import { VirtualItems } from './VirtualItems.jsx';
+import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { version as packageVersion } from '../package.json';
 import {
   Search,
@@ -103,10 +105,52 @@ export default function Workspace({
   const [purging,setPurging]=useState(null);
   const [selectionRows,setSelectionRows]=useState({}),[groupSelecting,setGroupSelecting]=useState(false);
   const groupRequest=useRef(0),selectionSeed=useRef(null);
-  const chosenItems=selection.map(id=>selectionRows[id]||items.find(item=>item.id===id)).filter(Boolean);
+  const itemById = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
+  const selectedIds = useMemo(() => new Set(selection), [selection]);
+  const chosenItems=selection.map(id=>selectionRows[id]||itemById.get(id)).filter(Boolean);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
+  const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
+  const [updatesAvailable, setUpdatesAvailable] = useState(false);
+  const pagingRequest = useRef(null), restoreAnchor = useRef(null), pendingBrowse = useRef(null);
+  const selectionAnchor = useRef(null), browsing = useRef(null), previousParams = useRef(null);
+  const eventCursor = useRef(0);
+  browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, layout, loading };
+  function rememberBrowse() {
+    const state = browsing.current;
+    if (!state || state.loading) return;
+    writeBrowse(state.library, state.view, { query: state.query, tags: state.tags, mode: state.mode, sort: state.sort, layout: state.layout, anchor: captureAnchor() });
+  }
+  function restoreBrowse(id, targetView) {
+    const saved = readBrowse(id, targetView);
+    pendingBrowse.current = saved.anchor;
+    setView(saved.view); setQuery(saved.query); setSearch(saved.query);
+    setSelectedTags(saved.tags); setTagMode(saved.mode); setSort(saved.sort); setLayout(saved.layout);
+  }
+  useEffect(() => {
+    let timer;
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(rememberBrowse, 350); };
+    const leave = () => { if (document.visibilityState === 'hidden') rememberBrowse(); };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('pagehide', rememberBrowse); document.addEventListener('visibilitychange', leave);
+    return () => { clearTimeout(timer); window.removeEventListener('scroll', schedule); window.removeEventListener('pagehide', rememberBrowse); document.removeEventListener('visibilitychange', leave); };
+  }, []);
+  useEffect(() => { if (ready && !loading) rememberBrowse(); }, [ready, loading, query, selectedTags, tagMode, sort, layout, view, collection]);
+  useLayoutEffect(() => {
+    if (loading) return;
+    const anchor = restoreAnchor.current;
+    if (!anchor) return;
+    const restore = () => {
+      const card = [...document.querySelectorAll('.item-card[data-item-id]')].find(el => el.dataset.itemId === anchor.id);
+      if (card) window.scrollBy({ top: card.getBoundingClientRect().top - anchor.top, behavior: 'instant' });
+      else window.scrollTo({ top: 0, behavior: 'instant' });
+    };
+    restore();
+    // Grid measurement and browser scroll anchoring settle at the next frame.
+    const frame = requestAnimationFrame(() => { restore(); restoreAnchor.current = null; });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, items]);
   const galleryItems = gallery || items.filter(i => i.kind === 'image');
   const galleryIndex = galleryItems.findIndex(i => i.id === selected?.id);
   async function stepImage(delta) {
@@ -129,7 +173,7 @@ export default function Workspace({
     });
     return () => images.forEach(img => { img.src = ''; });
   }, [selected?.id, galleryIndex, galleryItems.length]);
-  const refresh = () => setRevision((n) => n + 1),
+  const refresh = () => { pendingBrowse.current = captureAnchor(); setUpdatesAvailable(false); setRevision((n) => n + 1); },
     notify = setToast;
   const actualCollection = collection === "unfiled" ? null : collection;
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
@@ -151,15 +195,23 @@ export default function Workspace({
     }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message)}
     finally{if(request===groupRequest.current)setGroupSelecting(false)}
   }
-  const toggleSelection = id => setSelection(previous => previous.includes(id)
-    ? previous.filter(value => value !== id)
-    : previous.length < 10000 ? [...previous,id] : previous);
+  const toggleSelection = (id, event) => {
+    const from = items.findIndex(item => item.id === selectionAnchor.current);
+    const to = items.findIndex(item => item.id === id);
+    const range = event?.shiftKey && from >= 0 && to >= 0
+      ? items.slice(Math.min(from, to), Math.max(from, to) + 1).map(item => item.id) : [id];
+    const rangeIds = new Set(range);
+    setSelection(previous => previous.includes(id) ? previous.filter(value => !rangeIds.has(value)) : [...new Set([...previous, ...range])].slice(0, 10000));
+    if (!event?.shiftKey || from < 0) selectionAnchor.current = id;
+  };
   const closeDetail = () => {
     ++detailGeneration.current;
     setSelected(null); setGallery(null); setGalleryBusy(false);
     if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
   };
   const resetScope = () => {
+    rememberBrowse(); selectionAnchor.current = null;
+    pagingRequest.current = null; setPaging(false); setPageOffset(0);
     ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
     ++generation.current;
     listRequest.current?.abort();
@@ -169,12 +221,12 @@ export default function Workspace({
     setSelectedTags([]); setQuery(''); setSearch('');
     setSelection([]); setSelecting(false); setMobile(false);
     // Re-entering the current scope must also fetch again after clearing it.
-    refresh();
+    pendingBrowse.current = null; setUpdatesAvailable(false); setRevision(n => n + 1);
   };
   const chooseCollection = (id) => {
     resetScope(); setTags([]); setStats({});
     setCollection(id);
-    setView("all");
+    restoreBrowse(id);
   };
   const goHome = () => {
     if (preferences.default_collection_id)
@@ -195,7 +247,7 @@ export default function Workspace({
         const home = prefs.default_collection_id;
         if (home === "unfiled" || libs.some((c) => c.id === home)) {
           setCollection(home);
-          setView("all");
+          restoreBrowse(home);
         }
         setReady(true);
       })
@@ -279,15 +331,22 @@ export default function Workspace({
     const current = ++generation.current;
     const controller = new AbortController();
     listRequest.current = controller;
+    const signature = params(0);
+    const keepSelection = previousParams.current === signature;
+    previousParams.current = signature;
+    const anchor = pendingBrowse.current; pendingBrowse.current = null;
+    restoreAnchor.current = anchor || { id: '', top: 0 };
+    pagingRequest.current = null; setPaging(false);
     const read = path => api(path, { signal: controller.signal });
     setLoading(true);
     setLoadError("");
     const seed=selectionSeed.current;selectionSeed.current=null;
-    setSelection([]);setSelectionRows({});
+    if (!keepSelection) { setSelection([]);setSelectionRows({}); selectionAnchor.current = null; }
+    else setSelectionRows(Object.fromEntries(chosenItems.map(row => [row.id, row])));
     Promise.all([
       view === "home"
         ? Promise.resolve({ items: [], total: 0 })
-        : read(`/api/items?${params(0)}`),
+        : read(`/api/items?${signature}${anchor ? '&anchor=' + encodeURIComponent(anchor.id) : ''}`),
       read(`/api/stats?collection=${encodeURIComponent(collection || 'unfiled')}`),
       read("/api/collections"),
       view === 'home' ? Promise.resolve([]) : read(`/api/tags?collection=${encodeURIComponent(collection || 'unfiled')}`),
@@ -295,6 +354,10 @@ export default function Workspace({
       .then(([result, stats, libs, tags]) => {
         if (controller.signal.aborted || current !== generation.current) return;
         setItems(result.items);
+        setPageOffset(result.offset || 0);
+        eventCursor.current = result.event_cursor || 0;
+        if (keepSelection) setSelectionRows(previous => Object.fromEntries(Object.entries(previous).map(([id, row]) => [id, result.items.find(item => item.id === id) || row])));
+        setUpdatesAvailable(false);
         if(seed){setSelection(seed.ids);setSelectionRows(seed.rows)}
         setTotal(result.total);
         setStats(stats);
@@ -318,7 +381,17 @@ export default function Workspace({
     return () => controller.abort();
   }, [ready, view, params, revision]);
   useEffect(() => {
-    const focus = () => refresh();
+    // A return from another app must not destroy selection, pagination or an
+    // open editor. Offer an explicit refresh instead of replacing the list.
+    let checking = false;
+    const focus = async () => {
+      if (checking || browsing.current?.view === 'home' || browsing.current?.loading) return;
+      checking = true;
+      const current = generation.current;
+      try { const result = await api('/api/events?latest=true'); if (current === generation.current && result.cursor > eventCursor.current) setUpdatesAvailable(true); }
+      catch { /* Keep the current working view when the server is unreachable. */ }
+      finally { checking = false; }
+    };
     window.addEventListener("focus", focus);
     return () => window.removeEventListener("focus", focus);
   }, []);
@@ -341,7 +414,7 @@ export default function Workspace({
   }, [ready]);
   const navigate = (v) => {
     resetScope();
-    setView(v);
+    restoreBrowse(collection || 'unfiled', v);
     if (!collection) setCollection('unfiled');
   };
   const toggleTag = (t) => {
@@ -354,6 +427,24 @@ export default function Workspace({
     );
     setMobile(false);
   };
+  async function loadPage(previous = false) {
+    if (pagingRequest.current || loading) return;
+    const current = generation.current, request = Symbol('page');
+    pagingRequest.current = request; setPaging(true);
+    const offset = previous ? Math.max(0, pageOffset - 60) : pageOffset + items.length;
+    const anchor = previous ? captureAnchor() : null;
+    try {
+      const result = await api(`/api/items?${params(offset)}`, { signal: listRequest.current?.signal });
+      if (current !== generation.current || pagingRequest.current !== request) return;
+      if (previous) { restoreAnchor.current = anchor; setPageOffset(offset); }
+      setItems(old => {
+        const known = new Set(old.map(i => i.id)), added = result.items.filter(i => !known.has(i.id));
+        return previous ? [...added, ...old] : [...old, ...added];
+      });
+      setTotal(result.total);
+    } catch (e) { if (current === generation.current && e.name !== 'AbortError') notify(e.message); }
+    finally { if (pagingRequest.current === request) { pagingRequest.current = null; setPaging(false); } }
+  }
   async function uploadFiles(files, insertInNote, targetCollection) {
     const results = [];
     const failures = [];
@@ -811,6 +902,7 @@ export default function Workspace({
                   </IconButton>
                 </div>
               </section>
+              {updatesAvailable && <div className="browse-update" role="status"><span>有内容更新，当前浏览位置和选择已保留</span><button onClick={refresh}><RefreshCw size={14}/>刷新内容</button><IconButton label="忽略更新提示" onClick={() => setUpdatesAvailable(false)}><X size={14}/></IconButton></div>}
               <TagFilter key={actualCollection || 'unfiled'} tags={tags} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
                 onToggle={toggleTag} onMode={setTagMode} onClear={() => setSelectedTags([])}
                 onBrowse={['notes', 'videos'].includes(view) ? null : browseFilteredImages}
@@ -847,22 +939,22 @@ export default function Workspace({
                     <input
                       type="checkbox"
                       aria-label="选择当前页全部内容"
-                      ref={node=>{if(node)node.indeterminate=items.some(i=>selection.includes(i.id))&&!items.every(i=>selection.includes(i.id))}}
+                      ref={node=>{if(node)node.indeterminate=items.some(i=>selectedIds.has(i.id))&&!items.every(i=>selectedIds.has(i.id))}}
                       disabled={batchBusy || groupSelecting}
                       checked={
-                        !!items.length && items.every(i => selection.includes(i.id))
+                        !!items.length && items.every(i => selectedIds.has(i.id))
                       }
                       onChange={(e) =>
                         setSelection(
-                          e.target.checked ? [...new Set([...selection,...items.map(i=>i.id)])].slice(0,10000) : selection.filter(id=>!items.some(i=>i.id===id)),
+                          e.target.checked ? [...new Set([...selection,...items.map(i=>i.id)])].slice(0,10000) : selection.filter(id=>!itemById.has(id)),
                         )
                       }
                     />
                     当前已加载
                   </label>
                   <span>已选 {selection.length} 项</span>
-                  <button disabled={!selection.length||batchBusy||groupSelecting} onClick={()=>{setSelection([]);setSelectionRows({})}}>清除选择</button>
-                  <HelpHint label="图片组选择">点击图片、标题或勾选框即可选择 / 取消。“选择整组”包含当前知识库中同组的全部图片，不受筛选和分页影响；可继续取消单张或加选其他组。</HelpHint>
+                  <button disabled={!selection.length||batchBusy||groupSelecting} onClick={()=>{selectionAnchor.current=null;setSelection([]);setSelectionRows({})}}>清除选择</button>
+                  <HelpHint label="图片组选择">点击图片、标题或勾选框即可选择 / 取消。按住 Shift 点击另一张，连续选择或取消已加载范围。“选择整组”包含当前知识库中同组的全部图片，不受筛选和分页影响。</HelpHint>
                   <button
                     onClick={() => setBatchTags(true)}
                     disabled={!selection.length || view === "trash"}
@@ -919,26 +1011,29 @@ export default function Workspace({
                   )}
                 </div>
               ) : (
-                <div className={`items ${layout}`}>
-                  {items.map((item) => (
-                    <article className={`item-card ${item.kind}${selecting&&selection.includes(item.id)?' is-selected':''}`} key={item.id}>
+                <>
+                {pageOffset > 0 && <button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : '加载前面的内容'}</button>}
+                <VirtualItems items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
+                  {(item) => (
+                    <article data-item-id={item.id} className={`item-card ${item.kind}${selecting&&selectedIds.has(item.id)?' is-selected':''}`} key={item.id}>
                       {selecting && (
                         <label className="card-select">
                           <input
                             type="checkbox"
                             aria-label={`选择 ${item.title}`}
-                            checked={selection.includes(item.id)}
-                            disabled={batchBusy || groupSelecting || (selection.length >= 10000 && !selection.includes(item.id))}
-                            onChange={() => toggleSelection(item.id)}
+                            checked={selectedIds.has(item.id)}
+                            disabled={batchBusy || groupSelecting || (selection.length >= 10000 && !selectedIds.has(item.id))}
+                            onClick={e => toggleSelection(item.id, e)}
+                            onChange={() => {}}
                           />
                         </label>
                       )}
                       <button
                         className="card-main"
-                        onClick={() => selecting ? toggleSelection(item.id) : openItem(item)}
-                        aria-pressed={selecting ? selection.includes(item.id) : undefined}
-                        disabled={selecting && (batchBusy || groupSelecting || (selection.length >= 10000 && !selection.includes(item.id)))}
-                        aria-label={`${selecting ? selection.includes(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
+                        onClick={(e) => selecting ? toggleSelection(item.id, e) : openItem(item)}
+                        aria-pressed={selecting ? selectedIds.has(item.id) : undefined}
+                        disabled={selecting && (batchBusy || groupSelecting || (selection.length >= 10000 && !selectedIds.has(item.id)))}
+                        aria-label={`${selecting ? selectedIds.has(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
                           {item.kind === "image" ? (
@@ -1029,31 +1124,17 @@ export default function Workspace({
                         )}
                       </div>
                     </article>
-                  ))}
-                </div>
+                  )}
+                </VirtualItems>
+                </>
               )}
-              {items.length < total && !loading && (
+              {pageOffset + items.length < total && !loading && (
                 <button
                   className="load-more"
-                  onClick={async () => {
-                    const current = generation.current;
-                    try {
-                      const result = await api(
-                        `/api/items?${params(items.length)}`,
-                      );
-                      if (current === generation.current)
-                        setItems((previous) => [
-                          ...previous,
-                          ...result.items.filter(
-                            (i) => !previous.some((p) => p.id === i.id),
-                          ),
-                        ]);
-                    } catch (e) {
-                      notify(e.message);
-                    }
-                  }}
+                  disabled={paging}
+                  onClick={() => loadPage()}
                 >
-                  加载更多内容
+                  {paging ? '正在加载…' : '加载更多内容'}
                 </button>
               )}
             </>

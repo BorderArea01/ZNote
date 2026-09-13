@@ -86,3 +86,8 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 }
 @media (prefers-reduced-motion: reduce) { .item-card { transition: none; } }
 .note-image-error{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:20px;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:var(--muted)}.note-image-error button{font:inherit;padding:6px 12px}
+.browse-update { display:flex; align-items:center; gap:12px; padding:10px 14px; margin:0 0 14px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); color:var(--muted); font-size:12px; }
+.browse-update > span { flex:1; }
+.browse-update > button { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.items[data-virtual] .item-card { align-self:stretch; }
+@media(max-width:600px) { .browse-update { gap:6px; font-size:11px; } }

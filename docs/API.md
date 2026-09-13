@@ -23,6 +23,8 @@ curl http://localhost:3741/api/items \
 
 ## 常用接口
 
+`GET /api/items` 支持 `anchor=<内容 ID>`：按当前知识库、标签、分类和排序定位该项所在分页，返回实际 `offset`，不需要下载此前所有页面。定位项不存在或不符合筛选时回到第 1 页；默认分页行为不变。结果的 `event_cursor` 可与 `GET /api/events?latest=true` 返回的游标比较，判断是否有更新；普通事件增量读取接口保持不变。
+
 | 接口 | 用途 |
 | --- | --- |
 | `GET/POST /api/items` | 查询、创建笔记 |
