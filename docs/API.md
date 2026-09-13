@@ -29,6 +29,33 @@ curl http://localhost:3741/api/items \
 
 支持现有 read/write 令牌和管理员会话。记录上限为每篇 50 个、压缩后 8 MiB；仅收藏或移动不重复保存相同正文。普通删除保留历史，永久删除笔记会删除其历史。浏览器本地草稿未上传，不属于这些接口。
 
+## 常用筛选
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/saved-views?collection=知识库UUID` | 返回 `{ views: [...] }`；省略 collection 或传 unfiled 时仅返回未分类 |
+| `POST /api/saved-views` | 创建：name、config、collection_id（可省略或为 null，代表未分类） |
+| `GET /api/saved-views/:id` | 读取定义和 version |
+| `PATCH /api/saved-views/:id` | 传当前 version，更新 name 和 / 或完整 config |
+| `DELETE /api/saved-views/:id` | JSON 请求体传当前 version；成功返回 204，不删除库内内容 |
+
+配置示例：
+
+```json
+{
+  "view": "images",
+  "query": "建筑",
+  "tags": ["参考", "插画"],
+  "mode": "any",
+  "sort": "title",
+  "layout": "grid"
+}
+```
+
+view 支持 all / images / videos / notes / favorites / trash；mode 为 all / any；sort 为 updated / created / title；layout 为 grid / list。配置不包含知识库 ID，归属由定义的 collection_id 固定。每库最多 50 个，名称去首尾空白后在库内唯一，最长 80 字符；不同库可同名。定义支持现有 read/write 令牌，写入受权限检查。过期版本或同名冲突返回 409，界面读取失败不修改内容。
+
+调用方读取定义后，可把 query 映射到 `GET /api/items` 的 q、tags 序列化为 JSON、mode 映射到 tag_mode，并带上定义所属 collection；images / videos / notes 分别映射到 kind，favorites 映射到 favorite=true，trash 映射到 trash=true。sort 直接传入，layout 仅影响客户端展示。不要沿用其他知识库的查询参数。
+
 ## 常用接口
 
 批量整理、标签、回收站操作、整组移动 / 收藏和 `PATCH /api/items/:id` 可传入 `undo: true`，返回 `undo` 操作摘要（没有实际字段变化时为 `null`）。未传入时保持原行为。

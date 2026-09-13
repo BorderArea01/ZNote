@@ -10,13 +10,14 @@ import { z } from 'zod';
 import { exportContent } from './exports.js';
 import { originalBuffer, digest } from './storage.js';
 import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
+import { savedViewConfig } from './saved-views.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const policySchema = z.object({ enabled: z.boolean(), interval_hours: z.number().int().min(1).max(720), keep: z.number().int().min(1).max(100) });
 const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(value) && !value.includes('..');
 const uuid = z.uuid();
 const requiredTables = ['settings', 'tokens', 'collections', 'items', 'events'];
-const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions'];
+const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views'];
 
 async function removeStage(root, path) {
   const rel = relative(resolve(root), resolve(path));
@@ -59,7 +60,7 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
       const table = snapshot.prepare('SELECT type,sql FROM sqlite_master WHERE name=?').get(name);
@@ -71,6 +72,14 @@ async function inspectBackup(stage) {
     if (!/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(password || '')) throw fail(400, '备份的访问密码记录缺失或损坏');
     for (const collection of snapshot.prepare('SELECT * FROM collections').iterate()) {
       uuid.parse(collection.id); z.string().min(1).max(80).parse(collection.name);
+    }
+    if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='saved_views'").get()) {
+      if (snapshot.prepare('SELECT count(*) n FROM saved_views GROUP BY collection_id HAVING n>50 LIMIT 1').get()) throw fail(400, '备份中单个知识库的常用筛选超过 50 个');
+      for (const view of snapshot.prepare('SELECT * FROM saved_views').iterate()) {
+        uuid.parse(view.id); if (view.collection_id !== null) uuid.parse(view.collection_id);
+        z.string().trim().min(1).max(80).parse(view.name); z.number().int().positive().parse(view.version);
+        savedViewConfig.parse(JSON.parse(view.config));
+      }
     }
     if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='webhooks'").get()) {
       for (const hook of snapshot.prepare('SELECT * FROM webhooks').iterate()) {

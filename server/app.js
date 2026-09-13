@@ -2,6 +2,7 @@ import {localMediaReferences} from '../shared/local-media.js';
 import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
 import { createNoteHistory } from './note-history.js';
+import { registerSavedViews } from './saved-views.js';
 import {createTrashManager} from './trash.js';
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
@@ -1130,6 +1131,7 @@ export function createApp({
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
   noteHistory=createNoteHistory({app,db});
   transaction(() => noteHistory.seed());
+  registerSavedViews({app,db,transaction});
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));
   app.get("/docs-init.js", (req, res) =>
     res

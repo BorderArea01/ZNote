@@ -55,6 +55,19 @@ export const spec = {
     },
     schemas: {
       ItemInput: input,
+      SavedViewConfig: {
+        type: 'object', additionalProperties: false,
+        required: ['view', 'query', 'tags', 'mode', 'sort', 'layout'],
+        properties: {
+          view: { type: 'string', enum: ['all', 'images', 'videos', 'notes', 'favorites', 'trash'] },
+          query: { ...str, maxLength: 200 }, tags: { type: 'array', maxItems: 30, items: { ...str, minLength: 1, maxLength: 40 } },
+          mode: { type: 'string', enum: ['all', 'any'] }, sort: { type: 'string', enum: ['updated', 'created', 'title'] }, layout: { type: 'string', enum: ['grid', 'list'] },
+        },
+      },
+      SavedView: { type: 'object', properties: {
+        id: { ...str, format: 'uuid' }, collection_id: { ...str, nullable: true, format: 'uuid' }, name: { ...str, maxLength: 80 }, config: ref('SavedViewConfig'),
+        version: { type: 'integer', minimum: 1 }, created_at: { ...str, format: 'date-time' }, updated_at: { ...str, format: 'date-time' },
+      } },
       NoteVersion: {
         type: 'object',
         properties: { id: str, version: { type: 'integer' }, saved_at: { ...str, format: 'date-time' }, title: str },
@@ -101,6 +114,26 @@ export const spec = {
     },
   },
   paths: {
+    '/api/saved-views': {
+      get: operation('当前知识库的常用筛选（默认未分类，最多 50 个）', { type: 'object', properties: { views: list(ref('SavedView')) } }, {
+        parameters: [{ name: 'collection', in: 'query', schema: str, description: '知识库 UUID 或 unfiled；省略时仅返回未分类' }],
+      }),
+      post: operation('保存一组常用筛选；同库名称唯一，不修改内容', ref('SavedView'), {
+        requestBody: body({ type: 'object', additionalProperties: false, required: ['name', 'config'], properties: { name: { ...str, minLength: 1, maxLength: 80 }, collection_id: { ...str, nullable: true, format: 'uuid', default: null }, config: ref('SavedViewConfig') } }),
+        responses: { 201: response(ref('SavedView')), ...errorResponses },
+      }),
+    },
+    '/api/saved-views/{id}': {
+      get: operation('读取常用筛选', ref('SavedView'), { parameters: [id] }),
+      patch: operation('重命名或替换条件，必须提供当前 version；不支持跨库移动', ref('SavedView'), {
+        parameters: [id], requestBody: body({ type: 'object', additionalProperties: false, required: ['version'], properties: { name: { ...str, minLength: 1, maxLength: 80 }, config: ref('SavedViewConfig'), version: { type: 'integer', minimum: 1 } } }),
+      }),
+      delete: {
+        summary: '删除筛选定义；保留所有内容', parameters: [id],
+        requestBody: body({ type: 'object', additionalProperties: false, required: ['version'], properties: { version: { type: 'integer', minimum: 1 } } }),
+        responses: { 204: { description: '筛选已删除，内容保留' }, ...errorResponses },
+      },
+    },
     "/api/health": {
       get: operation("服务健康", { type: "object" }, { security: [] }),
     },

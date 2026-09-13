@@ -114,3 +114,15 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .draft-columns strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .draft-columns textarea { width:100%; height:40dvh; resize:none; line-height:1.6; }
 @media(max-width:600px) { .draft-columns { grid-template-columns:1fr; } .draft-columns textarea { height:23dvh; } }
+.saved-view-section { flex:none; margin-bottom:18px; }
+.saved-view-section .nav-caption { margin-bottom:6px; }
+.saved-view-section .nav-caption > span { display:flex; align-items:center; gap:5px; }
+.sidebar .saved-view-list { max-height:210px; overflow-y:auto; margin:0; }
+.saved-view-list .collection-row > .icon-button { opacity:.7; }
+.saved-view-empty { width:100%; background:transparent; border:1px dashed var(--border); color:var(--muted); font-size:12px; justify-content:flex-start; }
+.saved-view-status { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; padding-left:12px; }
+.saved-view-dialog .feature-body { overflow:auto; }
+.saved-view-conditions { padding:14px; border:1px solid var(--border); border-radius:12px; margin:16px 0; background:var(--surface-2); font-size:13px; }
+.saved-view-conditions p { overflow-wrap:anywhere; }
+.saved-view-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.saved-view-chips span { max-width:100%; overflow-wrap:anywhere; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:4px 8px; }

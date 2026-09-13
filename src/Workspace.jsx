@@ -4,6 +4,8 @@ import { VirtualItems } from './VirtualItems.jsx';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
 import { DraftsDialog } from './NoteDrafts.jsx';
+import { useSavedViews, SavedViewList } from './SavedViews.jsx';
+const SavedViewDialog = React.lazy(() => import('./SavedViewDialog.jsx'));
 import { version as packageVersion } from '../package.json';
 import {
   Search,
@@ -35,6 +37,7 @@ import {
   Hash,
   Film,
   History,
+  BookmarkPlus,
 } from "lucide-react";
 import { api, send, uploadFile } from "./api.js";
 import { HelpHint } from './HelpHint.jsx';
@@ -183,6 +186,16 @@ export default function Workspace({
   const refresh = () => { pendingBrowse.current = captureAnchor(); setUpdatesAvailable(false); setRevision((n) => n + 1); },
     notify = (message, receipt = null) => { setUndoReceipt(receipt); setToast(receipt && !selected ? '' : message); };
   const actualCollection = collection === "unfiled" ? null : collection;
+  const savedViews = useSavedViews(actualCollection, ready && view !== 'home');
+  const [savedViewEditor, setSavedViewEditor] = useState(null);
+  const currentViewConfig = { view, query, tags: selectedTags, mode: tagMode, sort, layout };
+  const editSavedView = row => setSavedViewEditor({ row, current: currentViewConfig, library: actualCollection });
+  const applySavedView = row => {
+    if (row.collection_id !== actualCollection) return;
+    resetScope(); const config = row.config;
+    setView(config.view); setQuery(config.query); setSearch(config.query); setSelectedTags(config.tags);
+    setTagMode(config.mode); setSort(config.sort); setLayout(config.layout);
+  };
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
   async function selectGroup(item){
     if(groupSelecting||batchBusy)return;
@@ -486,6 +499,7 @@ export default function Workspace({
   useEffect(() => {
     const paste = (e) => {
       if (
+        e.target.closest?.('[role="dialog"]') ||
         selected ||
         uploadBatch ||
         settings ||
@@ -505,6 +519,10 @@ export default function Workspace({
   }, [selected, uploadBatch, settings]);
   useEffect(() => {
     const hotkey = (e) => {
+      if (e.target.closest?.('[role="dialog"]')) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') e.preventDefault();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         if (view === "home") setView("all");
@@ -702,6 +720,7 @@ export default function Workspace({
             未分类
           </button>
         </nav>
+        {view !== 'home' && <SavedViewList model={savedViews} config={currentViewConfig} onApply={applySavedView} onEdit={editSavedView} onCreate={() => editSavedView(null)}/>}
         <div className="nav-caption">多标签筛选</div>
         <div className="sidebar-tags">
           {tags.slice(0, 30).map((t) => (
@@ -918,6 +937,7 @@ export default function Workspace({
                   <IconButton label="刷新内容" onClick={refresh}>
                     <RefreshCw size={16} />
                   </IconButton>
+                  <IconButton label="保存当前筛选" onClick={() => editSavedView(null)}><BookmarkPlus size={16}/></IconButton>
                 </div>
               </section>
               {updatesAvailable && <div className="browse-update" role="status"><span>有内容更新，当前浏览位置和选择已保留</span><button onClick={refresh}><RefreshCw size={14}/>刷新内容</button><IconButton label="忽略更新提示" onClick={() => setUpdatesAvailable(false)}><X size={14}/></IconButton></div>}
@@ -1214,6 +1234,7 @@ export default function Workspace({
         </div>
       )}
       <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
+      {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;
         if (draft.note_id) { try { note = await api('/api/items/' + draft.note_id); } catch (e) {

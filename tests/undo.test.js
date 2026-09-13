@@ -108,7 +108,7 @@ test('durable undo preserves versions, related notes, original bytes and conflic
     const exported = await request('/api/export?mode=backup'), file = resolve(dir, 'full-backup.zip');
     assert.ok(exported.ok); await writeFile(file, Buffer.from(await exported.arrayBuffer()));
     const preview = await runtime.backups.preview(file); await runtime.backups.restore(preview.id);
-    assert.equal(runtime.db.prepare('PRAGMA user_version').get().user_version, 9);
+    assert.equal(runtime.db.prepare('PRAGMA user_version').get().user_version, 10);
     assert.equal(runtime.db.prepare('SELECT count(*) n FROM undo_actions').get().n, 0);
     assert.equal(runtime.db.prepare('SELECT count(*) n FROM items WHERE collection_id=?').get(b.id).n, 10000);
     assert.equal((await request('/api/undo')).status, 401);
