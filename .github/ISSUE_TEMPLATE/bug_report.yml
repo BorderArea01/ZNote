@@ -1,0 +1,55 @@
+name: 问题反馈 / Bug report
+description: 报告启动、采集、客户端或知识库问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "感谢反馈。请勿上传访问密码、API 令牌、登录二维码、完整数据库或私人图片。安全漏洞请使用仓库 Security 页的私密报告入口。"
+  - type: input
+    id: version
+    attributes:
+      label: ZNote 版本
+      placeholder: 设置页或 Release 中的完整版本号
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: 使用入口
+      options:
+        - Windows 客户端
+        - macOS 客户端
+        - Android 客户端
+        - iPhone / iPad 主屏幕入口
+        - 浏览器网页
+        - 普通浏览器扩展
+        - Pixiv 增强版
+        - 微信收件
+        - 服务端 / Docker
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 系统与浏览器
+      placeholder: 如 Windows 11 / Edge 版本；Android 版本 / WebView 版本
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 从哪个页面开始、点击了什么、最终发生了什么？
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图或经过脱敏的错误信息
+      description: 采集问题可提供公开作品链接；请移除链接中的登录凭据。无需提交完整日志。

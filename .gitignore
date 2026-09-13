@@ -19,3 +19,16 @@ integrations/pixiv/build/
 /VERIFICATION*.md
 /DEVELOPMENT-v*.md
 /PLAN-v*.md
+
+# Client build output and private signing material.
+clients/desktop/release/
+clients/desktop/runtime/
+clients/desktop/build/icons/
+clients/android/.gradle/
+clients/android/build/
+clients/android/app/build/
+clients/android/local.properties
+*.jks
+*.keystore
+*.p12
+*.mobileprovision

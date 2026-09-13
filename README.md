@@ -4,7 +4,8 @@
   <p><strong>把喜欢的图片、值得回看的视频、随手记下的想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 微信收件 · 本地自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.31-7886c7?style=flat-square" alt="Version 0.9.31" />
+    <img src="https://img.shields.io/badge/version-0.10.0-beta.1-7886c7?style=flat-square" alt="Version 0.10.0-beta.1" />
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-8d76b0?style=flat-square" alt="GPL-3.0-or-later" /></a>
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -190,10 +191,20 @@ ZNote 面向以图片为主的个人资料整理。**一张图片可以是素材
       <strong>桌面整理，手机随时回看。</strong><br /><br />
       电脑、手机和平板通过浏览器访问同一个 ZNote。图片浏览位置、视频播放记录与常用筛选可以在同一服务的设备间使用。<br /><br />
       图片组支持滑动翻页，展开后可双指缩放。长笔记在内容区域滚动，操作栏保持可见。<br /><br />
-      无需为每台设备复制整个素材目录；目前采用浏览器访问，尚无原生客户端或离线同步。
+      无需为每台设备复制整个素材目录；可通过 Windows / Mac 客户端、Android 客户端和浏览器访问；iPhone 可添加到主屏幕。当前不提供整库离线同步。
     </td>
   </tr>
 </table>
+
+## 客户端下载
+
+**[前往 Releases 下载测试版](https://github.com/BorderArea01/ZNote/releases)** · [安装与迁移指南](docs/CLIENTS.md)
+
+| Windows | macOS | Android | iPhone / iPad |
+| --- | --- | --- | --- |
+| 64 位 EXE / ZIP | Apple 芯片与 Intel 分别提供 DMG / ZIP | Android 10+ 签名 APK | Safari → 添加到主屏幕 |
+
+电脑端可以连接现有服务，也可使用内置本机服务；手机连接电脑或 NAS 上的同一知识库。首个客户端版本为 Beta，Windows / Mac 尚无商业签名 / Apple 公证；iPhone 主屏幕入口属于 Web 应用，本次没有原生 IPA。具体构建与验证结果以 Release 说明为准。
 
 ## 快速开始
 
@@ -302,5 +313,6 @@ npm run test:ui          # 浏览器界面测试，需要 Microsoft Edge
 
 <div align="center">
   <p><strong>随手收集的灵感，值得一个长久的家。</strong></p>
-  <p><a href="https://github.com/BorderArea01/ZNote/issues">反馈问题 / 提出建议</a> · <a href="CHANGELOG.md">查看更新</a> · <a href="#快速开始">开始使用</a></p>
+  <p>自有代码采用 <a href="LICENSING.md">GPL-3.0-or-later</a>，第三方组件保留原许可。</p>
+  <p><a href="https://github.com/BorderArea01/ZNote/discussions">交流与建议</a> · <a href="CONTRIBUTING.md">参与维护</a> · <a href="https://github.com/BorderArea01/ZNote/issues">反馈问题 / 提出建议</a> · <a href="CHANGELOG.md">查看更新</a> · <a href="#快速开始">开始使用</a></p>
 </div>

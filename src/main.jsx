@@ -62,6 +62,7 @@ import './group-order.css';
 import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import {WeixinSettings} from './WeixinSettings.jsx';
+import {ClientSettings} from './ClientSettings.jsx';
 import { OrganizeDialog } from './organize.jsx';
 import { BackupSettings } from './backups.jsx';
 import {TaskProvider} from './Tasks.jsx';
@@ -403,7 +404,7 @@ function Detail({
   const applyDraft = value => { setTitle(value.title); setContent(value.content); setTags(value.tags); setCollection(value.collection_id || ''); setEditing(true); };
   const exportCurrent = () => {
     const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }));
-    const link = document.createElement('a'); link.href = url; link.download = (title || '未命名笔记').replace(/[\\/:*?"<>|]/g, '-') + '.md'; link.click();
+    const link = document.createElement('a'); link.href = url; link.download = (title || '未命名笔记').replace(/[\\/:*?"<>|]/g, '-') + '.md'; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const draft = useNoteDraft({ initial, item, fields, dirty, textarea, apply: applyDraft });
@@ -871,6 +872,7 @@ function SettingsPanel({
           storage={storage}
         />
         <BackupSettings />
+        <ClientSettings />
         <WeixinSettings collections={collections} onOpen={id=>{onClose();const target='#item/'+id;if(location.hash===target)window.dispatchEvent(new HashChangeEvent('hashchange'));else location.hash=target;}}/>
         <section>
           <div className="settings-title"><h3>浏览器媒体工具</h3><HelpHint label="浏览器采集">悬停看高清大图，默认 S 下载、Z 入库，支持自定义快捷键。视频浮窗专门嗅探 MP4、WebM 和 m3u8，也可将网页正文保存为 Markdown；采集自动保留来源。</HelpHint><HelpHint label="扩展安装与更新">Chrome / Edge 安装后刷新本页，再点击一键连接。更新时覆盖同一目录、重新加载扩展，连接和偏好会保留。0.7 及更早版本首次升级需移除旧版并重新连接一次。m3u8 合并使用本机 ZNote 服务。</HelpHint></div>

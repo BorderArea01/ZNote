@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "ZNote 私人知识库",
+  "short_name": "ZNote",
+  "description": "图片、视频与图文笔记的个人知识库",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#151923",
+  "theme_color": "#287464",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

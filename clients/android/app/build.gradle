@@ -1,0 +1,27 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'io.github.borderarea01.znote'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.github.borderarea01.znote'
+        minSdk 29
+        targetSdk 35
+        versionCode 10001
+        versionName '0.10.0-beta.1'
+        testInstrumentationRunner 'io.github.borderarea01.znote.SmokeRunner'
+    }
+    signingConfigs {
+        release {
+            if (System.getenv('ZNOTE_ANDROID_KEYSTORE')) {
+                storeFile file(System.getenv('ZNOTE_ANDROID_KEYSTORE'))
+                storePassword System.getenv('ZNOTE_ANDROID_STORE_PASSWORD')
+                keyAlias System.getenv('ZNOTE_ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ZNOTE_ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { if (System.getenv('ZNOTE_ANDROID_KEYSTORE')) signingConfig signingConfigs.release; minifyEnabled false }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}

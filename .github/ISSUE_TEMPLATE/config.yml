@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安装与连接说明
+    url: https://github.com/BorderArea01/ZNote/blob/main/docs/CLIENTS.md
+    about: 客户端下载、知识库地址与常见连接问题
+  - name: 使用讨论 / Questions
+    url: https://github.com/BorderArea01/ZNote/discussions
+    about: 使用交流、展示与尚未确认的疑问
+  - name: 私密安全报告
+    url: https://github.com/BorderArea01/ZNote/security/advisories/new
+    about: 请勿在公开 Issue 中披露未修复的漏洞或凭据
