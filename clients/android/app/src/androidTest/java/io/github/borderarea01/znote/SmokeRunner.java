@@ -30,6 +30,9 @@ public class SmokeRunner extends Instrumentation {
         js("window.__result='pending';(async()=>{try{const f=new FormData();const canvas=document.createElement('canvas');canvas.width=canvas.height=64;canvas.getContext('2d').fillRect(0,0,64,64);const b=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));f.append('file',b,'android-smoke.png');const r=await fetch('/api/assets',{method:'POST',body:f});window.__result=r.ok?'ok':'http-'+r.status}catch(e){window.__result=String(e)}})();true");
         until("window.__result==='ok'");
         checkpoint("Android image upload complete");
+        until("!!document.querySelector('.library-card:not(.new-library)')");
+        js("document.querySelector('.library-card:not(.new-library)').click();true");
+        until("document.body.innerText.includes('android-smoke.png')&&!!document.querySelector('.item-card img')&&document.querySelector('.item-card img').complete&&document.querySelector('.item-card img').naturalWidth>0");
         // Verify renderer and native upload/download hooks coexist with the actual app.
         until("typeof ZNoteDownloads.markdown==='function'&&!!document.querySelector('input[type=file]')");
         screenshot();

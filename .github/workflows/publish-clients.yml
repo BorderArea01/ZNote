@@ -1,0 +1,37 @@
+name: Attach verified desktop builds
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag
+        required: true
+        default: v0.10.0-beta.1
+      windows_run:
+        description: Successful Windows client job run
+        required: true
+      intel_run:
+        description: Successful Intel Mac client job run
+        required: true
+      arm_run:
+        description: Successful Apple silicon Mac client job run
+        required: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  attach:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node scripts/attach-release-clients.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          WINDOWS_RUN: ${{ inputs.windows_run }}
+          INTEL_RUN: ${{ inputs.intel_run }}
+          ARM_RUN: ${{ inputs.arm_run }}
