@@ -158,14 +158,18 @@
     const active=videos.filter(v=>!v.paused&&v.getBoundingClientRect().width>0);
     const primary=active.length===1?active[0]:videos.length===1?videos[0]:null;
     const metadata=videos.length<=1||primary?globalThis.ZNoteVideoMetadata(primary):{title:document.title};
+    const networkMetadata=/(^|\.)(douyin|iesdouyin)\.com$/.test(location.hostname)?{title:metadata.title,source_url:metadata.source_url}:metadata;
     for (const video of videos) {
       const details=globalThis.ZNoteVideoMetadata(video);
       for(const url of [video.currentSrc,video.src,...[...video.querySelectorAll('source')].map(s=>s.src)])
-        if (/^https?:/.test(url))found.push({...details,url,kind:'video'});
+        if (/^https?:/.test(url))found.push({...details,...globalThis.ZNoteDouyinMetadataForUrl?.(url),url,kind:'video'});
     }
-    for (const r of performance.getEntriesByType('resource'))
-      if(/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(r.name))found.push({...metadata,metadata_rank:1,url:r.name});
-    send({ type: 'media-scan', resources: found.slice(0,200), metadata })
+    for(const resource of resources){const details=globalThis.ZNoteDouyinMetadataForUrl?.(resource.url);if(details)found.push({...details,url:resource.url,kind:resource.kind,mime:resource.mime})}
+    for (const r of performance.getEntriesByType('resource')) {
+      const details=globalThis.ZNoteDouyinMetadataForUrl?.(r.name);
+      if(details||/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(r.name))found.push({...networkMetadata,metadata_rank:1,...details,url:r.name,...(details?{kind:'video'}:{})});
+    }
+    send({ type: 'media-scan', resources: found.slice(0,200), metadata:networkMetadata })
       .then((state) => {
         resources = state.resources;
         draw();
@@ -208,6 +212,7 @@
       if (JSON.stringify(state.resources) !== JSON.stringify(resources)) {
         resources = state.resources;
         draw();
+        scan();
       }
     } catch (e) {
       notify(e.message);

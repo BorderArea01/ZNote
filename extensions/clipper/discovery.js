@@ -248,7 +248,7 @@ export async function discover(message, sender) {
     if (message.type === "media-clear") state.resources = [];
     if (message.type === 'media-scan' && state.enabled && sender.frameId===0 && message.metadata) {
       state.metadata={source_url:String(message.metadata.source_url||state.source_url).slice(0,4096),title:String(message.metadata.title||'').slice(0,200),author:String(message.metadata.author||'').slice(0,200),author_url:String(message.metadata.author_url||'').slice(0,4096),metadata_rank:1};
-      for(const resource of state.resources)if(!resource.metadata_rank)addResource(state,{url:resource.url,kind:resource.kind,mime:resource.mime,...state.metadata});
+      for(const resource of state.resources)if(!resource.metadata_rank||((resource.metadata_rank||0)<=1&&!resource.author&&resource.source_url===state.metadata.source_url))addResource(state,{url:resource.url,kind:resource.kind,mime:resource.mime,...state.metadata});
     }
     if (message.type === "media-scan" && state.enabled)
       for (const resource of (Array.isArray(message.resources)

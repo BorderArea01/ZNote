@@ -98,3 +98,5 @@ node tests/pixiv-enhanced-ui.mjs
 回收站参考 [SQLite 原子提交](https://www.sqlite.org/atomiccommit.html) 和 [Immich 回收站设置](https://docs.immich.app/administration/system-settings/)：先原子提交条目删除与文件清理任务，再在维护锁内清理，失败持久重试。trash.test.js 验证范围与版本、超过一页的清空、独立配图、共享文件、并发等待、重启清理、路径边界及旧备份恢复。trash-ui.mjs 在实际 Edge 验证单项/多选/清空、取消、筛选范围以及暗色桌面和手机布局。
 
 整组选择使用独立的完整成员快照，批量动作不再从当前列表截取成员。参考 [WAI 复选框模式](https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/) 保留逐项和部分选择语义。group-selection.test.js 验证超过 100 项的原子标签/删除/恢复、来源库隔离与笔记整组移动；group-selection-ui.mjs 在 Edge 中验证 125 张图片的过滤/分页选择、实际全组收藏、逐张取消、清空、预览入口及切库迟到请求。
+
+抖音元数据参考 [yt-dlp 抖音提取器](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/tiktok.py) 的作品标识、author.nickname 与展示昵称映射，独立实现页面数据和 DOM 匹配，不执行页面脚本。douyin-metadata-ui.mjs 覆盖弹层编号、多个作品、CDN 切换/追加参数后的媒体对象匹配、编码 JSON、路由数据、晚到作者及评论/导航排除；douyin-save-ui.mjs 加载实际 Edge 扩展，验证视频嗅探到本地入库、作者标签、来源链接、原文件一致和重复采集补标签。

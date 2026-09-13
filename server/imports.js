@@ -12,6 +12,8 @@ export function platformUrl(value) {
   let url; try { url = new URL(value); } catch { throw fail(400, '请粘贴完整的视频页面链接'); }
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.port || url.href.length > 4096) throw fail(400, '视频链接格式不正确');
   const h = url.hostname, p = url.pathname;
+  // Personal/favorites pages open a single work in a modal; import that work.
+  if (['www.douyin.com', 'douyin.com'].includes(h) && /^\d+$/.test(url.searchParams.get('modal_id') || '')) return 'https://www.douyin.com/video/' + url.searchParams.get('modal_id');
   const valid = ((h === 'www.bilibili.com' || h === 'm.bilibili.com' || h === 'bilibili.com') && /^\/video\/(?:BV[\w]+|av\d+)/i.test(p)) ||
     (h === 'b23.tv' && /^\/[\w]+\/?$/.test(p)) ||
     (['www.douyin.com', 'douyin.com', 'www.iesdouyin.com'].includes(h) && /^\/(?:share\/)?video\/\d+/.test(p)) ||
@@ -23,6 +25,10 @@ export function platformUrl(value) {
   url.protocol = 'https:'; url.hash = ''; return url.href;
 }
 
+export function importAuthor(metadata){
+  const douyin=/douyin/i.test(metadata.extractor_key||metadata.extractor||'')||/^https?:\/\/(?:[^/]+\.)?douyin\.com\//i.test(metadata.webpage_url||'');
+  return (douyin?metadata.channel||metadata.creator||metadata.uploader:metadata.uploader||metadata.creator||metadata.channel)||'';
+}
 export function mediaTools() {
   const local = resolve('tools/media', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
   let ffmpeg = process.env.ZNOTE_FFMPEG;
@@ -92,7 +98,7 @@ export async function downloadVideo({ url, dir, signal, progress }) {
   const path = join(dir, media[0]); if ((await stat(path)).size > MAX_VIDEO_BYTES) throw fail(413, '视频超过 500 MB，未入库');
   let metadata = {}; const info = join(dir, 'media.info.json');
   if (existsSync(info) && (await stat(info)).size < 5 * 1024 * 1024) { try { metadata = JSON.parse(await readFile(info, 'utf8')); } catch {} }
-  return { path, originalname: media[0], title: String(metadata.title || '网络视频').slice(0, 200), description: String(metadata.description || '').slice(0, 100000), author: metadata.uploader || metadata.creator || metadata.channel || '', author_url: metadata.uploader_url || metadata.channel_url || '' };
+  return { path, originalname: media[0], title: String(metadata.title || '网络视频').slice(0, 200), description: String(metadata.description || '').slice(0, 100000), author: importAuthor(metadata), author_url: metadata.uploader_url || metadata.channel_url || '' };
 }
 
 export function createImportManager({ dataDir, save, downloader = downloadVideo }) {

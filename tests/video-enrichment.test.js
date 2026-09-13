@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import sharp from 'sharp';
-import {mediaTools,runMediaCommand} from '../server/imports.js';
+import {mediaTools,runMediaCommand,importAuthor,platformUrl} from '../server/imports.js';
 import {videoThumbnail} from '../server/video-thumbnail.js';
 import {videoDetails} from '../shared/video-details.js';
 import {addResource} from '../extensions/clipper/resource-store.js';
@@ -21,3 +21,7 @@ test('video metadata enrichment cannot be downgraded by network filenames and ho
  const hover={source_url:state.source_url,resources:[]};assert.ok(addResource(hover,{url:'https://cdn.test/a.png'},true));assert.equal(state.resources.length,1);
  const details=videoDetails({title:'作品',author:'作者 [甲]',author_url:'javascript:alert(1)'},['参考']);assert.equal(details.title,'作品');assert.deepEqual(details.tags,['作者 [甲]','参考']);assert.ok(details.content.includes('作者 \\[甲\\]'));assert.ok(!details.content.includes('javascript:'));
 });
+
+test('Douyin import prefers the display nickname over account handle',()=>{assert.equal(importAuthor({extractor_key:'Douyin',uploader:'account_123',channel:'作者昵称'}),'作者昵称');assert.equal(importAuthor({webpage_url:'https://www.douyin.com/video/123',uploader:'account_123',channel:'作者昵称'}),'作者昵称');assert.equal(importAuthor({extractor_key:'BiliBili',uploader:'原作者',channel:'频道'}),'原作者');assert.equal(importAuthor({extractor_key:'Douyin',uploader:'唯一作者'}),'唯一作者')});
+
+test('Douyin favorites modal imports the work, never the profile',()=>{assert.equal(platformUrl('https://www.douyin.com/user/self?from_tab_name=main&modal_id=7684474331233527412&showTab=favorite_collection'),'https://www.douyin.com/video/7684474331233527412');for(const url of ['https://www.douyin.com/user/self','https://www.douyin.com/user/self?modal_id=invalid','https://www.douyin.com.evil.test/user/self?modal_id=123'])assert.throws(()=>platformUrl(url))});

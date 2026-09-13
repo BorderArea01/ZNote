@@ -9,7 +9,7 @@
     const authorLink=selector=>{for(const el of root.querySelectorAll(selector)){const name=clean(el.textContent);if(name){author=name;author_url=safe(el.closest('a')?.getAttribute('href'));break}}};
     if(/(^|\.)bilibili\.com$/.test(host)) {title=text(document,'h1.video-title, h1');authorLink('.up-name[href], .up-info-container a[href*="space.bilibili.com"]');}
     else if(/(^|\.)xiaohongshu\.com$/.test(host)){title=text(root,'#detail-title, .title')||text(root,'#detail-desc');authorLink('.author-wrapper a.name, .author-wrapper a[href*="/user/profile/"], .author a.name, .author-wrapper .username, .author .username');}
-    else if(/(^|\.)douyin\.com$/.test(host)){title=text(root,'[data-e2e="video-desc"], [data-e2e="video-detail-desc"]');authorLink('[data-e2e="video-author-nickname"], a[href*="/user/"]');author ||= text(root,'[data-e2e="video-author-nickname"]');const link=root.querySelector('a[href*="/video/"]');if(link)source_url=safe(link.href)||source_url;}
+    else if(/(^|\.)(douyin|iesdouyin)\.com$/.test(host)&&globalThis.ZNoteDouyinMetadata){const details=globalThis.ZNoteDouyinMetadata(video);title=details.title;author=details.author;author_url=details.author_url;source_url=details.source_url;}
     else if(/(^|\.)(x|twitter)\.com$/.test(host)&&root!==document){title=text(root,'[data-testid="tweetText"]');authorLink('[data-testid="User-Name"] a[href]:first-child');const time=root.querySelector('time');source_url=safe(time?.closest('a')?.href)||source_url;}
     if(title||author)rank=3;
     if(root!==document){title ||= text(root,'h1,h2,h3,[itemprop="name"]');if(!author)authorLink('[rel="author"], [itemprop="author"] a');if(title||author)rank=3;}
