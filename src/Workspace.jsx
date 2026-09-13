@@ -1242,6 +1242,7 @@ export default function Workspace({
                               <h3>{item.title}</h3>
                               <p>
                                 {item.content
+                                  .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
                                   .replace(/!\[[^\]]*\]\([^)]*\)/g, "[图片]")
                                   .replace(/[#*`>]/g, "")
                                   .slice(0, 240) || "一页空白，无限可能。"}
