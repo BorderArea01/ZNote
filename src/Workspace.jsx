@@ -1309,8 +1309,10 @@ export default function Workspace({
                           >
                             <RefreshCw size={16} />
                           </IconButton><IconButton disabled={batchBusy||groupSelecting||!!selectionProgress} label={`永久删除 ${item.title}`} onClick={()=>openPurge([item.id])}><Trash2 size={16}/></IconButton></>
-                        ) : (
-                          <IconButton
+                        ) : null}
+                      </div>
+                      {view!=="trash" && (
+                          <IconButton className="icon-button card-favorite-button" aria-pressed={!!item.favorite}
                             disabled={batchBusy||groupSelecting||!!selectionProgress}
                             label={
                               item.favorite
@@ -1321,12 +1323,11 @@ export default function Workspace({
                           >
                             <Star
                               size={16}
-                              fill={item.favorite ? "#d9a245" : "none"}
-                              color={item.favorite ? "#d9a245" : "currentColor"}
+                              fill={item.favorite ? "currentColor" : "none"}
+                              color="currentColor"
                             />
                           </IconButton>
-                        )}
-                      </div>
+                      )}
                     </article>
                   )}
                 </VirtualItems>
