@@ -1939,3 +1939,7 @@ a {
     transition: none !important;
   }
 }
+
+.card-actions{display:flex;align-items:center;gap:4px}
+html[data-style] .card-actions .select-group-button{display:flex;align-items:center;gap:4px;padding:5px 8px;font-size:11px;border-radius:8px;background:var(--surface);color:var(--ink);border:1px solid var(--border)}
+html[data-style] .item-card .card-actions:has(.select-group-button){top:10px;bottom:auto}

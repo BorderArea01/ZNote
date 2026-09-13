@@ -61,7 +61,7 @@ curl http://localhost:3741/api/items \
 
 创建笔记或更新笔记 `content` 时默认尝试归档外部配图，返回 `image_archive: { total, archived, failures }`。成功图片使用 `/media/...` 内部地址；失败保留网址与提示，可再次保存重试。`archive_images: false` 可显式保留外链。单次最多 200 张 / 500 MB，服务器尝试约两分钟后返回剩余失败项；单张最多 25 MB。服务器不获取本机、内网或凭据 URL，浏览器扩展可利用用户已有站点访问状态上传配图。
 
-批量回收站接口接收 `{ items: [{ id, version }], collection_id, restore: false }`；`restore: true` 为恢复，`collection_id: null` 为未分类。每次最多 100 项，要求所有条目属于指定知识库、版本及删除状态一致，失败时整体回滚。
+批量回收站接口接收 `{ items: [{ id, version }], collection_id, restore: false }`；`restore: true` 为恢复，`collection_id: null` 为未分类。每次最多 10,000 项，要求所有条目属于指定知识库、版本及删除状态一致，失败时整体回滚。
 
 ### HLS 分片
 
@@ -109,8 +109,10 @@ Webhook 可在设置中创建，也可通过管理员接口 `/api/webhooks` 管�
 
 ### 永久删除回收站内容
 
-1. POST /api/trash/preview，JSON：`{ "collection_id": "知识库 ID", "ids": ["条目 ID"] }`。collection_id 必填，null 表示未分类；省略 ids 表示当前库整个回收站，指定 ids 每次最多 100 项。
+1. POST /api/trash/preview，JSON：`{ "collection_id": "知识库 ID", "ids": ["条目 ID"] }`。collection_id 必填，null 表示未分类；省略 ids 表示当前库整个回收站，指定 ids 每次最多 10,000 项。
 2. 返回 count、revision、referenced、shared、reclaimable_bytes。确认后 POST /api/trash/purge，带同一选择范围、revision 和 `confirm: "DELETE"`。
 3. 内容或引用变化返回 409，须重新预览、确认。成功返回上述字段及 freed_bytes、freed_files、pending_files；待清理原文件会自动重试。写入令牌可用，只读令牌不可用。清空不会跨知识库，不能永久删除活动条目。
 
 移入回收站与永久删除会保留笔记的独立配图，自动替换其 Markdown 内部地址；笔记不再引用删除条目。保存笔记引用回收站或不存在的条目返回 409，须先恢复或换用有效配图。条目及笔记版本号可能随配图替换更新，请使用响应中的最新版本。媒体读取接口保留回收站预览能力，但不允许将该地址重新写入笔记。
+
+`GET /api/item-groups/selection?id=图片ID`：返回同知识库、同分组、同回收站状态的全部图片 `{ items: [{id, version}], collection_id, group_key, trash }`，不受筛选或分页影响。支持笔记 ID 获取活动笔记配图；最多 10,000 项，超限返回错误，不截断选择。批量标签/整理/删除/恢复支持同样上限。完整选中某笔记的活动配图后批量移动，会同时移动该笔记。

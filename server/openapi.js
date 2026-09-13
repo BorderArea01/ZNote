@@ -41,7 +41,7 @@ export const spec = {
   openapi: "3.0.3",
   info: {
     title: "ZNote API",
-    version: "0.9.9",
+    version: "0.9.10",
     description:
       "网页与插件共用同一套 API。外部工具发送 Authorization: Bearer zn_…；浏览器使用 HttpOnly Cookie。read 令牌只读，write 令牌可管理内容，令牌管理与导出需要管理员浏览器会话。所有时间为 UTC ISO 8601。删除可恢复；事件接口适用于轮询集成。",
   },
@@ -507,7 +507,7 @@ spec.paths["/api/items/batch-tags"] = {
           items: {
             type: "array",
             minItems: 1,
-            maxItems: 100,
+            maxItems: 10000,
             items: {
               type: "object",
               required: ["id", "version"],
@@ -594,7 +594,7 @@ spec.paths['/api/item-groups/order']={
 };
 spec.paths['/api/items/batch-trash']={post:operation('当前知识库批量回收或恢复，版本冲突时整体回滚',{type:'object'},
   {requestBody:body({type:'object',required:['items','collection_id'],properties:{collection_id:{type:'string',nullable:true},restore:{type:'boolean',default:false},
-    items:{type:'array',minItems:1,maxItems:100,items:{type:'object',required:['id','version'],properties:{id:str,version:{type:'integer',minimum:1}}}}}})})};
+    items:{type:'array',minItems:1,maxItems:10000,items:{type:'object',required:['id','version'],properties:{id:str,version:{type:'integer',minimum:1}}}}}})})};
 spec.components.schemas.Item.allOf[1].properties.image_archive={type:'object',description:'笔记保存时的配图归档结果',properties:{total:{type:'integer'},archived:{type:'integer'},failures:{type:'array',items:{type:'object',properties:{url:str,error:str}}}}};
 spec.paths['/api/clipper/pair'] = {post:{summary:'已登录网页创建扩展一次性连接凭据',description:'仅管理员浏览器会话可用，同源写入；凭据 2 分钟内单次有效，不返回 API 令牌。',responses:{200:{description:'一次性 code，禁止缓存'},...errorResponses}}};
 spec.paths['/api/pixiv/notes'] = { post: operation('Pixiv 小说入库（write）', ref('Item'), {
@@ -605,7 +605,9 @@ spec.paths['/api/pixiv/notes'] = { post: operation('Pixiv 小说入库（write�
 for (const artifact of ['download', 'source']) spec.paths['/api/clipper/pixiv/' + artifact] = { get: { summary: artifact === 'download' ? '下载 Pixiv 增强版安装包' : '下载 Pixiv 增强版完整 GPL 对应源码', responses: { 200: { description: 'application/zip' }, 503: { description: '服务端尚未运行 npm run pixiv:build' }, ...errorResponses } } };
 spec.paths['/api/clipper/redeem'] = {post:{summary:'扩展兑换一次性连接凭据',description:'要求 chrome-extension 来源及有效 code；兑换为 write 令牌。不可重放，发起连接的管理员会话注销或过期后失效。',security:[],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['code'],properties:{code:{type:'string',minLength:64,maxLength:64}}}}}},responses:{200:{description:'扩展写入令牌，禁止缓存'},...errorResponses}}};
 
-const trashScope={type:'object',required:['collection_id'],properties:{collection_id:{type:'string',nullable:true},ids:{type:'array',minItems:1,maxItems:100,items:str,description:'省略表示当前知识库整个回收站'}}};
+const trashScope={type:'object',required:['collection_id'],properties:{collection_id:{type:'string',nullable:true},ids:{type:'array',minItems:1,maxItems:10000,items:str,description:'省略表示当前知识库整个回收站'}}};
 const trashPreview={type:'object',properties:{revision:str,count:{type:'integer'},referenced:{type:'integer'},shared:{type:'integer'},reclaimable_bytes:{type:'integer'}}};
 spec.paths['/api/trash/preview']={post:operation('预览永久删除范围（需写入权限）',trashPreview,{requestBody:body(trashScope)})};
 spec.paths['/api/trash/purge']={post:operation('永久删除当前知识库回收站内容',{...trashPreview,properties:{...trashPreview.properties,freed_bytes:{type:'integer'},freed_files:{type:'integer'},pending_files:{type:'integer'}}},{description:'必须先预览并确认；revision 变化返回 409。保留独立笔记配图及共享原文件，待释放文件自动重试。',requestBody:body({...trashScope,required:['collection_id','revision','confirm'],properties:{...trashScope.properties,revision:str,confirm:{type:'string',enum:['DELETE']}}})})};
+
+spec.paths['/api/item-groups/selection']={get:operation('获取整个图片组的选择快照',{type:'object',properties:{items:list({type:'object',properties:{id:str,version:{type:'integer'}}}),collection_id:{type:'string',nullable:true},group_key:str,trash:{type:'boolean'}}},{parameters:[{name:'id',in:'query',required:true,schema:str}],description:'同知识库、同分组、同回收站状态的图片，按组内顺序返回。包含未加载和被筛选隐藏的成员；最多 10000 项，超限报错。'})};

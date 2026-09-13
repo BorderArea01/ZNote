@@ -101,6 +101,9 @@ export default function Workspace({
     listRequest = useRef(null);
   const [organizing, setOrganizing] = useState(false);
   const [purging,setPurging]=useState(null);
+  const [selectionRows,setSelectionRows]=useState({}),[groupSelecting,setGroupSelecting]=useState(false);
+  const groupRequest=useRef(0),selectionSeed=useRef(null);
+  const chosenItems=selection.map(id=>selectionRows[id]||items.find(item=>item.id===id)).filter(Boolean);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
@@ -130,15 +133,34 @@ export default function Workspace({
     notify = setToast;
   const actualCollection = collection === "unfiled" ? null : collection;
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
+  async function selectGroup(item){
+    if(groupSelecting||batchBusy)return;
+    const request=++groupRequest.current,current=generation.current;
+    setGroupSelecting(true);
+    try{
+      const result=await api('/api/item-groups/selection?id='+encodeURIComponent(item.id));
+      if(request!==groupRequest.current||current!==generation.current)return;
+      if(result.collection_id!==actualCollection||result.trash!==(view==='trash'))throw Error('图片组已移动或删除，请刷新后选择');
+      const rows=Object.fromEntries([...chosenItems,...result.items].map(row=>[row.id,row]));
+      const ids=[...new Set([...selection,...result.items.map(row=>row.id)])];
+      if(ids.length>10000)throw Error('单次最多选择 10000 项，请先处理已选内容');
+      closeDetail();
+      if(selecting){setSelectionRows(rows);setSelection(ids)}
+      else{selectionSeed.current={rows,ids};setSelecting(true)}
+      notify('已选中整组 '+result.items.length+' 张图片（包含筛选隐藏和未加载的成员）');
+    }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message)}
+    finally{if(request===groupRequest.current)setGroupSelecting(false)}
+  }
   const toggleSelection = id => setSelection(previous => previous.includes(id)
     ? previous.filter(value => value !== id)
-    : previous.length < 100 ? [...previous,id] : previous);
+    : previous.length < 10000 ? [...previous,id] : previous);
   const closeDetail = () => {
     ++detailGeneration.current;
     setSelected(null); setGallery(null); setGalleryBusy(false);
     if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
   };
   const resetScope = () => {
+    ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
     ++generation.current;
     listRequest.current?.abort();
     closeDetail();
@@ -260,7 +282,8 @@ export default function Workspace({
     const read = path => api(path, { signal: controller.signal });
     setLoading(true);
     setLoadError("");
-    setSelection([]);
+    const seed=selectionSeed.current;selectionSeed.current=null;
+    setSelection([]);setSelectionRows({});
     Promise.all([
       view === "home"
         ? Promise.resolve({ items: [], total: 0 })
@@ -272,6 +295,7 @@ export default function Workspace({
       .then(([result, stats, libs, tags]) => {
         if (controller.signal.aborted || current !== generation.current) return;
         setItems(result.items);
+        if(seed){setSelection(seed.ids);setSelectionRows(seed.rows)}
         setTotal(result.total);
         setStats(stats);
         setCollections(libs);
@@ -413,7 +437,7 @@ export default function Workspace({
     if(batchBusy || !selection.length) return;
     setBatchBusy(true);
     try {
-      const chosen=items.filter(i=>selection.includes(i.id));
+      const chosen=chosenItems;
       if(chosen.length!==selection.length) throw new Error('选择内容已变化，请重新选择');
       await send('/api/items/batch-trash',{items:chosen.map(({id,version})=>({id,version})),collection_id:actualCollection,restore:view==='trash'});
       setSelection([]); refresh(); notify(view==='trash'?`已恢复 ${chosen.length} 项内容`:`已将 ${chosen.length} 项移至当前知识库回收站，可随时恢复`);
@@ -801,6 +825,7 @@ export default function Workspace({
                   <button
                     className="text-button"
                     onClick={() => {
+                      ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
                       setSelecting(!selecting);
                       setSelection([]);
                     }}
@@ -822,20 +847,22 @@ export default function Workspace({
                     <input
                       type="checkbox"
                       aria-label="选择当前页全部内容"
-                      disabled={batchBusy}
+                      ref={node=>{if(node)node.indeterminate=items.some(i=>selection.includes(i.id))&&!items.every(i=>selection.includes(i.id))}}
+                      disabled={batchBusy || groupSelecting}
                       checked={
-                        !!items.length && items.slice(0, 100).every(i => selection.includes(i.id))
+                        !!items.length && items.every(i => selection.includes(i.id))
                       }
                       onChange={(e) =>
                         setSelection(
-                          e.target.checked ? items.slice(0, 100).map((i) => i.id) : [],
+                          e.target.checked ? [...new Set([...selection,...items.map(i=>i.id)])].slice(0,10000) : selection.filter(id=>!items.some(i=>i.id===id)),
                         )
                       }
                     />
-                    {items.length > 100 ? '前 100 项' : '当前页'}
+                    当前已加载
                   </label>
-                  <span>已选 {selection.length} 项（每次最多 100 项）</span>
-                  <HelpHint label="图片组选择">点击图片、标题或勾选框即可选择 / 取消。图片组会展开，支持按单张图片移动、加标签或删除。</HelpHint>
+                  <span>已选 {selection.length} 项</span>
+                  <button disabled={!selection.length||batchBusy||groupSelecting} onClick={()=>{setSelection([]);setSelectionRows({})}}>清除选择</button>
+                  <HelpHint label="图片组选择">点击图片、标题或勾选框即可选择 / 取消。“选择整组”包含当前知识库中同组的全部图片，不受筛选和分页影响；可继续取消单张或加选其他组。</HelpHint>
                   <button
                     onClick={() => setBatchTags(true)}
                     disabled={!selection.length || view === "trash"}
@@ -901,7 +928,7 @@ export default function Workspace({
                             type="checkbox"
                             aria-label={`选择 ${item.title}`}
                             checked={selection.includes(item.id)}
-                            disabled={batchBusy || (selection.length >= 100 && !selection.includes(item.id))}
+                            disabled={batchBusy || groupSelecting || (selection.length >= 10000 && !selection.includes(item.id))}
                             onChange={() => toggleSelection(item.id)}
                           />
                         </label>
@@ -910,7 +937,7 @@ export default function Workspace({
                         className="card-main"
                         onClick={() => selecting ? toggleSelection(item.id) : openItem(item)}
                         aria-pressed={selecting ? selection.includes(item.id) : undefined}
-                        disabled={selecting && (batchBusy || (selection.length >= 100 && !selection.includes(item.id)))}
+                        disabled={selecting && (batchBusy || groupSelecting || (selection.length >= 10000 && !selection.includes(item.id)))}
                         aria-label={`${selecting ? selection.includes(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
@@ -976,6 +1003,7 @@ export default function Workspace({
                         </div>
                       </button>
                       <div className="card-actions">
+                        {item.kind==='image'&&item.group_key&&<button className="select-group-button" disabled={groupSelecting||batchBusy} aria-label={`选择整组 ${item.group_title||item.title}`} title="选择该组全部图片，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>选择整组</button>}
                         {view === "trash" ? (
                           <><IconButton
                             label={`恢复 ${item.title}`}
@@ -1092,6 +1120,8 @@ export default function Workspace({
           suggestions={tags}
           onClose={closeDetail}
           onSaved={refresh}
+          onSelectGroup={selectGroup}
+          groupSelecting={groupSelecting}
           onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
           onDelete={remove}
           onRestore={restore}
@@ -1118,7 +1148,7 @@ export default function Workspace({
         />
       )}
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
-      {organizing && <OrganizeDialog items={items.filter(i => selection.includes(i.id))} collections={collections} onClose={() => setOrganizing(false)} onDone={() => { refresh(); notify('已完成批量整理'); }} />}
+      {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={() => { refresh(); notify('已完成批量整理'); }} />}
       {settings && (
         <SettingsPanel
           onClose={() => setSettings(false)}
@@ -1195,7 +1225,7 @@ export default function Workspace({
       )}
       {batchTags && (
         <BatchTagsDialog
-          items={items.filter((i) => selection.includes(i.id))}
+          items={chosenItems}
           suggestions={tags}
           onClose={() => setBatchTags(false)}
           onSaved={refresh}

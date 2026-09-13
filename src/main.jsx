@@ -341,6 +341,8 @@ function Detail({
   onClose,
   onSaved,
   onGroupOrdered,
+  onSelectGroup,
+  groupSelecting,
   onDelete,
   onRestore,
   onPurge,
@@ -523,6 +525,7 @@ function Detail({
             {dirty && <span className="unsaved">未保存</span>}
           </div>
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
+            {item.kind==='image'&&item.group_key&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
             {item.kind==='image'&&item.group_key&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
             <button onClick={async () => { if (!dirty || await save()) setCopying(true); }} disabled={busy}>复用到其他知识库</button>

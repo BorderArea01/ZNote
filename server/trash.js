@@ -4,7 +4,7 @@ import {resolve,dirname} from 'node:path';
 import {z} from 'zod';
 import {localMediaReferences,replaceLocalMedia} from '../shared/local-media.js';
 const fail=(status,message)=>Object.assign(Error(message),{status});
-const selection=z.object({collection_id:z.string().nullable(),ids:z.array(z.string()).min(1).max(100).optional()});
+const selection=z.object({collection_id:z.string().nullable(),ids:z.array(z.string()).min(1).max(10000).optional()});
 
 export function createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache,unlinkFile=unlink}) {
   let timer,pending=Promise.resolve(),stopped=false;

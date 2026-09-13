@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.9-287464?style=flat-square" alt="Version 0.9.9" />
+    <img src="https://img.shields.io/badge/version-0.9.10-287464?style=flat-square" alt="Version 0.9.10" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -137,6 +137,8 @@ docker compose up -d --build
 **Pixiv 增强版**：需要作者、收藏、搜索、排行榜等完整抓取与筛选时，可在设置页下载基于 Powerful Pixiv Downloader 的独立增强版。保留原插件功能；作品封面旁点击「入库」或按 **Z**，就地选择「按作品分组」或「逐张入库」（快捷键沿用上次选择）。自动加入作者姓名标签，并沿用原插件下载后自动收藏、附带标签及公开 / 私密设置。作者、收藏等目录点击「当前范围入库」，沿用原插件的整目录范围与筛选，一次排队数百部作品。知识库选择、标签、进度、停止和重试都在 Pixiv 页内操作，无需跳转。后台归档原图、漫画、APNG 动图与 Markdown 小说，并保留作者、来源和标签；已排队任务离开页面仍继续，浏览器重启后恢复。首次连接填写一次写入令牌；增强版更新后保留连接。安装与动图 / 小说边界见 [增强版说明](integrations/pixiv/README.md)，完整对应源码也可从设置页下载。
 
 **图文笔记的配图默认本地归档**：普通 Markdown 外链图片也会在保存时尝试入库，成功后改为内部地址。已有笔记可点击「归档外部配图」；无法下载时保留来源和失败说明。每次最多 200 张 / 500 MB，单张 25 MB，可再次保存继续处理。
+
+**整组选择**：点击图片组卡片或图片预览里的「选择整组」，一次选中该组全部图片，包含被筛选隐藏和未加载的成员。支持继续加选其他组、取消单张、批量标签、移动、收藏和删除；批量操作最多 10,000 项。完整选中笔记配图后移动，会同时移动所属笔记。
 
 **批量删除**：按标签筛选 →「选择内容」→ 勾选当前页或指定图片 →「删除所选」。内容进入当前知识库回收站，支持批量恢复。回收站卡片和详情页可「永久删除」，选择模式可「永久删除所选」，右上角可「清空回收站」（当前知识库全部回收站内容，不受筛选影响）。删除前会显示数量并确认。
 

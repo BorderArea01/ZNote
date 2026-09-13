@@ -213,7 +213,7 @@ export function createApp({
       path: "/",
     });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", version: "0.9.9" }),
+    res.json({ status: "ok", version: "0.9.10" }),
   );
   app.get("/api/auth/status", (req, res) =>
     res.json({ configured: !!setting("password") }),
@@ -313,7 +313,7 @@ export function createApp({
       .map((i) => `http://${i.address}:${port}`);
     res.json({
       name: "ZNote",
-      version: "0.9.9",
+      version: "0.9.10",
       addresses,
       storage: "无损压缩原图 · 按需缩略图",
       max_upload_mb: 25,
@@ -653,14 +653,23 @@ export function createApp({
   registerGroupOrderRoutes({app,db,transaction,getItem,serialize,event,groupNoteImages});
   app.post('/api/items/batch-organize', (req, res) => {
     const input = z.object({
-      items: z.array(z.object({ id: z.string(), version: z.number().int().positive() })).min(1).max(100),
+      items: z.array(z.object({ id: z.string(), version: z.number().int().positive() })).min(1).max(10000),
       collection_id: z.string().nullable().optional(), favorite: z.boolean().optional(),
     }).refine(v => v.collection_id !== undefined || v.favorite !== undefined).parse(req.body);
     if (new Set(input.items.map(i => i.id)).size !== input.items.length) throw fail(400, '内容 ID 不可重复');
     if (input.collection_id !== undefined) validateCollection(input.collection_id);
     const result = transaction(() => {
       const originals=input.items.map(value=>{const old=getItem(value.id);if(old.deleted_at||old.version!==value.version)throw fail(409,'部分内容已被修改或删除，请刷新后重试');return old;});
-      if(input.collection_id!==undefined)for(const old of originals)if(old.kind==='note')moveNotePages(old,input.collection_id);
+      if(input.collection_id!==undefined){
+        const selectedIds=new Set(originals.map(row=>row.id)),groups=new Map(originals.filter(row=>row.kind==='image'&&row.group_key?.startsWith('note:')).map(row=>[row.group_key,row]));
+        for(const [key,page] of groups){
+          const note=db.prepare("SELECT * FROM items WHERE id=? AND kind='note' AND deleted_at IS NULL AND collection_id IS ?").get(key.slice(5),page.collection_id);
+          if(note&&!selectedIds.has(note.id)&&note.collection_id!==input.collection_id&&db.prepare("SELECT id FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL").all(key,page.collection_id).every(row=>selectedIds.has(row.id))){
+            db.prepare('UPDATE items SET collection_id=?,version=version+1,updated_at=? WHERE id=?').run(input.collection_id,now(),note.id);event('item.updated',note.id);
+          }
+        }
+        for(const old of originals)if(old.kind==='note')moveNotePages(old,input.collection_id);
+      }
       return originals.map(old => {
       const target = input.collection_id === undefined ? old.collection_id : input.collection_id;
       if (old.hash && target !== old.collection_id && mediaCollision(old,target))
@@ -673,7 +682,7 @@ export function createApp({
     res.json({ items: result });
   });
   app.post('/api/items/batch-trash', (req, res) => {
-    const input = z.object({ items: z.array(z.object({id:z.string(),version:z.number().int().positive()})).min(1).max(100),
+    const input = z.object({ items: z.array(z.object({id:z.string(),version:z.number().int().positive()})).min(1).max(10000),
       collection_id:z.string().nullable(), restore:z.boolean().default(false) }).parse(req.body);
     if(new Set(input.items.map(i=>i.id)).size!==input.items.length) throw fail(400,'内容 ID 不可重复');
     const result=transaction(()=>{const changed=input.items.map(value=>{
@@ -693,7 +702,7 @@ export function createApp({
             z.object({ id: z.string(), version: z.number().int().positive() }),
           )
           .min(1)
-          .max(100),
+          .max(10000),
         tags: cleanTags,
         mode: z.enum(["add", "remove", "replace"]).default("add"),
       })
