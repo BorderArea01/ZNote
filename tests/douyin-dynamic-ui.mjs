@@ -7,7 +7,7 @@ import {createApp} from '../server/app.js';
 const dir=await mkdtemp(resolve('artifacts/douyin-dynamic-')),runtime=createApp({dataDir:join(dir,'data')}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
 const bytes=await readFile('tests/fixtures/sample.mp4'),poster=await sharp({create:{width:320,height:180,channels:3,background:'#7667dd'}}).png().toBuffer();
 const extension=resolve('extensions/clipper'),context=await chromium.launchPersistentContext(join(dir,'profile'),{channel:'msedge',headless:true,args:['--mute-audio','--disable-extensions-except='+extension,'--load-extension='+extension]}),worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker'),page=await context.newPage();
-const urlA='https://v26-web.douyinvod.com/sign/expiry/video/tos/cn/bucket/work-a/',urlB='https://sf6-cdn-tos.douyinstatic.com/sign/expiry/video/tos/cn/bucket/work-a/',urlC='https://v26-web.douyinvod.com/sign/expiry/video/tos/cn/bucket/work-b/';
+const urlA='https://v26-web.douyinvod.com/sign/expiry/video/tos/cn/bucket/work-a/',urlB='https://sf6-cdn-tos.douyinstatic.com/obj/tos-cn-ve/work-a.mp4',urlC='https://v26-web.douyinvod.com/sign/expiry/video/tos/cn/bucket/work-b/';
 const work=(id,name,urls)=>({aweme_id:id,desc:'作品 '+id,author:{nickname:name,sec_uid:'MS4w_'+id},video:{play_addr:{url_list:urls},cover:{url_list:['https://p3.douyinpic.com/cover.png']}}});
 let payload={aweme_list:[work('111','动态作者甲',[urlA,urlB]),work('222','动态作者乙',[urlC])],private_field:'must-not-cross-bridge'};
 try{

@@ -56,7 +56,7 @@
   const publicData=({urls,id,...value})=>value;
   // The player appends request parameters and can switch CDN hosts. The TOS
   // object path still identifies the same media; unrelated assets stay separate.
-  const mediaKey=value=>{try{const u=new URL(value);if(/(^|\.)(?:douyinvod\.com|douyinstatic\.com|douyinvod\.com\.cn)$/.test(u.hostname))return u.pathname.match(/\/video\/tos\/.+/)?.[0]||'';if(/(^|\.)douyin\.com$/.test(u.hostname)&&/^\/aweme\/v1\/play\//.test(u.pathname))return u.searchParams.get('video_id')||''}catch{}return ''};
+  const mediaKey=value=>{try{const u=new URL(value);if(/(^|\.)(?:douyinvod\.com|douyinstatic\.com|douyinvod\.com\.cn)$/.test(u.hostname))return u.pathname.match(/\/(?:video\/tos|obj)\/.+/)?.[0]||u.pathname;if(/(^|\.)douyin\.com$/.test(u.hostname)&&/^\/aweme\/v1\/play\//.test(u.pathname))return u.searchParams.get('video_id')||''}catch{}return ''};
   let indexed;
   const recordIndex=()=>{if(indexed)return indexed;const all=records(),exact=new Map(),keys=new Map();const add=(map,key,row)=>{if(!key)return;const prev=map.get(key);map.set(key,map.has(key)&&prev?.id!==row.id?null:row)};for(const row of all)for(const url of row.urls){add(exact,url,row);add(keys,mediaKey(url),row)}indexed={all,exact,keys};queueMicrotask(()=>indexed=null);return indexed};
   globalThis.ZNoteDouyinMetadataForUrl=url=>{const address=urlOf(url),index=recordIndex(),row=index.exact.get(address)||index.keys.get(mediaKey(address));return row?publicData(row):null};
