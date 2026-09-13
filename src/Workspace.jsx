@@ -5,6 +5,9 @@ import { PageLoader, readAutoPages, saveAutoPages } from './PageLoader.jsx';
 import { ReadingProgress, useReadingProgress } from './ReadingProgress.jsx';
 import { VideoHistory } from './VideoProgress.jsx';
 import { extendPageWindow } from './page-window.js';
+import { changeSelection, collectSelection } from './selection.js';
+import { SelectionBar } from './SelectionBar.jsx';
+import './selection.css';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
 import { DraftsDialog } from './NoteDrafts.jsx';
@@ -118,9 +121,15 @@ export default function Workspace({
   const [purging,setPurging]=useState(null);
   const [selectionRows,setSelectionRows]=useState({}),[groupSelecting,setGroupSelecting]=useState(false);
   const groupRequest=useRef(0),selectionSeed=useRef(null);
+  const [selectionProgress, setSelectionProgress] = useState(null), [knownGroups, setKnownGroups] = useState({});
+  const selectionRequest = useRef(null);
   const itemById = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
   const selectedIds = useMemo(() => new Set(selection), [selection]);
-  const chosenItems=selection.map(id=>selectionRows[id]||itemById.get(id)).filter(Boolean);
+  const selectedGroups = useMemo(() => new Set(Object.entries(knownGroups).filter(([,ids])=>ids.length&&ids.every(id=>selectedIds.has(id))).map(([key])=>key)),[knownGroups,selectedIds]);
+  const chosenItems=selection.map(id=>{
+    const cached=selectionRows[id],visible=itemById.get(id);
+    return !cached || (visible && visible.version >= cached.version) ? visible : cached;
+  }).filter(Boolean);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
@@ -130,7 +139,18 @@ export default function Workspace({
   const [readingOpen, setReadingOpen] = useState(false);
   const taskStore=useTaskStore(),[tasksOpen,setTasksOpen]=useState(false);
   const recordUndo = result => { if (result?.undo) { setToast(''); setUndoReceipt(result.undo); } };
-  const saved = result => { recordUndo(result); refresh(); };
+  const saved = result => {
+    if (result?.items) {
+      const changed = new Map(result.items.map(row => [row.id, row]));
+      setSelectionRows(previous => ({...previous,...Object.fromEntries(changed)}));
+      setItems(previous => previous.map(row => changed.has(row.id) ? {...row,...changed.get(row.id)} : row));
+      setSelection(previous => previous.filter(id => {
+        const row = changed.get(id);
+        return !row || (row.collection_id === actualCollection && Boolean(row.deleted_at) === (view === 'trash'));
+      }));
+    }
+    recordUndo(result); refresh();
+  };
   const taskRefresh=useRef();taskRefresh.current=()=>refresh();
   useEffect(()=>{let last=taskStore.getSnapshot().changes,timer;const unsubscribe=taskStore.subscribe(()=>{const current=taskStore.getSnapshot().changes;if(last!==current){last=current;clearTimeout(timer);timer=setTimeout(()=>taskRefresh.current(),500);}});return()=>{unsubscribe();clearTimeout(timer)}},[taskStore]);
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
@@ -165,15 +185,27 @@ export default function Workspace({
     if (loading) return;
     const anchor = restoreAnchor.current;
     if (!anchor) return;
+    let active = true, expectedScroll = window.scrollY;
     const restore = () => {
+      if (!active) return;
       const card = [...document.querySelectorAll('.item-card[data-item-id]')].find(el => el.dataset.itemId === anchor.id);
       if (card) window.scrollBy({ top: card.getBoundingClientRect().top - anchor.top, behavior: 'instant' });
       else window.scrollTo({ top: 0, behavior: 'instant' });
+      expectedScroll = window.scrollY;
     };
     restore();
-    // Grid measurement and browser scroll anchoring settle at the next frame.
-    const frame = requestAnimationFrame(() => { restore(); restoreAnchor.current = null; });
-    return () => cancelAnimationFrame(frame);
+    // Tags and history panels can settle after the list response. Keep the
+    // anchor through those layout changes, but yield immediately to the user.
+    const stop = () => { active = false; observer.disconnect(); if(restoreAnchor.current===anchor)restoreAnchor.current=null; };
+    const scrolled = () => { if(Math.abs(window.scrollY-expectedScroll)>1)stop(); };
+    const observer = new ResizeObserver(restore);
+    const content = document.querySelector('.main-content');
+    if(anchor.id && content)observer.observe(content);
+    const frame = requestAnimationFrame(() => { restore(); if(!anchor.id)stop(); });
+    const inputs=['wheel','touchstart','pointerdown','keydown'];
+    inputs.forEach(type=>window.addEventListener(type,stop,{passive:true,capture:true}));
+    window.addEventListener('scroll',scrolled,{passive:true});
+    return () => { cancelAnimationFrame(frame); stop(); inputs.forEach(type=>window.removeEventListener(type,stop,true)); window.removeEventListener('scroll',scrolled); };
   }, [loading, items]);
   const galleryItems = gallery || items.filter(i => i.kind === 'image');
   const galleryIndex = galleryItems.findIndex(i => i.id === selected?.id);
@@ -235,32 +267,64 @@ export default function Workspace({
   };
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
   async function selectGroup(item){
-    if(groupSelecting||batchBusy)return;
+    if(groupSelecting||batchBusy||selectionProgress||loading)return;
     const request=++groupRequest.current,current=generation.current;
     setGroupSelecting(true);
     try{
       const result=await api('/api/item-groups/selection?id='+encodeURIComponent(item.id));
       if(request!==groupRequest.current||current!==generation.current)return;
       if(result.collection_id!==actualCollection||result.trash!==(view==='trash'))throw Error('图片组已移动或删除，请刷新后选择');
-      const rows=Object.fromEntries([...chosenItems,...result.items].map(row=>[row.id,row]));
-      const ids=[...new Set([...selection,...result.items.map(row=>row.id)])];
-      if(ids.length>10000)throw Error('单次最多选择 10000 项，请先处理已选内容');
+      const members=result.items.map(row=>({...itemById.get(row.id),...selectionRows[row.id],...row,collection_id:result.collection_id,group_key:result.group_key}));
+      const groupIds=members.map(row=>row.id),removing=selecting&&groupIds.every(id=>selectedIds.has(id));
+      const rows=Object.fromEntries([...chosenItems,...members].map(row=>[row.id,row]));
+      const ids=changeSelection(selection,groupIds,removing?'remove':'add');
+      setKnownGroups(previous=>({...previous,[result.group_key]:groupIds}));
       closeDetail();
       if(selecting){setSelectionRows(rows);setSelection(ids)}
-      else{selectionSeed.current={rows,ids};setSelecting(true)}
-      notify('已选中整组 '+result.items.length+' 张图片（包含筛选隐藏和未加载的成员）');
+      else{pendingBrowse.current=null;selectionSeed.current={rows,ids};setSelecting(true)}
+      notify((removing?'已取消整组 ':'已选中整组 ')+result.items.length+' 张图片');
     }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message)}
     finally{if(request===groupRequest.current)setGroupSelecting(false)}
   }
   const toggleSelection = (id, event) => {
+    if(batchBusy||groupSelecting||selectionProgress||loading)return;
     const from = items.findIndex(item => item.id === selectionAnchor.current);
     const to = items.findIndex(item => item.id === id);
     const range = event?.shiftKey && from >= 0 && to >= 0
       ? items.slice(Math.min(from, to), Math.max(from, to) + 1).map(item => item.id) : [id];
-    const rangeIds = new Set(range);
-    setSelection(previous => previous.includes(id) ? previous.filter(value => !rangeIds.has(value)) : [...new Set([...previous, ...range])].slice(0, 10000));
+    applySelection(range, selectedIds.has(id)?'remove':'add');
     if (!event?.shiftKey || from < 0) selectionAnchor.current = id;
   };
+  function applySelection(ids, mode) {
+    try { setSelection(changeSelection(selection, ids, mode)); } catch(e) { notify(e.message); }
+  }
+  function cancelSelectionRequest() {
+    selectionRequest.current?.abort(); selectionRequest.current=null; setSelectionProgress(null);
+  }
+  function clearSelection() {
+    cancelSelectionRequest(); selectionAnchor.current=null; setSelection([]); setSelectionRows({});
+  }
+  function toggleSelectionMode(item = null) {
+    if(batchBusy||groupSelecting||loading)return;
+    cancelSelectionRequest();
+    pendingBrowse.current=captureAnchor();
+    selectionSeed.current=item?{ids:[item.id],rows:{[item.id]:item},anchor:item.id}:null;
+    setSelection([]);setSelectionRows({});setSelecting(item?true:!selecting);
+  }
+  async function selectFiltered() {
+    if(!selecting||batchBusy||groupSelecting||loading||query!==search||selectionRequest.current)return;
+    const controller=new AbortController(),current=generation.current;
+    selectionRequest.current=controller;setSelectionProgress({loaded:0,total});
+    try {
+      const rows=await collectSelection(api,params(0),{signal:controller.signal,onProgress:setSelectionProgress});
+      if(controller.signal.aborted||current!==generation.current)return;
+      const ids=changeSelection(selection,rows.map(row=>row.id),'add');
+      setSelectionRows(previous=>({...previous,...Object.fromEntries(rows.map(row=>[row.id,row]))}));
+      setSelection(ids);notify(`已选中当前筛选的全部 ${rows.length} 项内容`);
+    } catch(e) { if(!controller.signal.aborted&&current===generation.current)notify(e.message); }
+    finally {if(selectionRequest.current===controller){selectionRequest.current=null;setSelectionProgress(null);}}
+  }
+  useEffect(()=>()=>selectionRequest.current?.abort(),[]);
   const closeDetail = () => {
     window.dispatchEvent(new Event('znote:leaving-preview'));
     reading.leave();
@@ -269,6 +333,7 @@ export default function Workspace({
     if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
   };
   const resetScope = () => {
+    cancelSelectionRequest();setKnownGroups({});
     setReadingOpen(false);
     rememberBrowse(); selectionAnchor.current = null;
     pagingRequest.current = null; setPaging(false); setPageOffset(0); setPageError(null);
@@ -409,6 +474,7 @@ export default function Workspace({
   }
   useEffect(() => {
     if (!ready) return;
+    cancelSelectionRequest();
     const current = ++generation.current;
     const controller = new AbortController();
     listRequest.current = controller;
@@ -438,7 +504,7 @@ export default function Workspace({
         eventCursor.current = result.event_cursor || 0;
         if (keepSelection) setSelectionRows(previous => Object.fromEntries(Object.entries(previous).map(([id, row]) => [id, result.items.find(item => item.id === id) || row])));
         setUpdatesAvailable(false);
-        if(seed){setSelection(seed.ids);setSelectionRows(seed.rows)}
+        if(seed){setSelection(seed.ids);setSelectionRows(seed.rows);selectionAnchor.current=seed.anchor||null;}
         setTotal(result.total);
         setStats(stats);
         setCollections(libs);
@@ -571,7 +637,8 @@ export default function Workspace({
   }, [selected, uploadBatch, settings]);
   useEffect(() => {
     const hotkey = (e) => {
-      if (e.target.closest?.('[role="dialog"]')) {
+      if (e.isComposing || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"]')) {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') e.preventDefault();
         return;
       }
@@ -581,10 +648,20 @@ export default function Workspace({
         searchInput.current?.focus();
       }
       if (e.key === "Escape") setMobile(false);
+      if(e.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+      if(selecting && (e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='a') {
+        e.preventDefault();selectFiltered();
+      }
+      if(selecting && e.key==='Escape' && !batchBusy && !groupSelecting) {
+        e.preventDefault();
+        if(selectionProgress)cancelSelectionRequest();
+        else if(selection.length)clearSelection();
+        else toggleSelectionMode();
+      }
     };
     window.addEventListener("keydown", hotkey);
     return () => window.removeEventListener("keydown", hotkey);
-  }, [view]);
+  }, [view, selecting, selection, batchBusy, groupSelecting, selectionProgress, loading, query, search, params]);
   async function favorite(item) {
     try {
       if(item.group_key && item.group_count) {
@@ -614,15 +691,28 @@ export default function Workspace({
     }
   }
   async function batchTrash() {
-    if(batchBusy || !selection.length) return;
+    if(batchBusy || groupSelecting || selectionProgress || loading || !selection.length) return;
     setBatchBusy(true);
     try {
       const chosen=chosenItems;
       if(chosen.length!==selection.length) throw new Error('选择内容已变化，请重新选择');
       const result = await send('/api/items/batch-trash',{items:chosen.map(({id,version})=>({id,version})),collection_id:actualCollection,restore:view==='trash',undo:true});
-      recordUndo(result);
-      setSelection([]); refresh(); notify(view==='trash'?`已恢复 ${chosen.length} 项内容`:`已将 ${chosen.length} 项移至当前知识库回收站，可随时恢复`,result.undo);
+      if(browsing.current.library===collection&&browsing.current.view===view)saved(result);
+      else {recordUndo(result);refresh();}
+      notify(view==='trash'?`已恢复 ${chosen.length} 项内容`:`已将 ${chosen.length} 项移至回收站，可随时恢复`,result.undo);
     } catch(e) { notify(e.message); } finally {setBatchBusy(false);}
+  }
+  async function batchFavorite() {
+    if(batchBusy||groupSelecting||selectionProgress||loading||!selection.length)return;
+    setBatchBusy(true);
+    try {
+      if(chosenItems.length!==selection.length)throw Error('选择内容已变化，请重新选择');
+      const value=!chosenItems.every(row=>row.favorite);
+      const result=await send('/api/items/batch-organize',{items:chosenItems.map(({id,version})=>({id,version})),favorite:value,undo:true});
+      if(browsing.current.library===collection&&browsing.current.view===view)saved(result);
+      else {recordUndo(result);refresh();}
+      notify(`${value?'已收藏':'已取消收藏'} ${chosenItems.length} 项内容`,result.undo);
+    }catch(e){notify(e.message);}finally{setBatchBusy(false);}
   }
   async function restore(item) {
     try {
@@ -1012,11 +1102,8 @@ export default function Workspace({
                   {view==='trash'&&<button className="text-button danger" disabled={!stats.trash} onClick={()=>openPurge(null)}><Trash2 size={14}/>清空回收站</button>}
                   <button
                     className="text-button"
-                    onClick={() => {
-                      ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
-                      setSelecting(!selecting);
-                      setSelection([]);
-                    }}
+                    disabled={batchBusy||groupSelecting||loading}
+                    onClick={()=>toggleSelectionMode()}
                   >
                     {selecting ? "退出选择" : "选择内容"}
                   </button>
@@ -1029,43 +1116,19 @@ export default function Workspace({
                   </button>
                 </div>
               </div>
-              {selecting && (
-                <div className="selection-bar">
-                  <label>
-                    <input
-                      type="checkbox"
-                      aria-label="选择当前页全部内容"
-                      ref={node=>{if(node)node.indeterminate=items.some(i=>selectedIds.has(i.id))&&!items.every(i=>selectedIds.has(i.id))}}
-                      disabled={batchBusy || groupSelecting}
-                      checked={
-                        !!items.length && items.every(i => selectedIds.has(i.id))
-                      }
-                      onChange={(e) =>
-                        setSelection(
-                          e.target.checked ? [...new Set([...selection,...items.map(i=>i.id)])].slice(0,10000) : selection.filter(id=>!itemById.has(id)),
-                        )
-                      }
-                    />
-                    当前已加载
-                  </label>
-                  <span>已选 {selection.length} 项</span>
-                  <button disabled={!selection.length||batchBusy||groupSelecting} onClick={()=>{selectionAnchor.current=null;setSelection([]);setSelectionRows({})}}>清除选择</button>
-                  <HelpHint label="图片组选择">点击图片、标题或勾选框即可选择 / 取消。按住 Shift 点击另一张，连续选择或取消已加载范围。“选择整组”包含当前知识库中同组的全部图片，不受筛选和分页影响。</HelpHint>
-                  <button
-                    onClick={() => setBatchTags(true)}
-                    disabled={!selection.length || view === "trash"}
-                  >
-                    <Hash size={15} />
-                    批量标签
-                  </button>
-                  <button onClick={() => setOrganizing(true)} disabled={!selection.length || view === 'trash'}>移动 / 收藏</button>
-                  <button onClick={() => { setToast(''); setGroupOrganizing(true); }} disabled={!selection.length || chosenItems.length !== selection.length || chosenItems.some(i => i.kind !== 'image') || view === 'trash' || batchBusy || groupSelecting}><Layers size={15}/>整理图片组</button>
-                  <button className={view==='trash'?'':'danger'} disabled={!selection.length || batchBusy} onClick={batchTrash}>
-                    {view==='trash'?<RefreshCw size={15}/>:<Trash2 size={15}/>} {batchBusy?'正在处理…':view==='trash'?'恢复所选':'删除所选'}
-                  </button>
-                  {view==='trash'&&<button className="danger" disabled={!selection.length||batchBusy} onClick={()=>openPurge(selection)}><Trash2 size={15}/>永久删除所选</button>}
-                </div>
-              )}
+              {selecting && <SelectionBar
+                count={selection.length} loadedCount={items.length} total={total}
+                allLoaded={!!items.length&&items.every(i=>selectedIds.has(i.id))} someLoaded={items.some(i=>selectedIds.has(i.id))}
+                locked={batchBusy||groupSelecting||!!selectionProgress||loading||query!==search||!!loadError}
+                progress={selectionProgress} working={batchBusy||groupSelecting} trash={view==='trash'}
+                imagesOnly={chosenItems.length===selection.length&&chosenItems.every(i=>i.kind==='image')}
+                allFavorite={chosenItems.length===selection.length&&chosenItems.every(i=>i.favorite)}
+                onLoaded={e=>applySelection(items.map(i=>i.id),e.target.checked?'add':'remove')}
+                onAll={selectFiltered} onInvert={()=>applySelection(items.map(i=>i.id),'invert')}
+                onClear={clearSelection} onExit={()=>toggleSelectionMode()} onCancel={cancelSelectionRequest}
+                onTags={()=>setBatchTags(true)} onOrganize={()=>setOrganizing(true)} onFavorite={batchFavorite}
+                onGroup={()=>{setToast('');setGroupOrganizing(true);}} onTrash={batchTrash} onPurge={()=>openPurge(selection)}
+              />}
               {loadError ? (
                 <div className="empty">
                   <h3>内容加载失败</h3>
@@ -1110,16 +1173,16 @@ export default function Workspace({
               ) : (
                 <>
                 {pageOffset > 0 && <button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : '加载前面的内容'}</button>}
-                <VirtualItems items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
+                <VirtualItems selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
-                    <article data-item-id={item.id} className={`item-card ${item.kind}${selecting&&selectedIds.has(item.id)?' is-selected':''}`} key={item.id}>
+                    <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&selectedIds.has(item.id)?' is-selected':''}`} key={item.id}>
                       {selecting && (
                         <label className="card-select">
                           <input
                             type="checkbox"
                             aria-label={`选择 ${item.title}`}
                             checked={selectedIds.has(item.id)}
-                            disabled={batchBusy || groupSelecting || (selection.length >= 10000 && !selectedIds.has(item.id))}
+                            disabled={batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !selectedIds.has(item.id))}
                             onClick={e => toggleSelection(item.id, e)}
                             onChange={() => {}}
                           />
@@ -1127,10 +1190,11 @@ export default function Workspace({
                       )}
                       <button
                         className="card-main"
+                        onKeyDown={e=>{if(!selecting&&(e.ctrlKey||e.metaKey)&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleSelectionMode(item);}}}
                         aria-busy={openingItem === item.id || undefined}
-                        onClick={(e) => selecting ? toggleSelection(item.id, e) : openItem(item)}
+                        onClick={(e) => selecting ? toggleSelection(item.id, e) : (e.ctrlKey||e.metaKey) ? toggleSelectionMode(item) : openItem(item)}
                         aria-pressed={selecting ? selectedIds.has(item.id) : undefined}
-                        disabled={selecting && (batchBusy || groupSelecting || (selection.length >= 10000 && !selectedIds.has(item.id)))}
+                        disabled={selecting && (batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !selectedIds.has(item.id)))}
                         aria-label={`${selecting ? selectedIds.has(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
@@ -1197,16 +1261,18 @@ export default function Workspace({
                         </div>
                       </button>
                       <div className="card-actions">
-                        {item.kind==='image'&&item.group_key&&<button className="select-group-button" disabled={groupSelecting||batchBusy} aria-label={`选择整组 ${item.group_title||item.title}`} title="选择该组全部图片，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>选择整组</button>}
+                        {item.kind==='image'&&item.group_key&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部图片的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
                         {view === "trash" ? (
                           <><IconButton
+                            disabled={batchBusy||groupSelecting||!!selectionProgress}
                             label={`恢复 ${item.title}`}
                             onClick={() => restore(item)}
                           >
                             <RefreshCw size={16} />
-                          </IconButton><IconButton label={`永久删除 ${item.title}`} onClick={()=>openPurge([item.id])}><Trash2 size={16}/></IconButton></>
+                          </IconButton><IconButton disabled={batchBusy||groupSelecting||!!selectionProgress} label={`永久删除 ${item.title}`} onClick={()=>openPurge([item.id])}><Trash2 size={16}/></IconButton></>
                         ) : (
                           <IconButton
+                            disabled={batchBusy||groupSelecting||!!selectionProgress}
                             label={
                               item.favorite
                                 ? `取消收藏 ${item.title}`

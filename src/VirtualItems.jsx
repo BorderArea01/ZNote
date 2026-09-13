@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 
 // A bounded DOM window over already loaded records. Small pages remain native
 // grids; large lists retain a focused row so keyboard focus is never unmounted.
-export function VirtualItems({ items, layout, restoreId, children }) {
+export function VirtualItems({ items, layout, restoreId, selecting, children }) {
   const root = useRef(null);
   const [windowed, setWindowed] = useState({ start: 0, end: 60, columns: 1, stride: 350, gap: 0, focused: -1 });
   const virtual = items.length > 120;
@@ -56,5 +56,5 @@ export function VirtualItems({ items, layout, restoreId, children }) {
     }
     if (cursor < rows) rendered.push(<div key="gap-end" aria-hidden="true" style={{ gridColumn: '1 / -1', height: (rows - cursor) * stride - gap }} />);
   }
-  return <div ref={root} className={`items ${layout}`} data-virtual={virtual || undefined} style={{ overflowAnchor: 'none' }}>{virtual ? rendered : items.map(children)}</div>;
+  return <div ref={root} className={`items ${layout}${selecting ? ' is-selecting' : ''}`} data-virtual={virtual || undefined} style={{ overflowAnchor: 'none' }}>{virtual ? rendered : items.map(children)}</div>;
 }
