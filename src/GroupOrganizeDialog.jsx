@@ -20,7 +20,7 @@ export default function GroupOrganizeDialog({ items, library, onClose, onDone })
   }, [mode, library, query, offset, revision]);
   useEffect(() => {
     setError(''); setSnapshot(null);
-    if ((mode === 'create' && !title.trim()) || (mode === 'append' && !target)) { setLoading(false); return; }
+    if (mode === 'append' && !target) { setLoading(false); return; }
     const controller = new AbortController(); setLoading(true);
     const timer = setTimeout(async () => {
       try {
@@ -46,7 +46,7 @@ export default function GroupOrganizeDialog({ items, library, onClose, onDone })
     <div className="group-organize-body">
       <fieldset className="group-organize-settings" disabled={busy || uncertain}>
         <label>整理方式<select aria-label="图片组整理方式" value={mode} onChange={e => setMode(e.target.value)}><option value="create">组成新图片组</option><option value="append">追加到已有图片组</option><option value="detach">拆为独立图片</option></select></label>
-        {mode === 'create' && <label>新图片组名称<input aria-label="新图片组名称" maxLength={200} placeholder="例如：建筑立面参考" value={title} onChange={e => setTitle(e.target.value)}/></label>}
+        {mode === 'create' && <label>新图片组名称（可选）<input aria-label="新图片组名称" maxLength={200} placeholder={plan?.title ? `默认：${plan.title}` : '留空使用封面图片标题'} value={title} onChange={e => setTitle(e.target.value)}/></label>}
         {mode === 'append' && <div className="group-target-picker"><label>查找目标组<input aria-label="搜索目标图片组" value={query} onChange={e => { setQuery(e.target.value); setOffset(0); }} placeholder="搜索当前知识库的素材组"/></label>
           <select aria-label="目标图片组" value={target?.id || ''} onChange={e => setTarget(groups.groups.find(g => g.id === e.target.value) || null)}>
             <option value="">选择素材组</option>{target && !groups.groups.some(g => g.id === target.id) && <option value={target.id}>{target.title} · {target.count} 张</option>}{groups.groups.map(g => <option key={g.id} value={g.id}>{g.title} · {g.count} 张</option>)}
@@ -58,9 +58,9 @@ export default function GroupOrganizeDialog({ items, library, onClose, onDone })
         {!!plan?.note_count && <label>笔记配图处理<select aria-label="笔记配图处理" value={notes} onChange={e => setNotes(e.target.value)}><option value="copy">保留原组，建立素材引用</option><option value="exclude">跳过笔记配图</option></select></label>}
       </fieldset>
       <section className="group-plan" aria-label="图片组整理预览">
-        <div className="group-plan-heading"><strong>{mode === 'detach' ? '将拆为独立图片' : '整理后的图片组'}</strong><span>{plan ? `${plan.result_count} 张` : `${selection.length} 张已选`}</span></div>
+        <div className="group-plan-heading"><strong>{mode === 'detach' ? '将拆为独立图片' : plan?.title || '整理后的图片组'}</strong><span>{plan ? `${plan.result_count} 张` : `${selection.length} 张已选`}</span></div>
         {loading && <p role="status">正在核对图片与分组…</p>}
-        {!loading && !plan && !error && <p className="muted">{mode === 'create' ? '填写组名后显示预览' : '选择目标组后显示预览'}</p>}
+        {!loading && !plan && !error && mode === 'append' && <p className="muted">选择目标组后显示预览</p>}
         {plan && <><p className="group-plan-summary">已选 {plan.selected_count} 张 · 实际范围 {plan.expanded_count} 张{plan.target_count ? ` · 目标原有 ${plan.target_count} 张` : ''}</p>
           <div className="group-plan-grid">{plan.items.map((item,index) => <div key={item.id}><img src={item.thumbnail_url} alt={item.title} loading="lazy"/><span>{index === 0 && plan.cover ? '封面' : index+1}</span></div>)}</div>
           {plan.result_count > plan.items.length && <p className="muted">预览前 60 张，操作包含全部 {plan.result_count} 张</p>}

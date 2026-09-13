@@ -34,6 +34,17 @@ test('image regrouping preserves source identity, note groups, covers, undo and 
   const preview = value => json('/api/item-groups/organize/preview', 'POST', value);
   const commit = state => json('/api/item-groups/organize', 'POST', { ...state.input, revision: state.revision, operation_id: state.operation_id, prepared_at: state.prepared_at, undo: true });
   const groupIds = id => json('/api/item-groups/order?id=' + id).then(r => r.items.map(i => i.id));
+  const unnamed = await input([pages[1].id, loose.id]); delete unnamed.title;
+  const automatic = await preview(unnamed);
+  assert.equal(automatic.title, '原页 1'); assert.equal(automatic.cover.id, pages[1].id); assert.equal(automatic.input.title, '');
+  const namedByCover = await commit(automatic);
+  assert.equal(namedByCover.item.group_title, automatic.title); assert.equal((await get(loose.id)).group_title, automatic.title);
+  assert.equal((await commit(automatic)).group_key, namedByCover.group_key);
+  await json('/api/undo/' + namedByCover.undo.id, 'POST', {});
+  const expandedName = await preview(await input([pages[2].id], {title:'   ',whole_groups:true}));
+  assert.equal(expandedName.cover.id,pages[0].id); assert.equal(expandedName.title,'原页 0');
+  const excludedCover = await preview(await input([noteRows[0].id,loose.id], {title:'',note_mode:'exclude'}));
+  assert.equal(excludedCover.cover.id,loose.id); assert.equal(excludedCover.title,'独立素材');
   let plan = await preview(await input([pages[1].id, loose.id]));
   assert.equal(plan.changed_count, 2); assert.equal(plan.expanded_count, 2); assert.equal(plan.cover.id, pages[1].id);
   let result = await commit(plan); assert.ok(result.group_key.startsWith('manual:')); assert.equal(result.item.id, pages[1].id);

@@ -196,6 +196,7 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .group-whole-row { display:flex; align-items:center; gap:6px; margin:20px 0 18px; }
 .group-organize-settings .group-whole { display:flex; align-items:center; gap:8px; margin:0; }
 .group-plan-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:14px; }
+.group-plan-heading strong{min-width:0;overflow-wrap:anywhere}.group-plan-heading>span{flex-shrink:0}
 .group-plan-summary, .group-copy-notice { font-size:12px; color:var(--muted); line-height:1.7; }
 .group-plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:8px; max-height:310px; overflow:auto; }
 .group-plan-grid > div { position:relative; aspect-ratio:1; border:1px solid var(--border); border-radius:9px; overflow:hidden; background:var(--surface-2); }

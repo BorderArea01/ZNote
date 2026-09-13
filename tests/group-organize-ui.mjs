@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { createApp } from '../server/app.js';
 const dir = await mkdtemp(resolve('artifacts/group-organize-ui-')), runtime = createApp({ dataDir: dir, staticDir: resolve(process.env.UI_DIST || 'dist') });
 const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); const base = 'http://127.0.0.1:' + server.address().port;
-const browser = await chromium.launch({ channel: 'msedge', headless: true }), context = await browser.newContext({ viewport: { width: 1366, height: 768 } }), page = await context.newPage(), errors = [];
+const browser = await chromium.launch({ channel: 'msedge', headless: true }), context = await browser.newContext({ viewport: { width: 1366, height: 768 }, hasTouch:true }), page = await context.newPage(), errors = [];
 page.on('pageerror', e => errors.push(e.message));
 const post = async (path, data) => { const r = await context.request.post(base + path, { data }); assert.ok(r.ok(), await r.text()); return r.json(); };
 const dialog = () => page.getByRole('dialog', { name: '整理图片组', exact: true });
@@ -25,18 +25,18 @@ try {
   await page.goto(base); await page.locator('.sidebar').getByRole('button', { name: /^图片素材/ }).click();
   await page.getByRole('button', { name: '选择整组 画册A', exact: true }).click(); await page.getByText('已选 3 项', { exact: true }).waitFor();
   await page.getByRole('button', { name: '选择整组 画册B', exact: true }).first().click(); await page.getByText('已选 5 项', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '整理图片组', exact: true }).click(); await dialog().getByRole('textbox', { name: '新图片组名称', exact: true }).fill('合并后的画册'); await ready();
+  await page.getByRole('button', { name: '整理图片组', exact: true }).click(); await ready();assert.equal(await dialog().getByRole('textbox',{name:'新图片组名称',exact:true}).inputValue(),'');await dialog().locator('.group-plan-heading').getByText('A0',{exact:true}).waitFor();await dialog().getByRole('textbox',{name:'新图片组名称',exact:true}).fill('自定义画册');await ready();await dialog().locator('.group-plan-heading').getByText('自定义画册',{exact:true}).waitFor();await dialog().getByRole('textbox',{name:'新图片组名称',exact:true}).fill('   ');await ready();await dialog().locator('.group-plan-heading').getByText('A0',{exact:true}).waitFor();
   assert.equal(await dialog().locator('.group-plan-grid img').count(),5); await page.screenshot({ path: resolve('artifacts/v0918-group-merge-desktop.png') });
   await dialog().getByRole('button', { name: '确认整理', exact: true }).click(); await dialog().waitFor({ state:'hidden' });
-  await page.getByRole('button', { name: '打开 合并后的画册', exact: true }).waitFor();
+  await page.getByRole('button', { name: '打开 A0', exact: true }).waitFor();
   assert.deepEqual(runtime.db.prepare('SELECT id FROM items WHERE group_key=? ORDER BY group_order').all(row(a[0].id).group_key).map(r=>r.id), [...a,...b].map(r=>r.id));
-  await page.getByRole('button', { name: '选择整组 合并后的画册', exact: true }).click(); await page.getByText('已选 5 项',{exact:true}).waitFor();
-  await page.getByRole('button', { name: '清除选择', exact: true }).click(); await page.getByRole('button',{name:'选择 A0',exact:true}).click();
+  await page.getByRole('button', { name: '选择整组 A0', exact: true }).click(); await page.getByText('已选 5 项',{exact:true}).waitFor();
+  await page.getByRole('button', { name: '清除选择', exact: true }).click(); await page.getByRole('button',{name:'选择组内图片 A0',exact:true}).click();const picker=page.getByRole('dialog',{name:'选择组内图片',exact:true});await picker.getByRole('checkbox',{name:'选择第 1 张',exact:true}).check();await picker.getByRole('button',{name:'应用选择',exact:true}).click();
   await page.getByRole('button',{name:'整理图片组',exact:true}).click(); await dialog().getByRole('combobox',{name:'图片组整理方式',exact:true}).selectOption('detach'); await ready();
   await dialog().getByRole('button',{name:'确认整理',exact:true}).click(); await dialog().waitFor({state:'hidden'});
   assert.equal(row(a[0].id).group_key,null); assert.equal(row(a[0].id).group_manual,1);
   assert.equal(runtime.db.prepare('SELECT id FROM items WHERE group_key=? ORDER BY group_order LIMIT 1').get(row(a[1].id).group_key).id,a[1].id);
-  await page.locator('.undo-notice').getByRole('button',{name:'撤销',exact:true}).click(); await page.getByRole('button',{name:'打开 合并后的画册',exact:true}).waitFor();
+  await page.locator('.undo-notice').getByRole('button',{name:'撤销',exact:true}).click(); await page.waitForFunction(()=>[...document.querySelectorAll('.card-main')].filter(el=>el.getAttribute('aria-label')==='打开 A0').length===1);
   assert.equal(row(a[0].id).group_key,row(a[1].id).group_key);
   await page.getByRole('button',{name:'选择内容',exact:true}).click(); await page.getByRole('button',{name:'选择 散图0',exact:true}).click();
   await page.getByRole('button',{name:'整理图片组',exact:true}).click(); await dialog().getByRole('combobox',{name:'图片组整理方式',exact:true}).selectOption('append');
@@ -50,7 +50,7 @@ try {
   assert.ok(await dialog().getByRole('button',{name:'确认整理',exact:true}).isDisabled());
   await dialog().getByRole('combobox',{name:'笔记配图处理',exact:true}).selectOption('copy'); await ready();
   await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.palette='slate'}); await page.setViewportSize({width:390,height:844});
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(250);await dialog().getByRole('textbox',{name:'新图片组名称',exact:true}).tap();await dialog().getByRole('textbox',{name:'新图片组名称',exact:true}).fill('');await ready();const defaultName=await dialog().locator('.group-plan-heading strong').innerText();assert.ok(defaultName);await dialog().getByRole('textbox',{name:'新图片组名称',exact:true}).fill('共享笔记的素材');await ready();
   await page.screenshot({path:resolve('artifacts/v0918-group-note-mobile.png')});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   const footer = await dialog().locator('.group-organize-footer').boundingBox(); assert.ok(footer.y+footer.height<=844);
@@ -72,5 +72,5 @@ try {
   assert.deepEqual(row(note.id),originalNote); assert.equal(row(attachment.id).group_key,'note:'+note.id);
   assert.deepEqual((await readdir(join(dir,'media'))).sort(),originalFiles);
   assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE group_title='共享笔记的素材' AND group_origin_id=?").get(attachment.id).n,1);
-  assert.deepEqual(errors,[]); console.log('PASS Edge: whole-group merge, single-page detach, cover promotion and undo, append target cover, note policy, source sharing, stale preview recovery, mobile and desktop');
+  assert.deepEqual(errors,[]); console.log('PASS Edge: automatic cover naming/blank and custom override, whole-group merge, single-page detach, cover promotion and undo, append target cover, note policy, source sharing, stale preview recovery, mobile and desktop');
 } finally { await browser.close(); await runtime.trash.stop(); await runtime.imports.stop(); await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(r=>server.close(r)); runtime.db.close(); }

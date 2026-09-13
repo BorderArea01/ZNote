@@ -40,7 +40,6 @@ export function registerGroupOrganize({ app, db, undo, getItem, event, serialize
       if (target.kind !== 'image' || target.deleted_at || !target.group_key || noteGroup(target) || target.collection_id !== value.collection_id) throw fail(409, '目标必须是当前知识库中未删除的素材组');
       targetRows = loadGroup(target.group_key);
     }
-    if (value.mode === 'create' && !value.title) throw fail(400, '请为新图片组命名');
     const expanded = new Map(), expandedGroups = new Set();
     for (const row of selected) {
       if (value.whole_groups && row.group_key) {
@@ -64,12 +63,15 @@ export function registerGroupOrganize({ app, db, undo, getItem, event, serialize
     });
     if (targetRows.length + moving.length > 10000) throw fail(413, '整理后单组超过 10000 张，请分组保存');
     const rows = [...targetRows, ...moving];
+    // Resolve after whole-group expansion and note exclusions: this is the
+    // actual cover, which can differ from the first originally selected row.
+    const title = value.mode === 'detach' ? null : target?.group_title || target?.title || value.title || rows[0]?.title?.trim().slice(0,200) || '新图片组';
     const revision = createHash('sha256').update(JSON.stringify([input, [...expanded.values()].map(r => [r.id,r.version]), [...groups].map(([key,rows]) => [key,rows.map(r => [r.id,r.version])]), [...existingOrigins].sort()])).digest('hex');
-    return { input, selected, expanded, target, targetRows, moving, rows, revision,
+    return { input, selected, expanded, target, targetRows, moving, rows, revision, title,
       copied: moving.filter(noteGroup).length, excluded: expanded.size - candidates.length, duplicateCopies: duplicateCopies.size };
   }
   function preview(state) {
-    return { input: state.input, revision: state.revision, selected_count: state.selected.length, expanded_count: state.expanded.size,
+    return { input: state.input, revision: state.revision, title: state.title, selected_count: state.selected.length, expanded_count: state.expanded.size,
       changed_count: state.moving.length, copied_count: state.copied, excluded_count: state.excluded, existing_count: state.duplicateCopies,
       note_count: [...state.expanded.values()].filter(noteGroup).length,
       target_count: state.targetRows.length, result_count: state.rows.length, items: state.rows.slice(0,60).map(picture),
@@ -113,7 +115,7 @@ export function registerGroupOrganize({ app, db, undo, getItem, event, serialize
       if (state.revision !== revision) throw fail(409, '图片组成员、顺序或目标已有变化，请重新预览后确认；未修改任何图片');
       if (!state.moving.length) return remember({ changed_count: 0, copied_count: 0, group_key: state.target?.group_key || null, item: state.target ? serialize(getItem(state.target.id)) : null });
       const key = input.mode === 'detach' ? null : state.target?.group_key || 'manual:' + randomUUID();
-      const title = key ? state.target?.group_title || state.target?.title || input.title : null;
+      const title = state.title;
       const date = new Date().toISOString(), ids = []; let copiedBytes = 0;
       function assign(row, order) {
         let id = row.id;
