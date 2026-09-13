@@ -6,6 +6,14 @@
 
 列表 `GET /api/items` 可传 `summary=true`：笔记 content 只返回前 1000 个字符，图片/视频说明为空，同时返回 `summary:true` 和完整 `content_length`。搜索仍匹配完整正文。打开或编辑前须通过 `/api/items/:id` 读取完整内容，不能将列表摘要作为原文保存。省略参数时保留完整响应。
 
+## 图片浏览位置
+
+- `GET /api/reading-progress?collection=知识库UUID`：省略 collection 或传 unfiled 表示未分类。返回 `{version,epoch,entries}`，每库最多 20 个图片组 / 单图，最近查看的在前；entries 含 item_id、group_key、title、item_title、thumbnail_url、viewed_at、position（从 1 开始）和 total。
+- `POST /api/reading-progress`：传 `{collection_id,item_id,version,epoch,request_id}`。collection_id 可为 null，version/epoch 必须来自当前读取结果，request_id 为本次操作 UUID。只接受所属库的活动图片，自动合并同组记录；不修改图片本身或生成内容事件。
+- `DELETE /api/reading-progress`：传 `{collection_id,version,epoch,request_id}` 清除该库全部浏览记录，不删除图片。
+
+读接口支持 read 权限，写 / 清除需要 write。冲突返回 409，不覆盖较新位置。丢失响应时使用完全相同请求重试；仍是最后一次操作时返回 `replayed:true`，已有后续操作则拒绝旧版本。完整恢复更换 epoch，旧请求不得直接重放。所有访问同一实例的授权设备共享这些位置；客户端可重新读取，再由用户明确选择使用本页位置。按图片 ID 重新计算当前组序，失效条目不出现在读取结果中。
+
 连续翻页可将首个列表响应的 `event_cursor` 作为下一页的 `cursor` 参数。出现新内容事件时返回 409，客户端应暂停、让用户刷新同一筛选后继续；此检查按服务整体事件进行，其他库的内容修改也可能触发。省略 cursor 沿用原有偏移分页语义。
 
 ## 鉴权

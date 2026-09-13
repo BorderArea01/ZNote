@@ -3,6 +3,7 @@ import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
 import { createNoteHistory } from './note-history.js';
 import { registerSavedViews } from './saved-views.js';
+import { registerReadingProgress } from './reading-progress.js';
 import { registerGroupOrganize } from './group-organize.js';
 import {createTrashManager} from './trash.js';
 import express from "express";
@@ -1150,6 +1151,7 @@ export function createApp({
   noteHistory=createNoteHistory({app,db});
   transaction(() => noteHistory.seed());
   registerSavedViews({app,db,transaction});
+  registerReadingProgress({app,db,transaction});
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));
   app.get("/docs-init.js", (req, res) =>
     res

@@ -354,6 +354,8 @@ function Detail({
   onSearch,
   onOpen,
   onStep,
+  onImageViewed,
+  onBeforeItemChange,
   previousAvailable,
   nextAvailable,
   galleryBusy,
@@ -370,6 +372,7 @@ function Detail({
   const scopedSuggestions = useCollectionTags(collection);
   const [noteIndex,setNoteIndex] = useState(null);
   const noteImages = React.useMemo(()=>markdownImages(content,true).filter(i=>i.url.startsWith('/media/')).map((i,index)=>({...i,id:String(index),thumbnail_url:i.url.replace(/\/(original|thumbnail)(\?|$)/,'/thumbnail$2')})),[content]);
+  useEffect(()=>{const id=noteImages[noteIndex]?.url.match(/^\/media\/([a-f0-9-]{36})\//i)?.[1];if(id&&!item.deleted_at)onImageViewed?.(id);},[noteImages[noteIndex]?.url,item.deleted_at]);
   const [editing, setEditing] = useState(
     initial.kind === "note" && !initial.id,
   );
@@ -437,6 +440,7 @@ function Detail({
     try {
       const value = { title, content, tags, collection_id: collection || null };
       if (item.id) { value.version = item.version; value.undo = true; }
+      if (item.id && value.collection_id !== item.collection_id) onBeforeItemChange?.(item.kind==='note' ? [item.id,...noteImages.map(image=>image.url.match(/^\/media\/([^/]+)\//)?.[1])] : item.group_key ? [item.id,...galleryItems.map(image=>image.id)] : [item.id]);
       const movingGroup=item.kind==='image'&&item.group_key&&value.collection_id!==item.collection_id;
       const result = movingGroup
         ? await send('/api/item-groups/move',{...value,id:item.id,move_note:true})
@@ -735,7 +739,7 @@ function Detail({
             </span>
             <div>
               {item.id && !item.deleted_at && (
-                <IconButton label="移至回收站" onClick={() => onDelete(item)}>
+                <IconButton label="移至回收站" onClick={() => { onBeforeItemChange?.(item.kind==='note' ? [item.id,...noteImages.map(image=>image.url.match(/^\/media\/([^/]+)\//)?.[1])] : [item.id]); onDelete(item); }}>
                   <Trash2 size={17} />
                 </IconButton>
               )}

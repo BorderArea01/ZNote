@@ -695,3 +695,11 @@ spec.paths['/api/items'].get.parameters.push(
 );
 spec.components.schemas.Item.allOf[1].properties.summary={type:'boolean',description:'true 表示列表摘要，不能当作完整正文编辑'};
 spec.components.schemas.Item.allOf[1].properties.content_length={type:'integer',description:'完整正文字符数，仅摘要模式提供'};
+const readingRow={type:'object',properties:{item_id:{type:'string',format:'uuid'},group_key:{type:'string',nullable:true},viewed_at:{type:'string',format:'date-time'},title:str,item_title:str,thumbnail_url:str,position:{type:'integer',minimum:1},total:{type:'integer',minimum:1}}};
+const readingState={type:'object',properties:{version:{type:'integer',minimum:0},epoch:str,entries:{type:'array',maxItems:20,items:readingRow},replayed:{type:'boolean'}}};
+const readingWrite={type:'object',required:['collection_id','version','epoch','request_id'],properties:{collection_id:{type:'string',format:'uuid',nullable:true},version:{type:'integer',minimum:0},epoch:{type:'string',maxLength:100},request_id:{type:'string',format:'uuid'}}};
+spec.paths['/api/reading-progress']={
+ get:operation('当前知识库最近 20 个图片组或单图的查看位置',readingState,{parameters:[{name:'collection',in:'query',schema:{type:'string',default:'unfiled'},description:'知识库 UUID 或 unfiled'}],description:'同一实例的授权设备共享。按图片 ID 重新计算当前页码，删除、移动和重新分组后的失效条目隐藏。'}),
+ post:operation('保存图片查看位置（write）',readingState,{requestBody:body({...readingWrite,required:[...readingWrite.required,'item_id'],properties:{...readingWrite.properties,item_id:{type:'string',format:'uuid'}}}),description:'同组仅保留最后一张，只接受当前库活动图片，不修改内容、更新时间和内容事件。version/epoch 必须匹配；冲突返回 409。丢失响应时完全相同的请求可重试，仍为最后操作时返回 replayed:true，已有更新则拒绝旧版本。完整恢复更换 epoch。'}),
+ delete:operation('清除当前知识库浏览记录，不删除图片（write）',readingState,{requestBody:body(readingWrite),description:'检查 version/epoch，请求 UUID 支持最后一次操作重试。清除后版本递增，旧待同步请求不能重新填回记录。'})
+};

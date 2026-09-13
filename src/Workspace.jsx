@@ -2,6 +2,7 @@ import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { VirtualItems } from './VirtualItems.jsx';
 import { PageLoader, readAutoPages, saveAutoPages } from './PageLoader.jsx';
+import { ReadingProgress, useReadingProgress } from './ReadingProgress.jsx';
 import { extendPageWindow } from './page-window.js';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
@@ -124,6 +125,7 @@ export default function Workspace({
   const [openingItem, setOpeningItem] = useState(null);
   const [undoReceipt, setUndoReceipt] = useState(null), [undoOpen, setUndoOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  const [readingOpen, setReadingOpen] = useState(false);
   const recordUndo = result => { if (result?.undo) { setToast(''); setUndoReceipt(result.undo); } };
   const saved = result => { recordUndo(result); refresh(); };
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
@@ -193,6 +195,18 @@ export default function Workspace({
   const refresh = () => { pendingBrowse.current = captureAnchor(); setUpdatesAvailable(false); setRevision((n) => n + 1); },
     notify = (message, receipt = null) => { setUndoReceipt(receipt); setToast(receipt && !selected ? '' : message); };
   const actualCollection = collection === "unfiled" ? null : collection;
+  const reading = useReadingProgress(actualCollection, ready && view !== 'home', revision);
+  useEffect(() => { if (selected?.kind === 'image' && !selected.deleted_at && selected.collection_id === actualCollection) reading.record(selected.id); }, [selected?.id, actualCollection]);
+  async function resumeReading(row) {
+    const current = ++detailGeneration.current;
+    try {
+      const item = await api('/api/items/' + row.item_id);
+      if (current !== detailGeneration.current) return;
+      if (item.deleted_at || item.collection_id !== actualCollection || item.group_key !== row.group_key) throw Error('这张图片已移动、删除或重新分组，请刷新浏览记录');
+      if (item.group_key) await openItem({...item,group_count:row.total});
+      else { setGallery([{id:item.id,thumbnail_url:item.thumbnail_url}]); setSelected(item); }
+    } catch (e) { if (current === detailGeneration.current) { notify(e.message); reading.reload(); } }
+  }
   const savedViews = useSavedViews(actualCollection, ready && view !== 'home');
   const [savedViewEditor, setSavedViewEditor] = useState(null);
   const currentViewConfig = { view, query, tags: selectedTags, mode: tagMode, sort, layout };
@@ -232,11 +246,13 @@ export default function Workspace({
     if (!event?.shiftKey || from < 0) selectionAnchor.current = id;
   };
   const closeDetail = () => {
+    reading.leave();
     ++detailGeneration.current;
     setSelected(null); setGallery(null); setGalleryBusy(false); setOpeningItem(null);
     if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
   };
   const resetScope = () => {
+    setReadingOpen(false);
     rememberBrowse(); selectionAnchor.current = null;
     pagingRequest.current = null; setPaging(false); setPageOffset(0); setPageError(null);
     ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
@@ -963,6 +979,7 @@ export default function Workspace({
                 </div>
               </section>
               {updatesAvailable && <div className="browse-update" role="status"><span>有内容更新，当前浏览位置和选择已保留</span><button onClick={refresh}><RefreshCw size={14}/>刷新内容</button><IconButton label="忽略更新提示" onClick={() => setUpdatesAvailable(false)}><X size={14}/></IconButton></div>}
+              {view !== 'trash' && <ReadingProgress key={'reading:' + (actualCollection || 'unfiled')} progress={reading} onOpen={resumeReading} disabled={loading || galleryBusy || selecting} open={readingOpen} setOpen={setReadingOpen}/>}
               <TagFilter key={actualCollection || 'unfiled'} tags={tags} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
                 onToggle={toggleTag} onMode={setTagMode} onClear={() => setSelectedTags([])}
                 onBrowse={['notes', 'videos'].includes(view) ? null : browseFilteredImages}
@@ -1195,7 +1212,7 @@ export default function Workspace({
               )}
               {!!items.length && !loading && <div className="browse-pagination" data-window-size={items.length} data-window-offset={pageOffset}>
                 <div className="browse-pagination-meta"><span>显示 {pageOffset + 1}–{pageOffset + items.length} / {total} 项</span><label><input type="checkbox" checked={autoPages} onChange={e => { setAutoPages(e.target.checked); saveAutoPages(e.target.checked); }}/>滚动自动加载</label><HelpHint label="连续浏览">列表只保留附近 600 项摘要，向前可加载之前的内容；已选内容保留。打开详情再读取完整正文。网络失败或内容更新时暂停加载。</HelpHint></div>
-                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
+                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen && !readingOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
               </div>}
             </>
           )}
@@ -1253,7 +1270,7 @@ export default function Workspace({
           </IconButton>
         </div>
       )}
-      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
+      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || readingOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
       {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;
@@ -1293,6 +1310,8 @@ export default function Workspace({
             setGallery(item.kind === 'image' ? [item] : []); setSelected(item);
           }}
           onStep={stepImage}
+          onImageViewed={id => reading.record(id)}
+          onBeforeItemChange={ids => reading.cancelItems(ids)}
           galleryItems={galleryItems}
           galleryIndex={galleryIndex}
           previousAvailable={galleryIndex > 0}

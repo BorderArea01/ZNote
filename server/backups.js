@@ -11,13 +11,14 @@ import { exportContent } from './exports.js';
 import { originalBuffer, digest } from './storage.js';
 import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
 import { savedViewConfig } from './saved-views.js';
+import { readingEntries } from './reading-progress.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const policySchema = z.object({ enabled: z.boolean(), interval_hours: z.number().int().min(1).max(720), keep: z.number().int().min(1).max(100) });
 const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(value) && !value.includes('..');
 const uuid = z.uuid();
 const requiredTables = ['settings', 'tokens', 'collections', 'items', 'events'];
-const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views'];
+const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views', 'reading_progress'];
 
 async function removeStage(root, path) {
   const rel = relative(resolve(root), resolve(path));
@@ -60,7 +61,7 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
       const table = snapshot.prepare('SELECT type,sql FROM sqlite_master WHERE name=?').get(name);
@@ -79,6 +80,15 @@ async function inspectBackup(stage) {
         uuid.parse(view.id); if (view.collection_id !== null) uuid.parse(view.collection_id);
         z.string().trim().min(1).max(80).parse(view.name); z.number().int().positive().parse(view.version);
         savedViewConfig.parse(JSON.parse(view.config));
+      }
+    }
+    if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='reading_progress'").get()) {
+      for (const progress of snapshot.prepare('SELECT * FROM reading_progress').iterate()) {
+        if (progress.collection_id !== null) uuid.parse(progress.collection_id);
+        if (progress.scope !== (progress.collection_id || 'unfiled')) throw fail(400,'备份中的浏览记录归属不正确');
+        z.number().int().positive().parse(progress.version); uuid.parse(progress.request_id);
+        z.string().regex(/^[a-f0-9]{64}$/).parse(progress.request_hash);
+        readingEntries.parse(JSON.parse(z.string().max(16000).parse(progress.entries)));
       }
     }
     if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='webhooks'").get()) {
@@ -243,6 +253,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
             // against restored content or renamed media paths.
             db.exec('DELETE FROM undo_actions; DELETE FROM group_operations');
             db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('group_operations_reset_at', String(Date.now()));
+            db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('reading_epoch', randomUUID());
             db.prepare("DELETE FROM tokens WHERE kind='session'").run();
             db.prepare("UPDATE webhook_deliveries SET status='pending',next_attempt=? WHERE status='inflight'").run(now());
             db.exec("UPDATE items SET stored_bytes=bytes WHERE kind='image' AND stored_bytes IS NULL");

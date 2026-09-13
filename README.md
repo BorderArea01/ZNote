@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.19-287464?style=flat-square" alt="Version 0.9.19" />
+    <img src="https://img.shields.io/badge/version-0.9.20-287464?style=flat-square" alt="Version 0.9.20" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -56,6 +56,10 @@
 **操作更顺手**：点击弹窗外空白或按 Esc 关闭当前窗口；嵌套预览只退出最上层，笔记先保存本地草稿；写入失败或其他未保存编辑会提示。选择模式下，点击图片、标题、卡片正文或勾选框都能选中 / 取消，键盘和手机触摸同样适用。
 
 ## 常用条件，一键找回
+
+**跨设备继续看图**：每个知识库都有「继续查看」和「浏览记录」，保存最近 20 个图片组或单张图片的最后查看位置，笔记配图也支持。另一台设备登录同一个 ZNote 后即可接着看；直接点击图片仍打开你点的那张。
+
+记录按图片 ID 定位，调整顺序后显示新的页码；删除、移动或重新分组后的失效记录会隐藏。记录随完整备份迁移，清除记录不会删除图片。同步失败时可重试；有多设备冲突时，由你选择同步本页位置或放弃本次同步。
 
 大图库滚动接近底部时会自动续页，也可在列表下方关闭 **「滚动自动加载」**。页面只保留附近最多 600 项摘要，远处卡片不挂载；已选内容仍然保留。向前查找可点击「加载前面的内容」，打开笔记或媒体时读取完整详情。
 
