@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changeSelection, collectSelection } from '../src/selection.js';
+import { changeSelection, collectSelection, resolveSelectionCards } from '../src/selection.js';
 
 test('selection ranges, page inversion and limits preserve off-page choices atomically', () => {
   assert.deepEqual(changeSelection(['outside','a'],['a','b'],'invert'),['outside','b']);
@@ -11,6 +11,27 @@ test('selection ranges, page inversion and limits preserve off-page choices atom
   assert.throws(()=>changeSelection(full,['extra'],'add'),/10000/);
   assert.equal(full.length,10000);
   assert.equal(changeSelection(full,['0','extra'],'invert').length,10000);
+});
+
+test('folded cards resolve complete groups in display order with bounded concurrent reads',async()=>{
+  const cards=Array.from({length:7},(_,i)=>({id:String(i),group_key:'g'+i,group_count:1}));
+  let active=0,peak=0,reads=0;
+  const result=await resolveSelectionCards(async path=>{
+    const id=new URL(path,'http://local').searchParams.get('id');reads++;peak=Math.max(peak,++active);
+    await new Promise(resolve=>setTimeout(resolve,8-Number(id)));active--;
+    return {collection_id:'lib',trash:false,group_key:'g'+id,items:[{id:id+'a',version:3,kind:'image'},{id:id+'b',version:4,kind:'image'}]};
+  },[...cards,cards[0],{id:'note',kind:'note',version:1}],{collectionId:'lib',trash:false});
+  assert.equal(reads,7);assert.ok(peak<=4);assert.equal(result.rows.length,15);
+  assert.deepEqual(result.rows.map(row=>row.id),[...cards.flatMap(card=>[card.id+'a',card.id+'b']),'note']);
+  assert.deepEqual(result.groups.g0,['0a','0b']);
+});
+
+test('folded selection rejects moved, regrouped, deleted and failed snapshots atomically',async()=>{
+  const cards=[{id:'a',group_key:'g',group_count:1}],scope={collectionId:'lib',trash:false};
+  const snapshot={collection_id:'lib',trash:false,group_key:'g',items:[{id:'a',version:1}]};
+  for(const patch of [{collection_id:'other'},{trash:true},{group_key:'other'}])await assert.rejects(resolveSelectionCards(async()=>({...snapshot,...patch}),cards,scope),/变化|移动/);
+  await assert.rejects(resolveSelectionCards(async()=>{throw Error('断网')},cards,scope),/断网/);
+  const controller=new AbortController();await assert.rejects(resolveSelectionCards(async()=>{controller.abort();return snapshot},cards,{...scope,signal:controller.signal}),{name:'AbortError'});
 });
 
 test('select all reads every filtered page with one cursor and retains only selection metadata',async()=>{

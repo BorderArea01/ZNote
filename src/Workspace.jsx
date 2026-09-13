@@ -5,7 +5,8 @@ import { PageLoader, readAutoPages, saveAutoPages } from './PageLoader.jsx';
 import { ReadingProgress, useReadingProgress } from './ReadingProgress.jsx';
 import { VideoHistory } from './VideoProgress.jsx';
 import { extendPageWindow } from './page-window.js';
-import { changeSelection, collectSelection } from './selection.js';
+import { changeSelection, collectSelection, resolveSelectionCards } from './selection.js';
+import { GroupSelectionDialog } from './GroupSelectionDialog.jsx';
 import { SelectionBar } from './SelectionBar.jsx';
 import { SelectionEntry } from './SelectionEntry.jsx';
 import {useAppBack} from './back-navigation.js';
@@ -123,7 +124,8 @@ export default function Workspace({
   const [groupOrganizing, setGroupOrganizing] = useState(false);
   const [purging,setPurging]=useState(null);
   const [selectionRows,setSelectionRows]=useState({}),[groupSelecting,setGroupSelecting]=useState(false);
-  const groupRequest=useRef(0),selectionSeed=useRef(null);
+  const groupRequest=useRef(0);
+  const [groupPicker,setGroupPicker]=useState(null);
   const [selectionProgress, setSelectionProgress] = useState(null), [knownGroups, setKnownGroups] = useState({});
   const selectionRequest = useRef(null);
   const itemById = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
@@ -133,6 +135,10 @@ export default function Workspace({
     const cached=selectionRows[id],visible=itemById.get(id);
     return !cached || (visible && visible.version >= cached.version) ? visible : cached;
   }).filter(Boolean);
+  const selectedGroupCounts = new Map();
+  chosenItems.forEach(row=>{if(row.group_key)selectedGroupCounts.set(row.group_key,(selectedGroupCounts.get(row.group_key)||0)+1);});
+  const cardSelected = item => item.group_key&&item.group_count ? selectedGroups.has(item.group_key) : selectedIds.has(item.id);
+  const cardPartial = item => item.group_key&&item.group_count&&!cardSelected(item)&&!!selectedGroupCounts.get(item.group_key);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
@@ -214,7 +220,7 @@ export default function Workspace({
     inputs.forEach(type=>window.addEventListener(type,stop,{passive:true,capture:true}));
     window.addEventListener('scroll',scrolled,{passive:true});
     return () => { cancelAnimationFrame(frame); stop(); inputs.forEach(type=>window.removeEventListener(type,stop,true)); window.removeEventListener('scroll',scrolled); };
-  }, [loading, items]);
+  }, [loading, items, selecting]);
   const [imageExpanded,setImageExpanded] = useState(false);
   const galleryItems = gallery || items.filter(i => i.kind === 'image');
   const galleryIndex = galleryItems.findIndex(i => i.id === selected?.id);
@@ -275,38 +281,39 @@ export default function Workspace({
     setTagMode(config.mode); setSort(config.sort); setLayout(config.layout);
   };
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
-  async function selectGroup(item){
+  async function selectCards(cards, mode='toggle', {enter=false,picker=false,announce=false}={}) {
     if(groupSelecting||batchBusy||selectionProgress||loading)return;
-    const request=++groupRequest.current,current=generation.current;
+    const request=++groupRequest.current,current=generation.current,anchor=captureAnchor();
     setGroupSelecting(true);
     try{
-      const result=await api('/api/item-groups/selection?id='+encodeURIComponent(item.id));
+      const result=await resolveSelectionCards(api,cards,{collectionId:actualCollection,trash:view==='trash'});
       if(request!==groupRequest.current||current!==generation.current)return;
-      if(result.collection_id!==actualCollection||result.trash!==(view==='trash'))throw Error('图片组已移动或删除，请刷新后选择');
-      const members=result.items.map(row=>({...itemById.get(row.id),...selectionRows[row.id],...row,collection_id:result.collection_id,group_key:result.group_key}));
-      const groupIds=members.map(row=>row.id),removing=selecting&&groupIds.every(id=>selectedIds.has(id));
-      const rows=Object.fromEntries([...chosenItems,...members].map(row=>[row.id,row]));
-      const ids=changeSelection(selection,groupIds,removing?'remove':'add');
-      setKnownGroups(previous=>({...previous,[result.group_key]:groupIds}));
-      closeDetail();
-      if(selecting){setSelectionRows(rows);setSelection(ids)}
-      else{pendingBrowse.current=null;selectionSeed.current={rows,ids};setSelecting(true)}
-      notify((removing?'已取消整组 ':'已选中整组 ')+result.items.length+' 张图片');
-    }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message)}
-    finally{if(request===groupRequest.current)setGroupSelecting(false)}
+      const members=result.rows.map(row=>({...itemById.get(row.id),...selectionRows[row.id],...row}));
+      setKnownGroups(previous=>({...previous,...result.groups}));
+      if(picker){setToast('');setGroupPicker({title:cards[0].group_title||cards[0].title,rows:members});return;}
+      const memberIds=members.map(row=>row.id);
+      let ids;
+      if(mode==='invert'){
+        const remove=[],add=[];
+        for(const card of cards){const targets=card.group_key&&card.group_count?result.groups[card.group_key]:[card.id];(targets.every(id=>selectedIds.has(id))?remove:add).push(...targets);}
+        ids=changeSelection(changeSelection(selection,remove,'remove'),add,'add');
+      }else ids=changeSelection(enter?[]:selection,memberIds,mode);
+      if(enter){pendingBrowse.current=null;restoreAnchor.current=anchor;closeDetail();setSelecting(true);}
+      setSelectionRows(previous=>({...previous,...Object.fromEntries(members.map(row=>[row.id,row]))}));setSelection(ids);
+      if(announce){const next=new Set(ids);notify((memberIds.every(id=>next.has(id))?'已选中整组 ':'已取消整组 ')+members.length+' 张图片');}
+    }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message);}
+    finally{if(request===groupRequest.current)setGroupSelecting(false);}
+  }
+  function selectGroup(item){
+    return selectCards([{...item,group_key:item.kind==='note'?'note:'+item.id:item.group_key,group_count:1}],'toggle',{enter:!selecting,announce:true});
   }
   const toggleSelection = (id, event) => {
     if(batchBusy||groupSelecting||selectionProgress||loading)return;
-    const from = items.findIndex(item => item.id === selectionAnchor.current);
-    const to = items.findIndex(item => item.id === id);
-    const range = event?.shiftKey && from >= 0 && to >= 0
-      ? items.slice(Math.min(from, to), Math.max(from, to) + 1).map(item => item.id) : [id];
-    applySelection(range, selectedIds.has(id)?'remove':'add');
-    if (!event?.shiftKey || from < 0) selectionAnchor.current = id;
+    const from=items.findIndex(item=>item.id===selectionAnchor.current),to=items.findIndex(item=>item.id===id),item=itemById.get(id);
+    const range=event?.shiftKey&&from>=0&&to>=0?items.slice(Math.min(from,to),Math.max(from,to)+1):[item];
+    void selectCards(range,range.length===1?'toggle':cardSelected(item)?'remove':'add');
+    if(!event?.shiftKey||from<0)selectionAnchor.current=id;
   };
-  function applySelection(ids, mode) {
-    try { setSelection(changeSelection(selection, ids, mode)); } catch(e) { notify(e.message); }
-  }
   function cancelSelectionRequest() {
     selectionRequest.current?.abort(); selectionRequest.current=null; setSelectionProgress(null);
   }
@@ -317,8 +324,9 @@ export default function Workspace({
     if(batchBusy||groupSelecting||loading)return;
     cancelSelectionRequest();
     pendingBrowse.current=captureAnchor();
-    selectionSeed.current=item?{ids:[item.id],rows:{[item.id]:item},anchor:item.id}:null;
-    setSelection([]);setSelectionRows({});setSelecting(item?true:!selecting);
+    if(item){selectionAnchor.current=item.id;void selectCards([item],'add',{enter:true});return;}
+    restoreAnchor.current=pendingBrowse.current;pendingBrowse.current=null;
+    setSelection([]);setSelectionRows({});setSelecting(!selecting);
   }
   async function selectFiltered() {
     if(!selecting||batchBusy||groupSelecting||loading||query!==search||selectionRequest.current)return;
@@ -328,6 +336,10 @@ export default function Workspace({
       const rows=await collectSelection(api,params(0),{signal:controller.signal,onProgress:setSelectionProgress});
       if(controller.signal.aborted||current!==generation.current)return;
       const ids=changeSelection(selection,rows.map(row=>row.id),'add');
+      if(!search&&!selectedTags.length&&['all','images'].includes(view)){
+        const groups={};rows.forEach(row=>{if(row.group_key)(groups[row.group_key]||=[]).push(row.id);});
+        setKnownGroups(previous=>({...previous,...groups}));
+      }
       setSelectionRows(previous=>({...previous,...Object.fromEntries(rows.map(row=>[row.id,row]))}));
       setSelection(ids);notify(`已选中当前筛选的全部 ${rows.length} 项内容`);
     } catch(e) { if(!controller.signal.aborted&&current===generation.current)notify(e.message); }
@@ -346,7 +358,7 @@ export default function Workspace({
     setReadingOpen(false);
     rememberBrowse(); selectionAnchor.current = null;
     pagingRequest.current = null; setPaging(false); setPageOffset(0); setPageError(null);
-    ++groupRequest.current;selectionSeed.current=null;setGroupSelecting(false);setSelectionRows({});
+    ++groupRequest.current;setGroupPicker(null);setGroupSelecting(false);setSelectionRows({});
     ++generation.current;
     listRequest.current?.abort();
     closeDetail();
@@ -410,7 +422,7 @@ export default function Workspace({
         offset: String(offset),
         limit: "60",
         summary: 'true',
-        grouped: selecting || view==='trash' ? 'false' : 'true',
+        grouped: view==='trash' ? 'false' : 'true',
       });
       if (search) p.set("q", search);
       p.set("collection", collection || 'unfiled');
@@ -425,7 +437,7 @@ export default function Workspace({
       if (view === "trash") p.set("trash", "true");
       return p.toString();
     },
-    [sort, search, collection, selectedTags, tagMode, view, selecting],
+    [sort, search, collection, selectedTags, tagMode, view],
   );
   async function openItem(item) {
     const current = ++detailGeneration.current;
@@ -498,7 +510,6 @@ export default function Workspace({
     const read = path => api(path, { signal: controller.signal });
     setLoading(true);
     setLoadError("");
-    const seed=selectionSeed.current;selectionSeed.current=null;
     if (!keepSelection) { setSelection([]);setSelectionRows({}); selectionAnchor.current = null; }
     else setSelectionRows(Object.fromEntries(chosenItems.map(row => [row.id, row])));
     Promise.all([
@@ -515,7 +526,6 @@ export default function Workspace({
         eventCursor.current = result.event_cursor || 0;
         if (keepSelection) setSelectionRows(previous => Object.fromEntries(Object.entries(previous).map(([id, row]) => [id, result.items.find(item => item.id === id) || row])));
         setUpdatesAvailable(false);
-        if(seed){setSelection(seed.ids);setSelectionRows(seed.rows);selectionAnchor.current=seed.anchor||null;}
         setTotal(result.total);
         setStats(stats);
         setCollections(libs);
@@ -1145,13 +1155,13 @@ export default function Workspace({
               </div>
               {selecting && <SelectionBar
                 count={selection.length} loadedCount={items.length} total={total}
-                allLoaded={!!items.length&&items.every(i=>selectedIds.has(i.id))} someLoaded={items.some(i=>selectedIds.has(i.id))}
+                allLoaded={!!items.length&&items.every(cardSelected)} someLoaded={items.some(i=>cardSelected(i)||cardPartial(i))}
                 locked={batchBusy||groupSelecting||!!selectionProgress||loading||query!==search||!!loadError}
                 progress={selectionProgress} working={batchBusy||groupSelecting} trash={view==='trash'}
                 imagesOnly={chosenItems.length===selection.length&&chosenItems.every(i=>i.kind==='image')}
                 allFavorite={chosenItems.length===selection.length&&chosenItems.every(i=>i.favorite)}
-                onLoaded={e=>applySelection(items.map(i=>i.id),e.target.checked?'add':'remove')}
-                onAll={selectFiltered} onInvert={()=>applySelection(items.map(i=>i.id),'invert')}
+                onLoaded={e=>selectCards(items,e.target.checked?'add':'remove')}
+                onAll={selectFiltered} onInvert={()=>selectCards(items,'invert')}
                 onClear={clearSelection} onExit={()=>toggleSelectionMode()} onCancel={cancelSelectionRequest}
                 onTags={()=>setBatchTags(true)} onOrganize={()=>setOrganizing(true)} onFavorite={batchFavorite}
                 onGroup={()=>{setToast('');setGroupOrganizing(true);}} onTrash={batchTrash} onPurge={()=>openPurge(selection)}
@@ -1202,14 +1212,14 @@ export default function Workspace({
                 {pageOffset > 0 && <button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : '加载前面的内容'}</button>}
                 <VirtualItems selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
-                    <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&selectedIds.has(item.id)?' is-selected':''}`} key={item.id}>
+                    <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&cardSelected(item)?' is-selected':selecting&&cardPartial(item)?' is-partial':''}`} key={item.id}>
                       {selecting && (
                         <label className="card-select">
                           <input
                             type="checkbox"
-                            aria-label={`选择 ${item.title}`}
-                            checked={selectedIds.has(item.id)}
-                            disabled={batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !selectedIds.has(item.id))}
+                            aria-label={`选择 ${item.group_key&&item.group_count?item.group_title||item.title:item.title}`}
+                            checked={cardSelected(item)} ref={node=>{if(node)node.indeterminate=!!cardPartial(item);}}
+                            disabled={batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item))}
                             onClick={e => toggleSelection(item.id, e)}
                             onChange={() => {}}
                           />
@@ -1220,9 +1230,9 @@ export default function Workspace({
                         onKeyDown={e=>{if(!selecting&&(e.ctrlKey||e.metaKey)&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleSelectionMode(item);}}}
                         aria-busy={openingItem === item.id || undefined}
                         onClick={(e) => selecting ? toggleSelection(item.id, e) : (e.ctrlKey||e.metaKey) ? toggleSelectionMode(item) : openItem(item)}
-                        aria-pressed={selecting ? selectedIds.has(item.id) : undefined}
-                        disabled={selecting && (batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !selectedIds.has(item.id)))}
-                        aria-label={`${selecting ? selectedIds.has(item.id)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
+                        aria-pressed={selecting ? cardPartial(item)?'mixed':cardSelected(item) : undefined}
+                        disabled={selecting && (batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item)))}
+                        aria-label={`${selecting ? cardSelected(item)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
                           {openingItem === item.id && <span className="card-opening"><Loader2 size={16} className="spin"/>正在打开…</span>}
@@ -1289,6 +1299,7 @@ export default function Workspace({
                         </div>
                       </button>
                       <div className="card-actions">
+                        {selecting&&item.group_key&&item.group_count&&<button className="group-members-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`选择组内图片 ${item.group_title||item.title}`} onClick={()=>selectCards([item],'toggle',{picker:true})}>选择组内图片{selectedGroupCounts.get(item.group_key)?` · ${selectedGroupCounts.get(item.group_key)}`:''}</button>}
                         {item.kind==='image'&&item.group_key&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部图片的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
                         {view === "trash" ? (
                           <><IconButton
@@ -1436,6 +1447,7 @@ export default function Workspace({
         />
       )}
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
+      {groupPicker&&<GroupSelectionDialog group={groupPicker} selected={selectedIds} onClose={()=>setGroupPicker(null)} onApply={ids=>{const next=changeSelection(changeSelection(selection,groupPicker.rows.map(row=>row.id),'remove'),ids,'add');setSelectionRows(previous=>({...previous,...Object.fromEntries(groupPicker.rows.map(row=>[row.id,row]))}));setSelection(next);setGroupPicker(null);}}/>}
       {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={result => { saved(result); notify('已完成批量整理',result?.undo); }} />}
       {groupOrganizing && <React.Suspense fallback={null}><GroupOrganizeDialog items={chosenItems} library={actualCollection} onClose={() => setGroupOrganizing(false)} onDone={result => { setSelecting(false); setSelection([]); setSelectionRows({}); saved(result); notify(`已整理 ${result.changed_count} 张图片${result.copied_count ? `，其中 ${result.copied_count} 张共享笔记原图` : ''}`,result.undo); }}/></React.Suspense>}
       {settings && (

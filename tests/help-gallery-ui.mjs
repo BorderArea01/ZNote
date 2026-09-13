@@ -34,6 +34,7 @@ try{
  const touch=(type,points)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:points.map(([id,x,y])=>({id,x,y,radiusX:2,radiusY:2,force:1}))});
  const swipe=async(from,to)=>{await touch('touchStart',[[1,from,410]]);for(let i=1;i<=5;i++)await touch('touchMove',[[1,from+(to-from)*i/5,412]]);await touch('touchEnd',[]);};
  await swipe(310,80);await expectImage(images[2].id);await swipe(80,310);await expectImage(images[1].id);
+ await zoom().locator('img').evaluate(async img=>{await img.decode();await new Promise(requestAnimationFrame)});
  await touch('touchStart',[[1,145,410],[2,245,410]]);await touch('touchMove',[[1,70,410],[2,320,410]]);await touch('touchEnd',[]);await page.waitForFunction(()=>parseInt(document.querySelector('.zoom-tools output')?.textContent)>200);await expectImage(images[1].id);
  await swipe(270,140);await expectImage(images[1].id); // Pan from centre, not a page turn.
  await swipe(330,40);await expectImage(images[1].id); // Reach the image edge first.

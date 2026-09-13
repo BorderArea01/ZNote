@@ -9,7 +9,7 @@ export function SelectionBar({ count, loadedCount, allLoaded, someLoaded, total,
       <label><input type="checkbox" aria-label="选择当前页全部内容" checked={allLoaded} ref={node=>{if(node)node.indeterminate=someLoaded&&!allLoaded}} disabled={locked||!loadedCount} onChange={onLoaded}/>已加载 {loadedCount} 项</label>
       <strong className="selection-count" role="status" aria-live="polite">已选 {count} 项</strong>
       {working&&<span className="selection-working" role="status"><Loader2 size={14} className="spin"/>正在处理…</span>}
-      <HelpHint label="多选快捷操作">多选时点击卡片任意内容即可选择。Shift 点击可连续选择或取消，Ctrl / ⌘ 点击可直接进入多选。Ctrl / ⌘ A 全选当前筛选（含未加载项），Esc 清除选择，再按一次退出。反选仅影响已加载内容。选择整组不受筛选和分页影响，再点一次取消整组。单次最多 10000 项。</HelpHint>
+      <HelpHint label="多选快捷操作">图片组保持折叠，点击组卡片选择或取消整组（含筛选隐藏、未加载的成员），「选择组内图片」可单独挑选。Shift 点击连续选择，Ctrl / ⌘ 点击直接进入多选。当前页全选和反选按卡片操作；Ctrl / ⌘ A 只全选当前筛选匹配的内容。Esc 清除选择，再按一次退出。单次最多 10000 项。</HelpHint>
       <button className="selection-exit icon-button" aria-label="退出多选" title="退出多选" disabled={locked&&!progress} onClick={onExit}><X size={17}/></button>
     </div>
     <div className="selection-controls">

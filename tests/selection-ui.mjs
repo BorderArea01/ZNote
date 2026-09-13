@@ -18,6 +18,7 @@ try {
  for(let i=0;i<125;i++)await post('/api/items',{title:`灵感 ${String(i).padStart(3,'0')}`,content:'# 灵感记录\n\n记录文字、链接和创作思路。',collection_id:a.id,tags:['待整理']});
  const other=await post('/api/items',{title:'另一知识库的笔记',collection_id:b.id,content:'保留',tags:['待整理']});
  await context.request.patch(base+'/api/preferences',{data:{default_collection_id:a.id}});
+ await context.addInitScript(()=>localStorage.setItem('znote:auto-pages','false'));
  await page.goto(base);await ready();await page.getByLabel('排序方式').selectOption('title');await ready();
  await page.getByLabel('滚动自动加载',{exact:true}).uncheck();
  await page.locator('.card-main').nth(1).click({modifiers:['Control']});await count(1);await ready();
