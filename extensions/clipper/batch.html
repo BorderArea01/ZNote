@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZNote 批量入库</title><link rel="stylesheet" href="batch.css"></head>
+<body><header><span>ZNote · 批量入库</span><button id="minimize" title="收起后继续入库" aria-label="收起入库窗口">−</button></header>
+<main><h1 id="title">读取作品…</h1><p id="summary"></p>
+<label for="collection">知识库</label><select id="collection" disabled></select>
+<label for="tags">标签</label><input id="tags" placeholder="用逗号分隔，可不填" disabled>
+<div class="connection"><a href="options.html" target="_blank" rel="noreferrer">连接设置 ↗</a><button id="reconnect" aria-label="重新连接" title="重新连接">↻</button></div>
+<button id="save" disabled>保存全部到知识库</button><button id="save-cancel" hidden>停止入库</button>
+<p id="save-status" role="status">正在连接知识库…</p><progress id="save-progress" max="1" value="0" aria-label="入库进度"></progress>
+<details><summary>逐页进度</summary><ol id="pages"></ol></details>
+</main><script type="module" src="batch.js"></script></body></html>

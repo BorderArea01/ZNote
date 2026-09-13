@@ -41,7 +41,7 @@ export function libraryBatch(group, persist, changed, downloading) {
   }
   async function saveAll() {
     if (!ready || running || downloading() || count() === states.length) return;
-    running = true; controller = new AbortController(); changed();
+    running = true; group.busy=true;controller = new AbortController(); changed();
     try {
       // Pin this job to its selected server/library even if another extension
       // window changes defaults while originals are still being transferred.
@@ -80,7 +80,7 @@ export function libraryBatch(group, persist, changed, downloading) {
       }
       const failed = states.filter(s => s === 'failed').length;
       $('save-status').textContent = `${controller.signal.aborted ? '已停止。' : ''}已入库 ${count()} / ${states.length} 张${failed ? `，${failed} 张失败：${lastError}` : ''}${count() === states.length ? '。' : '，可重试未完成项。'}`;
-    } finally { running = false; changed(); }
+    } finally { running = false;group.busy=false;try{await persist();}finally{changed();} }
   }
   $('save').onclick = () => saveAll().catch(e => { $('save-status').textContent = '入库已停止：' + e.message; });
   $('save-cancel').onclick = () => {

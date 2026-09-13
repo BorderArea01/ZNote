@@ -1,6 +1,6 @@
 import { mediaKind, addResource } from "./resource-store.js";
 import { api, settings, serverUrl, saveImage, limitedImage } from "./client.js";
-import { openGallery } from './gallery-ticket.js';
+import { openGallery,pendingInlineGalleries } from './gallery-ticket.js';
 import { blockedSite } from './site-policy.js';
 const key = "sniffTabs";
 let states = {},
@@ -184,6 +184,7 @@ export async function discover(message, sender) {
   if(message.type==='media-settings')return {blocked,hover:!blocked&&config.hover!==false,dock:!blocked&&config.dock!==false,downloadKey:config.downloadKey,saveKey:config.saveKey,previewWidth:config.previewWidth};
   if(blocked && !['media-options','media-stop','media-clear'].includes(message.type))throw Error('此网站已停用 ZNote 资源嗅探，可在扩展设置管理黑名单');
   if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action);
+  if (message.type === 'media-gallery-resume') return pendingInlineGalleries(sender);
   if (message.type === "media-action") {
     const resource = await serial(async () =>
       [...(states[tabId]?.resources||[]),...(states[tabId]?.hoverResources||[])].find((r) => r.id === message.id),

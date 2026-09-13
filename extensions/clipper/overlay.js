@@ -7,6 +7,7 @@
     });
   let host,
     root,
+    inlineGallery,
     dock,
     panel,
     preview,
@@ -517,7 +518,7 @@
     const openBatch = async(action)=>{
       if(!imageGroup)return; batchButton.disabled=batchSaveButton.disabled=true;
       if((imageGroup.page_url||imageGroup.source_url)!==location.href){hide();batchButton.disabled=batchSaveButton.disabled=false;return;}
-      try { await send({type:'media-gallery',group:imageGroup,action}); }
+      try { const result=await send({type:'media-gallery',group:imageGroup,action});if(result.inline){inlineGallery ||= new globalThis.ZNoteInlineGallery(root);inlineGallery.open(result.id);hide();} }
       catch(e) {previewLabel.textContent=e.message;}
       finally {batchButton.disabled=batchSaveButton.disabled=false;}
     };
@@ -628,6 +629,7 @@
     document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(scanTimer);scanTimer=null;globalThis.ZNoteVideoThumbnailCancel?.();globalThis.ZNoteDouyinObserve?.(false)}else if(enabled){scan();if(!panel.classList.contains('hidden'))poll()}});
     await refreshSettings();
     window.addEventListener('focus', refreshSettings);
+    if(!siteBlocked)try{const pending=await send({type:'media-gallery-resume'});if(pending.length){inlineGallery ||= new globalThis.ZNoteInlineGallery(root);for(const job of pending)inlineGallery.open(job.id,{minimized:true});}}catch{}
     window.addEventListener('znote-video-metadata',scheduleScan);
     chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (sender.id !== chrome.runtime.id) return;

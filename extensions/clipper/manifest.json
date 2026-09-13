@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZNote 媒体采集",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "description": "悬停高清大图，S 下载、Z 保存知识库；视频嗅探支持 MP4 与 m3u8，保留作品标题、作者与来源。",
   "permissions": [
     "activeTab",
@@ -31,6 +31,7 @@
         "video-metadata.js",
         "video-groups.js",
         "video-thumbnails.js",
+        "inline-gallery.js",
         "overlay.js",
         "connect.js",
         "vendor/article-extract.js"
@@ -68,5 +69,16 @@
     }
   },
   "options_page": "options.html",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvbaXgKiTHoVef5HRISlgEcxouSRtogGu8QnUAjeCc2nz+tVr4UFjoYNx/hg/WXQeJMGP/jtNZT0Z285b5+4GCYvS930UNY3wU4jtu8P8yb+SrQcR3dE2pCKXAArSSHYXZ71kHYzUu+k9R+civwSw62yiH2a/i8r0ksetIZ7RP/cqO64Ga2eaYdO/6akd9jiJ808ZlaBERxS+SG8uyr7Lq+E+kDbyxF++4sT8taRWcs7OOQ29OBxqsGZgFA3vIraGZXbxOL0E+NJvF0Bw0EQ4KcHT+PrBt2auyop6tPb7nZuwmKRTrL7gG7Unuq1sTxUzoHb2soIbT3ADvVSQEfY1owIDAQAB"
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvbaXgKiTHoVef5HRISlgEcxouSRtogGu8QnUAjeCc2nz+tVr4UFjoYNx/hg/WXQeJMGP/jtNZT0Z285b5+4GCYvS930UNY3wU4jtu8P8yb+SrQcR3dE2pCKXAArSSHYXZ71kHYzUu+k9R+civwSw62yiH2a/i8r0ksetIZ7RP/cqO64Ga2eaYdO/6akd9jiJ808ZlaBERxS+SG8uyr7Lq+E+kDbyxF++4sT8taRWcs7OOQ29OBxqsGZgFA3vIraGZXbxOL0E+NJvF0Bw0EQ4KcHT+PrBt2auyop6tPb7nZuwmKRTrL7gG7Unuq1sTxUzoHb2soIbT3ADvVSQEfY1owIDAQAB",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "batch.html"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
 }

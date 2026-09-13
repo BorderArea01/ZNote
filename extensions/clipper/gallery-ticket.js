@@ -11,9 +11,33 @@ export async function openGallery(group, sender, action = 'download') {
   });
   const saved = await chrome.storage.session.get(null);
   const old = Object.entries(saved).filter(([key])=>key.startsWith('gallery-')).sort((a,b)=>b[1].created-a[1].created);
-  await chrome.storage.session.remove(old.filter(([,item],i)=>i>=9||Date.now()-item.created>86400000).map(([key])=>key));
+  if(action==='save'){
+    const existing=old.find(([,item])=>item.action==='save'&&item.inline&&item.owner?.tab===sender.tab?.id&&item.owner?.frame===(sender.frameId||0)&&item.source_url===source.href&&JSON.stringify(item.images)===JSON.stringify(images)&&item.busy);
+    if(existing)return {id:existing[0].slice(8),inline:true,message:'已展开正在入库的作品'};
+  }
+  const removable=old.filter(([,item])=>!item.busy);
+  if(old.length>=10&&!removable.length)throw Error('已有 10 个作品正在处理，请等待其中一个完成');
+  await chrome.storage.session.remove(removable.filter(([,item],i)=>i>=Math.max(0,9-(old.length-removable.length))||Date.now()-item.created>86400000).map(([key])=>key));
   const id = crypto.randomUUID();
-  await chrome.storage.session.set({['gallery-'+id]:{images,previews,action,title:String(group.title||'作品图片').slice(0,180),source_url:source.href,created:Date.now()}});
+  await chrome.storage.session.set({['gallery-'+id]:{images,previews,action,title:String(group.title||'作品图片').slice(0,180),source_url:source.href,created:Date.now(),...(action==='save'?{inline:true,owner:{tab:sender.tab.id,frame:sender.frameId||0,origin:page.origin}}:{})}});
+  if(action==='save')return {id,inline:true,message:'在当前网页选择知识库后入库'};
   await chrome.tabs.create({url:chrome.runtime.getURL('gallery.html')+'?id='+id});
-  return {message:action==='save'?'请选择知识库后保存整组图片':'已打开作品批量下载'};
+  return {message:'已打开作品批量下载'};
+}
+
+export async function inlineGalleryTicket(sender){
+  const url=new URL(sender.url),id=url.searchParams.get('id');
+  if(url.origin!==new URL(chrome.runtime.getURL('batch.html')).origin||url.pathname!=='/batch.html'||!id||!sender.tab)throw Error('请从原网页打开批量入库');
+  const group=(await chrome.storage.session.get('gallery-'+id))['gallery-'+id];
+  if(!group?.inline||group.owner?.tab!==sender.tab.id||Date.now()-group.created>86400000)throw Error('入库任务已过期，请从原网页重新打开');
+  // webNavigation omits extension-origin child frames. Validate the originating
+  // web frame and tab instead, and reject opening the task as a top-level page.
+  const parent=await chrome.webNavigation.getFrame({tabId:sender.tab.id,frameId:group.owner.frame});
+  if(sender.frameId===0||!parent||new URL(parent.url).origin!==group.owner.origin)throw Error('请在创建任务的网页中继续入库');
+  return {id,group};
+}
+
+export async function pendingInlineGalleries(sender){
+  const origin=new URL(sender.url).origin,saved=await chrome.storage.session.get(null);
+  return Object.entries(saved).filter(([key,g])=>key.startsWith('gallery-')&&g.inline&&g.owner?.tab===sender.tab.id&&g.owner.frame===(sender.frameId||0)&&g.owner.origin===origin&&Date.now()-g.created<=86400000&&g.saveTarget&&g.images.some((_,i)=>!['done','duplicate'].includes(g.saveStates?.[i]))).sort((a,b)=>a[1].created-b[1].created).slice(-10).map(([key])=>({id:key.slice(8)}));
 }
