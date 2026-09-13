@@ -55,6 +55,10 @@ export const spec = {
     },
     schemas: {
       ItemInput: input,
+      NoteVersion: {
+        type: 'object',
+        properties: { id: str, version: { type: 'integer' }, saved_at: { ...str, format: 'date-time' }, title: str },
+      },
       Item: {
         allOf: [
           input,
@@ -205,6 +209,16 @@ export const spec = {
         parameters: [id],
         responses: { 204: { description: "成功" }, ...errorResponses },
       },
+    },
+    "/api/items/{id}/versions": {
+      get: operation('笔记版本记录（最近 50 个，单篇压缩上限 8 MiB）', {
+        type: 'object', properties: { versions: list(ref('NoteVersion')) },
+      }, { parameters: [id] }),
+    },
+    "/api/items/{id}/versions/{versionId}": {
+      get: operation('读取历史正文；载入后通过普通 PATCH 保存，仍须提供当前 version', {
+        allOf: [ref('NoteVersion'), { type: 'object', properties: { content: str, tags: list(str) } }],
+      }, { parameters: [id, { name: 'versionId', in: 'path', required: true, schema: str }] }),
     },
     "/api/items/{id}/restore": {
       post: operation("从回收站恢复", ref("Item"), { parameters: [id] }),

@@ -1,6 +1,7 @@
 import {localMediaReferences} from '../shared/local-media.js';
 import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
+import { createNoteHistory } from './note-history.js';
 import {createTrashManager} from './trash.js';
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
@@ -145,10 +146,14 @@ export function createApp({
   app.use(express.json({ limit: "2mb" }));
   const setting = (key) =>
     db.prepare("SELECT value FROM settings WHERE key=?").get(key)?.value;
-  const event = (type, id) =>
-    db
+  let noteHistory;
+  const event = (type, id) => {
+    const result = db
       .prepare("INSERT INTO events(type,item_id,created_at) VALUES(?,?,?)")
       .run(type, id, now());
+    noteHistory?.capture(id);
+    return result;
+  };
   const transaction = (fn) => {
     db.exec("BEGIN IMMEDIATE");
     try {
@@ -1119,10 +1124,12 @@ export function createApp({
   const webhooks = createWebhookManager({ db, maintenance, ...webhookOptions });
   registerWebhookRoutes(app, webhooks, admin);
   registerClipper(app);
-  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => trash.repairReferences(), beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
+  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
+  noteHistory=createNoteHistory({app,db});
+  transaction(() => noteHistory.seed());
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));
   app.get("/docs-init.js", (req, res) =>
     res

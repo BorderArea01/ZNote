@@ -3,6 +3,9 @@ import { sourceLinks } from '../shared/provenance.js';
 import { markdownImages } from '../shared/markdown-images.js';
 import { mediaDescription } from '../shared/media-description.js';
 import { GroupOrderDialog } from './GroupOrderDialog.jsx';
+import { useNoteDraft } from './useNoteDraft.js';
+import { DraftConflict } from './NoteDrafts.jsx';
+const NoteVersions = React.lazy(() => import('./NoteVersions.jsx'));
 import { GalleryStrip } from './GalleryStrip.jsx';
 import { ZoomViewer } from './ZoomViewer.jsx';
 import { useCollectionTags } from './useCollectionTags.js';
@@ -376,6 +379,7 @@ function Detail({
   const [lightbox, setLightbox] = useState(false);
   const [copying, setCopying] = useState(false);
   const [sorting,setSorting] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const openSorting=async()=>{if(!dirty||await save())setSorting(true)};
   const externalImages = React.useMemo(()=>item.kind==='note'?markdownImages(content):[],[item.kind,content]);
   const input = useRef();
@@ -386,6 +390,15 @@ function Detail({
     content !== item.content ||
     JSON.stringify(tags) !== JSON.stringify(item.tags) ||
     collection !== (item.collection_id || "");
+  const fields = { title, content, tags, collection_id: collection || null };
+  const latestFields = useRef(fields); latestFields.current = fields;
+  const applyDraft = value => { setTitle(value.title); setContent(value.content); setTags(value.tags); setCollection(value.collection_id || ''); setEditing(true); };
+  const exportCurrent = () => {
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = (title || '未命名笔记').replace(/[\\/:*?"<>|]/g, '-') + '.md'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const draft = useNoteDraft({ initial, item, fields, dirty, textarea, apply: applyDraft });
   useEffect(() => {
     if (item.id)
       api(`/api/items/${item.id}/backlinks`)
@@ -394,7 +407,7 @@ function Detail({
   }, [item.id]);
   useEffect(() => {
     const warn = (e) => {
-      if (dirty) {
+      if (dirty && (item.kind !== 'note' || !draft.isPersisted())) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -402,8 +415,9 @@ function Detail({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  const close = () => {
+  const close = async () => {
     if (busy) return;
+    if (item.kind === 'note' && dirty && await draft.flush()) { onClose(); return; }
     if (!dirty || confirm("有尚未保存的修改，确定关闭吗？")) onClose();
   };
   const insertImages = (images) => {
@@ -428,10 +442,12 @@ function Detail({
         ? await send('/api/item-groups/move',{...value,id:item.id,move_note:true})
         : await send(`/api/items${item.id ? `/${item.id}` : ""}`,value,item.id?'PATCH':'POST');
       setItem(result);
-      setTitle(result.title);
-      setContent(result.content);
-      setTags(result.tags);
-      setCollection(result.collection_id || "");
+      // Keep anything typed while a save or remote-image archive was pending.
+      const pending = latestFields.current;
+      if (pending.title === value.title) setTitle(result.title);
+      if (pending.content === value.content) setContent(result.content);
+      if (JSON.stringify(pending.tags) === JSON.stringify(value.tags)) setTags(result.tags);
+      if (pending.collection_id === value.collection_id) setCollection(result.collection_id || "");
       onSaved(result);
       const failures=result.image_archive?.failures||[];
       if(failures.length)setError(`${failures.length} 张配图暂未归档：${failures[0].error}。可再次点击归档重试。`);
@@ -465,6 +481,7 @@ function Detail({
   });
   useEffect(() => {
     const key = e => {
+      if (item.kind === 'note' && !item.deleted_at && e.target.closest?.('[role="dialog"]')?.classList.contains('note-detail') && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && !e.isComposing && !copying && !sorting && !versionsOpen) { e.preventDefault(); if (!busy && !e.repeat) void save(); return; }
       if (lightbox || copying || sorting || busy || galleryBusy || e.repeat || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
       const delta=['ArrowLeft','a','A'].includes(e.key)?-1:['ArrowRight','d','D'].includes(e.key)?1:0;
       if(noteIndex!==null){if(e.key==='Escape')setNoteIndex(null);if(delta){e.preventDefault();setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)))}return;}
@@ -573,6 +590,7 @@ function Detail({
           </div>
           {item.kind === "note" ? (
             <>
+              <DraftConflict draft={draft.candidate} current={item} onUse={draft.useCandidate} onDiscard={draft.discardCandidate}/>
               <div className="editor-toolbar">
                 <div>
                   <button
@@ -590,6 +608,8 @@ function Detail({
                     预览
                   </button>
                 </div>
+                {item.id && !item.deleted_at && <button disabled={busy} onClick={() => setVersionsOpen(true)}>版本记录</button>}
+                <IconButton label="导出当前正文为 Markdown" onClick={exportCurrent}><Download size={15}/></IconButton>
                 {noteImages.length>1&&!item.deleted_at&&<button onClick={openSorting} disabled={busy}>调整配图顺序</button>}
                 <button
                   onClick={() => input.current.click()}
@@ -601,14 +621,16 @@ function Detail({
               </div>
               {editing ? (
                 <textarea
-                  ref={textarea}
+                  ref={draft.restorePosition}
                   className="markdown-editor"
                   aria-label="笔记正文"
                   placeholder={
                     "在这里写下想法…\n\n支持 Markdown、粘贴图片和 [[双向链接]]。"
                   }
                   value={content}
-                  disabled={!!item.deleted_at}
+                  disabled={!!item.deleted_at || !draft.ready}
+                  onSelect={draft.rememberPosition}
+                  onScroll={draft.rememberPosition}
                   onChange={(e) => setContent(e.target.value)}
                   onPaste={async (e) => {
                     const files = [...e.clipboardData.files].filter((f) =>
@@ -706,9 +728,10 @@ function Detail({
           )}
           <div className="detail-bottom">
             <span>
-              {item.id
+              {item.kind === 'note' && draft.status ? <span role="status">{draft.status}</span> :
+              (item.id
                 ? `更新于 ${date(item.updated_at)}`
-                : "新的灵感，即将入库"}
+                : "新的灵感，即将入库")}
             </span>
             <div>
               {item.id && !item.deleted_at && (
@@ -756,6 +779,7 @@ function Detail({
       />
       {lightbox && <ZoomViewer src={lightbox} alt={title} onClose={()=>setLightbox(false)}/>}
       {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
+      {versionsOpen && <React.Suspense fallback={null}><NoteVersions item={{...item,title,content}} onClose={() => setVersionsOpen(false)} onUse={async value => { if (!(await draft.keepCurrent())) return false; applyDraft({...value,collection_id:collection||null}); return true; }}/></React.Suspense>}
       {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);onGroupOrdered?.(result);onSaved();notify('顺序已保存，第一张为封面');}}/>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
     </Dialog>

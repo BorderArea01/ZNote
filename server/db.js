@@ -12,13 +12,21 @@ export function openDatabase(dir) {
         PRAGMA user_version=8; COMMIT;`);
     } catch (e) { db.exec('ROLLBACK'); db.close(); throw e; }
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 9) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`CREATE TABLE note_versions (id TEXT PRIMARY KEY, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, version INTEGER NOT NULL, title TEXT NOT NULL, saved_at TEXT NOT NULL, hash TEXT NOT NULL, payload BLOB NOT NULL, UNIQUE(item_id,version));
+        CREATE INDEX note_versions_item ON note_versions(item_id,version DESC);
+        PRAGMA user_version=9; COMMIT;`);
+    } catch (e) { db.exec('ROLLBACK'); db.close(); throw e; }
+  }
   return db;
 }
 function openLegacyDatabase(dir) {
   mkdirSync(join(dir, "media"), { recursive: true });
   const db = new DatabaseSync(join(dir, "znote.sqlite"));
   const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
-  if (schemaVersion > 8) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
+  if (schemaVersion > 9) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT UNIQUE NOT NULL, scope TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT);

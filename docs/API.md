@@ -21,6 +21,14 @@ curl http://localhost:3741/api/items \
 
 媒体接口同样需要鉴权，不是公开图床。网页写入默认要求同源；被授权扩展使用 Bearer 令牌。
 
+## 笔记版本
+
+- `GET /api/items/:id/versions` 返回 `{ versions: [{ id, version, title, saved_at }] }`，按保存版本倒序。
+- `GET /api/items/:id/versions/:versionId` 返回该版本的 `id/version/saved_at/title/content/tags`。
+- 通过普通 `PATCH /api/items/:id` 提交选用的旧正文，并传入**当前笔记**的 `version`；冲突与本地图片引用检查仍然生效。读取历史不会修改笔记。
+
+支持现有 read/write 令牌和管理员会话。记录上限为每篇 50 个、压缩后 8 MiB；仅收藏或移动不重复保存相同正文。普通删除保留历史，永久删除笔记会删除其历史。浏览器本地草稿未上传，不属于这些接口。
+
 ## 常用接口
 
 批量整理、标签、回收站操作、整组移动 / 收藏和 `PATCH /api/items/:id` 可传入 `undo: true`，返回 `undo` 操作摘要（没有实际字段变化时为 `null`）。未传入时保持原行为。

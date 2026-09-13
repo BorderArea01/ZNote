@@ -103,3 +103,14 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .undo-row > button { flex:none; }
 .undo-empty { text-align:center; padding:32px 0; color:var(--muted); }
 .toast.above-undo { bottom:110px; }
+.draft-conflict { display:flex; align-items:center; gap:8px; padding:8px 0; font-size:12px; }
+.draft-conflict > span { flex:1; }
+.draft-conflict button { padding:5px 10px; flex:none; }
+.draft-compare { width:min(1000px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; }
+.draft-compare-body { padding:20px; min-height:0; overflow:auto; }
+.draft-compare-body > p { font-size:13px; color:var(--muted); line-height:1.6; }
+.draft-columns { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.draft-columns label { display:flex; flex-direction:column; gap:8px; min-width:0; font-size:13px; }
+.draft-columns strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.draft-columns textarea { width:100%; height:40dvh; resize:none; line-height:1.6; }
+@media(max-width:600px) { .draft-columns { grid-template-columns:1fr; } .draft-columns textarea { height:23dvh; } }

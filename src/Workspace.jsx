@@ -3,6 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { VirtualItems } from './VirtualItems.jsx';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
+import { DraftsDialog } from './NoteDrafts.jsx';
 import { version as packageVersion } from '../package.json';
 import {
   Search,
@@ -114,6 +115,7 @@ export default function Workspace({
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
   const [undoReceipt, setUndoReceipt] = useState(null), [undoOpen, setUndoOpen] = useState(false);
+  const [draftsOpen, setDraftsOpen] = useState(false);
   const recordUndo = result => { if (result?.undo) { setToast(''); setUndoReceipt(result.undo); } };
   const saved = result => { recordUndo(result); refresh(); };
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
@@ -298,6 +300,15 @@ export default function Workspace({
   );
   async function openItem(item) {
     const current = ++detailGeneration.current;
+    if (item.kind === 'note') {
+      try {
+        const fresh = await api(`/api/items/${item.id}`);
+        if (current !== detailGeneration.current) return;
+        if (fresh.collection_id !== item.collection_id || !!fresh.deleted_at !== !!item.deleted_at) throw Error('笔记已移动或删除，请刷新列表后打开');
+        setSelected(fresh); setGallery(null); setGalleryBusy(false);
+      } catch (e) { if (current === detailGeneration.current) notify(e.message); }
+      return;
+    }
     setSelected(item);
     if (item.kind !== 'image') { setGallery(null); setGalleryBusy(false); return; }
     setGallery(items.filter(i => i.kind === 'image'));
@@ -920,6 +931,7 @@ export default function Workspace({
                   <b>{total} 项内容</b>
                 </span>
                 <div className="result-actions">
+                  <button className="text-button" onClick={() => setDraftsOpen(true)}>本地草稿</button>
                   <button className="text-button" onClick={() => setUndoOpen(true)}><History size={15}/>最近操作</button>
                   {view==='trash'&&<button className="text-button danger" disabled={!stats.trash} onClick={()=>openPurge(null)}><Trash2 size={14}/>清空回收站</button>}
                   <button
@@ -1202,6 +1214,17 @@ export default function Workspace({
         </div>
       )}
       <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
+      {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
+        let note;
+        if (draft.note_id) { try { note = await api('/api/items/' + draft.note_id); } catch (e) {
+          if (!e.status && draft.base) { note = {...draft.base,id:draft.note_id,kind:'note',version:draft.base_version,favorite:false}; notify('正在离线续写，恢复连接后可保存到知识库'); }
+          else if (e.status !== 404) throw e;
+        } }
+        if (!note || note.deleted_at) { note = {kind:'note',title:'',content:'',tags:[],favorite:false,collection_id:actualCollection}; draft = {...draft,base_version:0,fields:{...draft.fields,collection_id:actualCollection}}; if(draft.note_id)notify('原笔记已删除，草稿将作为新笔记保存'); }
+        if (draft.fields.collection_id && !collections.some(c => c.id === draft.fields.collection_id)) draft = {...draft,fields:{...draft.fields,collection_id:note.collection_id||null}};
+        if (note.collection_id !== actualCollection) chooseCollection(note.collection_id || 'unfiled');
+        setDraftsOpen(false); setSelected({...note,_draft:draft});
+      }}/>}
       {selected && (
         <Detail
           key={selected.id || "new"}
