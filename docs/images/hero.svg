@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="480" viewBox="0 0 1440 480" role="img" aria-labelledby="title desc">
+  <title id="title">ZNote — 图片、视频与想法的私人收藏馆</title>
+  <desc id="desc">深蓝色背景上的 ZNote 标志、山海卡片与文字卡片，呈现收集、整理、留存的工作流。</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#151c30"/><stop offset="1" stop-color="#242741"/></linearGradient>
+    <linearGradient id="card" x2="0" y2="1"><stop stop-color="#d1e3e4"/><stop offset="1" stop-color="#8caeb8"/></linearGradient>
+    <linearGradient id="mark" x2="1" y2="1"><stop stop-color="#b5c5ff"/><stop offset="1" stop-color="#9a8ae2"/></linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#b7c6ff" stroke-opacity=".055"/></pattern>
+  </defs>
+  <rect width="1440" height="480" rx="24" fill="url(#bg)"/>
+  <rect width="1440" height="480" rx="24" fill="url(#grid)"/>
+  <circle cx="1260" cy="65" r="210" fill="none" stroke="#bfc6ef" stroke-opacity=".09"/>
+  <circle cx="1260" cy="65" r="290" fill="none" stroke="#bfc6ef" stroke-opacity=".07"/>
+  <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif">
+    <rect x="66" y="67" width="60" height="60" rx="18" fill="url(#mark)"/>
+    <path d="M83 84H109L83 110H109" fill="none" stroke="#1c2440" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="148" y="108" fill="#c5ccea" font-size="15" letter-spacing="4">YOUR LOCAL KNOWLEDGE LIBRARY</text>
+    <text x="64" y="232" fill="#f5f4fb" font-size="91" font-weight="650" letter-spacing="-3">ZNote</text>
+    <text x="68" y="292" fill="#e3e5f3" font-size="28">图片、视频与想法的私人收藏馆</text>
+    <text x="70" y="334" fill="#a4aecb" font-size="18">随手收集 · 成组整理 · 长久留存</text>
+    <g font-size="13" fill="#c6cee9">
+      <rect x="68" y="383" width="112" height="32" rx="16" fill="#303a56"/><text x="91" y="405">LOCAL FIRST</text>
+      <rect x="192" y="383" width="128" height="32" rx="16" fill="#303a56"/><text x="214" y="405">OPEN API</text>
+      <rect x="332" y="383" width="128" height="32" rx="16" fill="#303a56"/><text x="354" y="405">SELF HOSTED</text>
+    </g>
+    <g transform="translate(852 61) rotate(-7 200 150)">
+      <rect x="0" y="0" width="398" height="300" rx="18" fill="#404763" stroke="#7b85ac" stroke-opacity=".45"/>
+      <rect x="14" y="14" width="370" height="225" rx="10" fill="url(#card)"/>
+      <circle cx="280" cy="76" r="32" fill="#fff2d5"/>
+      <path d="M14 202L106 78 190 179 262 130 384 223V239H14" fill="#81a3ac"/>
+      <path d="M14 223Q135 130 220 208T384 192V239H14" fill="#4f758d"/>
+      <text x="26" y="271" fill="#f0f1fa" font-size="17">一组风景，一段灵感。</text>
+      <circle cx="361" cy="266" r="6" fill="#c8bdf3"/>
+    </g>
+    <g transform="translate(1035 259) rotate(5 150 80)">
+      <rect width="290" height="159" rx="16" fill="#eeeaf3"/>
+      <rect x="22" y="21" width="62" height="20" rx="10" fill="#dad2e8"/>
+      <text x="35" y="36" fill="#65527f" font-size="10" letter-spacing="1">NOTES</text>
+      <text x="23" y="76" fill="#34354c" font-size="21" font-weight="600">让收藏，也有上下文。</text>
+      <path d="M24 100H245M24 116H209M24 132H158" stroke="#b6b0c4" stroke-width="5" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>
