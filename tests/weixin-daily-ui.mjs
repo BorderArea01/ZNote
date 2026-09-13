@@ -1,0 +1,40 @@
+import {chromium} from 'playwright';
+import {mkdtemp} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import sharp from 'sharp';
+import {createApp} from '../server/app.js';
+const dir=await mkdtemp(resolve('artifacts/weixin-daily-ui-'));let messages=[],wake=null,sequence=0,cursor=0;
+const image=await sharp({create:{width:640,height:400,channels:3,background:'#8f9bc4'}}).png().toBuffer();
+const client={image:async()=>image,updates:(_,__,signal)=>new Promise((resolve,reject)=>{
+ const abort=()=>{if(wake===flush)wake=null;signal.removeEventListener('abort',abort);reject(signal.reason)};
+ const flush=()=>{if(wake===flush)wake=null;signal.removeEventListener('abort',abort);resolve({msgs:messages.splice(0),get_updates_buf:String(++cursor)})};
+ if(signal.aborted){abort();return;}signal.addEventListener('abort',abort,{once:true});if(messages.length)flush();else wake=flush;
+})};
+const enqueue=parts=>{messages.push({message_type:1,message_state:2,message_id:String(++sequence),from_user_id:'owner',create_time_ms:Date.now(),item_list:typeof parts==='string'?[{type:1,text_item:{text:parts}}]:parts});wake?.()};
+const runtime=createApp({dataDir:dir,staticDir:resolve(process.env.UI_DIST||'artifacts/build-v0931'),weixinClient:client}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+const browser=await chromium.launch({channel:'msedge',headless:true}),context=await browser.newContext({viewport:{width:1366,height:900}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+const post=async(path,data)=>{const r=await context.request.post(base+path,{data});assert.ok(r.ok(),await r.text());return r.json()};
+const completed=async n=>{const until=Date.now()+15000;while(Date.now()<until){const response=await context.request.get(base+'/api/weixin');const state=await response.json();if(state.jobs.filter(j=>j.state==='done').length>=n)return;await page.waitForTimeout(100)}throw Error('Receipts did not reach '+n)};
+const section=page.locator('.weixin-settings'),notes=()=>runtime.db.prepare("SELECT * FROM items WHERE kind='note' ORDER BY created_at").all();
+try{
+ await post('/api/auth/setup',{password:'0931'});const lib=await post('/api/collections',{name:'微信灵感'});
+ runtime.db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('weixin_inbox_v1',JSON.stringify({enabled:false,collection_id:lib.id,tags:['灵感'],account:{base:'https://ilinkai.weixin.qq.com',bot:'bot',user:'owner',token:'private'},cursor:'',jobs:[]}));
+ await context.request.patch(base+'/api/preferences',{data:{default_collection_id:lib.id}});
+ await page.goto(base);await page.getByRole('button',{name:'设置与连接',exact:true}).click();await section.getByLabel('微信归档方式').waitFor();assert.equal(await section.getByLabel('微信归档方式').inputValue(),'daily');
+ await section.getByRole('button',{name:'恢复接收',exact:true}).click();
+ enqueue('## 今天的建筑灵感\n\n[参考链接](https://example.com/)');await completed(1);
+ enqueue([{type:2,image_item:{media:{}}}]);await completed(2);enqueue('这张图的留白很适合作为布局参考。');await completed(3);
+ assert.equal(notes().length,1);assert.ok(notes()[0].content.indexOf('建筑灵感')<notes()[0].content.indexOf('/media/'));assert.ok(notes()[0].content.indexOf('/media/')<notes()[0].content.indexOf('留白'));
+ await section.getByRole('button',{name:'打开笔记',exact:true}).click();const note=page.getByRole('dialog',{name:'图文笔记',exact:true});await note.waitFor();await note.getByRole('button',{name:'预览',exact:true}).click();await note.locator('.markdown-preview img').waitFor();assert.equal(await note.locator('.markdown-preview a').getAttribute('href'),'https://example.com/');
+ await page.screenshot({path:resolve('artifacts/v0931-weixin-note.png')});
+ await note.getByRole('button',{name:'关闭窗口',exact:true}).click();await page.getByRole('button',{name:'设置与连接',exact:true}).click();await section.getByLabel('微信新篇标题').fill('周末旅行参考');await section.getByRole('button',{name:'开始新篇',exact:true}).click();await section.getByText('周末旅行参考 · 等待收件',{exact:true}).waitFor();
+ enqueue('新话题的文字');enqueue([{type:2,image_item:{media:{}}}]);await completed(5);assert.equal(notes().length,2);assert.ok(notes().some(n=>n.title==='周末旅行参考'&&n.content.includes('新话题')&&n.content.includes('/media/')));
+ enqueue('/新篇 插画收藏');enqueue([{type:2,image_item:{media:{}}}]);await completed(7);assert.equal(notes().length,3);assert.ok(notes().some(n=>n.title==='插画收藏'&&n.content.includes('/media/')));
+ await section.getByLabel('微信归档方式').selectOption('session');await section.getByRole('button',{name:'保存收件设置',exact:true}).click();assert.equal(runtime.weixin.status().merge_mode,'session');
+ await section.getByLabel('微信归档方式').selectOption('daily');await section.getByRole('button',{name:'保存收件设置',exact:true}).click();
+ await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.palette='slate'});await section.scrollIntoViewIfNeeded();await page.waitForTimeout(250);await page.screenshot({path:resolve('artifacts/v0931-weixin-settings.png')});
+ await page.setViewportSize({width:390,height:844});await section.scrollIntoViewIfNeeded();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:resolve('artifacts/v0931-weixin-mobile.png')});
+ await section.getByRole('button',{name:'暂停接收',exact:true}).click();await section.getByRole('button',{name:'恢复接收',exact:true}).waitFor();assert.deepEqual(errors,[]);
+ console.log('PASS Edge: separate text/photo/caption form one Markdown note; local image preview; settings and WeChat command split topics; mode persistence; dark/mobile layout; pause reception');
+}catch(e){await page.screenshot({path:resolve('artifacts/v0931-weixin-ui-failure.png')}).catch(()=>{});throw e;}finally{await runtime.weixin.stop();await browser.close();await runtime.trash.stop();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close()}

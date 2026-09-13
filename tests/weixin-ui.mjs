@@ -8,7 +8,7 @@ const dir=await mkdtemp(resolve('artifacts/weixin-ui-'));let authorized=false,ch
 const image=await sharp({create:{width:32,height:24,channels:3,background:'#6688dd'}}).png().toBuffer();
 const abortable=signal=>new Promise((resolve,reject)=>{if(signal?.aborted)return reject(signal.reason);signal?.addEventListener('abort',()=>reject(signal.reason),{once:true});});
 const client={qr:async()=>({qrcode:'fixture',qrcode_img_content:'https://example.com/fixture-qr'}),qrStatus:async(_,opts)=>{checks++;if(!authorized)return {status:'need_verifycode'};return {status:'confirmed',bot_token:'secret',ilink_bot_id:'bot',ilink_user_id:'owner',baseurl:'https://ilinkai.weixin.qq.com'}},updates:async(_,cursor,signal)=>messages.length?{msgs:messages.splice(0),get_updates_buf:'cursor'}:abortable(signal),image:async()=>image};
-const runtime=createApp({dataDir:dir,staticDir:resolve('artifacts/build-v0929'),weixinClient:client}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+const runtime=createApp({dataDir:dir,staticDir:resolve(process.env.UI_DIST||'dist'),weixinClient:client}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({channel:'msedge',headless:true}),context=await browser.newContext({viewport:{width:1366,height:900}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
 try{
 await context.request.post(base+'/api/auth/setup',{data:{password:'0929'}});const library=await(await context.request.post(base+'/api/collections',{data:{name:'微信灵感'}})).json();

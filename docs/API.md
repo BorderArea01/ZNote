@@ -232,8 +232,9 @@ mode 为 create / append / detach。create 需非空组名（最多 200 字）�
 
 ## 微信收件箱（管理员）
 
-- `GET /api/weixin`：连接状态、收件设置、最近 30 条处理记录；不返回账号令牌、游标或原始消息。
-- `PATCH /api/weixin`：提交 `{enabled, collection_id, tags}`；知识库可为 null，标签最多 20 个、每个最多 40 字。
+- `GET /api/weixin`：连接状态、收件设置与最多 30 条处理记录（失败优先）；包含 `merge_mode`、`time_zone`、`current_note` 和 `failed_count`，不返回账号令牌、游标或原始消息。
+- `PATCH /api/weixin`：提交 `{enabled, collection_id, tags, merge_mode?}`；`merge_mode` 为 `daily`（默认，按北京时间的发送日期合并）、`session`（手动分篇）或 `message`（原逐条模式），省略时保持当前方式。知识库可为 null，标签最多 20 个、每个最多 40 字。只影响之后收到的消息。
+- `POST /api/weixin/new-note`：提交 `{title?: string}`，在当前归档范围开始新篇，标题最多 80 字、不含换行；不立即创建空白笔记，已排队消息保留原目标。需先连接并启用合并模式。
 - `POST /api/weixin/login`：创建二维码会话，后端等待扫码；状态由 GET 接口读取。
 - `POST /api/weixin/verify`：提交 `{id, code}` 完成手机验证码确认。
 - `DELETE /api/weixin/login`：断开当前连接，移除本地凭据，保留入库内容和接收记录。

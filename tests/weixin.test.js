@@ -38,7 +38,7 @@ test('Weixin inbox saves original images and Markdown locally, isolates senders/
  const account={base:'https://ilinkai.weixin.qq.com',token:'PRIVATE-TOKEN',bot:'bot',user:'owner'};
  const state=()=>JSON.parse(runtime.db.prepare("SELECT value FROM settings WHERE key='weixin_inbox_v1'").get().value);
  const store=s=>runtime.db.prepare("INSERT INTO settings(key,value) VALUES('weixin_inbox_v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(s));
- store({enabled:true,collection_id:a.id,tags:['灵感'],account,cursor:'',jobs:[]});
+ store({enabled:true,merge_mode:'message',collection_id:a.id,tags:['灵感'],account,cursor:'',jobs:[]});
  const photo={type:2,image_item:{media:{encrypt_query_param:'resource',aes_key:'PRIVATE-KEY'}}},text={type:1,text_item:{text:'**想法** [链接](https://example.com/)\n\n保留原文'}};
  const msg=(id,items,from='owner')=>({message_type:1,message_state:2,message_id:id,from_user_id:from,item_list:items,create_time_ms:Date.now()});
  const mixed=msg(1,[text,photo,photo]);next=[mixed,msg(2,[photo],'other-person'),{...msg(3,[photo]),message_type:2}];

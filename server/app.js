@@ -526,7 +526,7 @@ export function createApp({
       event_cursor: db.prepare('SELECT COALESCE(MAX(id),0) cursor FROM events').get().cursor,
     });
   });
-  const insert = (input, image = null, fixedId = null) => {
+  const insert = (input, image = null, fixedId = null, onCommit = () => {}) => {
     if (input.source_url) input = withSource(input);
     validateCollection(input.collection_id);
     const id = fixedId || randomUUID();
@@ -569,6 +569,7 @@ export function createApp({
       }
       if (image?.kind === 'video') db.prepare('UPDATE items SET duration=?,video_codec=? WHERE id=?').run(image.duration, image.codecName, id);
       event("item.created", id);
+      onCommit();
     });
     return serialize(getItem(id));
   };
@@ -1174,10 +1175,30 @@ export function createApp({
         '<!doctype html><html><head><title>ZNote API</title><link rel="stylesheet" href="/docs/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="/docs/swagger-ui-bundle.js"></script><script src="/docs-init.js"></script></body></html>',
       ),
   );
-  const weixin=createWeixinInbox({db,client:weixinClient,validateCollection,work:operation=>maintenance.work(operation),
+  const weixin=createWeixinInbox({db,client:weixinClient,validateCollection,transaction,work:operation=>maintenance.work(operation),
     exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
     saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:'微信图片',size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),
-    saveNote:({id,...fields})=>insert(itemInput.parse(fields),null,id),
+    saveNote:({id,...fields},commit)=>insert(itemInput.parse(fields),null,id,commit),
+    appendNote:({id,...fields},commit)=>{
+      const old=db.prepare('SELECT * FROM items WHERE id=?').get(id);
+      if(!old)return insert(itemInput.parse(fields),null,id,commit);
+      if(old.kind!=='note'||old.deleted_at||old.collection_id!==fields.collection_id)throw fail(409,'收件笔记已移动或删除，请恢复原归属后重试；新消息会使用新篇');
+      const content=old.content+(old.content?'\n\n':'')+fields.content;
+      if(content.length>500000)throw fail(400,'收件笔记超过 50 万字符，请缩短原笔记后重试；后续内容可使用“开始新篇”');
+      const tags=[...new Set([...JSON.parse(old.tags),...fields.tags])];
+      if(tags.length>30)throw fail(400,'收件笔记超过 30 个标签，请整理标签后重试');
+      transaction(()=>{
+        // Appending must preserve the user's current title, text and cover order.
+        const prior=db.prepare("SELECT id,COALESCE(group_order,group_index) position FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL").all('note:'+id,old.collection_id);
+        const input=groupNoteImages({...serialize(old),content,tags},id);
+        for(const row of prior)db.prepare('UPDATE items SET group_order=? WHERE id=? AND group_key=?').run(row.position,row.id,'note:'+id);
+        const known=new Set(prior.map(row=>row.id));let position=Math.max(-1,...prior.map(row=>row.position));
+        for(const row of db.prepare("SELECT id FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY group_index,id").all('note:'+id,old.collection_id))if(!known.has(row.id))db.prepare('UPDATE items SET group_order=? WHERE id=?').run(++position,row.id);
+        db.prepare('UPDATE items SET content=?,tags=?,version=version+1,updated_at=? WHERE id=?').run(input.content,JSON.stringify(tags),now(),id);
+        event('item.updated',id);commit();
+      });
+      return serialize(getItem(id));
+    },
   });
   registerWeixinRoutes(app,admin,weixin);
   app.use("/api", (req, res) => res.status(404).json({ error: "接口不存在" }));

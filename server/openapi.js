@@ -729,8 +729,9 @@ spec.paths['/api/video-progress']={
  delete:operation('清除当前库播放记录，不删除视频（write）',videoProgressState,{requestBody:body(readingWrite),description:'仅接受 collection_id/version/epoch/request_id。版本冲突整次拒绝，最后请求可幂等重放。'})
 };
 
-const weixinConfig={type:'object',required:['enabled','collection_id','tags'],properties:{enabled:{type:'boolean'},collection_id:{type:'string',nullable:true},tags:{type:'array',maxItems:20,items:{type:'string',minLength:1,maxLength:40}}}};
+const weixinConfig={type:'object',required:['enabled','collection_id','tags'],properties:{enabled:{type:'boolean'},collection_id:{type:'string',nullable:true},merge_mode:{type:'string',enum:['daily','session','message'],description:'默认 daily；省略时保留当前归档方式。日期按 Asia/Shanghai 划分。'},tags:{type:'array',maxItems:20,items:{type:'string',minLength:1,maxLength:40}}}};
 spec.paths['/api/weixin']={get:operation('微信收件连接与最近处理状态，不返回凭据（管理员）',{type:'object'}),patch:operation('设置微信收件开关、知识库与标签（管理员）',{type:'object'},{requestBody:body(weixinConfig)})};
+spec.paths['/api/weixin/new-note']={post:operation('开始新篇；只影响后续收件，不创建空白笔记（管理员）',{type:'object'},{requestBody:body({type:'object',properties:{title:{type:'string',maxLength:80}}})})};
 spec.paths['/api/weixin/login']={post:operation('生成微信登录二维码，后台等待本人扫码确认（管理员）',{type:'object'}),delete:operation('移除微信连接凭据，保留已收内容（管理员）',{type:'object'})};
 spec.paths['/api/weixin/verify']={post:operation('提交手机显示的扫码验证码（管理员）',{type:'object'},{requestBody:body({type:'object',required:['id','code'],properties:{id:str,code:{type:'string',pattern:'^[0-9]{4,8}$'}}})})};
 for(const action of ['retry','skip'])spec.paths['/api/weixin/jobs/{id}/'+action]={post:operation(action==='retry'?'重试失败的微信消息（管理员）':'忽略失败的微信消息（管理员）',{type:'object'},{parameters:[id]})};
