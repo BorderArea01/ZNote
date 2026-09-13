@@ -126,3 +126,23 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .saved-view-conditions p { overflow-wrap:anywhere; }
 .saved-view-chips { display:flex; flex-wrap:wrap; gap:6px; }
 .saved-view-chips span { max-width:100%; overflow-wrap:anywhere; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:4px 8px; }
+.group-organize-dialog { width:min(850px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; }
+.group-organize-body { display:grid; grid-template-columns:290px minmax(0,1fr); gap:24px; padding:20px; min-height:0; overflow:auto; }
+.group-organize-settings { border:0; margin:0; padding:0; min-width:0; }
+.group-organize-settings label { display:grid; gap:8px; margin-bottom:18px; font-size:13px; }
+.group-organize-settings input:not([type="checkbox"]), .group-organize-settings select { width:100%; min-width:0; }
+.group-whole-row { display:flex; align-items:center; gap:6px; margin:20px 0 18px; }
+.group-organize-settings .group-whole { display:flex; align-items:center; gap:8px; margin:0; }
+.group-plan-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:14px; }
+.group-plan-summary, .group-copy-notice { font-size:12px; color:var(--muted); line-height:1.7; }
+.group-plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:8px; max-height:310px; overflow:auto; }
+.group-plan-grid > div { position:relative; aspect-ratio:1; border:1px solid var(--border); border-radius:9px; overflow:hidden; background:var(--surface-2); }
+.group-plan-grid img { width:100%; height:100%; object-fit:contain; }
+.group-plan-grid span { position:absolute; left:4px; bottom:4px; color:white; background:#111b; border-radius:4px; padding:2px 5px; font-size:10px; }
+.group-organize-footer { flex:none; padding:14px 20px; border-top:1px solid var(--border); }
+.group-organize-footer .feature-actions { margin:0; }
+.group-organize-error { display:flex; align-items:center; gap:12px; margin-bottom:10px; font-size:12px; }
+.group-organize-error p { flex:1; margin:0; }
+.group-organize-error button { flex:none; }
+.group-target-pages { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-top:8px; font-size:12px; }
+@media(max-width:620px) { .group-organize-body { grid-template-columns:1fr; gap:16px; padding:16px; } .group-plan-grid { max-height:160px; } .group-organize-footer { padding:12px 16px; } .group-organize-error { flex-wrap:wrap; } }

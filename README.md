@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.17-287464?style=flat-square" alt="Version 0.9.17" />
+    <img src="https://img.shields.io/badge/version-0.9.18-287464?style=flat-square" alt="Version 0.9.18" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -36,6 +36,10 @@
 | 🌐 随处访问 | 一个服务，电脑、手机和平板通过浏览器访问；适合家庭或个人局域网 |
 
 ## 成组浏览与整理
+
+选择图片后点击 **「整理图片组」**，可组成新组、追加到已有组或拆为独立图片。默认只处理选中的图片，勾选「包含所选图片所在的整组」可包含未加载的成员；确认前显示实际范围与封面。追加保留目标封面，整理后可以撤销。
+
+笔记配图可选择跳过，或保留原笔记配图组、共享原文件建立素材引用。手工整理后的分组不会被重复采集打散。网络响应丢失时点击「重试本次操作」，不会重复建组。
 
 图片组预览内点 **「调整顺序」**，拖动缩略图后保存，**排在第一张的图片就是封面**；也可用前后移动按钮或「设为封面」。笔记内点「调整配图顺序」，可选择同步正文图片顺序，文字和图片链接保留。顺序保存在本地数据库，重新打开、迁移和完整备份恢复后仍有效。
 

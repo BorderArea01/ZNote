@@ -10,7 +10,7 @@ export function registerGroupOrderRoutes({app,db,transaction,getItem,serialize,e
     const rows=db.prepare("SELECT id,version FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND (deleted_at IS NOT NULL)=? ORDER BY COALESCE(group_order,group_index),group_index,id LIMIT 10001").all(key,anchor.collection_id,+Boolean(anchor.deleted_at));
     if(rows.length>10000)throw fail(400,'单次最多选择 10000 张图片，请分组整理');
     if(!rows.length)throw fail(404,'图片组已没有可选成员');
-    res.json({items:rows,collection_id:anchor.collection_id,group_key:key,trash:Boolean(anchor.deleted_at)});
+    res.json({items:rows.map(row=>({...row,kind:'image'})),collection_id:anchor.collection_id,group_key:key,trash:Boolean(anchor.deleted_at)});
   });
   function snapshot(id) {
     const anchor=getItem(id);if(anchor.deleted_at)throw fail(409,'请先恢复内容');

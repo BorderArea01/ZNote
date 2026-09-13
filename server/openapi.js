@@ -673,3 +673,19 @@ for(const [path,method] of [['/api/items/batch-organize','post'],['/api/items/ba
   const response=endpoint.responses[200]?.content?.['application/json']?.schema;
   if(response?.properties)response.properties.undo={...undoAction,nullable:true};
 }
+
+const organizeInput = {type:'object',required:['items','collection_id','mode'],properties:{
+  items:{type:'array',minItems:1,maxItems:10000,items:{type:'object',required:['id','version'],properties:{id:{type:'string',format:'uuid'},version:{type:'integer',minimum:1}}}},
+  collection_id:{type:'string',format:'uuid',nullable:true},mode:{type:'string',enum:['create','append','detach']},title:{type:'string',maxLength:200,default:''},whole_groups:{type:'boolean',default:false},target_id:{type:'string',format:'uuid',nullable:true},note_mode:{type:'string',enum:['copy','exclude'],default:'copy'}
+}};
+const organizeReceipt = {revision:{type:'string',minLength:64,maxLength:64},operation_id:{type:'string',format:'uuid'},prepared_at:{type:'string',format:'date-time'}};
+const organizePicture = {type:'object',properties:{id:str,title:str,thumbnail_url:str}};
+const organizePreview = {type:'object',properties:{input:organizeInput,...organizeReceipt,selected_count:{type:'integer'},expanded_count:{type:'integer'},changed_count:{type:'integer'},copied_count:{type:'integer'},excluded_count:{type:'integer'},existing_count:{type:'integer'},note_count:{type:'integer'},target_count:{type:'integer'},result_count:{type:'integer'},items:{type:'array',maxItems:60,items:organizePicture},cover:{...organizePicture,nullable:true}}};
+spec.paths['/api/item-groups']={get:operation('分页查找当前知识库素材组',{type:'object',properties:{groups:list({type:'object',properties:{...organizePicture.properties,group_key:str,count:{type:'integer'}}}),total:{type:'integer'},offset:{type:'integer'}}},{parameters:[{name:'collection',in:'query',schema:{type:'string',default:'unfiled'},description:'知识库 UUID 或 unfiled'},{name:'q',in:'query',schema:{type:'string',maxLength:200}},{name:'offset',in:'query',schema:{type:'integer',minimum:0,maximum:100000,default:0}}],description:'每页 40 组，不含回收站与笔记配图组；首张按展示顺序确定。'})};
+spec.paths['/api/item-groups/organize/preview']={post:operation('预览合组、追加或拆分（write）',organizePreview,{requestBody:body({...organizeInput,properties:{...organizeInput.properties,refresh:{type:'boolean',default:false,description:'明确重新读取所选版本；默认拒绝旧版本'}}}),description:'同知识库活动图片；create 需组名，append 需素材组目标。关联及结果组最多 10000 张，预览至多 60 张。note_mode copy 保留原笔记与配图组并共享文件建立素材引用，exclude 跳过。追加保留目标封面。'})};
+spec.paths['/api/item-groups/organize']={post:operation('按预览原子整理图片组（write）',{type:'object',properties:{changed_count:{type:'integer'},copied_count:{type:'integer'},group_key:{...str,nullable:true},ids:list(str),item:{...ref('Item'),nullable:true},undo:{...undoAction,nullable:true},replayed:{type:'boolean'},already_undone:{type:'boolean'}}},{requestBody:body({...organizeInput,required:[...organizeInput.required,'revision','operation_id','prepared_at'],properties:{...organizeInput.properties,...organizeReceipt,undo:{type:'boolean',default:false}}}),description:'原样提交预览 input（展开）、revision、operation_id、prepared_at。网络失败使用完全相同请求重试；24 小时内同调用者不重复执行，已撤销也不重做。版本或组成员变化 409，过期 410，容量超限 413，均整次回滚。回执压缩上限每调用者 32 MiB，复制配图元数据上限 16 MiB；完整恢复清除旧回执。'})};
+spec.components.schemas.Item.allOf[1].properties.group_manual={type:'integer',enum:[0,1],description:'手工分组或拆分标记，重复采集保留结果'};
+spec.components.schemas.Item.allOf[1].properties.group_origin_id={type:'string',nullable:true,description:'共享配图引用的来源记录 ID'};
+spec.paths['/api/item-groups/selection'].get.responses[200].content['application/json'].schema.properties.items.items.properties.kind={type:'string',enum:['image']};
+
+Object.assign(spec.paths['/api/item-groups/organize'].post.responses,{410:{description:'预览已过期'},413:{description:'数量或容量超限，未修改内容'}});

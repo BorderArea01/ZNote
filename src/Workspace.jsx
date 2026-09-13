@@ -6,6 +6,7 @@ import { UndoCenter } from './UndoCenter.jsx';
 import { DraftsDialog } from './NoteDrafts.jsx';
 import { useSavedViews, SavedViewList } from './SavedViews.jsx';
 const SavedViewDialog = React.lazy(() => import('./SavedViewDialog.jsx'));
+const GroupOrganizeDialog = React.lazy(() => import('./GroupOrganizeDialog.jsx'));
 import { version as packageVersion } from '../package.json';
 import {
   Search,
@@ -108,6 +109,7 @@ export default function Workspace({
     detailGeneration = useRef(0),
     listRequest = useRef(null);
   const [organizing, setOrganizing] = useState(false);
+  const [groupOrganizing, setGroupOrganizing] = useState(false);
   const [purging,setPurging]=useState(null);
   const [selectionRows,setSelectionRows]=useState({}),[groupSelecting,setGroupSelecting]=useState(false);
   const groupRequest=useRef(0),selectionSeed=useRef(null);
@@ -1003,6 +1005,7 @@ export default function Workspace({
                     批量标签
                   </button>
                   <button onClick={() => setOrganizing(true)} disabled={!selection.length || view === 'trash'}>移动 / 收藏</button>
+                  <button onClick={() => { setToast(''); setGroupOrganizing(true); }} disabled={!selection.length || chosenItems.length !== selection.length || chosenItems.some(i => i.kind !== 'image') || view === 'trash' || batchBusy || groupSelecting}><Layers size={15}/>整理图片组</button>
                   <button className={view==='trash'?'':'danger'} disabled={!selection.length || batchBusy} onClick={batchTrash}>
                     {view==='trash'?<RefreshCw size={15}/>:<Trash2 size={15}/>} {batchBusy?'正在处理…':view==='trash'?'恢复所选':'删除所选'}
                   </button>
@@ -1233,7 +1236,7 @@ export default function Workspace({
           </IconButton>
         </div>
       )}
-      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
+      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
       {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;
@@ -1283,6 +1286,7 @@ export default function Workspace({
       )}
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
       {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={result => { saved(result); notify('已完成批量整理',result?.undo); }} />}
+      {groupOrganizing && <React.Suspense fallback={null}><GroupOrganizeDialog items={chosenItems} library={actualCollection} onClose={() => setGroupOrganizing(false)} onDone={result => { setSelecting(false); setSelection([]); setSelectionRows({}); saved(result); notify(`已整理 ${result.changed_count} 张图片${result.copied_count ? `，其中 ${result.copied_count} 张共享笔记原图` : ''}`,result.undo); }}/></React.Suspense>}
       {settings && (
         <SettingsPanel
           onClose={() => setSettings(false)}

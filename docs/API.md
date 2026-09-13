@@ -158,4 +158,28 @@ Webhook 可在设置中创建，也可通过管理员接口 `/api/webhooks` 管�
 
 移入回收站与永久删除会保留笔记的独立配图，自动替换其 Markdown 内部地址；笔记不再引用删除条目。保存笔记引用回收站或不存在的条目返回 409，须先恢复或换用有效配图。条目及笔记版本号可能随配图替换更新，请使用响应中的最新版本。媒体读取接口保留回收站预览能力，但不允许将该地址重新写入笔记。
 
-`GET /api/item-groups/selection?id=图片ID`：返回同知识库、同分组、同回收站状态的全部图片 `{ items: [{id, version}], collection_id, group_key, trash }`，不受筛选或分页影响。支持笔记 ID 获取活动笔记配图；最多 10,000 项，超限返回错误，不截断选择。批量标签/整理/删除/恢复支持同样上限。完整选中某笔记的活动配图后批量移动，会同时移动该笔记。
+`GET /api/item-groups/selection?id=图片ID`：返回同知识库、同分组、同回收站状态的全部图片 `{ items: [{id, version, kind: "image"}], collection_id, group_key, trash }`，不受筛选或分页影响。支持笔记 ID 获取活动笔记配图；最多 10,000 项，超限返回错误，不截断选择。批量标签/整理/删除/恢复支持同样上限。完整选中某笔记的活动配图后批量移动，会同时移动该笔记。
+
+## 合并、追加与拆分图片组
+
+`GET /api/item-groups?collection=知识库UUID&q=组名&offset=0` 列出当前库有效的素材组，不含笔记配图组。省略 collection 或传 unfiled 为未分类。返回 `{groups:[{id,group_key,title,count,thumbnail_url}],total,offset}`，每页 40 组。
+
+先 `POST /api/item-groups/organize/preview`：
+
+```json
+{
+  "items": [{"id":"图片UUID","version":1}],
+  "collection_id":null,
+  "mode":"create",
+  "title":"参考画册",
+  "whole_groups":false,
+  "target_id":null,
+  "note_mode":"copy"
+}
+```
+
+mode 为 create / append / detach。create 需非空组名（最多 200 字）；append 需目标组任意图片的 target_id。whole_groups 默认 false，开启后包含隐藏或未加载成员并保留原组内部顺序。note_mode 为 copy / exclude：保留笔记并共享文件建立素材引用，或跳过笔记配图。append 保留目标封面和顺序；同一目标已有配图引用时不重复添加。
+
+响应含规范化 input、revision、operation_id、prepared_at、实际数量及至多 60 张预览。提交 `POST /api/item-groups/organize` 时原样带回这四个字段（将 input 展开到请求体），加 `undo:true` 可撤销。响应含 changed_count、copied_count、group_key、ids、item 和 undo。相关组或版本变化返回 409，整次不修改；只有用户明确重读时，预览请求才传 `refresh:true` 更新所选版本。
+
+响应丢失时须使用完全相同的请求与 operation_id 重试，返回 `replayed:true`；已撤销则同时返回 `already_undone:true`，不会重做。预览超过 24 小时返回 410；每个调用者回执压缩总量至多 32 MiB，超限返回 413 并回滚。完整恢复后旧回执失效。需要 write 权限，且所有图片及目标必须属于指定库、未删除。关联组总量和结果组至多 10000 张；复制配图元数据至多 16 MiB，均不复制原图文件。

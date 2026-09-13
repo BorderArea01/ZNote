@@ -29,13 +29,25 @@ export function openDatabase(dir) {
         PRAGMA user_version=10; COMMIT;`);
     } catch (e) { db.exec('ROLLBACK'); db.close(); throw e; }
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 11) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const columns = new Set(db.prepare('PRAGMA table_info(items)').all().map(c => c.name));
+      if (!columns.has('group_manual')) db.exec('ALTER TABLE items ADD COLUMN group_manual INTEGER NOT NULL DEFAULT 0');
+      if (!columns.has('group_origin_id')) db.exec('ALTER TABLE items ADD COLUMN group_origin_id TEXT');
+      db.exec(`CREATE INDEX IF NOT EXISTS items_group_origin ON items(collection_id,group_key,group_origin_id) WHERE group_origin_id IS NOT NULL;
+        CREATE TABLE group_operations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_hash TEXT NOT NULL, created_at INTEGER NOT NULL, response BLOB NOT NULL);
+        CREATE INDEX group_operations_owner ON group_operations(owner,created_at);
+        PRAGMA user_version=11; COMMIT`);
+    } catch (e) { db.exec('ROLLBACK'); db.close(); throw e; }
+  }
   return db;
 }
 function openLegacyDatabase(dir) {
   mkdirSync(join(dir, "media"), { recursive: true });
   const db = new DatabaseSync(join(dir, "znote.sqlite"));
   const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
-  if (schemaVersion > 10) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
+  if (schemaVersion > 11) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT UNIQUE NOT NULL, scope TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT);

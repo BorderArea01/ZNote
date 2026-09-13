@@ -61,7 +61,7 @@ test('saved views are scoped, validated, conflict-aware, durable and included in
   assert.equal(runtime.db.prepare('SELECT count(*) n FROM saved_views WHERE collection_id=?').get(a.id).n, 0);
   assert.equal((await list()).views.length, 1); assert.equal((await list(b.id)).views.length, 1);
   assert.equal(runtime.db.prepare('SELECT collection_id FROM items WHERE id=?').get(item.id).collection_id, null);
-  runtime.db.exec('DROP TABLE saved_views; PRAGMA user_version=9');
+  runtime.db.exec('DROP TABLE group_operations; DROP TABLE saved_views; PRAGMA user_version=9');
   const legacyPath = join(dir, 'schema9.zip'); await writeFile(legacyPath, Buffer.from(await (await request('/api/export?mode=backup')).arrayBuffer()));
   const legacyTarget = createApp({ dataDir: join(dir, 'legacy-restore') });
   try {
@@ -77,11 +77,11 @@ test('schema 9 upgrades additively and repeated startup preserves existing rows'
   const dir = await mkdtemp(resolve('artifacts/views-migration-'));
   let db = openDatabase(dir);
   db.exec("INSERT INTO collections VALUES('old-library','旧知识库','#123456','2026-01-01'); INSERT INTO items(id,kind,title,content,collection_id,created_at,updated_at) VALUES('old-note','note','旧正文','保留','old-library','2026-01-01','2026-01-01')");
-  db.exec('DROP TABLE saved_views; PRAGMA user_version=9');
+  db.exec('DROP TABLE group_operations; DROP TABLE saved_views; PRAGMA user_version=9');
   const before = db.prepare('SELECT * FROM items').all();
   await backup(db, join(dir, 'before.sqlite')); db.close();
   await copyFile(join(dir, 'before.sqlite'), join(dir, 'znote.sqlite'));
   db = openDatabase(dir);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 10); assert.deepEqual(db.prepare('SELECT * FROM items').all(), before); assert.equal(db.prepare('SELECT count(*) n FROM saved_views').get().n, 0);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 11); assert.deepEqual(db.prepare('SELECT * FROM items').all(), before); assert.equal(db.prepare('SELECT count(*) n FROM saved_views').get().n, 0);
   db.close(); const next = openDatabase(dir); assert.deepEqual(next.prepare('SELECT * FROM items').all(), before); next.close();
 });

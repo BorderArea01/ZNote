@@ -27,7 +27,7 @@ export function createUndoManager({ app, db, transaction, event, mediaCollision,
     let bytes = 0;
     for (const row of rows) { bytes += row.bytes; if (bytes > MAX_BYTES) db.prepare('DELETE FROM undo_actions WHERE id=?').run(row.id); }
   }
-  function run(req, label, fn) {
+  function run(req, label, fn, { guardGroups = false, actionId } = {}) {
     if (req.body?.undo !== true) return { result: transaction(fn), undo: null };
     return transaction(() => {
       const sourceId = req.params?.id || req.body?.id || req.body?.items?.[0]?.id;
@@ -63,7 +63,18 @@ export function createUndoManager({ app, db, transaction, event, mediaCollision,
       }
       db.exec('DELETE FROM undo_capture');
       if (!changes.size) return { result, undo: null };
-      const date = new Date(), action = { id: randomUUID(), owner: req.auth.id, label, count: changes.size, created_at: date.toISOString(), expires_at: new Date(+date + TTL).toISOString(), undone_at: null };
+      if (guardGroups) {
+        const groups = new Map();
+        for (const entry of changes.values()) {
+          const current = get.get(entry.id);
+          for (const key of [entry.before.group_key, entry.after.group_key].filter(Boolean)) {
+            const scope = JSON.stringify([key, current.collection_id]);
+            if (!groups.has(scope)) groups.set(scope, { key, collection: current.collection_id, ids: db.prepare("SELECT id FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id").all(key, current.collection_id).map(r => r.id) });
+          }
+        }
+        changes.values().next().value.groups = [...groups.values()];
+      }
+      const date = new Date(), action = { id: actionId || randomUUID(), owner: req.auth.id, label, count: changes.size, created_at: date.toISOString(), expires_at: new Date(+date + TTL).toISOString(), undone_at: null };
       const payload = gzipSync(Buffer.from(JSON.stringify([...changes.values()])));
       if (payload.length > MAX_BYTES) throw fail(413, '撤销记录过大，请分批操作');
       db.prepare('INSERT INTO undo_actions VALUES(?,?,?,?,?,?,?,NULL)').run(action.id, action.owner, label, action.count, action.created_at, action.expires_at, payload);
@@ -81,6 +92,10 @@ export function createUndoManager({ app, db, transaction, event, mediaCollision,
       if (!action || action.expires_at <= new Date().toISOString()) throw fail(410, '撤销记录已过期或不属于本次登录');
       if (action.undone_at) return { ...summary(action), already_undone: true };
       const changes = JSON.parse(gunzipSync(action.payload, { maxOutputLength: 2 * MAX_BYTES }).toString());
+      for (const group of changes[0]?.groups || []) {
+        const ids = db.prepare("SELECT id FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id").all(group.key, group.collection).map(r => r.id);
+        if (JSON.stringify(ids) !== JSON.stringify(group.ids)) throw fail(409, '图片组成员已变化，无法完整撤销；未修改任何内容');
+      }
       const affected = new Map(), removed = new Set(changes.filter(c => c.created).map(c => c.id));
       for (const entry of changes) {
         const current = get.get(entry.id);

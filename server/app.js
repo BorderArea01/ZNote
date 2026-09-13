@@ -3,6 +3,7 @@ import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
 import { createNoteHistory } from './note-history.js';
 import { registerSavedViews } from './saved-views.js';
+import { registerGroupOrganize } from './group-organize.js';
 import {createTrashManager} from './trash.js';
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
@@ -443,9 +444,9 @@ export function createApp({
     const args = [];
     if (q.q) {
       where.push([...q.q].length >= 3
-        ? "rowid IN (SELECT rowid FROM items_search WHERE title LIKE ? UNION SELECT rowid FROM items_search WHERE content LIKE ? UNION SELECT rowid FROM items_search WHERE tags LIKE ?)"
-        : "(title LIKE ? OR content LIKE ? OR tags LIKE ?)");
-      args.push(...Array(3).fill(`%${q.q}%`));
+        ? "(rowid IN (SELECT rowid FROM items_search WHERE title LIKE ? UNION SELECT rowid FROM items_search WHERE content LIKE ? UNION SELECT rowid FROM items_search WHERE tags LIKE ?) OR (group_manual=1 AND group_key NOT LIKE 'note:%' AND group_title LIKE ?))"
+        : "(title LIKE ? OR content LIKE ? OR tags LIKE ? OR (group_manual=1 AND group_key NOT LIKE 'note:%' AND group_title LIKE ?))");
+      args.push(...Array(4).fill(`%${q.q}%`));
     }
     if (q.kind) {
       where.push("kind=?");
@@ -550,6 +551,11 @@ export function createApp({
       );
       db.prepare('UPDATE items SET source_url=?,captured_at=? WHERE id=?').run(input.source_url ?? null, input.captured_at ?? null, id);
       if(image && input.group_key !== undefined) db.prepare('UPDATE items SET group_key=?,group_index=?,group_title=? WHERE id=?').run(input.group_key,input.group_index,input.group_title??null,id);
+      if (image?.manual) db.prepare('UPDATE items SET group_manual=1,group_origin_id=? WHERE id=?').run(image.origin || null, id);
+      if (image && input.group_key) {
+        const manual = db.prepare('SELECT group_title FROM items WHERE collection_id IS ? AND group_key=? AND group_manual=1 AND deleted_at IS NULL AND id!=? LIMIT 1').get(input.collection_id, input.group_key, id);
+        if (manual) db.prepare('UPDATE items SET group_manual=1,group_title=? WHERE id=?').run(manual.group_title, id);
+      }
       if(image?.order!=null) db.prepare('UPDATE items SET group_order=? WHERE id=?').run(image.order,id);
       else if(image && input.group_key) {
         const ordered=db.prepare('SELECT MAX(COALESCE(group_order,group_index)) AS last,COUNT(group_order) AS ordered FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL AND id<>?').get(input.group_key,input.collection_id,id);
@@ -646,7 +652,7 @@ export function createApp({
     validateCollection(input.collection_id);
     const existing = source.collection_id === input.collection_id ? source : mediaCollision(source,input.collection_id);
     if (existing) return res.json({ ...serialize(existing), duplicate: true });
-    res.status(201).json({ ...insert(input, {...imageReference(source),order:source.group_order}), shared: true });
+    res.status(201).json({ ...insert(input, {...imageReference(source),order:source.group_order,manual:source.group_manual,origin:source.group_origin_id}), shared: true });
   });
   app.post('/api/item-groups/favorite', (req,res) => {
     const input=z.object({group_key:z.string().min(1).max(200),collection_id:z.string().nullable(),favorite:z.boolean()}).parse(req.body);
@@ -993,6 +999,9 @@ export function createApp({
       .json({ results });
   });
   function sourceDuplicate(existing, input) {
+    // A collector may enrich source metadata, but never undo user grouping or
+    // take an image out of the note that owns its internal reference.
+    if (existing.group_manual || existing.group_key?.startsWith('note:')) input = { ...input, group_key: undefined };
     if (input.group_key !== undefined || input.tags?.some(tag=>!JSON.parse(existing.tags).includes(tag))) {
       const tags=[...new Set([...JSON.parse(existing.tags), ...(input.tags||[])])];
       if(tags.length>30) throw fail(400,'已有图片的标签已满，请整理标签后重试；原内容未覆盖');
@@ -1129,6 +1138,7 @@ export function createApp({
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
+  registerGroupOrganize({app,db,undo,getItem,event,serialize,validateCollection});
   noteHistory=createNoteHistory({app,db});
   transaction(() => noteHistory.seed());
   registerSavedViews({app,db,transaction});
