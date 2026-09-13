@@ -1,5 +1,6 @@
 import {localMediaReferences} from '../shared/local-media.js';
 import { VERSION } from './version.js';
+import { createUndoManager } from './undo.js';
 import {createTrashManager} from './trash.js';
 import express from "express";
 import { archiveNoteImages } from './note-images.js';
@@ -646,13 +647,13 @@ export function createApp({
     validateCollection(input.collection_id);
     const items=db.prepare('SELECT id FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL').all(input.group_key,input.collection_id);
     if(!items.length) throw fail(404,'图片组不存在');
-    transaction(()=>{for(const item of items){db.prepare('UPDATE items SET favorite=?,updated_at=?,version=version+1 WHERE id=?').run(+input.favorite,now(),item.id);event('item.updated',item.id);}});
-    res.json({count:items.length});
+    const action=undo.run(req,'整组收藏',()=>{for(const item of items){db.prepare('UPDATE items SET favorite=?,updated_at=?,version=version+1 WHERE id=?').run(+input.favorite,now(),item.id);event('item.updated',item.id);}});
+    res.json({count:items.length,undo:action.undo});
   });
   app.post('/api/item-groups/move', (req,res) => {
     const input=z.object({id:z.string(),version:z.number().int().positive(),collection_id:z.string().nullable(),move_note:z.boolean().default(false),title:z.string().min(1).max(200).optional(),content:z.string().max(500000).optional(),tags:cleanTags.optional()}).parse(req.body);
     validateCollection(input.collection_id);
-    const result=transaction(()=>{
+    const {result,undo:receipt}=undo.run(req,'整组移动',()=>{
       const anchor=getItem(input.id);if(anchor.deleted_at||!anchor.group_key||anchor.version!==input.version)throw fail(409,'图片组已变更，请重新打开后移动');
       const group=db.prepare('SELECT * FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL').all(anchor.group_key,anchor.collection_id);
       checkGroupDestination(group,input.collection_id);
@@ -660,7 +661,7 @@ export function createApp({
       if(input.move_note&&anchor.group_key.startsWith('note:')){const note=db.prepare("SELECT * FROM items WHERE id=? AND kind='note' AND deleted_at IS NULL AND collection_id IS ?").get(anchor.group_key.slice(5),anchor.collection_id);if(note){db.prepare('UPDATE items SET collection_id=?,version=version+1,updated_at=? WHERE id=?').run(input.collection_id,now(),note.id);event('item.updated',note.id);}}
       db.prepare('UPDATE items SET title=?,content=?,tags=? WHERE id=?').run(input.title??anchor.title,input.content??anchor.content,JSON.stringify(input.tags??JSON.parse(anchor.tags)),anchor.id);
       return {...serialize(getItem(anchor.id)),moved_count:group.length};
-    });res.json(result);
+    });res.json({...result,undo:receipt});
   });
   registerGroupOrderRoutes({app,db,transaction,getItem,serialize,event,groupNoteImages});
   app.post('/api/items/batch-organize', (req, res) => {
@@ -670,7 +671,7 @@ export function createApp({
     }).refine(v => v.collection_id !== undefined || v.favorite !== undefined).parse(req.body);
     if (new Set(input.items.map(i => i.id)).size !== input.items.length) throw fail(400, '内容 ID 不可重复');
     if (input.collection_id !== undefined) validateCollection(input.collection_id);
-    const result = transaction(() => {
+    const {result,undo:receipt} = undo.run(req,'批量整理',() => {
       const originals=input.items.map(value=>{const old=getItem(value.id);if(old.deleted_at||old.version!==value.version)throw fail(409,'部分内容已被修改或删除，请刷新后重试');return old;});
       if(input.collection_id!==undefined){
         const selectedIds=new Set(originals.map(row=>row.id)),groups=new Map(originals.filter(row=>row.kind==='image'&&row.group_key?.startsWith('note:')).map(row=>[row.group_key,row]));
@@ -691,20 +692,20 @@ export function createApp({
       event('item.updated', old.id);
       return serialize(getItem(old.id));
     });});
-    res.json({ items: result });
+    res.json({ items: result, undo: receipt });
   });
   app.post('/api/items/batch-trash', (req, res) => {
     const input = z.object({ items: z.array(z.object({id:z.string(),version:z.number().int().positive()})).min(1).max(10000),
       collection_id:z.string().nullable(), restore:z.boolean().default(false) }).parse(req.body);
     if(new Set(input.items.map(i=>i.id)).size!==input.items.length) throw fail(400,'内容 ID 不可重复');
-    const result=transaction(()=>{const changed=input.items.map(value=>{
+    const {result,undo:receipt}=undo.run(req,input.restore?'恢复内容':'删除内容',()=>{const changed=input.items.map(value=>{
       const item=getItem(value.id);
       if(item.version!==value.version || item.collection_id!==input.collection_id || Boolean(item.deleted_at)!==input.restore)
         throw fail(409,'部分内容已变更或不属于当前知识库，请刷新后重试');
       db.prepare('UPDATE items SET deleted_at=?,updated_at=?,version=version+1 WHERE id=?').run(input.restore?null:now(),now(),item.id);
       event(input.restore?'item.restored':'item.deleted',item.id); return serialize(getItem(item.id));
     });if(!input.restore)trash.repairReferences();return changed.map(item=>serialize(getItem(item.id)));});
-    res.json({items:result});
+    res.json({items:result,undo:receipt});
   });
   app.post("/api/items/batch-tags", (req, res) => {
     const input = z
@@ -721,7 +722,7 @@ export function createApp({
       .parse(req.body);
     if (new Set(input.items.map((i) => i.id)).size !== input.items.length)
       throw fail(400, "内容 ID 不可重复");
-    const result = transaction(() =>
+    const {result,undo:receipt} = undo.run(req,'批量标签',() =>
       input.items.map((value) => {
         const item = getItem(value.id);
         if (item.deleted_at || item.version !== value.version)
@@ -741,7 +742,7 @@ export function createApp({
         return serialize(getItem(item.id));
       }),
     );
-    res.json({ items: result });
+    res.json({ items: result, undo: receipt });
   });
   app.get("/api/items/:id", (req, res) =>
     res.json(serialize(getItem(req.params.id))),
@@ -761,7 +762,7 @@ export function createApp({
     if(current.deleted_at || current.version!==old.version) throw fail(409,'归档期间内容已在其他设备变更，请重新打开后保存');
     if (old.hash && old.collection_id !== item.collection_id && mediaCollision(old,item.collection_id))
       throw fail(409, '目标知识库已存在同一图片');
-    transaction(() => {
+    const action = undo.run(req,'编辑内容',() => {
       if(old.kind==='note'){
         moveNotePages(old,item.collection_id);
         item=groupNoteImages(item,old.id);
@@ -779,7 +780,7 @@ export function createApp({
       );
       event("item.updated", old.id);
     });
-    res.json({...serialize(getItem(old.id)),...(archived?{image_archive:archived.report}:{})});
+    res.json({...serialize(getItem(old.id)),undo:action.undo,...(archived?{image_archive:archived.report}:{})});
   });
   app.delete("/api/items/:id", (req, res) => {
     const item = getItem(req.params.id);
@@ -1121,6 +1122,7 @@ export function createApp({
   const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => trash.repairReferences(), beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
+  const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));
   app.get("/docs-init.js", (req, res) =>
     res

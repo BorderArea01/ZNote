@@ -11,16 +11,18 @@ export function OrganizeDialog({ items, collections, onClose, onDone, copy = fal
   async function save() {
     setBusy(true); setError('');
     try {
+      let result;
       if (copy) {
         await send(`/api/items/${items[0].id}/copy`, { collection_id: collection || null });
       } else {
-        await send('/api/items/batch-organize', {
+        result = await send('/api/items/batch-organize', {
+          undo: true,
           items: items.map(({ id, version }) => ({ id, version })),
           ...(move ? { collection_id: collection || null } : {}),
           ...(favorite !== 'keep' ? { favorite: favorite === 'yes' } : {}),
         });
       }
-      onDone(); onClose();
+      onDone(result); onClose();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }

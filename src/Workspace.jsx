@@ -2,6 +2,7 @@ import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { VirtualItems } from './VirtualItems.jsx';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
+import { UndoCenter } from './UndoCenter.jsx';
 import { version as packageVersion } from '../package.json';
 import {
   Search,
@@ -32,6 +33,7 @@ import {
   Sun,
   Hash,
   Film,
+  History,
 } from "lucide-react";
 import { api, send, uploadFile } from "./api.js";
 import { HelpHint } from './HelpHint.jsx';
@@ -111,6 +113,9 @@ export default function Workspace({
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
+  const [undoReceipt, setUndoReceipt] = useState(null), [undoOpen, setUndoOpen] = useState(false);
+  const recordUndo = result => { if (result?.undo) { setToast(''); setUndoReceipt(result.undo); } };
+  const saved = result => { recordUndo(result); refresh(); };
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
   const pagingRequest = useRef(null), restoreAnchor = useRef(null), pendingBrowse = useRef(null);
@@ -174,7 +179,7 @@ export default function Workspace({
     return () => images.forEach(img => { img.src = ''; });
   }, [selected?.id, galleryIndex, galleryItems.length]);
   const refresh = () => { pendingBrowse.current = captureAnchor(); setUpdatesAvailable(false); setRevision((n) => n + 1); },
-    notify = setToast;
+    notify = (message, receipt = null) => { setUndoReceipt(receipt); setToast(receipt && !selected ? '' : message); };
   const actualCollection = collection === "unfiled" ? null : collection;
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
   async function selectGroup(item){
@@ -502,24 +507,25 @@ export default function Workspace({
   async function favorite(item) {
     try {
       if(item.group_key && item.group_count) {
-        await send('/api/item-groups/favorite',{group_key:item.group_key,collection_id:item.collection_id,favorite:!item.favorite});refresh();return;
+        const result=await send('/api/item-groups/favorite',{group_key:item.group_key,collection_id:item.collection_id,favorite:!item.favorite,undo:true});saved(result);return;
       }
-      await send(
+      const result = await send(
         `/api/items/${item.id}`,
-        { favorite: !item.favorite, version: item.version },
+        { favorite: !item.favorite, version: item.version, undo: true },
         "PATCH",
       );
-      refresh();
+      saved(result);
     } catch (e) {
       notify(e.message);
     }
   }
   async function remove(item) {
     try {
-      await api(`/api/items/${item.id}`, { method: "DELETE" });
+      const result = await send('/api/items/batch-trash', { items: [{id:item.id, version:item.version}], collection_id:item.collection_id, undo:true });
+      recordUndo(result);
       setSelected(null);
       refresh();
-      notify("已移至回收站，可以随时恢复");
+      notify("已移至回收站，可以随时恢复", result.undo);
     } catch (e) {
       notify(e.message);
     }
@@ -530,8 +536,9 @@ export default function Workspace({
     try {
       const chosen=chosenItems;
       if(chosen.length!==selection.length) throw new Error('选择内容已变化，请重新选择');
-      await send('/api/items/batch-trash',{items:chosen.map(({id,version})=>({id,version})),collection_id:actualCollection,restore:view==='trash'});
-      setSelection([]); refresh(); notify(view==='trash'?`已恢复 ${chosen.length} 项内容`:`已将 ${chosen.length} 项移至当前知识库回收站，可随时恢复`);
+      const result = await send('/api/items/batch-trash',{items:chosen.map(({id,version})=>({id,version})),collection_id:actualCollection,restore:view==='trash',undo:true});
+      recordUndo(result);
+      setSelection([]); refresh(); notify(view==='trash'?`已恢复 ${chosen.length} 项内容`:`已将 ${chosen.length} 项移至当前知识库回收站，可随时恢复`,result.undo);
     } catch(e) { notify(e.message); } finally {setBatchBusy(false);}
   }
   async function restore(item) {
@@ -913,6 +920,7 @@ export default function Workspace({
                   <b>{total} 项内容</b>
                 </span>
                 <div className="result-actions">
+                  <button className="text-button" onClick={() => setUndoOpen(true)}><History size={15}/>最近操作</button>
                   {view==='trash'&&<button className="text-button danger" disabled={!stats.trash} onClick={()=>openPurge(null)}><Trash2 size={14}/>清空回收站</button>}
                   <button
                     className="text-button"
@@ -1185,7 +1193,7 @@ export default function Workspace({
         </div>
       )}
       {toast && (
-        <div role="status" className="toast">
+        <div role="status" className={`toast${undoReceipt ? ' above-undo' : ''}`}>
           <Check size={17} />
           {toast}
           <IconButton label="关闭提示" onClick={() => setToast("")}>
@@ -1193,6 +1201,7 @@ export default function Workspace({
           </IconButton>
         </div>
       )}
+      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
       {selected && (
         <Detail
           key={selected.id || "new"}
@@ -1200,7 +1209,7 @@ export default function Workspace({
           collections={collections}
           suggestions={tags}
           onClose={closeDetail}
-          onSaved={refresh}
+          onSaved={saved}
           onSelectGroup={selectGroup}
           groupSelecting={groupSelecting}
           onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
@@ -1229,7 +1238,7 @@ export default function Workspace({
         />
       )}
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
-      {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={() => { refresh(); notify('已完成批量整理'); }} />}
+      {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={result => { saved(result); notify('已完成批量整理',result?.undo); }} />}
       {settings && (
         <SettingsPanel
           onClose={() => setSettings(false)}
@@ -1309,7 +1318,7 @@ export default function Workspace({
           items={chosenItems}
           suggestions={tags}
           onClose={() => setBatchTags(false)}
-          onSaved={refresh}
+          onSaved={saved}
         />
       )}
     </div>

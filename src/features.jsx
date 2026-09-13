@@ -479,12 +479,13 @@ export function BatchTagsDialog({ items, suggestions, onClose, onSaved }) {
             onClick={async () => {
               setBusy(true);
               try {
-                await send("/api/items/batch-tags", {
+                const result = await send("/api/items/batch-tags", {
+                  undo: true,
                   items: items.map((i) => ({ id: i.id, version: i.version })),
                   tags,
                   mode,
                 });
-                onSaved();
+                onSaved(result);
                 onClose();
               } catch (e) {
                 setError(e.message);

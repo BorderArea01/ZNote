@@ -59,7 +59,7 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6, 7].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7, 8].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
       const table = snapshot.prepare('SELECT type,sql FROM sqlite_master WHERE name=?').get(name);
@@ -228,6 +228,9 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
               }
             }
             // Browser sessions must not survive a full restore on another device.
+            // Undo receipts refer to the pre-restore graph and must not replay
+            // against restored content or renamed media paths.
+            db.exec('DELETE FROM undo_actions');
             db.prepare("DELETE FROM tokens WHERE kind='session'").run();
             db.prepare("UPDATE webhook_deliveries SET status='pending',next_attempt=? WHERE status='inflight'").run(now());
             db.exec("UPDATE items SET stored_bytes=bytes WHERE kind='image' AND stored_bytes IS NULL");

@@ -3,10 +3,22 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 export function openDatabase(dir) {
+  const db = openLegacyDatabase(dir);
+  if (db.prepare('PRAGMA user_version').get().user_version < 8) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`CREATE TABLE undo_actions (id TEXT PRIMARY KEY, owner TEXT NOT NULL, label TEXT NOT NULL, count INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, payload BLOB NOT NULL, undone_at TEXT);
+        CREATE INDEX undo_owner_created ON undo_actions(owner,created_at DESC);
+        PRAGMA user_version=8; COMMIT;`);
+    } catch (e) { db.exec('ROLLBACK'); db.close(); throw e; }
+  }
+  return db;
+}
+function openLegacyDatabase(dir) {
   mkdirSync(join(dir, "media"), { recursive: true });
   const db = new DatabaseSync(join(dir, "znote.sqlite"));
   const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
-  if (schemaVersion > 7) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
+  if (schemaVersion > 8) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT UNIQUE NOT NULL, scope TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT);
@@ -28,7 +40,7 @@ export function openDatabase(dir) {
       .map((c) => c.name),
   );
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if(version===7)return db;
+  if(version>=7)return db;
   if(version===6){migrateTrash(db);return db;}
   if (version === 5) { migrateGroupOrder(db); migrateTrash(db); return db; }
   if (version === 4) { migrateGroups(db); migrateGroupOrder(db); migrateTrash(db); return db; }

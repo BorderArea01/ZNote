@@ -422,7 +422,7 @@ function Detail({
     setError("");
     try {
       const value = { title, content, tags, collection_id: collection || null };
-      if (item.id) value.version = item.version;
+      if (item.id) { value.version = item.version; value.undo = true; }
       const movingGroup=item.kind==='image'&&item.group_key&&value.collection_id!==item.collection_id;
       const result = movingGroup
         ? await send('/api/item-groups/move',{...value,id:item.id,move_note:true})
@@ -432,10 +432,10 @@ function Detail({
       setContent(result.content);
       setTags(result.tags);
       setCollection(result.collection_id || "");
-      onSaved();
+      onSaved(result);
       const failures=result.image_archive?.failures||[];
       if(failures.length)setError(`${failures.length} 张配图暂未归档：${failures[0].error}。可再次点击归档重试。`);
-      notify(result.moved_count?`已移动整组 ${result.moved_count} 张图片${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存');
+      notify(result.moved_count?`已移动整组 ${result.moved_count} 张图片${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存',failures.length?null:result.undo);
       return true;
     } catch (e) {
       setError(e.message);
@@ -453,8 +453,8 @@ function Detail({
     if (busy || item.deleted_at) return;
     setBusy(true);
     try {
-      const result = await send(`/api/items/${item.id}`, { version: item.version, favorite: !item.favorite }, 'PATCH');
-      setItem(result); onSaved();
+      const result = await send(`/api/items/${item.id}`, { version: item.version, favorite: !item.favorite, undo: true }, 'PATCH');
+      setItem(result); onSaved(result);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }

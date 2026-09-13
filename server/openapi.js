@@ -615,3 +615,14 @@ spec.paths['/api/trash/preview']={post:operation('预览永久删除范围（需
 spec.paths['/api/trash/purge']={post:operation('永久删除当前知识库回收站内容',{...trashPreview,properties:{...trashPreview.properties,freed_bytes:{type:'integer'},freed_files:{type:'integer'},pending_files:{type:'integer'}}},{description:'必须先预览并确认；revision 变化返回 409。保留独立笔记配图及共享原文件，待释放文件自动重试。',requestBody:body({...trashScope,required:['collection_id','revision','confirm'],properties:{...trashScope.properties,revision:str,confirm:{type:'string',enum:['DELETE']}}})})};
 
 spec.paths['/api/item-groups/selection']={get:operation('获取整个图片组的选择快照',{type:'object',properties:{items:list({type:'object',properties:{id:str,version:{type:'integer'}}}),collection_id:{type:'string',nullable:true},group_key:str,trash:{type:'boolean'}}},{parameters:[{name:'id',in:'query',required:true,schema:str}],description:'同知识库、同分组、同回收站状态的图片，按组内顺序返回。包含未加载和被筛选隐藏的成员；最多 10000 项，超限报错。'})};
+
+const undoAction={type:'object',properties:{id:str,label:str,count:{type:'integer'},created_at:str,expires_at:str,undone_at:{...str,nullable:true}}};
+spec.components.schemas.UndoAction=undoAction;
+spec.paths['/api/undo']={get:operation('当前会话最近 24 小时的可撤销操作（最多 50 条）',{type:'object',properties:{actions:list(undoAction)}})};
+spec.paths['/api/undo/{id}']={post:operation('撤销操作；重复请求不会重复写入',{...undoAction,properties:{...undoAction.properties,already_undone:{type:'boolean'}}},{parameters:[id],description:'仅调用者本人会话或令牌可用。字段、引用关系、知识库或永久删除发生冲突时返回 409，过期或不可访问返回 410；失败不做部分修改。'})};
+for(const [path,method] of [['/api/items/batch-organize','post'],['/api/items/batch-tags','post'],['/api/items/batch-trash','post'],['/api/item-groups/move','post'],['/api/item-groups/favorite','post'],['/api/items/{id}','patch']]){
+  const endpoint=spec.paths[path][method];
+  endpoint.requestBody.content['application/json'].schema.properties.undo={type:'boolean',default:false,description:'记录完整关联变化，响应返回 undo 摘要；原文件不复制'};
+  const response=endpoint.responses[200]?.content?.['application/json']?.schema;
+  if(response?.properties)response.properties.undo={...undoAction,nullable:true};
+}
