@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.25-287464?style=flat-square" alt="Version 0.9.25" />
+    <img src="https://img.shields.io/badge/version-0.9.26-287464?style=flat-square" alt="Version 0.9.26" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -50,6 +50,10 @@
 网络采集、导出和备份由服务器执行。采集与导出记录在服务重启后清空，已保存文件保留；导出至多保留最近 50 条结束记录、最长 24 小时，不额外存储 ZIP 副本。浏览器未开始接收时，任务中心可点击「开始下载」；5 分钟未开始会提示重试。清除本地任务记录不会删除素材或服务器备份。
 
 ## 成组浏览与整理
+
+手机看图时，在图片上左右滑动即可翻页，笔记配图也支持。点击展开后，双指缩放、单指拖动，双击放大 / 复位；点击图片外的空白处退出。普通预览保留上下滚动，展开后手势只操作当前图片。电脑继续支持滚轮、A / D 和方向键翻页，展开后用滚轮或 `+` / `−` 缩放、`0` 复位、`Esc` 返回。
+
+缩放范围为 25%–800%，拖动边界和横竖屏切换会保持图片可找回。图片加载失败时可直接重试；正在保存或整理时暂停手势翻页，修改保存失败则留在原图。
 
 标签多时可直接搜索整库作者或关键词，每页展示 40 个标签及使用次数。跨页选择仍保留，可以匹配全部或任意标签；编辑笔记、上传和批量修改标签时，输入关键词也能找到冷门标签。标签加载独立于内容列表，手机筛选栏保持紧凑。
 

@@ -21,7 +21,7 @@ html[data-style] .item-card.is-selected .card-select{border-color:var(--green)}
 .zoom-viewer{padding:0!important;z-index:10000;overflow:hidden}
 .zoom-surface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;outline:none}
 .zoom-surface:active{cursor:grabbing}
-.zoom-surface img{max-width:calc(100vw - 48px);max-height:calc(100vh - 120px);object-fit:contain;user-select:none;pointer-events:none;transform-origin:center}
+.zoom-surface img{max-width:calc(100% - 48px);max-height:calc(100% - 120px);object-fit:contain;user-select:none;pointer-events:none;transform-origin:center}
 .zoom-tools{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#171d2dee;border:1px solid #6d7890;border-radius:16px;padding:9px 13px;color:#f0f3ff}
 .zoom-tools button,.zoom-close{color:#f0f3ff!important;background:#283246!important;border-color:#65748f!important}
 .zoom-close{position:absolute;right:22px;top:20px;border-radius:12px}
@@ -193,3 +193,8 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .group-organize-error button { flex:none; }
 .group-target-pages { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-top:8px; font-size:12px; }
 @media(max-width:620px) { .group-organize-body { grid-template-columns:1fr; gap:16px; padding:16px; } .group-plan-grid { max-height:160px; } .group-organize-footer { padding:12px 16px; } .group-organize-error { flex-wrap:wrap; } }
+
+.zoom-surface:focus-visible{outline:2px solid #9caefa;outline-offset:-6px}
+.zoom-error{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px);padding:16px;border:1px solid #6d7890;border-radius:12px;background:#171d2d;color:#f0f3ff}
+.zoom-error button{color:#f0f3ff!important;background:#283246!important;border-color:#65748f!important}
+@media(pointer:coarse){.zoom-tools button,.zoom-close{min-width:44px;min-height:44px}.zoom-tools{gap:8px;bottom:max(14px,env(safe-area-inset-bottom))}.zoom-close{right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top))}}

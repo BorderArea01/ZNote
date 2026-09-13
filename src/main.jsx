@@ -8,6 +8,7 @@ import { DraftConflict } from './NoteDrafts.jsx';
 const NoteVersions = React.lazy(() => import('./NoteVersions.jsx'));
 import { GalleryStrip } from './GalleryStrip.jsx';
 import { ZoomViewer } from './ZoomViewer.jsx';
+import { useImageSwipe } from './useImageSwipe.js';
 import { VideoPlayer } from './VideoProgress.jsx';
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
@@ -473,6 +474,9 @@ function Detail({
     if (dirty && !(await save())) return;
     onStep?.(delta);
   }
+  const swipeDisabled=busy||galleryBusy||copying||sorting||!!lightbox;
+  const imageSwipe=useImageSwipe({identity:item.id,disabled:swipeDisabled,onTap:()=>setLightbox(item.url),onSwipe:delta=>{if(delta<0?previousAvailable:nextAvailable)void step(delta);}});
+  const noteSwipe=useImageSwipe({identity:noteImages[noteIndex]?.url,disabled:swipeDisabled,onTap:()=>setLightbox(noteImages[noteIndex].url),onSwipe:delta=>setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)))});
   async function undoOrder() {
     if (busy || dirty || !orderUndo) return;
     const submitted = latestFields.current;
@@ -533,7 +537,7 @@ function Detail({
         </div>}
         {item.kind === "image" && (
           <div className="image-stage">
-            <button ref={imageArea} onClick={() => setLightbox(item.url)} aria-label="全屏查看图片" title="滚轮翻图 · 点击展开缩放">
+            <button ref={imageArea} {...imageSwipe} onClick={() => setLightbox(item.url)} aria-label="全屏查看图片" title="左右滑动或滚轮翻图 · 点击展开缩放">
               <img src={item.url} alt={title} />
             </button>
             <span>
@@ -547,7 +551,7 @@ function Detail({
               <button disabled={!previousAvailable || busy || galleryBusy} onClick={() => step(-1)}>← 上一张</button>
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一张 →</button>
-              <HelpHint label="翻图快捷键">A / D 或 ← / → 翻图，F 收藏；输入文字时不触发。</HelpHint>
+              <HelpHint label="翻图快捷键">手机左右滑动翻图，点击展开后双指缩放；电脑用滚轮、A / D 或 ← / → 翻图，F 收藏。输入文字时不触发。</HelpHint>
             </div>
             <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} onSelect={index=>step(index-galleryIndex)}/>
           </div>
@@ -804,7 +808,7 @@ function Detail({
         }}
       />
       {lightbox && <ZoomViewer src={lightbox} alt={title} onClose={()=>setLightbox(false)}/>}
-      {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
+      {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} {...noteSwipe} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
       {versionsOpen && <React.Suspense fallback={null}><NoteVersions item={{...item,title,content}} onClose={() => setVersionsOpen(false)} onUse={async value => { if (!(await draft.keepCurrent())) return false; applyDraft({...value,collection_id:collection||null}); return true; }}/></React.Suspense>}
       {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify('顺序已保存，第一张为封面',result.undo);}}/>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
