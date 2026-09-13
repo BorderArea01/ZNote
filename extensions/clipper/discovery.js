@@ -243,6 +243,7 @@ export async function discover(message, sender) {
   }
   return serial(async () => {
     const state = await stateFor(tabId);
+    if(message.type==='media-list')return {resources:state.resources,enabled:state.enabled};
     if (message.type === "media-start") {
       state.enabled = true;
       chrome.tabs

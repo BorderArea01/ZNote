@@ -3,6 +3,7 @@
 (() => {
   if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(location.hostname))return;
   let enabled=false;
+  const examined=new WeakMap();
   const limit=2_000_000;
   const api=value=>{try{const u=new URL(value,location.href);return u.origin===location.origin&&/^\/aweme\/v\d+\//.test(u.pathname)}catch{return false}};
   const emit=data=>{if(!enabled)return;const rows=globalThis.ZNoteDouyinRecords(data);if(rows.length)window.postMessage({type:'znote-douyin-works',rows},location.origin)};
@@ -12,17 +13,20 @@
     for(const video of [...document.querySelectorAll('video')].slice(0,20)){
       for(let node=video,depth=0;node&&depth<12;node=node.parentElement,depth++){
         if(visited.has(node))continue;visited.add(node);
+        let matched=false;
         for(const key of Object.keys(node)){
           const props=key.startsWith('__reactProps$')?node[key]:key.startsWith('__reactFiber$')?node[key]?.memoizedProps:null;
-          if(props)for(const row of globalThis.ZNoteDouyinRecords(props))rows.set(row.id,row);
+          if(props&&typeof props==='object'){let records=examined.get(props);if(!records){records=globalThis.ZNoteDouyinRecords(props);examined.set(props,records)}for(const row of records)rows.set(row.id,row);matched ||= records.length>0}
         }
+        if(matched)break;
       }
     }
     if(rows.size)window.postMessage({type:'znote-douyin-works',rows:[...rows.values()].slice(0,300)},location.origin);
   };
   window.addEventListener('message',event=>{
     if(event.source!==window||event.origin!==location.origin||event.data?.type!=='znote-douyin-observe')return;
-    enabled=event.data.enabled===true;if(enabled)snapshot();
+    const wasEnabled=enabled;enabled=event.data.enabled===true;
+    if(enabled&&(!wasEnabled||event.data.snapshot===true))snapshot();
   });
   const originalFetch=window.fetch;
   window.fetch=function(...args){

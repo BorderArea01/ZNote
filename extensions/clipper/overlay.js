@@ -40,7 +40,8 @@
     hoverAllowed = false,
     dockAllowed = false,
     siteBlocked = true,
-    thumbnailObserver;
+    renderedCards = new Map(),
+    scanTimer, scanInFlight, scanQueued=false, lastScan=0;
   const own = (event) => event.composedPath().includes(host);
   const shortcutHelp = () => `${downloadKey.toUpperCase()} 下载 · ${saveKey.toUpperCase()} 入库`;
   async function refreshSettings() {
@@ -100,26 +101,25 @@
   const selectedVariants=new Map();
   function draw() {
     if (!list) return;
-    thumbnailObserver?.disconnect();
-    thumbnailObserver=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const video=entry.target;video.src=video.dataset.src;video.preload='metadata';video.load();thumbnailObserver.unobserve(video)}},{root:list,rootMargin:'80px'});
-    list.replaceChildren();
+
     const groups=globalThis.ZNoteVideoGroups(resources);
     dock.textContent = '▶ 视频 '+(groups.length||'');
-    if(!groups.length)list.append(element('p','暂未发现视频。播放视频后自动发现 MP4、WebM 或 m3u8。',{class:'empty'}));
+    const retained=new Set();let position=0;
+    if(!groups.length){if(!list.querySelector('.empty'))list.replaceChildren(element('p','暂未发现视频。播放视频后自动发现 MP4、WebM 或 m3u8。',{class:'empty'}))}else list.querySelector('.empty')?.remove();
     for(const group of [...groups].reverse()){
       let r=group.items.find(x=>x.id===selectedVariants.get(group.key))||group.primary;
+      retained.add(group.key);const signature=JSON.stringify([r.id,group.items]),cached=renderedCards.get(group.key);
+      if(cached?.signature===signature){if(list.children[position]!==cached.node)list.insertBefore(cached.node,list.children[position]||null);position++;continue}
+      cached?.node.remove();
       const item=element('article',null,{class:'item','data-resource-id':r.id,'data-work-id':r.work_id||''});
       const row=element('div',null,{class:'row'});
       const thumb=button('',()=>act(r,'preview',thumb));thumb.className='thumb-button';thumb.title='预览视频';thumb.setAttribute('aria-label','预览视频封面');
-      const showFrame=()=>{
-        thumb.replaceChildren();
-        if(r.kind==='hls'){thumb.append(element('span','▶',{class:'thumb-fallback'}));thumb.title='点击播放预览';return}
-        const video=element('video',null,{class:'thumb',muted:'',playsinline:'','aria-label':'视频首帧',preload:'none'});video.muted=true;video.dataset.src=r.url;
-        video.addEventListener('error',()=>{thumb.replaceChildren(element('span','▶',{class:'thumb-fallback'}));thumb.title='封面暂不可用，点击播放预览'},{once:true});
-        thumb.append(video);thumbnailObserver.observe(video);
-      };
+      let frameRequested=false;
+      const showFrame=()=>{thumb.replaceChildren(element('span','▶',{class:'thumb-fallback'}));thumb.title=r.kind==='hls'?'点击播放预览':'悬停查看首帧，点击播放预览'};
       const poster=r.poster||group.items.find(x=>x.poster)?.poster;
       if(poster){const img=element('img',null,{class:'thumb',alt:r.title+' 封面',loading:'lazy',referrerpolicy:'no-referrer'});img.src=poster;img.addEventListener('error',showFrame,{once:true});thumb.append(img)}else showFrame();
+      const requestFrame=async()=>{if(frameRequested||thumb.querySelector('img')||r.kind==='hls')return;frameRequested=true;const image=await globalThis.ZNoteVideoThumbnail?.(r.url);if(!image)frameRequested=false;if(image&&thumb.isConnected){const img=element('img',null,{class:'thumb',alt:'视频首帧'});img.src=image;thumb.replaceChildren(img)}};
+      thumb.addEventListener('pointerenter',requestFrame);thumb.addEventListener('focus',requestFrame);
       const info=element('div',null,{class:'info'});info.append(element('strong',r.title||'未识别标题',{class:'title',title:r.title||''}));
       info.append(element('span',r.author?'作者：'+r.author:'作者待识别',{class:r.author?'author':'meta unresolved'}));
       info.append(element('span',(r.kind==='hls'?'m3u8 分段视频':'视频文件')+(group.items.length>1?' · '+group.items.length+' 条线路':'')+(r.bytes?' · '+(r.bytes/1024/1024).toFixed(1)+' MB':''),{class:'meta'}));
@@ -131,10 +131,21 @@
       }
       const actions=element('div',null,{class:'actions'});
       for(const [label,action]of [['预览','preview'],['下载','download'],['保存知识库','save']]){const btn=button(label,()=>act(r,action,btn));if(action==='save')btn.classList.add('primary');actions.append(btn)}
-      item.append(actions);list.append(item);
+      item.append(actions);list.insertBefore(item,list.children[position]||null);position++;renderedCards.set(group.key,{signature,node:item});
     }
+    for(const [key,entry]of renderedCards)if(!retained.has(key)){entry.node.remove();renderedCards.delete(key);selectedVariants.delete(key)}
   }
-  function scan() {
+  const recentMedia=new Map();
+  const rememberMedia=entry=>{if(!entry?.name)return;const interesting=/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(entry.name)||/^https?:\/\/[^/]*\.(douyinvod|douyinstatic)\.com\//i.test(entry.name);if(!interesting)return;recentMedia.delete(entry.name);recentMedia.set(entry.name,entry);while(recentMedia.size>200)recentMedia.delete(recentMedia.keys().next().value);return true};
+  function scheduleScan(){if(!enabled||siteBlocked||document.hidden||scanTimer)return;scanTimer=setTimeout(()=>{scanTimer=null;runScan()},Math.max(250,750-(performance.now()-lastScan)))}
+  function scan(){globalThis.ZNoteDouyinRefresh?.();return runScan()}
+  function runScan(){
+    if(!enabled||siteBlocked||document.hidden)return;
+    clearTimeout(scanTimer);scanTimer=null;
+    if(scanInFlight){scanQueued=true;return scanInFlight}
+    lastScan=performance.now();scanInFlight=Promise.resolve(performScan()).finally(()=>{scanInFlight=null;if(scanQueued){scanQueued=false;scheduleScan()}});return scanInFlight;
+  }
+  function performScan() {
     if (!enabled || siteBlocked) return;
     globalThis.ZNoteDouyinObserve?.(true);
     const found = [];
@@ -149,7 +160,7 @@
         if (/^https?:/.test(url))found.push({...details,...globalThis.ZNoteDouyinMetadataForUrl?.(url),url,kind:'video'});
     }
     for(const resource of resources){const details=globalThis.ZNoteDouyinMetadataForUrl?.(resource.url);if(details)found.push({...details,url:resource.url,kind:resource.kind,mime:resource.mime})}
-    for (const r of performance.getEntriesByType('resource')) {
+    for (const r of recentMedia.values()) {
       const details=globalThis.ZNoteDouyinMetadataForUrl?.(r.name);
       if(details||/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(r.name))found.push({...networkMetadata,metadata_rank:1,...details,url:r.name,...(details?{kind:'video'}:{})});
     }
@@ -164,6 +175,7 @@
     await refreshSettings();
     if(siteBlocked)return;
     panel.classList.remove("hidden");
+    for(const entry of performance.getEntriesByType('resource').slice(-300))rememberMedia(entry);
     preview.classList.add("hidden");
     try {
       const state = await send({ type: "media-start" });
@@ -190,19 +202,21 @@
     }
   }
   async function poll() {
-    if (panel.classList.contains("hidden")) return;
+    clearTimeout(pollTimer);
+    if (panel.classList.contains("hidden")||document.hidden) return;
     try {
       const state = await send({ type: "media-list" });
       if (JSON.stringify(state.resources) !== JSON.stringify(resources)) {
         resources = state.resources;
         draw();
-        scan();
+        scheduleScan();
       }
     } catch (e) {
       notify(e.message);
     }
     pollTimer = setTimeout(poll, 1500);
   }
+  function closePanel(){panel.classList.add("hidden");clearTimeout(pollTimer);globalThis.ZNoteVideoThumbnailCancel?.()}
   function hide() {
     clearTimeout(hoverTimer); clearTimeout(hideTimer); hideTimer = null; pendingTarget = null;
     preview.classList.add("hidden");
@@ -397,7 +411,7 @@
     dock = button("▶ 视频", () =>
       panel.classList.contains("hidden")
         ? open()
-        : panel.classList.add("hidden"),
+        : closePanel(),
     );
     dock.className = "dock";
     dock.setAttribute("aria-label", "ZNote 视频嗅探");
@@ -409,7 +423,7 @@
     });
     const head = element("div", null, { class: "head" });
     head.append(element("span", "ZNote · 视频嗅探"));
-    head.append(button("收起", () => panel.classList.add("hidden")));
+    head.append(button("收起", closePanel));
     panel.append(head);
     const controls = element("div", null, { class: "controls" });
     controls.append(button("扫描", scan));
@@ -419,7 +433,7 @@
       });
       enabled = state.enabled;
       pause.textContent = enabled ? "暂停嗅探" : "继续嗅探";
-      globalThis.ZNoteDouyinObserve?.(enabled);
+      globalThis.ZNoteDouyinObserve?.(enabled);if(!enabled){clearTimeout(scanTimer);scanTimer=null;globalThis.ZNoteVideoThumbnailCancel?.()}
       if (enabled) scan();
     });
     controls.append(pause);
@@ -589,7 +603,7 @@
           return;
         if (e.key === "Escape") {
           hide();
-          panel.classList.add("hidden");
+          closePanel();
           return;
         }
         if (!hoverURL || preview.classList.contains("hidden")) return;
@@ -603,30 +617,18 @@
       },
       true,
     );
-    for(const event of ['play','loadstart','loadedmetadata'])document.addEventListener(event,e=>{if(e.target.tagName==='VIDEO'&&enabled)scan()},true);
-    const observer = new MutationObserver(() => {
-      if (enabled) {
-        clearTimeout(observer.timer);
-        observer.timer = setTimeout(scan, 800);
-      }
+    for(const event of ['play','loadstart','loadedmetadata'])document.addEventListener(event,e=>{if(e.target.tagName==='VIDEO'&&enabled)scheduleScan()},true);
+    const observer = new MutationObserver(mutations => {
+      if(!enabled||siteBlocked||document.hidden)return;
+      const selector='video,source,[data-e2e*="author"],[data-e2e*="nickname"]';
+      if(mutations.some(m=>m.type==='attributes'?m.target.matches('video,source'):[...m.addedNodes].some(n=>n.nodeType===1&&(n.matches(selector)||n.querySelector(selector)))))scheduleScan();
     });
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["src", "srcset"],
-    });
-    try {
-      new PerformanceObserver(() => {
-        if (enabled) {
-          clearTimeout(scan.timer);
-          scan.timer = setTimeout(scan, 500);
-        }
-      }).observe({ type: "resource", buffered: true });
-    } catch {}
+    observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['src','poster']});
+    try{new PerformanceObserver(entries=>{let changed=false;for(const entry of entries.getEntries())if(rememberMedia(entry))changed=true;if(changed)scheduleScan()}).observe({type:'resource',buffered:true})}catch{}
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(scanTimer);scanTimer=null;globalThis.ZNoteVideoThumbnailCancel?.();globalThis.ZNoteDouyinObserve?.(false)}else if(enabled){scan();if(!panel.classList.contains('hidden'))poll()}});
     await refreshSettings();
     window.addEventListener('focus', refreshSettings);
-    let metadataTimer;window.addEventListener('znote-video-metadata',()=>{clearTimeout(metadataTimer);metadataTimer=setTimeout(scan,100)});
+    window.addEventListener('znote-video-metadata',scheduleScan);
     chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (sender.id !== chrome.runtime.id) return;
       if (message.type === 'media-settings-changed') { refreshSettings(); reply({ok: true}); }

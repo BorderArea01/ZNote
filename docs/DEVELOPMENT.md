@@ -102,3 +102,5 @@ node tests/pixiv-enhanced-ui.mjs
 抖音元数据参考 [yt-dlp 抖音提取器](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/tiktok.py) 的作品标识、author.nickname 与展示昵称映射，独立实现页面数据和 DOM 匹配，不执行页面脚本。douyin-metadata-ui.mjs 覆盖弹层编号、多个作品、CDN 切换/追加参数后的媒体对象匹配、编码 JSON、路由数据、晚到作者及评论/导航排除；douyin-save-ui.mjs 加载实际 Edge 扩展，验证视频嗅探到本地入库、作者标签、来源链接、原文件一致和重复采集补标签。
 
 0.9.12 使用独立的 MAIN 世界入口只读观察抖音 fetch / XHR 响应和挂载的作品属性，遵循 [Chrome content-script world 隔离](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)。桥接只接受同窗口同源消息并规范化允许的元数据字段；暂停/黑名单停用后不处理响应，缓存限定 300 个作品。`douyin-dynamic-ui.mjs` 验证后续接口、XHR、已加载作品、作者归属、封面解码、多线路合并与选择、实际 API 标签、暂停以及手机布局；`video-groups.test.js` 防止按同名标题误合并并校验元数据优先级。
+
+`sniffer-performance-ui.mjs` 加载真实扩展并对比 24 条视频静置时的扫描次数、媒体请求和主线程时间，检查卡片 DOM 复用、关闭面板后无新增任务。可通过 `PERF_EXTENSION` 指定基线扩展目录，`PERF_BASELINE=1` 仅记录旧版本；测试不修改用户浏览器或知识库。

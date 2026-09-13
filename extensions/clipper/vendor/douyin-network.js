@@ -14,7 +14,7 @@
           if(Array.isArray(v)){for(const x of v.slice(0,40))addresses(x,d+1)}
           else if(typeof v==='object')for(const [k,x]of Object.entries(v))if(/play|download|url|bit.?rate|src|h264|h265|dash/i.test(k)&&!/cover|avatar|audio/i.test(k))addresses(x,d+1);
         };addresses(video);
-        const cover=video.origin_cover||video.originCover||video.cover||video.dynamic_cover;
+        const cover=video.cover||video.origin_cover||video.originCover||video.dynamic_cover;
         const poster=http(cover?.url_list?.[0]||cover?.urlList?.[0]||cover?.url||cover);
         const sec=clean(person.sec_uid||person.secUid);
         found.push({id,work_id:id,title:clean(value.desc||value.description),author:clean(person.nickname||person.nickName),author_url:sec?'https://www.douyin.com/user/'+encodeURIComponent(sec):'',poster,source_url:'https://www.douyin.com/video/'+id,metadata_rank:3,urls:[...urls].slice(0,60)});
@@ -30,6 +30,7 @@
 (() => {
   if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(location.hostname))return;
   let enabled=false;
+  const examined=new WeakMap();
   const limit=2_000_000;
   const api=value=>{try{const u=new URL(value,location.href);return u.origin===location.origin&&/^\/aweme\/v\d+\//.test(u.pathname)}catch{return false}};
   const emit=data=>{if(!enabled)return;const rows=globalThis.ZNoteDouyinRecords(data);if(rows.length)window.postMessage({type:'znote-douyin-works',rows},location.origin)};
@@ -39,17 +40,20 @@
     for(const video of [...document.querySelectorAll('video')].slice(0,20)){
       for(let node=video,depth=0;node&&depth<12;node=node.parentElement,depth++){
         if(visited.has(node))continue;visited.add(node);
+        let matched=false;
         for(const key of Object.keys(node)){
           const props=key.startsWith('__reactProps$')?node[key]:key.startsWith('__reactFiber$')?node[key]?.memoizedProps:null;
-          if(props)for(const row of globalThis.ZNoteDouyinRecords(props))rows.set(row.id,row);
+          if(props&&typeof props==='object'){let records=examined.get(props);if(!records){records=globalThis.ZNoteDouyinRecords(props);examined.set(props,records)}for(const row of records)rows.set(row.id,row);matched ||= records.length>0}
         }
+        if(matched)break;
       }
     }
     if(rows.size)window.postMessage({type:'znote-douyin-works',rows:[...rows.values()].slice(0,300)},location.origin);
   };
   window.addEventListener('message',event=>{
     if(event.source!==window||event.origin!==location.origin||event.data?.type!=='znote-douyin-observe')return;
-    enabled=event.data.enabled===true;if(enabled)snapshot();
+    const wasEnabled=enabled;enabled=event.data.enabled===true;
+    if(enabled&&(!wasEnabled||event.data.snapshot===true))snapshot();
   });
   const originalFetch=window.fetch;
   window.fetch=function(...args){

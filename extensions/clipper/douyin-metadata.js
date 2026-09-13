@@ -4,7 +4,8 @@
   const idOf=value=>{try{const u=new URL(value,location.href);return u.pathname.match(/\/(?:share\/)?video\/(\d+)/)?.[1]||u.searchParams.get('modal_id')||u.searchParams.get('aweme_id')||''}catch{return ''}};
   const urlOf=value=>{if(typeof value!=='string'||!value.trim())return '';try{const u=new URL(value,location.href);u.hash='';return /^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.href:''}catch{return ''}};
   const cache=new WeakMap(),live=new Map();let observing=false;
-  globalThis.ZNoteDouyinObserve=value=>{observing=value===true;window.postMessage({type:'znote-douyin-observe',enabled:observing},location.origin);if(!observing)live.clear()};
+  globalThis.ZNoteDouyinRefresh=()=>{if(observing)window.postMessage({type:'znote-douyin-observe',enabled:true,snapshot:true},location.origin)};
+  globalThis.ZNoteDouyinObserve=value=>{if(observing===(value===true))return;observing=value===true;window.postMessage({type:'znote-douyin-observe',enabled:observing},location.origin);if(!observing)live.clear()};
   window.addEventListener('message',event=>{
     if(!observing||event.source!==window||event.origin!==location.origin||event.data?.type!=='znote-douyin-works'||!Array.isArray(event.data.rows))return;
     let changed=false;

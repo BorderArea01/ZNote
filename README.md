@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.12-287464?style=flat-square" alt="Version 0.9.12" />
+    <img src="https://img.shields.io/badge/version-0.9.13-287464?style=flat-square" alt="Version 0.9.13" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />

@@ -14,7 +14,7 @@
           if(Array.isArray(v)){for(const x of v.slice(0,40))addresses(x,d+1)}
           else if(typeof v==='object')for(const [k,x]of Object.entries(v))if(/play|download|url|bit.?rate|src|h264|h265|dash/i.test(k)&&!/cover|avatar|audio/i.test(k))addresses(x,d+1);
         };addresses(video);
-        const cover=video.origin_cover||video.originCover||video.cover||video.dynamic_cover;
+        const cover=video.cover||video.origin_cover||video.originCover||video.dynamic_cover;
         const poster=http(cover?.url_list?.[0]||cover?.urlList?.[0]||cover?.url||cover);
         const sec=clean(person.sec_uid||person.secUid);
         found.push({id,work_id:id,title:clean(value.desc||value.description),author:clean(person.nickname||person.nickName),author_url:sec?'https://www.douyin.com/user/'+encodeURIComponent(sec):'',poster,source_url:'https://www.douyin.com/video/'+id,metadata_rank:3,urls:[...urls].slice(0,60)});
