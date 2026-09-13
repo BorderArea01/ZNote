@@ -82,6 +82,6 @@ test('schema 9 upgrades additively and repeated startup preserves existing rows'
   await backup(db, join(dir, 'before.sqlite')); db.close();
   await copyFile(join(dir, 'before.sqlite'), join(dir, 'znote.sqlite'));
   db = openDatabase(dir);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 12); assert.deepEqual(db.prepare('SELECT * FROM items').all(), before); assert.equal(db.prepare('SELECT count(*) n FROM saved_views').get().n, 0);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); assert.deepEqual(db.prepare('SELECT * FROM items').all(), before); assert.equal(db.prepare('SELECT count(*) n FROM saved_views').get().n, 0);
   db.close(); const next = openDatabase(dir); assert.deepEqual(next.prepare('SELECT * FROM items').all(), before); next.close();
 });

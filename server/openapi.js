@@ -717,3 +717,11 @@ spec.paths['/api/export-jobs/{id}/file']={
 };
 spec.paths['/api/export-jobs/{id}']={delete:operation('取消导出，不删除内容（管理员）',exportJobRow,{parameters:[id]})};
 spec.paths['/api/export-jobs/{id}/retry']={post:operation('沿用原参数重新导出（管理员）',exportJobRow,{parameters:[id],requestBody:body({type:'object'}),responses:{200:response(exportJobRow),201:response(exportJobRow),...errorResponses,429:{description:'导出队列已满'}},description:'失败、取消或完成可重新导出，返回新回执。后续回执仍保留时，重复请求旧 ID 返回同一后续任务；再次重试应使用后续 ID。每次重试重新读取当前数据。'})};
+
+const videoPosition={type:'object',properties:{item_id:{type:'string',format:'uuid'},position:{type:'number',minimum:0,maximum:31536000},duration:{type:'number',exclusiveMinimum:true,minimum:0,maximum:31536000},completed:{type:'boolean'},viewed_at:{type:'string',format:'date-time'},title:str,thumbnail_url:str}};
+const videoProgressState={type:'object',properties:{version:{type:'integer',minimum:0},epoch:str,entries:{type:'array',maxItems:20,items:videoPosition},replayed:{type:'boolean'}}};
+spec.paths['/api/video-progress']={
+ get:operation('读取当前库最近 20 个视频的播放位置',videoProgressState,{parameters:[{name:'collection',in:'query',schema:{type:'string',default:'unfiled'},description:'知识库 UUID 或 unfiled'}],description:'仅返回本库活动视频，按原文件哈希隐藏失效记录。与图片浏览记录分开保存。'}),
+ post:operation('保存视频播放位置（write）',videoProgressState,{requestBody:body({...readingWrite,required:[...readingWrite.required,'item_id','position','duration','completed'],properties:{...readingWrite.properties,...Object.fromEntries(['item_id','position','duration','completed'].map(k=>[k,videoPosition.properties[k]]))}}),description:'单库版本和 epoch 必须匹配，冲突 409；同 request_id 与完全相同参数支持最后请求重放。位置按原视频时长限制，越界超过 2 秒返回 400。completed 只对结尾有效。不修改内容版本、更新时间或事件。完整恢复后旧 epoch 失效。'}),
+ delete:operation('清除当前库播放记录，不删除视频（write）',videoProgressState,{requestBody:body(readingWrite),description:'仅接受 collection_id/version/epoch/request_id。版本冲突整次拒绝，最后请求可幂等重放。'})
+};

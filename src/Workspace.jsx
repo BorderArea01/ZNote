@@ -3,6 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { VirtualItems } from './VirtualItems.jsx';
 import { PageLoader, readAutoPages, saveAutoPages } from './PageLoader.jsx';
 import { ReadingProgress, useReadingProgress } from './ReadingProgress.jsx';
+import { VideoHistory } from './VideoProgress.jsx';
 import { extendPageWindow } from './page-window.js';
 import { readBrowse, writeBrowse, captureAnchor } from './browse-memory.js';
 import { UndoCenter } from './UndoCenter.jsx';
@@ -200,6 +201,16 @@ export default function Workspace({
     notify = (message, receipt = null) => { setUndoReceipt(receipt); setToast(receipt && !selected ? '' : message); };
   const actualCollection = collection === "unfiled" ? null : collection;
   const reading = useReadingProgress(actualCollection, ready && view !== 'home', revision);
+  const videoProgress = useReadingProgress(actualCollection, ready && view !== 'home', revision, 'video');
+  async function resumeVideo(row) {
+    const current=++detailGeneration.current;
+    try {
+      const item=await api('/api/items/'+row.item_id);
+      if(current!==detailGeneration.current)return;
+      if(item.deleted_at||item.collection_id!==actualCollection||item.kind!=='video')throw Error('视频已移动、删除或更换，请刷新播放记录');
+      setGallery([]);setSelected({...item,resume_position:row.completed?0:row.position});
+    }catch(e){if(current===detailGeneration.current){notify(e.message);videoProgress.reload();}}
+  }
   useEffect(() => { if (selected?.kind === 'image' && !selected.deleted_at && selected.collection_id === actualCollection) reading.record(selected.id); }, [selected?.id, actualCollection]);
   async function resumeReading(row) {
     const current = ++detailGeneration.current;
@@ -251,6 +262,7 @@ export default function Workspace({
     if (!event?.shiftKey || from < 0) selectionAnchor.current = id;
   };
   const closeDetail = () => {
+    window.dispatchEvent(new Event('znote:leaving-preview'));
     reading.leave();
     ++detailGeneration.current;
     setSelected(null); setGallery(null); setGalleryBusy(false); setOpeningItem(null);
@@ -589,6 +601,7 @@ export default function Workspace({
     }
   }
   async function remove(item) {
+    if(item.kind==='video')videoProgress.cancelItems([item.id]);
     try {
       const result = await send('/api/items/batch-trash', { items: [{id:item.id, version:item.version}], collection_id:item.collection_id, undo:true });
       recordUndo(result);
@@ -596,6 +609,7 @@ export default function Workspace({
       refresh();
       notify("已移至回收站，可以随时恢复", result.undo);
     } catch (e) {
+      if(item.kind==='video')videoProgress.allowItem(item.id);
       notify(e.message);
     }
   }
@@ -982,7 +996,7 @@ export default function Workspace({
                 </div>
               </section>
               {updatesAvailable && <div className="browse-update" role="status"><span>有内容更新，当前浏览位置和选择已保留</span><button onClick={refresh}><RefreshCw size={14}/>刷新内容</button><IconButton label="忽略更新提示" onClick={() => setUpdatesAvailable(false)}><X size={14}/></IconButton></div>}
-              {view !== 'trash' && <ReadingProgress key={'reading:' + (actualCollection || 'unfiled')} progress={reading} onOpen={resumeReading} disabled={loading || galleryBusy || selecting} open={readingOpen} setOpen={setReadingOpen}/>}
+              {view==='videos'?<VideoHistory progress={videoProgress} onOpen={resumeVideo} disabled={loading||selecting} open={readingOpen} setOpen={setReadingOpen}/>:view !== 'trash' && <ReadingProgress key={'reading:' + (actualCollection || 'unfiled')} progress={reading} onOpen={resumeReading} disabled={loading || galleryBusy || selecting} open={readingOpen} setOpen={setReadingOpen}/>}
               <TagFilter key={actualCollection || 'unfiled'} collection={actualCollection} revision={revision} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
                 onToggle={toggleTag} onMode={setTagMode} onClear={() => setSelectedTags([])}
                 onBrowse={['notes', 'videos'].includes(view) ? null : browseFilteredImages}
@@ -1315,7 +1329,8 @@ export default function Workspace({
           }}
           onStep={stepImage}
           onImageViewed={id => reading.record(id)}
-          onBeforeItemChange={ids => reading.cancelItems(ids)}
+          videoProgress={videoProgress}
+          onBeforeItemChange={ids => {reading.cancelItems(ids);videoProgress.cancelItems(ids);}}
           galleryItems={galleryItems}
           galleryIndex={galleryIndex}
           previousAvailable={galleryIndex > 0}

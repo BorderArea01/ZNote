@@ -8,6 +8,7 @@ import { DraftConflict } from './NoteDrafts.jsx';
 const NoteVersions = React.lazy(() => import('./NoteVersions.jsx'));
 import { GalleryStrip } from './GalleryStrip.jsx';
 import { ZoomViewer } from './ZoomViewer.jsx';
+import { VideoPlayer } from './VideoProgress.jsx';
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -356,6 +357,7 @@ function Detail({
   onOpen,
   onStep,
   onImageViewed,
+  videoProgress,
   onBeforeItemChange,
   previousAvailable,
   nextAvailable,
@@ -459,6 +461,7 @@ function Detail({
       notify(result.moved_count?`已移动整组 ${result.moved_count} 张图片${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存',failures.length?null:result.undo);
       return true;
     } catch (e) {
+      videoProgress?.allowItem(item.id);
       setError(e.message);
       return false;
     } finally {
@@ -523,7 +526,7 @@ function Detail({
     >
       <div className="detail-content">
         {item.kind === 'video' && <div className="video-stage">
-          <video src={item.url} poster={item.thumbnail_url} controls preload="metadata" playsInline onError={() => setVideoError(true)} aria-label={`播放 ${title}`} />
+          <VideoPlayer key={item.id} item={item} title={title} progress={videoProgress} onError={() => setVideoError(true)}/>
           <p>{item.width} × {item.height} · {bytes(item.bytes)} · {item.video_codec}{item.duration ? ` · ${Math.round(item.duration)} 秒` : ''}</p>
           {videoError && <p role="alert">浏览器无法播放此编码或文件。原视频已保存，可下载后使用本地播放器打开。</p>}
           <a href={item.url} download={title}>下载原视频</a>

@@ -4,18 +4,19 @@ import {ReadingSync} from './reading-sync.js';
 import {Dialog} from './ui.jsx';
 import {HelpHint} from './HelpHint.jsx';
 
-export function useReadingProgress(library,enabled,revision) {
+export function useReadingProgress(library,enabled,revision,kind='image') {
   const client=useRef(null),[state,setState]=useState({data:null,status:'loading',error:''});
   useEffect(()=>{
     if(!enabled){client.current=null;setState({data:null,status:'loading',error:''});return;}
-    const sync=new ReadingSync(library,state=>setState({...state,library}));client.current=sync;setState({...sync.state,library});sync.load();
+    const sync=new ReadingSync(library,state=>setState({...state,library}),undefined,kind==='video'?{endpoint:'/api/video-progress',storageKey:'znote:video-pending:v1'}:undefined);client.current=sync;setState({...sync.state,library});sync.load();
     const hide=()=>{if(!['error','conflict'].includes(sync.state.status))sync.flush();};const leave=()=>{if(document.hidden)hide();};
     const focus=()=>{if(!sync.busy&&!sync.active&&!sync.next)sync.load();};
     document.addEventListener('visibilitychange',leave);window.addEventListener('pagehide',hide);window.addEventListener('focus',focus);
     return()=>{sync.dispose();document.removeEventListener('visibilitychange',leave);window.removeEventListener('pagehide',hide);window.removeEventListener('focus',focus);};
-  },[library,enabled]);
+  },[library,enabled,kind]);
   useEffect(()=>{if(client.current&&!client.current.busy)client.current.load();},[revision]);
-  return {...(state.library===library?state:{data:null,status:'loading',error:''}),record:id=>client.current?.record(id),cancelItems:ids=>client.current?.cancelItems(ids),leave:()=>{const sync=client.current;if(sync&&!['error','conflict'].includes(sync.state.status))sync.flush();},retry:()=>client.current?.retry(),replace:()=>client.current?.replaceWithLatest(),discard:()=>client.current?.discard(),reload:()=>client.current?.load(),clear:()=>client.current?.clear(),hasPending:!!(client.current?.active||client.current?.next),clearing:client.current?.active?.method==='DELETE'&&!client.current?.next};
+  const owned=client.current;
+  return {...(state.library===library?state:{data:null,status:'loading',error:''}),record:id=>owned?.record(id),allowItem:id=>owned?.allowItem(id),cancelItems:ids=>owned?.cancelItems(ids,{block:kind==='video'}),leave:()=>{const sync=client.current;if(sync&&!['error','conflict'].includes(sync.state.status))sync.flush();},retry:()=>client.current?.retry(),replace:()=>client.current?.replaceWithLatest(),discard:()=>client.current?.discard(),reload:()=>client.current?.load(),clear:()=>client.current?.clear(),hasPending:!!(client.current?.active||client.current?.next),clearing:client.current?.active?.method==='DELETE'&&!client.current?.next};
 }
 export function ReadingProgress({progress,onOpen,disabled,open,setOpen}) {
   const entries=progress.data?.entries||[],first=entries[0];

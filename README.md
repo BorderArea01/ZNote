@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.24-287464?style=flat-square" alt="Version 0.9.24" />
+    <img src="https://img.shields.io/badge/version-0.9.25-287464?style=flat-square" alt="Version 0.9.25" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -28,12 +28,18 @@
 | :--- | :--- |
 | 🖼️ 图片素材库 | 批量上传、拖拽和粘贴；添加标题、说明、多标签与收藏；按筛选结果连续翻图 |
 | ✍️ 图文笔记 | Markdown 与图片分组、本地自动草稿、编辑位置恢复、历史版本和 `[[双向链接]]` |
-| 🎬 视频收藏 | 保存 MP4、WebM、MOV，以首帧作封面；采集作品标题和作者，预览、拖动进度、全屏播放 |
+| 🎬 视频收藏 | 保存 MP4、WebM、MOV，以首帧作封面；采集标题和作者，跨设备继续观看、播放记录、全屏预览 |
 | 🧩 浏览器采集 | 悬停看大图，点按钮或按快捷键下载/入库；浮窗嗅探视频和 m3u8；提取网页正文 |
 | 🏷️ 有序归类 | 所有分类、标签与回收站按知识库隔离；多标签筛选、跨设备常用筛选、批量删除与恢复 |
 | 🔌 开放接口 | REST API、OpenAPI、读写令牌、增量事件与 Webhook，方便工具和插件接入 |
 | 📦 数据可带走 | 六种导出、自动备份、网页恢复；原文件按字节保留，同内容去重 |
 | 🌐 随处访问 | 一个服务，电脑、手机和平板通过浏览器访问；适合家庭或个人局域网 |
+
+## 视频接着看
+
+进入 **「视频素材 → 播放记录」**，从上次的位置继续；直接打开视频时，也可选择「继续到…」或「从头查看」。定位后保持暂停，由你决定何时播放。播放时约每 10 秒同步，暂停、拖动、隐藏页面或关闭预览时保存；仅打开预览不会覆盖旧进度。
+
+每个知识库保留最近 20 个视频的位置与看完状态。其他设备登录同一服务可以接着看，多设备冲突时由你决定是否同步本页位置。断网后未确认的请求在当前浏览器暂存，重新打开后可重试；尚未成功同步的位置不会出现在其他设备上。清除记录不删除视频，完整备份包含已同步记录。
 
 ## 任务与进度
 

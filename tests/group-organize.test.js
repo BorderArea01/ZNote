@@ -112,7 +112,7 @@ test('regrouping 10000 pages has bounded preview output and upgrades schema 10 w
   db.exec('DROP TABLE reading_progress; DROP TABLE group_operations; DROP INDEX items_group_origin; ALTER TABLE items DROP COLUMN group_manual; ALTER TABLE items DROP COLUMN group_origin_id; PRAGMA user_version=10');
   db.prepare("INSERT INTO items(id,kind,title,content,created_at,updated_at) VALUES(?,'note','升级前的笔记','保持正文','2026-01-01','2026-01-01')").run(randomUUID());
   const before = db.prepare('SELECT * FROM items').all().map(row=>({...row})); db.close(); db = openDatabase(dir);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 12); assert.deepEqual(db.prepare('SELECT * FROM items').all().map(({group_manual,group_origin_id,...row}) => { assert.equal(group_manual,0); assert.equal(group_origin_id,null); return row; }), before); db.close();
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13); assert.deepEqual(db.prepare('SELECT * FROM items').all().map(({group_manual,group_origin_id,...row}) => { assert.equal(group_manual,0); assert.equal(group_origin_id,null); return row; }), before); db.close();
   const runtime = createApp({ dataDir: dir }), server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
   t.after(async () => { await runtime.trash.stop(); await runtime.imports.stop(); await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(r => server.close(r)); runtime.db.close(); });
   const base = 'http://127.0.0.1:' + server.address().port, setup = await fetch(base + '/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: '0918' }) }), cookie = setup.headers.get('set-cookie').split(';')[0];

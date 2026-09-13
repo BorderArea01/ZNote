@@ -95,6 +95,9 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 | `POST /api/items/batch-trash` | 按知识库批量移入回收站或恢复 |
 | `POST /api/items/:id/copy` | 跨库复用，共享原文件 |
 | `GET /api/events?after=0` | 持久化增量事件 |
+| `GET /api/video-progress?collection=unfiled` | 当前库最近 20 个视频播放记录 |
+| `POST /api/video-progress` | 保存播放位置，需 write 权限及 version / epoch / request_id |
+| `DELETE /api/video-progress` | 清除当前库播放记录，不删除视频 |
 | `GET /api/export?mode=markdown` | 按模式导出，需要管理员会话；兼容原有流式响应 |
 | `POST /api/export-jobs` | 创建原生下载回执，JSON 参数与 export 查询参数一致 |
 | `GET /api/export-jobs` | 查看服务器导出队列和结束记录 |
@@ -108,6 +111,14 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 内容包括 `title`、Markdown `content`、`tags`、`collection_id`、`favorite`、`source_url` 和 `captured_at`。更新时提供当前 `version`，冲突时返回错误以避免覆盖其他设备编辑。
 
 上传提供 `source_url` 会在备注中追加来源，并附加网站标签。相同文件的重复采集保留原说明，补充新的来源。
+
+### 视频播放位置
+
+读取返回 `version`、`epoch` 和 `entries`；每条包含 `item_id`、`position`（秒）、`duration`（秒）、`completed`、`viewed_at`、标题和封面地址。读取支持知识库 UUID 或 `unfiled`，只返回该库的活动视频。
+
+写入需 `collection_id`（未分类用 null）、读取到的 `version` / `epoch`、UUID `request_id`，以及 `item_id`、`position`、`duration`、`completed`。数值需有限且不超过 31536000 秒；时长优先使用已解析的原视频时长，位置超过时长 2 秒则拒绝，小幅误差会限制在时长以内。仅处于结尾的记录可标为看完。写入不更新内容版本、时间或增量内容事件。
+
+同库最多 20 条，最近记录靠前；版本不匹配或目标视频失效返回 409，待确认请求可原样重试，仍为最后请求时返回 `replayed:true`。清除请求只接受 `collection_id / version / epoch / request_id`，也检查并发版本。完整恢复更换 epoch，旧请求不能重新写回。图片和视频使用独立版本及存储表。
 
 ### 原生流式导出
 

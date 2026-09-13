@@ -12,13 +12,14 @@ import { originalBuffer, digest } from './storage.js';
 import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
 import { savedViewConfig } from './saved-views.js';
 import { readingEntries } from './reading-progress.js';
+import { videoEntries } from './video-progress.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const policySchema = z.object({ enabled: z.boolean(), interval_hours: z.number().int().min(1).max(720), keep: z.number().int().min(1).max(100) });
 const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(value) && !value.includes('..');
 const uuid = z.uuid();
 const requiredTables = ['settings', 'tokens', 'collections', 'items', 'events'];
-const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views', 'reading_progress'];
+const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views', 'reading_progress', 'video_progress'];
 
 async function removeStage(root, path) {
   const rel = relative(resolve(root), resolve(path));
@@ -61,7 +62,8 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if(version>=13&&!snapshot.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='video_progress'").get())throw fail(400,'备份缺少视频播放记录表');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
       const table = snapshot.prepare('SELECT type,sql FROM sqlite_master WHERE name=?').get(name);
@@ -82,13 +84,13 @@ async function inspectBackup(stage) {
         savedViewConfig.parse(JSON.parse(view.config));
       }
     }
-    if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='reading_progress'").get()) {
-      for (const progress of snapshot.prepare('SELECT * FROM reading_progress').iterate()) {
+    for (const [table,entriesSchema] of [['reading_progress',readingEntries],['video_progress',videoEntries]]) if (snapshot.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(table)) {
+      for (const progress of snapshot.prepare('SELECT * FROM '+table).iterate()) {
         if (progress.collection_id !== null) uuid.parse(progress.collection_id);
         if (progress.scope !== (progress.collection_id || 'unfiled')) throw fail(400,'备份中的浏览记录归属不正确');
         z.number().int().positive().parse(progress.version); uuid.parse(progress.request_id);
         z.string().regex(/^[a-f0-9]{64}$/).parse(progress.request_hash);
-        readingEntries.parse(JSON.parse(z.string().max(16000).parse(progress.entries)));
+        entriesSchema.parse(JSON.parse(z.string().max(16000).parse(progress.entries)));
       }
     }
     if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='webhooks'").get()) {

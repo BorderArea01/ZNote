@@ -17,3 +17,13 @@ test('reading sync coalesces, survives a lost response, protects newer devices a
  let releaseRead;pauseRead=new Promise(r=>releaseRead=r);const reading=client.load();client.record(ids[5]);await client.flush();const latest=client.state.data.version;releaseRead();await reading;assert.equal(client.state.data.version,latest);
  await client.clear();assert.equal(server.entries.length,0);assert.equal(storage.get('znote:reading-pending:v1'),'{}');const beforeCancel=writes.length;client.record(ids[0]);client.cancelItems([ids[0]]);await client.flush();assert.equal(writes.length,beforeCancel,'a pending view is cancelled before moving its picture');client.dispose();delete globalThis.localStorage;
 });
+
+test('video synchronization preserves position payloads and keeps image pending state separate',async()=>{
+ const storage=new Map([['znote:reading-pending:v1','{"preserved":true}']]);globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
+ let server={version:0,epoch:'video-epoch',entries:[]};const writes=[];
+ const request=async(path,options={})=>{assert.ok(path.startsWith('/api/video-progress'));if(!options.method)return structuredClone(server);const data=JSON.parse(options.body);writes.push(data);if(data.version!==server.version)throw Object.assign(Error('conflict'),{status:409});server={...server,version:server.version+1,entries:[data]};return structuredClone(server);};
+ const client=new ReadingSync(null,()=>{},request,{endpoint:'/api/video-progress',storageKey:'znote:video-pending:v1'});await client.load();const id=randomUUID();
+ client.record({item_id:id,position:12.5,duration:60,completed:false});server.version++;await client.flush();assert.equal(client.state.status,'conflict');await client.replaceWithLatest();assert.equal(writes.at(-1).position,12.5);assert.equal(writes.at(-1).duration,60);assert.equal(writes.at(-1).completed,false);
+ client.cancelItems([id],{block:true});const count=writes.length;client.record({item_id:id,position:15,duration:60,completed:false});await client.flush();assert.equal(writes.length,count);client.allowItem(id);client.record({item_id:id,position:16,duration:60,completed:false});await client.flush();assert.equal(writes.at(-1).position,16);
+ assert.equal(storage.get('znote:reading-pending:v1'),'{"preserved":true}');client.dispose();delete globalThis.localStorage;
+});
