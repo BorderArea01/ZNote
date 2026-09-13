@@ -1,4 +1,5 @@
 import {localMediaReferences} from '../shared/local-media.js';
+import {appendMessageBlocks} from '../shared/message-blocks.js';
 import {legacyGalleryPage} from '../shared/gallery-group.js';
 import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
@@ -43,6 +44,7 @@ import { maintenanceGate } from './maintenance.js';
 import { createBackupManager, registerBackupRoutes } from './backups.js';
 import { createWebhookManager, registerWebhookRoutes } from './webhooks.js';
 import {createWeixinInbox,registerWeixinRoutes} from './weixin.js';
+import {createWeixinNotifications,registerWeixinNotificationRoutes} from './weixin-notifications.js';
 import { registerClipper } from './clipper.js';
 import { createClipperPairing } from './clipper-pair.js';
 import { withSource } from './source.js';
@@ -303,6 +305,11 @@ export function createApp({
     if (!token || (token.expires_at && token.expires_at < now()))
       return next(fail(401, "请先登录"));
     req.auth = token;
+    if(token.scope==='notify'){
+      const path=req.originalUrl.split('?')[0];
+      if(!((req.method==='POST'&&path==='/api/weixin/notifications')||(req.method==='GET'&&/^\/api\/weixin\/notifications\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(path))))
+        return next(fail(403,'仅通知令牌不能访问知识库或连接设置'));
+    }
     if (!["GET", "HEAD"].includes(req.method) && token.scope === "read")
       return next(fail(403, "此令牌只有读取权限"));
     next();
@@ -1109,7 +1116,7 @@ export function createApp({
     const value = z
       .object({
         name: z.string().trim().min(1).max(80),
-        scope: z.enum(["read", "write"]),
+        scope: z.enum(["read", "write", "notify"]),
       })
       .parse(req.body);
     res.status(201).json(issueToken(value.name, value.scope, "api"));
@@ -1175,7 +1182,8 @@ export function createApp({
         '<!doctype html><html><head><title>ZNote API</title><link rel="stylesheet" href="/docs/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="/docs/swagger-ui-bundle.js"></script><script src="/docs-init.js"></script></body></html>',
       ),
   );
-  const weixin=createWeixinInbox({db,client:weixinClient,validateCollection,transaction,work:operation=>maintenance.work(operation),
+  const weixinNotifications=createWeixinNotifications({db,client:weixinClient});
+  const weixin=createWeixinInbox({db,client:weixinClient,observeMessage:weixinNotifications.captureContext,validateCollection,transaction,work:operation=>maintenance.work(operation),
     exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
     saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:'微信图片',size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),
     saveNote:({id,...fields},commit)=>insert(itemInput.parse(fields),null,id,commit),
@@ -1183,7 +1191,7 @@ export function createApp({
       const old=db.prepare('SELECT * FROM items WHERE id=?').get(id);
       if(!old)return insert(itemInput.parse(fields),null,id,commit);
       if(old.kind!=='note'||old.deleted_at||old.collection_id!==fields.collection_id)throw fail(409,'收件笔记已移动或删除，请恢复原归属后重试；新消息会使用新篇');
-      const content=old.content+(old.content?'\n\n---\n\n':'')+fields.content;
+      const content=appendMessageBlocks(old.content,fields.content);
       if(content.length>500000)throw fail(400,'收件笔记超过 50 万字符，请缩短原笔记后重试；后续内容可使用“开始新篇”');
       const tags=[...new Set([...JSON.parse(old.tags),...fields.tags])];
       if(tags.length>30)throw fail(400,'收件笔记超过 30 个标签，请整理标签后重试');
@@ -1201,6 +1209,7 @@ export function createApp({
     },
   });
   registerWeixinRoutes(app,admin,weixin);
+  registerWeixinNotificationRoutes(app,admin,weixinNotifications);
   app.use("/api", (req, res) => res.status(404).json({ error: "接口不存在" }));
   app.use(express.static(staticDir));
   app.get("/", (req, res) => res.sendFile(resolve(staticDir, "index.html")));
@@ -1244,5 +1253,5 @@ export function createApp({
     }
     db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('note_groups_v1','true');
   });
-  return { app, db, backups, webhooks, imports, trash, weixin, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
+  return { app, db, backups, webhooks, imports, trash, weixin, weixinNotifications, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
 }

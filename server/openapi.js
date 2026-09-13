@@ -353,7 +353,7 @@ export const spec = {
             required: ["name", "scope"],
             properties: {
               name: str,
-              scope: { type: "string", enum: ["read", "write"] },
+              scope: { type: "string", enum: ["read", "write", "notify"] },
             },
           }),
           responses: { 201: response({ type: "object" }), ...errorResponses },
@@ -730,6 +730,13 @@ spec.paths['/api/video-progress']={
 };
 
 const weixinConfig={type:'object',required:['enabled','collection_id','tags'],properties:{enabled:{type:'boolean'},collection_id:{type:'string',nullable:true},merge_mode:{type:'string',enum:['daily','session','message'],description:'默认 daily；省略时保留当前归档方式。日期按 Asia/Shanghai 划分。'},tags:{type:'array',maxItems:20,items:{type:'string',minLength:1,maxLength:40}}}};
+const notificationReceipt={type:'object',properties:{idempotency_key:str,status:{type:'string',enum:['sending','accepted','rejected','unknown']},created_at:str,updated_at:str,detail:str}};
+spec.paths['/api/weixin/notifications']={
+ get:operation('通知开关、上下文就绪状态与最近发送回执（管理员，不含微信凭据）',{type:'object'}),
+ patch:operation('单独启停通知发送，不改变微信收件设置（管理员）',{type:'object'},{requestBody:body({type:'object',additionalProperties:false,required:['enabled'],properties:{enabled:{type:'boolean'}}})}),
+ post:operation('发送给当前绑定用户（管理员或 notify 令牌）',notificationReceipt,{requestBody:body({type:'object',additionalProperties:false,required:['idempotency_key','title','body'],properties:{idempotency_key:{type:'string',pattern:'^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'},title:{type:'string',minLength:1,maxLength:100},body:{type:'string',minLength:1,maxLength:1500}}}),description:'200 仅表示微信接口接受；202 同编号仍提交中；409 未就绪或编号内容冲突；429 繁忙/频率/容量限制（未提交）；502 微信拒绝；504 结果未知。30 天保留最多 1000 个去重回执，超出拒绝而不删除有效回执。失败不自动重发。'})
+};
+spec.paths['/api/weixin/notifications/{key}']={get:operation('读取当前令牌自己的通知回执',notificationReceipt,{parameters:[{name:'key',in:'path',required:true,schema:{type:'string'}}]})};
 spec.paths['/api/weixin']={get:operation('微信收件连接与最近处理状态，不返回凭据（管理员）',{type:'object'}),patch:operation('设置微信收件开关、知识库与标签（管理员）',{type:'object'},{requestBody:body(weixinConfig)})};
 spec.paths['/api/weixin/new-note']={post:operation('开始新篇；只影响后续收件，不创建空白笔记（管理员）',{type:'object'},{requestBody:body({type:'object',properties:{title:{type:'string',maxLength:80}}})})};
 spec.paths['/api/weixin/login']={post:operation('生成微信登录二维码，后台等待本人扫码确认（管理员）',{type:'object'}),delete:operation('移除微信连接凭据，保留已收内容（管理员）',{type:'object'})};

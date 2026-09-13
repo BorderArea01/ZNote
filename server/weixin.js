@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {API_BASE,createWeixinClient,weixinUrl} from './weixin-client.js';
+import {writeMessageBlocks} from '../shared/message-blocks.js';
 import {createWeixinGrouping,WEIXIN_MODES,WEIXIN_TIME_ZONE,weixinDay,weixinNewNoteCommand} from './weixin-grouping.js';
 const KEY='weixin_inbox_v1';
 const fault=message=>Object.assign(Error(message),{status:400});
@@ -13,7 +14,7 @@ export function weixinMessageKey(message,account){
   if(typeof id!=='string'||!id||id.length>256)throw fault('微信消息缺少可靠的编号，未自动入库');
   return createHash('sha256').update(JSON.stringify([account.bot,message.from_user_id,id])).digest('hex');
 }
-export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,transaction,work,validateCollection,client=createWeixinClient()}){
+export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,transaction,work,validateCollection,observeMessage=()=>{},client=createWeixinClient()}){
   const defaults=()=>({enabled:false,collection_id:null,tags:['微信'],merge_mode:'daily',account:null,cursor:'',jobs:[]});
   const read=()=>{const row=db.prepare('SELECT value FROM settings WHERE key=?').get(KEY);return row?{...defaults(),...JSON.parse(row.value)}:defaults();};
   const write=state=>{const value=JSON.stringify(state);if(value.length>2*1024*1024)throw fault('微信收件箱已满，请先处理失败消息');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,value);};
@@ -61,7 +62,7 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
         checkTarget(job);
         if(job.target)for(const id of ids){const row=exists(id);if(!row||row.deleted_at||row.collection_id!==job.collection_id||row.group_key!=='note:'+noteId)throw fault('配图归属已变化，请恢复后重试');}
         if(!ids.length&&!text.trim())throw fault('消息中没有可保存的文字或图片');
-        if(note){ids.unshift(noteId);(job.target?appendNote:saveNote)({id:noteId,title:job.target?.title||job.title,content:content.join('\n\n'),collection_id:job.collection_id,tags:job.tags,captured_at:job.created_at},()=>finish(job,ids));}
+        if(note){ids.unshift(noteId);(job.target?appendNote:saveNote)({id:noteId,title:job.target?.title||job.title,content:writeMessageBlocks([{id:job.id,content:content.join('\n\n')}]),collection_id:job.collection_id,tags:job.tags,captured_at:job.created_at},()=>finish(job,ids));}
         else transaction(()=>finish(job,ids));
       });
     }catch(e){jobPatch(job.id,j=>{j.state=signal.aborted?'pending':'failed';j.error=signal.aborted?'':(e.status&&e.status<500?e.message:'图片读取或保存失败，可重试；请检查微信连接和存储空间');});}
@@ -86,6 +87,9 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
     transaction(()=>patch(s=>{
       for(const message of updates.msgs||[]){
         if((message.message_type!=null&&message.message_type!==1)||(message.message_state!=null&&message.message_state!==2)||message.delete_time_ms>0||message.group_id||message.from_user_id!==s.account.user)continue;
+        // Auxiliary outbound context must never interrupt archival or consume
+        // messages. Keep all existing filters, grouping and receipts unchanged.
+        try{observeMessage(message,s.account);}catch{console.warn('Weixin notification context could not be saved; inbox continues.');}
         const id=weixinMessageKey(message,s.account);if(s.jobs.some(j=>j.id===id)||grouping.receipt(id))continue;
         const text=(message.item_list||[]).filter(i=>i.type===1).map(i=>i.text_item?.text||'').join(' ');
         const time=Number(message.create_time_ms),created_at=new Date(Number.isFinite(time)&&time>0&&time<Date.now()+86400000?time:Date.now()).toISOString();

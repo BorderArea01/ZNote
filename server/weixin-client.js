@@ -33,13 +33,20 @@ export function createWeixinClient({fetcher=fetch}={}){
     const raw=await limited(response,2*1024*1024);let result;
     try{result=JSON.parse(raw,(key,value,context)=>['message_id','msg_id','svr_id'].includes(key)&&typeof value==='number'&&/^\d+$/.test(context?.source||'')?context.source:value);}catch{throw Error('微信返回了无法识别的数据');}
     const code=result.errcode||result.ret;
-    if(code)throw Object.assign(Error(code===-14?'微信连接已过期，请重新扫码':'微信请求失败（'+String(code).slice(0,20)+'）'),{expired:code===-14});
+    if(code)throw Object.assign(Error(code===-14?'微信连接已过期，请重新扫码':'微信请求失败（'+String(code).slice(0,20)+'）'),{expired:code===-14,weixinCode:Number.isInteger(code)?code:null});
     return result;
   }
   return {
     qr:signal=>request('/ilink/bot/get_bot_qrcode?bot_type=3',{body:{local_token_list:[]},metadata:false,signal,timeout:15000}),
     qrStatus:(qr,{base=API_BASE,code='',signal}={})=>request('/ilink/bot/get_qrcode_status?qrcode='+encodeURIComponent(qr)+(code?'&verify_code='+encodeURIComponent(code):''),{base,get:true,signal}),
     updates:(account,cursor,signal)=>request('/ilink/bot/getupdates',{base:account.base,account,body:{get_updates_buf:cursor||''},signal}),
+    async sendText(account,{text,contextToken,clientId},signal){
+      const result=await request('/ilink/bot/sendmessage',{base:account.base,account,signal,timeout:15000,body:{msg:{from_user_id:'',to_user_id:account.user,client_id:clientId,message_type:2,message_state:2,item_list:[{type:1,text_item:{text}}],context_token:contextToken}}});
+      // HTTP 200 alone is not a delivery receipt. Never infer acceptance from
+      // an empty body or invent a read/delivery acknowledgement.
+      if(result.ret!==0)throw Error('微信未返回明确的发送接受结果');
+      return {accepted:true};
+    },
     async image(image,signal){
       const media=image?.media;if(!media)throw Error('这条图片消息缺少原文件');
       const url=weixinUrl(media.full_url||(media.encrypt_query_param?CDN_BASE+'/download?encrypted_query_param='+encodeURIComponent(media.encrypt_query_param):''),{cdn:true});

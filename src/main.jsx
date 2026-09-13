@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
 import { markdownImages } from '../shared/markdown-images.js';
 import { mediaDescription } from '../shared/media-description.js';
+import {remarkMessageSpacing} from '../shared/message-blocks.js';
+import {MessageBlocks} from './MessageBlocks.jsx';
 import { GroupOrderDialog } from './GroupOrderDialog.jsx';
 import { useNoteDraft } from './useNoteDraft.js';
 import { DraftConflict } from './NoteDrafts.jsx';
@@ -49,6 +51,7 @@ import {
   Sparkles,
   MoreHorizontal,
   Undo2,
+  History,
 } from "lucide-react";
 import "./style.css";
 import "./features.css";
@@ -98,14 +101,14 @@ function MarkdownImage({ src, alt }) {
   const url = attempt ? `${src}${src.includes('?') ? '&' : '?'}retry=${attempt}` : src;
   return <img src={url} alt={alt || '笔记图片'} loading="lazy" decoding="async" onError={() => setFailed(true)} role={onImage?'button':undefined} tabIndex={onImage?0:undefined} onClick={onImage?e=>{e.preventDefault();e.stopPropagation();onImage(src)}:undefined} onKeyDown={onImage?e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();onImage(src)}}:undefined} />;
 }
-function Markdown({ content, onLink, onImage }) {
+function Markdown({ content, onLink, onImage, preserveSpacing = false }) {
   const markdown = content.replace(
     /\[\[([^\]\n]+)\]\]/g,
     (_, title) => `[${title}](#wiki/${encodeURIComponent(title)})`,
   );
   return (
     <MarkdownImagesContext.Provider value={onImage}><ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
+      remarkPlugins={preserveSpacing?[remarkGfm, remarkBreaks, remarkMessageSpacing]:[remarkGfm, remarkBreaks]}
       components={{
         a: ({ href, children }) => (
           <a
@@ -375,6 +378,7 @@ function Detail({
   const [videoError, setVideoError] = useState(false);
   const [title, setTitle] = useState(initial.title);
   const [content, setContent] = useState(initial.content);
+  const messageNote=initial.kind==='note'&&(initial.tags?.includes('微信')||initial.content.includes('<!-- znote-message:'));
   const [tags, setTags] = useState(initial.tags);
   const [collection, setCollection] = useState(initial.collection_id || "");
   const [noteIndex,setNoteIndex] = useState(null);
@@ -625,10 +629,11 @@ function Detail({
           {item.kind === "note" ? (
             <>
               <DraftConflict draft={draft.candidate} current={item} onUse={draft.useCandidate} onDiscard={draft.discardCandidate}/>
-              <div className="editor-toolbar">
-                <div>
+              <div className="editor-toolbar note-editor-toolbar" aria-label="笔记工具栏">
+                <div className="note-editor-modes" role="group" aria-label="笔记显示方式">
                   <button
                     className={editing ? "selected" : ""}
+                    aria-pressed={editing}
                     onClick={() => setEditing(true)}
                   >
                     <Pencil size={14} />
@@ -636,22 +641,27 @@ function Detail({
                   </button>
                   <button
                     className={!editing ? "selected" : ""}
+                    aria-pressed={!editing}
                     onClick={() => setEditing(false)}
                   >
                     <Eye size={14} />
                     预览
                   </button>
                 </div>
-                {item.id && !item.deleted_at && <button disabled={busy} onClick={() => setVersionsOpen(true)}>版本记录</button>}
+                <div className="note-editor-actions">
+                {item.id && !item.deleted_at && <button title="版本记录" aria-label="版本记录" disabled={busy} onClick={() => setVersionsOpen(true)}><History size={16}/><span>版本记录</span></button>}
                 <IconButton label="导出当前正文为 Markdown" onClick={exportCurrent}><Download size={15}/></IconButton>
-                {noteImages.length>1&&!item.deleted_at&&<button onClick={openSorting} disabled={busy}>调整配图顺序</button>}
+                {noteImages.length>1&&!item.deleted_at&&<button title="调整配图顺序" onClick={openSorting} disabled={busy}><Layers size={16}/><span>调整配图顺序</span></button>}
                 <button
                   onClick={() => input.current.click()}
                   disabled={busy || !!item.deleted_at}
+                  title="插入图片"
+                  aria-label="插入图片"
                 >
                   <Image size={15} />
-                  插入图片
+                  <span>插入图片</span>
                 </button>
+                </div>
               </div>
               {editing ? (
                 <textarea
@@ -678,6 +688,9 @@ function Detail({
                     }
                   }}
                 />
+              ) : messageNote ? (
+                <MessageBlocks content={content} onChange={setContent} disabled={busy||!!item.deleted_at||!draft.ready} copyText={copyText} notify={notify}
+                  render={text=><Markdown content={text} preserveSpacing onImage={src=>setNoteIndex(Math.max(0,noteImages.findIndex(i=>i.url===src)))} onLink={q=>{if(!dirty||confirm('尚未保存，确定离开吗？'))onSearch(q);}}/>}/>
               ) : (
                 <div className="markdown-preview">
                   {content ? (
@@ -826,10 +839,12 @@ async function copyText(text) {
   element.value = text;
   element.style.position = "fixed";
   element.style.opacity = "0";
-  document.body.append(element);
+  const active = document.activeElement;
+  (document.querySelector('dialog[open]') || document.querySelector('[role="dialog"]') || document.body).append(element);
   element.select();
   const ok = document.execCommand("copy");
   element.remove();
+  active?.focus({preventScroll:true});
   if (!ok) throw new Error("无法复制");
 }
 function SettingsPanel({
@@ -962,6 +977,7 @@ function SettingsPanel({
             >
               <option value="read">只读</option>
               <option value="write">读写</option>
+              <option value="notify">仅通知（不能读写知识库）</option>
             </select>
             <button disabled={busy || !!secret}>
               <Plus size={16} />
@@ -992,7 +1008,7 @@ function SettingsPanel({
                 <span>
                   <strong>{token.name}</strong>
                   <small>
-                    {token.scope === "read" ? "只读" : "读写"} ·{" "}
+                    {token.scope === "notify" ? "仅通知" : token.scope === "read" ? "只读" : "读写"} ·{" "}
                     {date(token.created_at)}
                   </small>
                 </span>

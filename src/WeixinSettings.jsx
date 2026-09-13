@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import {MessageCircle,RefreshCw} from 'lucide-react';
 import {api,send} from './api.js';
 import './weixin.css';
+import {WeixinNotificationsSettings} from './WeixinNotificationsSettings.jsx';
 const json=(path,method,body)=>send(path,body,method);
 export function WeixinSettings({collections,onOpen}){
   const [state,setState]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[collection,setCollection]=useState(''),[tags,setTags]=useState('微信'),[qrImage,setQrImage]=useState(''),[code,setCode]=useState('');
@@ -37,5 +38,6 @@ export function WeixinSettings({collections,onOpen}){
       {!!state.jobs.length&&<details><summary>最近收件 · {state.jobs.length} 条{state.failed_count?` · ${state.failed_count} 条失败优先`:""}</summary><ol className="weixin-receipts">{state.jobs.map(job=><li key={job.id}><div><strong>{job.title}</strong><span>{labels[job.state]||job.state}</span></div>{job.error&&<p>{job.error}</p>}{job.state==='done'&&job.items?.length>0&&onOpen&&<button onClick={()=>onOpen(job.items[0])}>查看内容</button>}{job.state==='failed'&&<div><button disabled={busy} onClick={()=>act(()=>json('/api/weixin/jobs/'+job.id+'/retry','POST',{}))}>重试</button><button disabled={busy} onClick={()=>act(()=>json('/api/weixin/jobs/'+job.id+'/skip','POST',{}))}>忽略</button></div>}</li>)}</ol></details>}
       <details className="weixin-help"><summary>收件方式与原图说明</summary><p>默认按消息发送日期（北京时间）合并，文字和图片分开发送也会追加到同一篇笔记；只发图片也会创建带配图组的笔记。手动分篇模式可跨天收集，每条单独保存模式保留原行为。</p><p>追加保留已有标题、正文与封面顺序。旧笔记不自动合并；设置变化只影响之后收到的消息。单篇最多 50 万字符、30 个标签，超限会保留失败消息供处理。同篇前一条失败时后续消息等待，重试或忽略后继续。</p><p>微信可能在发送时压缩图片；ZNote 完整保留收到的文件。目前不接收语音、视频和其他文件，聊天图片不会自动获得原网站链接。</p><p>绑定使用微信 ClawBot 通道，需要当前微信账号可使用该入口。电脑保持开机并连接网络才能接收，无需将知识库开放到公网。</p></details>
     </>}
+    <WeixinNotificationsSettings/>
   </section>;
 }

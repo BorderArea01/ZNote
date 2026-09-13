@@ -7,6 +7,8 @@ import {createApp} from '../server/app.js';
 import {weixinDay,weixinNewNoteCommand} from '../server/weixin-grouping.js';
 import {weixinMessageKey,weixinItemId} from '../server/weixin.js';
 import {originalBuffer} from '../server/storage.js';
+import {readMessageBlocks,writeMessageBlocks} from '../shared/message-blocks.js';
+const plain = content => readMessageBlocks(content).blocks.map(b=>b.content).join('\n\n');
 
 test('WeChat days use Beijing midnight and only explicit text commands split notes',()=>{
   assert.equal(weixinDay('2026-09-10T15:59:59Z'),'2026-09-10');
@@ -39,14 +41,14 @@ async function fixture(t){
   return {r,client,base,dir,a,b,account,image,state,store,update,tick,text,photo,message,deliver,note,notes,json,request,queue:(...messages)=>incoming.push(...messages),downloads:()=>downloads,fail:value=>{failing=value}};
 }
 
-test('merged messages retain original newlines and use Markdown separators exactly once',async t=>{
+test('merged messages retain original newlines and durable message boundaries exactly once',async t=>{
   const f=await fixture(t),text='第一行\r\n第二行\n\n[参考链接](https://example.com/)\n**保留强调**';
   const first=f.message(text),photo=f.message([f.photo]),caption=f.message('图片说明\n下一行');
   await f.deliver(first,photo,caption);
   const note=f.notes()[0];
-  assert.ok(note.content.startsWith(text+'\n\n---\n\n![微信配图'));
-  assert.ok(note.content.endsWith('\n\n---\n\n图片说明\n下一行'));
-  assert.equal(note.content.split('\n\n---\n\n').length,3);
+  const blocks=readMessageBlocks(note.content).blocks;
+  assert.equal(blocks.length,3);assert.equal(blocks[0].content,text);assert.ok(blocks[1].content.startsWith('![微信配图'));
+  assert.equal(blocks[2].content,'图片说明\n下一行');
   await f.deliver(first,photo,caption);
   assert.equal(f.note(note.id).content,note.content);
 });
@@ -63,13 +65,13 @@ test('daily text and separate images append locally; edits, cover, duplicate rep
   const order=await f.json('/api/item-groups/order?id='+note.id);const reversed=order.items.map(i=>i.id).reverse();await f.json('/api/item-groups/order','POST',{id:note.id,revision:order.revision,ids:reversed,sync_note:false});
   await f.deliver(f.message([f.photo]));const after=await f.json('/api/item-groups/order?id='+note.id);assert.equal(after.cover_id,reversed[0]);assert.equal(after.items.length,3);assert.deepEqual(after.items.slice(0,2).map(i=>i.id),reversed);
   const stable=f.note(note.id).content,downloadCount=f.downloads();f.update(s=>{s.jobs=[]});await f.deliver(first,picture,caption);assert.equal(f.note(note.id).content,stable);assert.equal(f.downloads(),downloadCount);
-  await f.deliver(f.message('次日内容','2026-09-10T16:00:00Z'));assert.equal(f.notes().length,2);assert.ok(f.notes().some(n=>n.title==='微信收件 · 2026-09-11'&&n.content==='次日内容'));
+  await f.deliver(f.message('次日内容','2026-09-10T16:00:00Z'));assert.equal(f.notes().length,2);assert.ok(f.notes().some(n=>n.title==='微信收件 · 2026-09-11'&&plain(n.content)==='次日内容'));
 });
 
 test('failed photos block only their note; append and receipts commit together and retry once',async t=>{
   const f=await fixture(t);await f.deliver(f.message('之前的内容'));const note=f.notes()[0];
   const imageMessage=f.message([f.photo]),after=f.message('紧随图片的说明'),nextDay=f.message('另一日期','2026-09-10T16:00:00Z');
-  f.fail(true);await f.deliver(imageMessage,after,nextDay);assert.equal(f.state().jobs.find(j=>j.id===weixinMessageKey(imageMessage,f.account)).state,'failed');assert.equal(f.note(note.id).content,'之前的内容');assert.ok(f.notes().some(n=>n.content==='另一日期'));
+  f.fail(true);await f.deliver(imageMessage,after,nextDay);assert.equal(f.state().jobs.find(j=>j.id===weixinMessageKey(imageMessage,f.account)).state,'failed');assert.equal(plain(f.note(note.id).content),'之前的内容');assert.ok(f.notes().some(n=>plain(n.content)==='另一日期'));
   f.fail(false);f.update(s=>{s.jobs.find(j=>j.state==='failed').state='pending'});await f.tick();assert.ok(f.note(note.id).content.indexOf('![微信配图')<f.note(note.id).content.indexOf('紧随图片的说明'));
   const baseline=f.note(note.id),history=f.r.db.prepare('SELECT count(*) n FROM note_versions WHERE item_id=?').get(note.id).n;
   f.r.db.exec("CREATE TRIGGER fail_weixin_receipt BEFORE INSERT ON settings WHEN NEW.key LIKE 'weixin_receipt_v1:%' BEGIN SELECT RAISE(ABORT,'receipt fixture'); END");
@@ -82,13 +84,13 @@ test('manual boundaries and pending destinations survive settings changes; delet
   const f=await fixture(t),old=f.message('原篇文字'),command=f.message('/新篇 旅行计划'),photo=f.message([f.photo]),caption=f.message('酒店参考');
   await f.deliver(old,command,photo,caption);assert.equal(f.notes().length,2);const travel=f.notes().find(n=>n.title==='旅行计划');assert.ok(travel.content.includes('酒店参考'));assert.equal(travel.content.includes('/新篇'),false);
   const pending=f.message('排队中的内容');f.queue(pending);await f.tick();f.update(s=>{s.collection_id=f.b.id});await f.tick();assert.ok(f.note(travel.id).content.includes('排队中的内容'));
-  await f.deliver(f.message('属于另一个库'));assert.ok(f.notes().some(n=>n.collection_id===f.b.id&&n.content==='属于另一个库'));
+  await f.deliver(f.message('属于另一个库'));assert.ok(f.notes().some(n=>n.collection_id===f.b.id&&plain(n.content)==='属于另一个库'));
   f.update(s=>{s.collection_id=f.a.id;s.merge_mode='session'});await f.deliver(f.message('持续收集'),f.message([f.photo],'2026-09-10T16:00:00Z'));const session=f.notes().find(n=>n.content.includes('持续收集'));assert.ok(session.content.includes('/media/'));
   const stale=f.message('不能复活旧笔记');f.queue(stale);await f.tick();await f.request('/api/items/'+session.id,'DELETE');await f.tick();assert.ok(f.note(session.id).deleted_at);assert.equal(f.note(session.id).content.includes('不能复活'),false);
-  await f.deliver(f.message('新的收集'));assert.ok(f.notes().some(n=>n.id!==session.id&&n.content==='新的收集'));
-  const active=f.notes().find(n=>n.content==='新的收集'),stalePermanent=f.message('永久删除之后不能重建');f.queue(stalePermanent);await f.tick();f.r.db.prepare('DELETE FROM items WHERE id=?').run(active.id);await f.tick();assert.equal(f.note(active.id),undefined);
+  await f.deliver(f.message('新的收集'));assert.ok(f.notes().some(n=>n.id!==session.id&&plain(n.content)==='新的收集'));
+  const active=f.notes().find(n=>plain(n.content)==='新的收集'),stalePermanent=f.message('永久删除之后不能重建');f.queue(stalePermanent);await f.tick();f.r.db.prepare('DELETE FROM items WHERE id=?').run(active.id);await f.tick();assert.equal(f.note(active.id),undefined);
   // Already queued messages retain their old mode; new independent messages keep legacy IDs.
-  f.update(s=>{s.merge_mode='message'});const separate=f.message('单条模式');await f.deliver(separate);assert.equal(f.note(weixinItemId(weixinMessageKey(separate,f.account))).content,'单条模式');
+  f.update(s=>{s.merge_mode='message'});const separate=f.message('单条模式');await f.deliver(separate);assert.equal(plain(f.note(weixinItemId(weixinMessageKey(separate,f.account))).content),'单条模式');
   assert.equal((await f.request('/api/weixin','PATCH',{enabled:false,collection_id:f.a.id,tags:[],merge_mode:'bad'})).status,400);
   await f.json('/api/weixin','PATCH',{enabled:false,collection_id:f.a.id,tags:['灵感'],merge_mode:'daily'});const next=await f.json('/api/weixin/new-note','POST',{title:'下一篇主题'});assert.equal(next.current_note.title,'下一篇主题');assert.equal(next.current_note.pending,true);
   const token=await f.json('/api/tokens','POST',{name:'writer',scope:'write'});const denied=await fetch(f.base+'/api/weixin/new-note',{method:'POST',headers:{Authorization:'Bearer '+token.token,'Content-Type':'application/json'},body:'{}'});assert.equal(denied.status,403);
@@ -106,6 +108,21 @@ test('daily destinations and durable receipts survive complete backup restore',a
     const images=restored.db.prepare("SELECT * FROM items WHERE kind='image'").all();assert.equal(images.length,1);assert.deepEqual(await originalBuffer(dir,images[0]),f.image);
   }finally{await restored.weixin.stop();await restored.trash.stop();await restored.backups.stop();await restored.imports.stop();await restored.webhooks.stop();restored.db.close()}
 });
+
+test('block edits and incoming messages keep optimistic concurrency and local image ownership',async t=>{
+  const f=await fixture(t);await f.deliver(f.message('一\n\n\n二\r\n三'),f.message([f.photo]),f.message('最后一条'));
+  const note=f.notes()[0],blocks=readMessageBlocks(note.content).blocks,image=f.r.db.prepare("SELECT * FROM items WHERE kind='image'").get();
+  const edited=writeMessageBlocks([{...blocks[2],content:'修改后的末条\n第二行'},blocks[0]]);
+  await f.deliver(f.message('编辑期间的新消息'));
+  assert.equal((await f.request('/api/items/'+note.id,'PATCH',{version:note.version,content:edited})).status,409);
+  const latest=f.note(note.id),newBlock=readMessageBlocks(latest.content).blocks.at(-1);
+  await f.json('/api/items/'+note.id,'PATCH',{version:latest.version,content:appendForTest(edited,newBlock)});
+  const saved=readMessageBlocks(f.note(note.id).content).blocks;
+  assert.deepEqual(saved.map(b=>b.content),['修改后的末条\n第二行','一\n\n\n二\r\n三','编辑期间的新消息']);
+  const kept=f.r.db.prepare('SELECT * FROM items WHERE id=?').get(image.id);assert.ok(kept&&!kept.deleted_at);assert.deepEqual(await originalBuffer(f.dir,kept),f.image);
+  const history=await f.json('/api/items/'+note.id+'/versions');assert.ok(history.versions?.length||history.length);
+});
+function appendForTest(content,block){return writeMessageBlocks([...readMessageBlocks(content).blocks,block]);}
 
 test('a note removed while its next photo downloads is not recreated by the append',async t=>{
   const f=await fixture(t);await f.deliver(f.message('不能复活'));const note=f.notes()[0];
