@@ -1059,6 +1059,7 @@ export function createApp({
     validateCollection(input.collection_id); res.status(202).json(imports.add(input));
   });
   app.delete('/api/imports/:id', (req, res) => res.json(imports.cancel(req.params.id)));
+  app.post('/api/imports/:id/retry',(req,res)=>{const previous=imports.get(req.params.id);validateCollection(previous.collection_id);res.status(202).json(imports.retry(req.params.id));});
   app.get("/media/:id/:variant", async (req, res) => {
     const item = getItem(req.params.id);
     if (!item.file_key) throw fail(404, "图片不存在");

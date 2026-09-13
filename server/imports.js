@@ -115,7 +115,7 @@ export function createImportManager({ dataDir, save, downloader = downloadVideo 
     }
   })();
   ready.catch(() => {});
-  const publicJob = job => { const { controller, input, ...rest } = job; return rest; };
+  const publicJob = job => { const { controller, input, ...rest } = job; return {...rest,collection_id:input.collection_id??null}; };
   async function pump() {
     if (running || stopped) return; running = true;
     try {
@@ -126,6 +126,7 @@ export function createImportManager({ dataDir, save, downloader = downloadVideo 
           job.status = 'running'; job.message = '正在解析平台视频';
           await ready; if (job.controller.signal.aborted) throw fail(409, '采集已取消'); dir = await mkdtemp(join(root, 'job-'));
           const file = await downloader({ url: job.source_url, dir, signal: job.controller.signal, progress: message => { job.message = message; } });
+          job.title=file.title||job.source_url;
           if (job.controller.signal.aborted) throw fail(409, '采集已取消');
           job.message = '正在验证视频并入库'; job.status = 'saving';
           const details=videoDetails(file,job.input.tags);
@@ -153,6 +154,13 @@ export function createImportManager({ dataDir, save, downloader = downloadVideo 
       pending = Promise.resolve().then(pump); return publicJob(job);
     },
     cancel(id) { const job = jobs.get(id); if (!job) throw fail(404, '采集记录不存在'); if (job.status === 'saving') throw fail(409, '正在入库，请等待完成'); if (['queued','running'].includes(job.status)) { job.controller.abort(); if (job.status === 'queued') { job.status = 'cancelled'; job.message = '采集已取消'; } } return publicJob(job); },
+    retry(id) {
+      const job=jobs.get(id);if(!job)throw fail(404,'采集记录不存在，服务重启后需重新提交链接');
+      if(!['failed','cancelled'].includes(job.status))throw fail(409,'只有失败或取消的采集任务可以重试');
+      const previous=jobs.get(job.retried_as);
+      if(previous)return publicJob(previous);
+      const next=this.add({...job.input,url:job.source_url});job.retried_as=next.id;job.message='已重新提交，请查看后续采集任务';return next;
+    },
     async cancelAll() { for (const job of jobs.values()) { if (job.status === 'queued') { job.status = 'cancelled'; job.message = '备份恢复中，采集已取消'; } job.controller.abort(); } while (running) await new Promise(r => setTimeout(r, 25)); },
     async stop() { stopped = true; for (const job of jobs.values()) job.controller.abort(); while (running) await new Promise(r => setTimeout(r, 25)); await pending; await ready.catch(() => {}); },
   };

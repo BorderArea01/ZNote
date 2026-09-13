@@ -27,7 +27,7 @@ export const bytes = (value) => {
       ? `${(n / 1024).toFixed(1)} KB`
       : `${(n / 1024 / 1024).toFixed(2)} MB`;
 };
-export function uploadFile(file, collection, tags = [], onProgress = () => {}) {
+export function uploadFile(file, collection, tags = [], onProgress = () => {}, signal) {
   return new Promise((resolve, reject) => {
     const data = new FormData();
     data.set("file", file);
@@ -36,6 +36,9 @@ export function uploadFile(file, collection, tags = [], onProgress = () => {}) {
     if (collection && collection !== "unfiled")
       data.set("collection_id", collection);
     const xhr = new XMLHttpRequest();
+    const abort=()=>xhr.abort();
+    xhr.onabort=()=>reject(Object.assign(new Error('已停止上传请求；已入库内容不会回退'),{name:'AbortError'}));
+    xhr.onloadend=()=>signal?.removeEventListener('abort',abort);
     xhr.open("POST", file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name) ? '/api/videos' : '/api/assets');
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable)
@@ -53,6 +56,8 @@ export function uploadFile(file, collection, tags = [], onProgress = () => {}) {
         reject(new Error("服务器返回格式错误"));
       }
     };
+    if(signal?.aborted)return reject(Object.assign(new Error('上传已取消'),{name:'AbortError'}));
+    signal?.addEventListener('abort',abort,{once:true});
     xhr.send(data);
   });
 }

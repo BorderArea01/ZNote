@@ -446,7 +446,7 @@ export const spec = {
     },
   },
 };
-const importJob = { type: 'object', properties: { id: str, status: { type: 'string', enum: ['queued','running','saving','completed','failed','cancelled'] }, message: str, source_url: str, item_id: str, duplicate: { type: 'boolean' }, created_at: { type: 'string', format: 'date-time' }, finished_at: { type: 'string', format: 'date-time' } } };
+const importJob = { type: 'object', properties: { id: str, status: { type: 'string', enum: ['queued','running','saving','completed','failed','cancelled'] }, message: str, source_url: str, collection_id:{...str,nullable:true},title:str,retried_as:str,item_id: str, duplicate: { type: 'boolean' }, created_at: { type: 'string', format: 'date-time' }, finished_at: { type: 'string', format: 'date-time' } } };
 spec.paths['/api/streams'] = { post: { summary: '合并浏览器采集的 HLS 分片：保存入库或只下载 MP4（write 权限）', description: 'files 中仅允许 index.m3u8、video.m3u8、audio.m3u8、part-N.bin。所有 URI 必须改写为这些包内文件名；仅 index 可以是主清单，媒体清单须以 EXT-X-ENDLIST 结束。支持普通 AES-128，不支持 DRM。最多 1203 文件、合计 500 MB，单清单最多 2 MB。同时处理一个请求；合并不重新编码。', parameters: [{ name: 'mode', in: 'query', schema: { type: 'string', enum: ['save','download'], default: 'save' } }], requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['files'], properties: { files: { type: 'array', maxItems: 1203, items: { type: 'string', format: 'binary' } }, title: str, source_url: { ...str, format: 'uri' }, tags: { ...str, description: 'JSON 标签数组' }, collection_id: str, content: str } } } } }, responses: { 200: { description: '重复条目 JSON；download 模式为 video/mp4' }, 201: response(ref('Item')), 413: { description: '合计超过 500 MB' }, 415: { description: '媒体无法合并为 MP4' }, 429: { description: '已有合并任务，请稍后重试' }, ...errorResponses } } };
 spec.paths['/api/imports'] = {
   get: operation('最近 50 条网络视频采集记录；服务重启会清空，已入库内容保留', { type: 'object', properties: { jobs: list(importJob) } }),
@@ -456,6 +456,7 @@ spec.paths['/api/imports/{id}'] = {
   get: operation('读取采集状态和成功后的 item_id', importJob, { parameters: [id] }),
   delete: operation('取消等待或下载中的采集；入库阶段不可取消', importJob, { parameters: [id] }),
 };
+spec.paths['/api/imports/{id}/retry']={post:operation('按原知识库、来源与标签重试失败或取消的采集',importJob,{parameters:[id],description:'需要 write 权限。原记录返回 retried_as 指向后续任务；后续记录仍在时，重复提交返回同一任务。若后续任务也失败，重试后续任务 ID。活动或成功任务不能重试；服务重启清空记录。',responses:{202:response(importJob),...errorResponses}})};
 
 spec.paths["/api/items"].get.parameters.push(
   {

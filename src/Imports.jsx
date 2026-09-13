@@ -3,23 +3,18 @@ import { Dialog } from './ui.jsx';
 import { HelpHint } from './HelpHint.jsx';
 import { api, send } from './api.js';
 import './imports.css';
+import {useTaskStore,useTaskSnapshot} from './Tasks.jsx';
 
 export function ImportsDialog({ collections, currentCollection, onClose, onComplete, onOpen }) {
+  const taskStore=useTaskStore(),{remote}=useTaskSnapshot(),jobs=remote.imports;
   const [url, setUrl] = useState(''), [collection, setCollection] = useState(currentCollection || ''), [tags, setTags] = useState('');
-  const [jobs, setJobs] = useState([]), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const seen = useRef(new Set()), complete = useRef(onComplete); complete.current = onComplete;
-  useEffect(() => {
-    let disposed = false, timer;
-    const poll = async () => {
-      try { const result = await api('/api/imports'); if (disposed) return; setJobs(result.jobs);
-        for (const job of result.jobs) if (job.status === 'completed' && !seen.current.has(job.id)) { seen.current.add(job.id); complete.current(); }
-      } catch (e) { if (!disposed) setError(e.message); }
-      finally { if (!disposed) timer = setTimeout(poll, 2000); }
-    }; poll(); return () => { disposed = true; clearTimeout(timer); };
-  }, []);
+  useEffect(()=>{taskStore.watchers++;taskStore.refreshRemote();return()=>{taskStore.watchers--}},[taskStore]);
+  useEffect(()=>{for(const job of jobs)if(job.status==='completed'&&!seen.current.has(job.id)){seen.current.add(job.id);complete.current();}},[jobs]);
   async function submit(e) {
     e.preventDefault(); setError(''); setBusy(true);
-    try { const job = await send('/api/imports', { url: url.trim(), collection_id: collection || null, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }); setJobs(old => [job, ...old.filter(j => j.id !== job.id)]); setUrl(''); }
+    try { await send('/api/imports', { url: url.trim(), collection_id: collection || null, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }); taskStore.refreshRemote(); setUrl(''); }
     catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   return <Dialog title="网络视频采集" onClose={onClose} className="import-dialog">
@@ -31,7 +26,7 @@ export function ImportsDialog({ collections, currentCollection, onClose, onCompl
         <label>标签（用逗号分隔）<input value={tags} onChange={e => setTags(e.target.value)} placeholder="参考，灵感" /></label>
         <button className="primary" disabled={busy || !url.trim()}>{busy ? '正在提交…' : '开始采集'}</button>
       </form>
-      {error && <p role="alert" className="error">{error}</p>}
+      {(error||remote.error) && <p role="alert" className="error">{error||remote.error}</p>}
       <div className="inline-heading"><h3>采集记录</h3><HelpHint label="采集任务">关闭窗口后继续处理；服务重启会清空记录并中止未完成任务，已入库内容保留。</HelpHint></div>
       {!jobs.length && <p className="muted">还没有采集任务</p>}
       <div className="import-jobs">{jobs.map(job => <article key={job.id} className="import-job">

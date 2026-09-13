@@ -104,6 +104,10 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 
 上传提供 `source_url` 会在备注中追加来源，并附加网站标签。相同文件的重复采集保留原说明，补充新的来源。
 
+### 采集任务重试
+
+网络采集记录现在包含 `collection_id` 与解析后的 `title`。`POST /api/imports/:id/retry` 可重试失败或取消的记录，沿用原始来源、知识库和标签，返回 202 与后续任务；原记录的 `retried_as` 指向后续 ID。后续记录仍保留时重复请求返回同一任务，若后续任务失败，应重试后续 ID。活动或成功的任务不能重试，目标知识库已删除时拒绝。仍需 write 权限，任务记录保留最近 50 条且服务重启清空。
+
 ### 多标签与连续浏览
 
 `GET /api/stats` 与 `GET /api/tags` 支持 `collection`，前端始终传入当前知识库；`unfiled` 表示未分类。省略参数时，stats 返回全局统计，tags 仅返回未分类标签。

@@ -1,5 +1,6 @@
 import { HelpHint } from './HelpHint.jsx';
 import { useTagPage } from './useTagPage.js';
+import {useTaskStore,useTaskSnapshot,queueUploads} from './Tasks.jsx';
 import React, { useEffect, useRef, useState } from "react";
 import {
   Sun,
@@ -144,6 +145,10 @@ export function UploadDialog({
   onOrganize,
   kind = 'image',
 }) {
+  const taskStore=useTaskStore(),taskSnapshot=useTaskSnapshot();
+  const taskById=new Map(taskSnapshot.jobs.map(job=>[job.id,job]));
+  const [runError,setRunError]=useState('');
+  const [uploadPage,setUploadPage]=useState(0);
   const [rows, setRows] = useState(() =>
     files.map((file) => ({
       id: Math.random(),
@@ -154,8 +159,10 @@ export function UploadDialog({
   );
   const [collection, setCollection] = useState(currentCollection || "");
   const [tags, setTags] = useState([]);
-  const [running, setRunning] = useState(false);
-  const stop = useRef(false);
+  const [submitting, setRunning] = useState(false);
+  const displayRows=rows.map(original=>{const task=taskById.get(original.task_id);return task?{...original,item:taskStore.result(task.id)||original.item,progress:task.progress,error:task.message,status:task.status==='completed'?(task.duplicate?'duplicate':'done'):task.status==='failed'||task.status==='cancelled'?'error':task.status==='queued'?'pending':'running'}:original});
+  const running=submitting||displayRows.some(row=>row.status==='running'||row.status==='pending'&&row.task_id&&taskById.get(row.task_id)?.status==='queued');
+  const queuedIds=useRef([]);
   const picker = useRef();
   const update = (id, patch) =>
     setRows((previous) =>
@@ -173,35 +180,22 @@ export function UploadDialog({
     ]);
   async function run() {
     setRunning(true);
-    stop.current = false;
-    for (const row of rows.filter((row) =>
-      ["pending", "error"].includes(row.status),
-    )) {
-      if (stop.current) break;
-      update(row.id, { status: "running", progress: 0, error: "" });
-      try {
-        const item = await uploadFile(row.file, collection, tags, (progress) =>
-          update(row.id, { progress }),
-        );
-        update(row.id, {
-          item,
-          status: item.duplicate ? "duplicate" : "done",
-          progress: 100,
-        });
-      } catch (e) {
-        update(row.id, { status: "error", error: e.message });
-      }
-    }
-    setRunning(false);
-    onComplete();
+    setRunError('');
+    const pending=displayRows.filter(row=>['pending','error'].includes(row.status));
+    try {
+      pending.forEach(row=>{if(row.task_id)taskStore.forget(row.task_id)});
+      const tickets=queueUploads(taskStore,pending.map(r=>r.file),collection,tags);queuedIds.current=tickets.map(t=>t.id);
+      tickets.forEach((ticket,index)=>update(pending[index].id,{task_id:ticket.id,status:'running',error:''}));
+      await Promise.all(tickets.map(async(ticket,index)=>{const result=await ticket.promise;update(pending[index].id,result.ok?{item:result.value,status:result.value.duplicate?'duplicate':'done',progress:100}:{status:'error',error:result.error.message});}));
+      onComplete();
+    } catch(e){setRunError(e.message);}
+    finally{setRunning(false);}
   }
-  const pending = rows.some((r) => ["pending", "error"].includes(r.status));
+  const pending = displayRows.some((r) => ["pending", "error"].includes(r.status));
   return (
     <Dialog
       title={kind === 'video' ? '批量上传视频' : '批量上传图片'}
-      onClose={() => {
-        if (!running) onClose();
-      }}
+      onClose={onClose}
       className="upload-dialog"
     >
       <div className="feature-body">
@@ -258,7 +252,7 @@ export function UploadDialog({
           disabled={running}
         />
         <div className="upload-queue">
-          {rows.map((row) => (
+          {displayRows.slice(uploadPage*50,uploadPage*50+50).map((row) => (
             <div className="upload-row" key={row.id}>
               <div>
                 <strong>{row.file.name}</strong>
@@ -269,7 +263,7 @@ export function UploadDialog({
                       pending: "等待上传",
                       running:
                         row.progress === 100
-                          ? "正在处理图片…"
+                          ? "正在验证文件并入库…"
                           : `${row.progress}%`,
                       done: "上传成功",
                       duplicate: "已存在，复用原图片",
@@ -299,20 +293,21 @@ export function UploadDialog({
             </div>
           ))}
         </div>
+        {displayRows.length>50&&<nav className="feature-actions" aria-label="上传文件分页"><button disabled={!uploadPage} onClick={()=>setUploadPage(n=>n-1)}>上一页文件</button><span>{uploadPage+1} / {Math.ceil(displayRows.length/50)}</span><button disabled={(uploadPage+1)*50>=displayRows.length} onClick={()=>setUploadPage(n=>n+1)}>下一页文件</button></nav>}
         <div className="feature-actions">
           <small>
             共 {rows.length} 个 · 完成{" "}
             {
-              rows.filter((r) => ["done", "duplicate"].includes(r.status))
+              displayRows.filter((r) => ["done", "duplicate"].includes(r.status))
                 .length
             }{" "}
-            个 · 失败 {rows.filter((r) => r.status === "error").length} 个
+            个 · 失败 {displayRows.filter((r) => r.status === "error").length} 个
           </small>
-          {!running && rows.some(r => r.item?.kind === 'image') && <button onClick={() => onOrganize?.([...new Map(rows.filter(r => r.item?.kind === 'image').map(r => [r.item.id, r.item])).values()])}>整理已上传图片</button>}
+          {!running && displayRows.some(r => r.item?.kind === 'image') && <button onClick={() => onOrganize?.([...new Map(displayRows.filter(r => r.item?.kind === 'image').map(r => [r.item.id, r.item])).values()])}>整理已上传图片</button>}
           {running ? (
             <button
               onClick={() => {
-                stop.current = true;
+                queuedIds.current.forEach(id=>{if(taskById.get(id)?.status==='queued')taskStore.cancel(id)});
               }}
             >
               停止后续上传
@@ -320,7 +315,7 @@ export function UploadDialog({
           ) : pending ? (
             <button className="primary" onClick={run}>
               <Upload size={16} />
-              {rows.some((r) => r.status === "error")
+              {displayRows.some((r) => r.status === "error")
                 ? "重试失败 / 继续上传"
                 : "开始上传"}
             </button>
@@ -328,6 +323,8 @@ export function UploadDialog({
             <button onClick={onClose}>完成</button>
           )}
         </div>
+        {running&&<p className="muted">可关闭此窗口，上传会继续；右上角「任务」可查看进度。</p>}
+        {runError&&<p role="alert" className="error">{runError}</p>}
       </div>
     </Dialog>
   );
@@ -344,6 +341,7 @@ const exportModes = {
   ],
 };
 export function ExportDialog({ collections, currentCollection, onClose }) {
+  const taskStore=useTaskStore();
   const [mode, setMode] = useState("portable");
   const [scope, setScope] = useState(currentCollection || "all");
   const [trash, setTrash] = useState(false);
@@ -358,16 +356,12 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
         include_trash: String(trash),
       });
       if (scope !== "all" && mode !== "backup") params.set("collection", scope);
-      const response = await fetch(`/api/export?${params}`);
-      if (!response.ok)
-        throw new Error((await response.json()).error || "导出失败");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `znote-${mode}.${mode === "json" ? "json" : "zip"}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      const [ticket]=taskStore.enqueue([{type:'export',lane:'export',title:exportModes[mode][0],global:scope==='all'||mode==='backup',collection_id:scope==='unfiled'?null:scope,cancellable:true,start_message:'正在打包并接收导出文件',done_message:'已交给浏览器下载',run:async({signal,update})=>{
+        const response=await fetch(`/api/export?${params}`,{signal});if(!response.ok)throw Error((await response.json()).error||'导出失败');
+        update({message:'正在接收导出文件'});const blob=await response.blob();
+        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`znote-${mode}.${mode==='json'?'json':'zip'}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+      }}]);
+      const result=await ticket.promise;if(!result.ok)throw result.error;
     } catch (e) {
       setError(e.message);
     } finally {
@@ -375,7 +369,7 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
     }
   }
   return (
-    <Dialog title="导出知识库" onClose={()=>!busy&&onClose()} className="export-dialog">
+    <Dialog title="导出知识库" onClose={onClose} className="export-dialog">
       <div className="feature-body">
         <div className="export-modes">
           {Object.entries(exportModes).map(([key, [name, description]]) => (
@@ -419,10 +413,11 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
         </label>
         <p className="muted">
           {mode === "backup"
-            ? "恢复时停止服务，解压 data 目录并设置为数据目录，再使用 0.2 或兼容版本启动。"
+            ? "可在备份设置中上传并预览恢复；完整备份包含全部知识库和访问设置。"
             : "图文包会附带笔记引用的图片，即使图片位于其他知识库，以保持阅读完整。"}
         </p>
         {error && <div className="error">{error}</div>}
+        {busy&&<p className="muted">可关闭此窗口，导出会继续；请保持网页打开。</p>}
         <div className="feature-actions">
           <button className="primary" onClick={download} disabled={busy}>
             {busy ? (

@@ -43,7 +43,7 @@ import {
   History,
   BookmarkPlus,
 } from "lucide-react";
-import { api, send, uploadFile } from "./api.js";
+import { api, send } from "./api.js";
 import { HelpHint } from './HelpHint.jsx';
 import { IconButton } from "./ui.jsx";
 import { UploadDialog, ExportDialog, BatchTagsDialog } from "./features.jsx";
@@ -51,6 +51,7 @@ import { OrganizeDialog } from './organize.jsx';
 import { TagFilter } from './TagFilter.jsx';
 import {useTagPage} from './useTagPage.js';
 import { ImportsDialog } from './Imports.jsx';
+import {TaskButton,TaskCenter,useTaskStore,queueUploads} from './Tasks.jsx';
 const labels = {
   home: "我的知识库",
   all: "全部内容",
@@ -126,8 +127,11 @@ export default function Workspace({
   const [undoReceipt, setUndoReceipt] = useState(null), [undoOpen, setUndoOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [readingOpen, setReadingOpen] = useState(false);
+  const taskStore=useTaskStore(),[tasksOpen,setTasksOpen]=useState(false);
   const recordUndo = result => { if (result?.undo) { setToast(''); setUndoReceipt(result.undo); } };
   const saved = result => { recordUndo(result); refresh(); };
+  const taskRefresh=useRef();taskRefresh.current=()=>refresh();
+  useEffect(()=>{let last=taskStore.getSnapshot().changes,timer;const unsubscribe=taskStore.subscribe(()=>{const current=taskStore.getSnapshot().changes;if(last!==current){last=current;clearTimeout(timer);timer=setTimeout(()=>taskRefresh.current(),500);}});return()=>{unsubscribe();clearTimeout(timer)}},[taskStore]);
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
   const [autoPages, setAutoPages] = useState(readAutoPages), [pageError, setPageError] = useState(null);
   const selectedRowsRef = useRef(chosenItems); selectedRowsRef.current = chosenItems;
@@ -517,7 +521,7 @@ export default function Workspace({
     for (const [i, file] of [...files].entries()) {
       setUploading(`上传 ${i + 1} / ${files.length}：${file.name}`);
       try {
-        results.push(await uploadFile(file, target));
+        const queued=queueUploads(taskStore,[file],target)[0];const result=await queued.promise;if(!result.ok)throw result.error;results.push(result.value);
       } catch (e) {
         failures.push(`${file.name}：${e.message}`);
       }
@@ -817,6 +821,7 @@ export default function Workspace({
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
+            <TaskButton onClick={()=>setTasksOpen(true)}/>
             <IconButton
               label={resolvedTheme === "dark" ? "切换浅色模式" : "切换夜间模式"}
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -1210,7 +1215,7 @@ export default function Workspace({
               )}
               {!!items.length && !loading && <div className="browse-pagination" data-window-size={items.length} data-window-offset={pageOffset}>
                 <div className="browse-pagination-meta"><span>显示 {pageOffset + 1}–{pageOffset + items.length} / {total} 项</span><label><input type="checkbox" checked={autoPages} onChange={e => { setAutoPages(e.target.checked); saveAutoPages(e.target.checked); }}/>滚动自动加载</label><HelpHint label="连续浏览">列表只保留附近 600 项摘要，向前可加载之前的内容；已选内容保留。打开详情再读取完整正文。网络失败或内容更新时暂停加载。</HelpHint></div>
-                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen && !readingOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
+                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen && !readingOpen && !tasksOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
               </div>}
             </>
           )}
@@ -1268,7 +1273,8 @@ export default function Workspace({
           </IconButton>
         </div>
       )}
-      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || readingOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
+      <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || readingOpen || tasksOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
+      {tasksOpen&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);setGallery(item.kind==='image'?[item]:[]);setSelected(item);}catch(e){notify(e.message)}}}/>}
       {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;

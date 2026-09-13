@@ -2,8 +2,10 @@ import { HelpHint } from './HelpHint.jsx';
 import React, { useState, useEffect, useRef } from 'react';
 import { api, send, bytes } from './api.js';
 import { Dialog } from './ui.jsx';
+import {useTaskStore} from './Tasks.jsx';
 
 export function BackupSettings() {
+  const taskStore=useTaskStore();
   const [status, setStatus] = useState(null), [error, setError] = useState(''), [working, setWorking] = useState('');
   const [preview, setPreview] = useState(null), [confirmed, setConfirmed] = useState(false);
   const picker = useRef();
@@ -38,7 +40,7 @@ export function BackupSettings() {
       </div>
       <div className="gallery-controls">
         <button disabled={!!working || status.busy} onClick={() => action('保存策略…', async () => { await send('/api/backups/policy', { enabled: status.enabled, interval_hours: status.interval_hours, keep: status.keep }, 'PATCH'); dirty.current = false; })}>保存备份设置</button>
-        <button disabled={!!working || status.busy} onClick={() => action('正在生成完整备份…', () => send('/api/backups', {}))}>立即备份</button>
+        <button disabled={!!working || status.busy} onClick={() => action('正在生成完整备份…', async () => {const [ticket]=taskStore.enqueue([{type:'backup',lane:'backup',title:'完整备份',global:true,cancellable:false,start_message:'服务器正在生成完整备份',done_message:'备份已生成',run:()=>send('/api/backups',{})}]);const result=await ticket.promise;if(!result.ok)throw result.error;})}>立即备份</button>
         <button disabled={!!working || status.busy} onClick={() => picker.current.click()}>上传备份并预览</button>
       </div>
       <p className="muted">最近成功：{status.last_success ? new Date(status.last_success).toLocaleString() : '尚无'}{status.busy ? ' · 后台任务进行中' : ''}</p>

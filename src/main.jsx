@@ -61,6 +61,7 @@ import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import { OrganizeDialog } from './organize.jsx';
 import { BackupSettings } from './backups.jsx';
+import {TaskProvider} from './Tasks.jsx';
 import { WebhookSettings } from './webhooks.jsx';
 import Workspace from "./Workspace.jsx";
 
@@ -264,7 +265,7 @@ function App() {
     );
   if (!auth) return <Auth configured={configured} onDone={checkAuth} />;
   return (
-    <Workspace
+    <TaskProvider><Workspace
       theme={theme}
       resolvedTheme={resolvedTheme}
       setTheme={setTheme}
@@ -275,7 +276,7 @@ function App() {
         await send("/api/auth/logout", {});
         setAuth(false);
       }}
-    />
+    /></TaskProvider>
   );
 }
 
