@@ -19,5 +19,5 @@ adb shell input keyevent 82
 adb install clients/android/app/build/outputs/apk/debug/app-debug.apk
 adb install clients/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 timeout 120 adb shell am instrument -w io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner | tee artifacts/android-emulator/result.txt
-grep -q ZNOTE_ANDROID_SMOKE_PASS artifacts/android-emulator/result.txt
 adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/client-smoke.png artifacts/android-emulator/ || true
+grep -q ZNOTE_ANDROID_SMOKE_PASS artifacts/android-emulator/result.txt

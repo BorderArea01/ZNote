@@ -10,6 +10,8 @@ import java.util.concurrent.*;
 // Runs in an isolated emulator against a disposable host library. No user device or data.
 public class SmokeRunner extends Instrumentation {
     private MainActivity activity;
+    private String nativeText(View v){String result=v instanceof TextView?((TextView)v).getText().toString()+" | ":"";if(v instanceof ViewGroup){ViewGroup group=(ViewGroup)v;for(int i=0;i<group.getChildCount();i++)result+=nativeText(group.getChildAt(i));}return result;}
+    private void screenshot(){try{android.graphics.Bitmap shot=getUiAutomation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}}
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     private View find(View v,Class<?> type){if(type.isInstance(v))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=find(g.getChildAt(i),type);if(r!=null)return r;}}return null;}
     private Button button(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return(Button)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){Button b=button(g.getChildAt(i),text);if(b!=null)return b;}}return null;}
@@ -28,5 +30,5 @@ public class SmokeRunner extends Instrumentation {
         until("typeof ZNoteDownloads.markdown==='function'&&!!document.querySelector('input[type=file]')");
         runOnMainSync(()->{try{android.graphics.Bitmap shot=getUiAutomation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}});
         report.putString("stream","\nZNOTE_ANDROID_SMOKE_PASS\n");finish(Activity.RESULT_OK,report);
-    }catch(Throwable e){report.putString("stream","\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\n");finish(Activity.RESULT_CANCELED,report);}}
+    }catch(Throwable e){screenshot();String[] nativeState={""};if(activity!=null)runOnMainSync(()->nativeState[0]=nativeText(activity.getWindow().getDecorView()));report.putString("stream","\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\nNative UI: "+nativeState[0]+"\n");finish(Activity.RESULT_CANCELED,report);}}
 }
