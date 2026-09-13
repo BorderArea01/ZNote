@@ -49,6 +49,7 @@ import { IconButton } from "./ui.jsx";
 import { UploadDialog, ExportDialog, BatchTagsDialog } from "./features.jsx";
 import { OrganizeDialog } from './organize.jsx';
 import { TagFilter } from './TagFilter.jsx';
+import {useTagPage} from './useTagPage.js';
 import { ImportsDialog } from './Imports.jsx';
 const labels = {
   home: "我的知识库",
@@ -79,7 +80,6 @@ export default function Workspace({
     [total, setTotal] = useState(0),
     [stats, setStats] = useState({}),
     [collections, setCollections] = useState([]),
-    [tags, setTags] = useState([]),
     [selectedTags, setSelectedTags] = useState([]),
     [tagMode, setTagMode] = useState("all");
   const [preferences, setPreferences] = useState({
@@ -208,6 +208,7 @@ export default function Workspace({
     } catch (e) { if (current === detailGeneration.current) { notify(e.message); reading.reload(); } }
   }
   const savedViews = useSavedViews(actualCollection, ready && view !== 'home');
+  const sidebarTags=useTagPage(actualCollection,{limit:30,revision,enabled:ready&&view!=='home'}),tags=sidebarTags.tags;
   const [savedViewEditor, setSavedViewEditor] = useState(null);
   const currentViewConfig = { view, query, tags: selectedTags, mode: tagMode, sort, layout };
   const editSavedView = row => setSavedViewEditor({ row, current: currentViewConfig, library: actualCollection });
@@ -260,14 +261,13 @@ export default function Workspace({
     listRequest.current?.abort();
     closeDetail();
     setItems([]); setTotal(0); setLoadError(''); setLoading(true);
-    setTags([]);
     setSelectedTags([]); setQuery(''); setSearch('');
     setSelection([]); setSelecting(false); setMobile(false);
     // Re-entering the current scope must also fetch again after clearing it.
     pendingBrowse.current = null; setUpdatesAvailable(false); setRevision(n => n + 1);
   };
   const chooseCollection = (id) => {
-    resetScope(); setTags([]); setStats({});
+    resetScope(); setStats({});
     setCollection(id);
     restoreBrowse(id);
   };
@@ -414,9 +414,8 @@ export default function Workspace({
         : read(`/api/items?${signature}${anchor ? '&anchor=' + encodeURIComponent(anchor.id) : ''}`),
       read(`/api/stats?collection=${encodeURIComponent(collection || 'unfiled')}`),
       read("/api/collections"),
-      view === 'home' ? Promise.resolve([]) : read(`/api/tags?collection=${encodeURIComponent(collection || 'unfiled')}`),
     ])
-      .then(([result, stats, libs, tags]) => {
+      .then(([result, stats, libs]) => {
         if (controller.signal.aborted || current !== generation.current) return;
         setItems(result.items);
         setPageOffset(result.offset || 0);
@@ -427,7 +426,6 @@ export default function Workspace({
         setTotal(result.total);
         setStats(stats);
         setCollections(libs);
-        setTags(tags);
         if (
           collection &&
           collection !== "unfiled" &&
@@ -771,7 +769,7 @@ export default function Workspace({
               # {t.name}
             </button>
           ))}
-          {!tags.length && <small>为内容加上多个标签，轻松找回灵感</small>}
+          {sidebarTags.error?<button onClick={refresh}>重新加载标签</button>:sidebarTags.loading?<small>正在加载标签…</small>:!tags.length&&<small>为内容加上多个标签，轻松找回灵感</small>}
         </div>
         <div className="sidebar-bottom">
           <button
@@ -980,7 +978,7 @@ export default function Workspace({
               </section>
               {updatesAvailable && <div className="browse-update" role="status"><span>有内容更新，当前浏览位置和选择已保留</span><button onClick={refresh}><RefreshCw size={14}/>刷新内容</button><IconButton label="忽略更新提示" onClick={() => setUpdatesAvailable(false)}><X size={14}/></IconButton></div>}
               {view !== 'trash' && <ReadingProgress key={'reading:' + (actualCollection || 'unfiled')} progress={reading} onOpen={resumeReading} disabled={loading || galleryBusy || selecting} open={readingOpen} setOpen={setReadingOpen}/>}
-              <TagFilter key={actualCollection || 'unfiled'} tags={tags} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
+              <TagFilter key={actualCollection || 'unfiled'} collection={actualCollection} revision={revision} selected={selectedTags} mode={tagMode} videos={view === 'videos'}
                 onToggle={toggleTag} onMode={setTagMode} onClear={() => setSelectedTags([])}
                 onBrowse={['notes', 'videos'].includes(view) ? null : browseFilteredImages}
                 busy={loading || galleryBusy || query !== search || !!loadError} />
@@ -1400,6 +1398,7 @@ export default function Workspace({
       {batchTags && (
         <BatchTagsDialog
           items={chosenItems}
+          collection={actualCollection}
           suggestions={tags}
           onClose={() => setBatchTags(false)}
           onSaved={saved}

@@ -4,7 +4,7 @@
   <p><strong>把图片、视频和想法，放进自己的知识库。</strong></p>
   <p>图片素材库 · Markdown 图文笔记 · 浏览器采集 · 局域网自托管</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.9.21-287464?style=flat-square" alt="Version 0.9.21" />
+    <img src="https://img.shields.io/badge/version-0.9.22-287464?style=flat-square" alt="Version 0.9.22" />
     <img src="https://img.shields.io/badge/Node.js-24%2B-43853d?style=flat-square" alt="Node.js 24+" />
     <img src="https://img.shields.io/badge/storage-SQLite-406080?style=flat-square" alt="SQLite" />
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
@@ -36,6 +36,8 @@
 | 🌐 随处访问 | 一个服务，电脑、手机和平板通过浏览器访问；适合家庭或个人局域网 |
 
 ## 成组浏览与整理
+
+标签多时可直接搜索整库作者或关键词，每页展示 40 个标签及使用次数。跨页选择仍保留，可以匹配全部或任意标签；编辑笔记、上传和批量修改标签时，输入关键词也能找到冷门标签。标签加载独立于内容列表，手机筛选栏保持紧凑。
 
 选择图片后点击 **「整理图片组」**，可组成新组、追加到已有组或拆为独立图片。默认只处理选中的图片，勾选「包含所选图片所在的整组」可包含未加载的成员；确认前显示实际范围与封面。追加保留目标封面，整理后可以撤销。
 

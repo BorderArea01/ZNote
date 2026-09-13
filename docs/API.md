@@ -106,7 +106,9 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 
 ### 多标签与连续浏览
 
-`GET /api/stats` 与 `GET /api/tags` 同样支持 `collection`，前端始终传入当前知识库；省略参数仍可供脚本获取全局统计。`unfiled` 表示未分类。
+`GET /api/stats` 与 `GET /api/tags` 支持 `collection`，前端始终传入当前知识库；`unfiled` 表示未分类。省略参数时，stats 返回全局统计，tags 仅返回未分类标签。
+
+标签支持 `q` 字面子串搜索（不区分大小写，最多 200 字符）。不传 `limit` 保留完整数组响应；传入 `limit=1..100` 返回 `{tags:[{name,count}],total,offset,limit,cursor}`，`offset` 为 0..1000000。按使用次数倒序、名称排序，仅统计未删除内容。翻页时附带第一页的 `cursor`；服务内容变化后返回 409，须重读第一页。搜索在整个指定知识库进行，非仅过滤已加载标签。前端每页 40 个、侧栏 30 个，已选条件独立于分页保留。
 
 `GET /api/items` 支持 `kind=image|video|note`、`collection`、`q`、`tags`、`tag_mode` 等查询。`tags` 为 URL 编码后的 JSON 数组；`tag_mode=all` 表示交集，`any` 表示并集。`collection=unfiled` 仅查看未分类。
 

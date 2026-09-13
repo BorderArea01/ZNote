@@ -45,6 +45,7 @@ import { withSource } from './source.js';
 import { createImportManager } from './imports.js';
 import { registerStreamRoutes } from './streams.js';
 import { registerGroupOrderRoutes } from './group-order.js';
+import { registerTags } from './tags.js';
 import {videoThumbnail} from './video-thumbnail.js';
 
 const now = () => new Date().toISOString();
@@ -409,16 +410,7 @@ export function createApp({
     });
     res.status(204).end();
   });
-  app.get("/api/tags", (req, res) => {
-    const scope = collectionScope(req.query.collection ?? 'unfiled', 'items.');
-    res.json(
-      db
-        .prepare(
-          `SELECT j.value name, count(*) count FROM items, json_each(items.tags) j WHERE deleted_at IS NULL${scope.sql} GROUP BY j.value ORDER BY count DESC, name`,
-        )
-        .all(...scope.args),
-    );
-  });
+  registerTags({app,db,collectionScope});
   app.get("/api/items", (req, res) => {
     const q = z
       .object({

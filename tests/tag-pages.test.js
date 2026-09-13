@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {createApp} from '../server/app.js';
+
+test('bounded tag pages search the entire library and preserve legacy API and mutation isolation',async t=>{
+  const dir=await mkdtemp(resolve('artifacts/tag-pages-')),runtime=createApp({dataDir:dir}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+  t.after(async()=>{await runtime.trash.stop();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();});
+  let cookie;const request=(path,method='GET',body)=>fetch(base+path,{method,headers:{...(cookie?{Cookie:cookie}:{}),...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  const json=async(...args)=>{const r=await request(...args);assert.ok(r.ok,await r.clone().text());return r.json();};
+  const setup=await request('/api/auth/setup','POST',{password:'0922'});cookie=setup.headers.get('set-cookie').split(';')[0];
+  const a=await json('/api/collections','POST',{name:'标签大库'}),b=await json('/api/collections','POST',{name:'私有标签库'});
+  const note=await json('/api/items','POST',{title:'标签种子',collection_id:a.id,tags:['ÄBC','100%_完成','共同']});
+  await json('/api/items','POST',{title:'另库笔记',collection_id:b.id,tags:['其他库限定']});
+  await json('/api/items','POST',{title:'未分类笔记',tags:['未分类限定']});
+  const template=runtime.db.prepare('SELECT * FROM items WHERE id=?').get(note.id),fields=Object.keys(template),insert=runtime.db.prepare(`INSERT INTO items (${fields.join(',')}) VALUES (${fields.map(()=>'?').join(',')})`);
+  runtime.db.exec('BEGIN');for(let i=0;i<10000;i++){const row={...template,id:randomUUID(),title:'条目 '+i,tags:JSON.stringify(['作者'+String(i).padStart(5,'0'),'共同'])};insert.run(...fields.map(f=>row[f]));}runtime.db.exec('COMMIT');
+  const url='/api/tags?collection='+a.id,started=performance.now(),first=await json(url+'&limit=40');
+  assert.equal(first.tags.length,40);assert.equal(first.total,10003);assert.equal(first.tags[0].name,'共同');assert.equal(first.tags[0].count,10001);
+  assert.ok(JSON.stringify(first).length<6000);console.log('10,001-item / 10,003-tag page:',Math.round(performance.now()-started)+' ms');
+  const second=await json(url+'&limit=40&offset=40&cursor='+first.cursor);assert.equal(new Set([...first.tags,...second.tags].map(t=>t.name)).size,80);
+  assert.deepEqual((await json(url+'&limit=40&q=作者09999')).tags,[{name:'作者09999',count:1}]);
+  assert.deepEqual((await json(url+'&limit=40&q='+encodeURIComponent('äbc'))).tags,[{name:'ÄBC',count:1}]);
+  assert.deepEqual((await json(url+'&limit=40&q='+encodeURIComponent('%_'))).tags,[{name:'100%_完成',count:1}]);
+  assert.equal((await json(url+'&limit=40&q=不存在')).total,0);
+  assert.deepEqual((await json(url+'&limit=40&offset=1000000')).tags,[]);
+  const legacy=await json(url);assert.ok(Array.isArray(legacy));assert.equal(legacy.length,10003);assert.deepEqual(legacy.slice(0,40),first.tags);
+  assert.deepEqual((await json('/api/tags?limit=40')).tags,[{name:'未分类限定',count:1}]);
+  assert.deepEqual((await json('/api/tags?collection='+b.id+'&limit=40')).tags,[{name:'其他库限定',count:1}]);
+  for(const query of ['limit=0','limit=101','offset=-1','cursor=no','limit=3.5','q='+'a'.repeat(201)])assert.equal((await request(url+'&'+query)).status,400,query);
+  const patched=await json('/api/items/'+note.id,'PATCH',{version:note.version,tags:['更新的标签'],undo:true});
+  assert.equal((await request(url+'&limit=40&offset=40&cursor='+first.cursor)).status,409);
+  assert.equal((await json(url+'&limit=40&q=更新的标签')).total,1);
+  await json('/api/undo/'+patched.undo.id,'POST',{});assert.equal((await json(url+'&limit=40&q=更新的标签')).total,0);
+  const current=await json('/api/items/'+note.id);await json('/api/items/batch-trash','POST',{items:[{id:note.id,version:current.version}],collection_id:a.id});assert.equal((await json(url+'&limit=40&q=äbc')).total,0);
+});

@@ -1,5 +1,5 @@
 import { HelpHint } from './HelpHint.jsx';
-import { useCollectionTags } from './useCollectionTags.js';
+import { useTagPage } from './useTagPage.js';
 import React, { useEffect, useRef, useState } from "react";
 import {
   Sun,
@@ -50,10 +50,14 @@ export function TagInput({
   value,
   onChange,
   suggestions = [],
+  collection,
   label = "标签",
   disabled = false,
 }) {
   const [draft, setDraft] = useState("");
+  const [retry,setRetry]=useState(0),suggestionList=useRef(),tagInput=useRef();
+  const model=useTagPage(collection,{query:draft.slice(0,200),limit:40,revision:retry,enabled:collection!==undefined&&!disabled});
+  const matches=(collection===undefined?suggestions:model.tags).filter(t=>!value.includes(t.name)&&t.name.toLowerCase().includes(draft.trim().toLowerCase())).slice(0,8);
   const add = (text) => {
     const tags = text
       .split(/[,，\n]/)
@@ -63,7 +67,7 @@ export function TagInput({
     setDraft("");
   };
   return (
-    <div className="tag-input-group">
+    <div className="tag-input-group" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))add(draft)}}>
       <div className={`tag-input ${disabled ? "disabled" : ""}`}>
         {value.map((tag) => (
           <span className="tag-pill" key={tag}>
@@ -79,6 +83,7 @@ export function TagInput({
           </span>
         ))}
         <input
+          ref={tagInput}
           aria-label={label}
           disabled={disabled}
           placeholder={value.length ? "继续添加…" : "输入标签，回车或逗号添加"}
@@ -94,8 +99,9 @@ export function TagInput({
               setDraft(last);
             } else setDraft(text);
           }}
-          onBlur={() => add(draft)}
           onKeyDown={(e) => {
+            if(e.nativeEvent.isComposing)return;
+            if(e.key==='ArrowDown'&&matches.length){e.preventDefault();suggestionList.current?.querySelector('button')?.focus();return;}
             if (e.key === "Enter") {
               e.preventDefault();
               add(draft);
@@ -106,32 +112,23 @@ export function TagInput({
         />
       </div>
       {!disabled && (
-        <div className="tag-suggestions">
-          {suggestions
-            .filter((t) => !value.includes(t.name))
-            .slice(0, 8)
+        <div className="tag-suggestions" ref={suggestionList} aria-label="标签推荐">
+          {matches
             .map((t) => (
               <button
                 type="button"
                 key={t.name}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  onChange([
-                    ...new Set([
-                      ...value,
-                      ...draft
-                        .split(/[,，]/)
-                        .map((t) => t.trim())
-                        .filter(Boolean),
-                      t.name,
-                    ]),
-                  ]);
+                  onChange([...new Set([...value,t.name])]);
                   setDraft("");
+                  tagInput.current?.focus();
                 }}
               >
                 + {t.name}
               </button>
             ))}
+          {model.error&&<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>setRetry(n=>n+1)}>重试标签推荐</button>}
         </div>
       )}
     </div>
@@ -156,7 +153,6 @@ export function UploadDialog({
     })),
   );
   const [collection, setCollection] = useState(currentCollection || "");
-  const scopedSuggestions = useCollectionTags(collection);
   const [tags, setTags] = useState([]);
   const [running, setRunning] = useState(false);
   const stop = useRef(false);
@@ -258,7 +254,7 @@ export function UploadDialog({
           label="批量上传标签"
           value={tags}
           onChange={setTags}
-          suggestions={scopedSuggestions}
+          collection={collection||null}
           disabled={running}
         />
         <div className="upload-queue">
@@ -441,7 +437,7 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
     </Dialog>
   );
 }
-export function BatchTagsDialog({ items, suggestions, onClose, onSaved }) {
+export function BatchTagsDialog({ items, suggestions, collection, onClose, onSaved }) {
   const [tags, setTags] = useState([]),
     [mode, setMode] = useState("add"),
     [error, setError] = useState(""),
@@ -469,6 +465,7 @@ export function BatchTagsDialog({ items, suggestions, onClose, onSaved }) {
           value={tags}
           onChange={setTags}
           suggestions={suggestions}
+          collection={collection}
           label="批量编辑标签"
         />
         {error && <div className="error">{error}</div>}

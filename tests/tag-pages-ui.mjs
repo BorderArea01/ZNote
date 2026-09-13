@@ -1,0 +1,41 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {mkdtemp} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {createApp} from '../server/app.js';
+const dir=await mkdtemp(resolve('artifacts/tag-pages-ui-')),runtime=createApp({dataDir:dir,staticDir:resolve(process.env.UI_DIST||'dist')}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+const browser=await chromium.launch({channel:'msedge',headless:true}),context=await browser.newContext({viewport:{width:1366,height:768}}),page=await context.newPage(),errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(new URL(r.url()).pathname==='/api/tags')requests.push(new URL(r.url()));});
+const post=async(path,data)=>{const r=await context.request.post(base+path,{data});assert.ok(r.ok(),await r.text());return r.json();};
+const choose=name=>page.getByRole('button',{name:'筛选标签：'+name,exact:true}),remove=name=>page.getByRole('button',{name:'移除筛选标签：'+name,exact:true});
+const next=page.getByRole('button',{name:'下一页标签',exact:true}),search=page.getByLabel('搜索筛选标签');
+try{
+  await post('/api/auth/setup',{password:'0922'});const a=await post('/api/collections',{name:'万张资料'}),b=await post('/api/collections',{name:'另一个库'});
+  const note=await post('/api/items',{title:'写作测试',collection_id:a.id,tags:['共同']});await post('/api/items',{title:'其他笔记',collection_id:b.id,tags:['另库独有']});
+  const template=runtime.db.prepare('SELECT * FROM items WHERE id=?').get(note.id),fields=Object.keys(template),insert=runtime.db.prepare(`INSERT INTO items (${fields.join(',')}) VALUES (${fields.map(()=>'?').join(',')})`);
+  runtime.db.exec('BEGIN');for(let i=0;i<10000;i++){const row={...template,id:randomUUID(),title:'资料 '+i,tags:JSON.stringify(['作者'+String(i).padStart(5,'0'),'共同'])};insert.run(...fields.map(f=>row[f]));}runtime.db.exec('COMMIT');
+  await context.request.patch(base+'/api/preferences',{data:{default_collection_id:a.id}});await page.goto(base);await choose('作者00000').waitFor();
+  assert.equal(await page.locator('.tag-options > button').count(),40);assert.equal(await page.locator('.sidebar-tags > button').count(),30);
+  await choose('作者00000').click();await next.click();await choose('作者00040').waitFor();await choose('作者00040').click();assert.ok(await remove('作者00000').isVisible());assert.ok(await remove('作者00040').isVisible());
+  await page.getByLabel('标签匹配方式').selectOption('any');await search.fill('作者09999');await choose('作者09999').click();assert.equal(await page.locator('.tag-selection button[aria-label]').count(),3);assert.equal(await page.locator('.tag-options > button').count(),1);
+  assert.equal(requests.filter(url=>url.searchParams.get('limit')==='30').length,1,'content filters and tag searches do not reload sidebar aggregates');
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.style='minimal';document.documentElement.dataset.palette='slate';});await page.waitForTimeout(300);await page.screenshot({path:resolve('artifacts/v0922-tags-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:resolve('artifacts/v0922-tags-mobile.png')});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.setViewportSize({width:1366,height:768});
+  // Search failures do not clear selected filters; explicit retry can recover.
+  await page.route('**/api/tags?**',route=>new URL(route.request().url()).searchParams.get('q')==='失败'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'暂时离线'})}):route.continue());await search.fill('失败');await page.getByRole('button',{name:'重试标签',exact:true}).waitFor();assert.ok(await remove('作者09999').isVisible());await page.unrouteAll();await page.getByRole('button',{name:'重试标签',exact:true}).click();await page.getByText('没有匹配的标签，试试其他关键词。',{exact:true}).waitFor();
+  // A late result from the previous query must never replace the new query.
+  let release,started;const gate=new Promise(r=>release=r),arrived=new Promise(r=>started=r);
+  await page.route('**/api/tags?**',async route=>{if(new URL(route.request().url()).searchParams.get('q')==='作者000'){started();await gate;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({tags:[{name:'不应显示',count:1}],total:1,offset:0,limit:40,cursor:0})});}else await route.continue();});
+  await search.fill('作者000');await arrived;await search.fill('作者08888');await choose('作者08888').waitFor();release();await page.waitForTimeout(250);assert.equal(await choose('不应显示').count(),0);await page.unrouteAll();
+  await search.fill('');await next.waitFor();await choose('作者00000').waitFor();await post('/api/items',{title:'外部更新',collection_id:a.id,tags:['新增标签']});await next.click();await page.getByRole('button',{name:'刷新标签',exact:true}).waitFor();await page.getByRole('button',{name:'刷新标签',exact:true}).click();await choose('作者00000').waitFor();assert.ok(await remove('作者09999').isVisible());
+  await page.getByRole('button',{name:'清除筛选',exact:true}).click();await page.getByLabel('搜索内容').fill('写作测试');await page.getByRole('button',{name:'打开 写作测试',exact:true}).click();const detail=page.getByRole('dialog',{name:'图文笔记',exact:true}),input=detail.getByLabel('标签',{exact:true});
+  await input.fill('09999');await detail.getByRole('button',{name:'+ 作者09999',exact:true}).waitFor();await input.press('ArrowDown');await page.keyboard.press('Enter');await detail.getByRole('button',{name:'移除标签 作者09999',exact:true}).waitFor();assert.equal(await detail.getByRole('button',{name:'移除标签 09999',exact:true}).count(),0,'choosing a suggestion must not also save its search fragment');
+  assert.ok(await input.evaluate(el=>el===document.activeElement),'keyboard selection returns focus for the next tag');
+  await input.fill('08888');await detail.getByRole('button',{name:'+ 作者08888',exact:true}).click();assert.equal(await detail.locator('.tag-pill').count(),3);assert.ok(await detail.getByRole('button',{name:'移除标签 作者08888',exact:true}).isVisible());
+  await detail.getByLabel('所属知识库').selectOption(b.id);await input.fill('另库');await detail.getByRole('button',{name:'+ 另库独有',exact:true}).waitFor();assert.equal(await detail.locator('.tag-suggestions').getByText('作者09999',{exact:false}).count(),0);await input.fill('');
+  const saved=page.waitForResponse(r=>r.url()===base+'/api/items/'+note.id&&r.request().method()==='PATCH');await detail.getByRole('button',{name:'保存',exact:true}).click();assert.equal((await saved).status(),200);await page.waitForFunction(()=>!document.querySelector('.detail-bottom .primary')?.disabled);await detail.getByRole('button',{name:'关闭窗口',exact:true}).click();
+  await page.getByRole('button',{name:/^另一个库 /}).click();await choose('另库独有').waitFor();assert.equal(await choose('作者00000').count(),0);
+  await context.request.patch(base+'/api/preferences',{data:{default_collection_id:b.id}});
+  await page.route('**/api/tags?**',route=>new URL(route.request().url()).searchParams.get('limit')==='30'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'侧栏暂时离线'})}):route.continue());await page.reload();await page.getByRole('button',{name:'重新加载标签',exact:true}).waitFor();await page.getByRole('button',{name:'打开 写作测试',exact:true}).waitFor();await page.unrouteAll();await page.getByRole('button',{name:'重新加载标签',exact:true}).click();await page.locator('.sidebar-tags > button').filter({hasText:'另库独有'}).waitFor();
+  assert.ok(requests.every(url=>{const limit=Number(url.searchParams.get('limit'));return limit>=1&&limit<=100;}),'all web tag requests must be bounded');assert.deepEqual(errors,[]);console.log('PASS Edge: 10,000 tags, bounded sidebar/filter/input, cross-page selection, server search, stale response cancellation, retry/conflict recovery, keyboard suggestions, library isolation and responsive layout');
+}finally{await page.unrouteAll({behavior:'ignoreErrors'});await browser.close();await runtime.trash.stop();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();}

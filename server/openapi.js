@@ -341,7 +341,7 @@ export const spec = {
         responses: { 204: { description: "成功" }, ...errorResponses },
       },
     },
-    "/api/tags": { get: operation("标签和内容数量", list({ type: "object" })) },
+    "/api/tags": { get: operation("当前知识库标签搜索与分页", {oneOf:[list({type:'object',properties:{name:str,count:{type:'integer'}}}),{type:'object',properties:{tags:list({type:'object',properties:{name:str,count:{type:'integer'}}}),total:{type:'integer'},limit:{type:'integer'},offset:{type:'integer'},cursor:{type:'integer'}}}]}, {description:'不传 limit 时保留完整数组响应；传 limit 返回分页对象，按使用次数倒序、名称排序。标签只统计未删除内容；省略 collection 为未分类。cursor 不匹配时返回 409，请重读第一页。',parameters:[{name:'collection',in:'query',schema:str},{name:'q',in:'query',schema:{type:'string',maxLength:200},description:'不区分大小写的字面子串，不解释通配符'},{name:'limit',in:'query',schema:{type:'integer',minimum:1,maximum:100}},{name:'offset',in:'query',schema:{type:'integer',minimum:0,maximum:1000000,default:0}},{name:'cursor',in:'query',schema:{type:'integer',minimum:0}}]}) },
     "/api/tokens": {
       get: operation("API 令牌列表（管理员）", list({ type: "object" })),
       post: operation(

@@ -8,7 +8,6 @@ import { DraftConflict } from './NoteDrafts.jsx';
 const NoteVersions = React.lazy(() => import('./NoteVersions.jsx'));
 import { GalleryStrip } from './GalleryStrip.jsx';
 import { ZoomViewer } from './ZoomViewer.jsx';
-import { useCollectionTags } from './useCollectionTags.js';
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -370,7 +369,6 @@ function Detail({
   const [content, setContent] = useState(initial.content);
   const [tags, setTags] = useState(initial.tags);
   const [collection, setCollection] = useState(initial.collection_id || "");
-  const scopedSuggestions = useCollectionTags(collection);
   const [noteIndex,setNoteIndex] = useState(null);
   const noteImages = React.useMemo(()=>markdownImages(content,true).filter(i=>i.url.startsWith('/media/')).map((i,index)=>({...i,id:String(index),thumbnail_url:i.url.replace(/\/(original|thumbnail)(\?|$)/,'/thumbnail$2')})),[content]);
   useEffect(()=>{const id=noteImages[noteIndex]?.url.match(/^\/media\/([a-f0-9-]{36})\//i)?.[1];if(id&&!item.deleted_at)onImageViewed?.(id);},[noteImages[noteIndex]?.url,item.deleted_at]);
@@ -606,7 +604,7 @@ function Detail({
               <TagInput
                 value={tags}
                 onChange={setTags}
-                suggestions={scopedSuggestions}
+                collection={collection||null}
                 disabled={!!item.deleted_at}
               />
             </label>

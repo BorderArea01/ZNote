@@ -22,7 +22,7 @@ try {
   const other = await post('/api/collections', { name: '其他知识库' });
   for (let i = 0; i < 65; i++) {
     const buffer = await sharp({ create: { width: 600, height: 400, channels: 3, background: { r: 30 + i * 3, g: 120, b: 80 + i } } }).png().toBuffer();
-    const tags = [...(i < 62 || i === 64 ? ['旅行'] : []), ...(i % 2 === 0 || i >= 62 ? ['风景'] : []), ...(i === 0 ? ['龘-冷门标签'] : [])];
+    const tags = [...(i < 62 || i === 64 ? ['旅行'] : []), ...(i % 2 === 0 || i >= 62 ? ['风景'] : []), ...(i === 0 ? ['龘-冷门标签'] : []), ...(i === 62 ? ['独立'] : [])];
     const r = await context.request.post(base + '/api/assets', { multipart: { file: { name: `照片${String(i).padStart(3, '0')}.png`, mimeType: 'image/png', buffer }, collection_id: i === 64 ? other.id : library.id, tags: JSON.stringify(tags) } });
     assert.ok(r.ok(), await r.text());
   }
@@ -61,17 +61,18 @@ try {
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
   await page.getByLabel('搜索筛选标签').fill('冷门');
   await toggle('龘-冷门标签'); await count(1);
-  assert.equal(await page.locator('.sidebar-tags').getByRole('button', { name: '# 龘-冷门标签', exact: true }).count(), 0);
+  assert.equal(await page.locator('.sidebar-tags').getByRole('button', { name: '# 龘-冷门标签', exact: true }).count(), 1);
+  assert.equal(await page.getByRole('button', { name: '筛选标签：标签0', exact: true }).count(), 0,'foreign-library tags never appear');
   await page.getByRole('button', { name: '移除筛选标签：龘-冷门标签', exact: true }).click(); await count(60);
   await page.getByLabel('搜索筛选标签').fill('不存在的标签');
   await page.getByText('没有匹配的标签，试试其他关键词。', { exact: true }).waitFor();
   await page.getByLabel('搜索筛选标签').fill('');
-  await toggle('旅行'); await toggle('标签0');
+  await toggle('旅行'); await toggle('独立');
   await page.getByLabel('标签匹配方式').selectOption('all');
   await page.getByRole('heading', { name: '还没有找到相关内容' }).waitFor();
   await page.getByRole('button', { name: '连续浏览图片', exact: true }).click();
   await page.getByText('当前筛选条件下没有图片', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '移除筛选标签：标签0', exact: true }).click();
+  await page.getByRole('button', { name: '移除筛选标签：独立', exact: true }).click();
   await toggle('风景'); await count(32);
   await page.getByRole('button', { name: '关闭提示', exact: true }).click();
   await page.waitForLoadState('networkidle');

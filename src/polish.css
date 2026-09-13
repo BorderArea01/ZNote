@@ -42,6 +42,18 @@ html[data-style] button.help-trigger:hover, html[data-style] button.help-trigger
 .tag-browser { margin-top: 18px; padding: 14px 18px; }
 .tag-browser-tools { margin-top: 10px; }
 .tag-options { margin: 12px 0 0; }
+.tag-options button { display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+.tag-options button small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tag-pages { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 8px 0; font-size: 11px; color: var(--muted); }
+.tag-pages button { font-size: 11px; padding: 5px 8px; white-space: nowrap; }
+.tag-pages span { font-variant-numeric: tabular-nums; }
+@media(max-width:600px){
+  .tag-browser-heading,.tag-browser-tools { flex-direction: row; align-items: center; gap: 8px; }
+  .tag-browser-heading > button { width: auto; padding: 8px; }
+  .tag-browser-tools select { width: 106px; flex: 0 0 106px; padding: 9px 6px; }
+  .tag-search input { padding: 9px 6px; font-size: 12px; }
+  .tag-pages { gap: 7px; justify-content: space-between; }
+}
 .tag-selection { margin-top: 12px; font-size: 12px; }
 .tag-browser-heading strong { font-size: 14px; }
 .tag-browser-tools select, .tag-options button { font-size: 13px; }
