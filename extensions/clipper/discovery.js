@@ -81,7 +81,7 @@ chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
         updated: Date.now(),
       };
       await persist();
-      await chrome.tabs
+      if(old.enabled)await chrome.tabs
         .sendMessage(details.tabId, { type: "scan-media-frame" })
         .catch(() => {});
     }
@@ -189,6 +189,11 @@ export async function discover(message, sender) {
       [...(states[tabId]?.resources||[]),...(states[tabId]?.hoverResources||[])].find((r) => r.id === message.id),
     );
     if (!resource) throw new Error("资源已失效，请重新扫描");
+    if(resource.kind==='video'||resource.kind==='hls'){
+      try{const details=await chrome.tabs.sendMessage(tabId,{type:'video-metadata',url:resource.url},{frameId:sender.frameId||0});
+        if(details?.author)await serial(async()=>{const state=await stateFor(tabId);addResource(state,{...details,url:resource.url,kind:resource.kind,mime:resource.mime});await persist()});
+      }catch{}
+    }
     return resourceAction(resource, message.action);
   }
   if (message.type === "hover-resource")

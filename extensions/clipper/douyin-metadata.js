@@ -3,7 +3,20 @@
   const clean=(v,n=200)=>typeof v==='string'?v.replace(/\s+/g,' ').trim().slice(0,n):'';
   const idOf=value=>{try{const u=new URL(value,location.href);return u.pathname.match(/\/(?:share\/)?video\/(\d+)/)?.[1]||u.searchParams.get('modal_id')||u.searchParams.get('aweme_id')||''}catch{return ''}};
   const urlOf=value=>{if(typeof value!=='string'||!value.trim())return '';try{const u=new URL(value,location.href);u.hash='';return /^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.href:''}catch{return ''}};
-  const cache=new WeakMap();
+  const cache=new WeakMap(),live=new Map();let observing=false;
+  globalThis.ZNoteDouyinObserve=value=>{observing=value===true;window.postMessage({type:'znote-douyin-observe',enabled:observing},location.origin);if(!observing)live.clear()};
+  window.addEventListener('message',event=>{
+    if(!observing||event.source!==window||event.origin!==location.origin||event.data?.type!=='znote-douyin-works'||!Array.isArray(event.data.rows))return;
+    let changed=false;
+    for(const raw of event.data.rows.slice(0,300)){
+      if(!raw||typeof raw.id!=='string'||!/^\d+$/.test(raw.id))continue;
+      const row={id:raw.id,work_id:raw.id,title:clean(raw.title),author:clean(raw.author),author_url:urlOf(raw.author_url),poster:urlOf(raw.poster),source_url:'https://www.douyin.com/video/'+raw.id,metadata_rank:3,urls:Array.isArray(raw.urls)?raw.urls.slice(0,60).map(urlOf).filter(Boolean):[]};
+      if(JSON.stringify(live.get(row.id))===JSON.stringify(row))continue;
+      live.set(row.id,row);changed=true;
+    }
+    while(live.size>300)live.delete(live.keys().next().value);
+    if(changed)window.dispatchEvent(new Event('znote-video-metadata'));
+  });
   function records(){
     const result=[];
     for(const script of [...document.querySelectorAll('script#RENDER_DATA,script#__NEXT_DATA__,script[type="application/json"],script:not([src])')].slice(0,120)){
@@ -16,17 +29,9 @@
         if(assignment){input=input.slice(assignment.index+assignment[0].length);let depth=0,quoted=false,escaped=false,end=-1;for(let i=0;i<input.length;i++){const c=input[i];if(quoted){if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c==='"')quoted=false;continue}if(c==='"')quoted=true;else if(c==='{')depth++;else if(c==='}'&&--depth===0){end=i+1;break}}if(end>0)input=input.slice(0,end);}
         data=JSON.parse(input);
       }catch{cache.set(script,{raw,records:[]});continue}
-      let visited=0;const walk=(value,depth=0)=>{
-        if(!value||typeof value!=='object'||depth>18||visited++>12000)return;
-        const id=value.aweme_id||value.awemeId,person=value.author||value.authorInfo;
-        if(typeof id==='string'&&/^\d+$/.test(id)&&person&&value.video){
-          const author=clean(person.nickname||person.nickName),sec=clean(person.sec_uid||person.secUid,200);
-          const urls=new Set();const addresses=(v,d=0)=>{if(!v||d>6)return;if(typeof v==='string'){if(/^https?:\/\//.test(v)&&v.length<4096)urls.add(urlOf(v));return}if(Array.isArray(v)){for(const x of v.slice(0,30))addresses(x,d+1)}else if(typeof v==='object')for(const [key,x]of Object.entries(v))if(/play|download|url|bit.?rate|src/i.test(key))addresses(x,d+1)};addresses(value.video);
-          found.push({id,title:clean(value.desc||value.description),author,author_url:sec?'https://www.douyin.com/user/'+encodeURIComponent(sec):'',source_url:'https://www.douyin.com/video/'+id,metadata_rank:3,urls:[...urls].filter(Boolean)});
-        }
-        for(const child of Object.values(value))walk(child,depth+1);
-      };walk(data);cache.set(script,{raw,records:found});result.push(...found);
+      found.push(...globalThis.ZNoteDouyinRecords(data));cache.set(script,{raw,records:found});result.push(...found);
     }
+    result.push(...live.values());
     const unique=new Map();for(const row of result){const old=unique.get(row.id);unique.set(row.id,old?{...old,...row,author:row.author||old.author,author_url:row.author_url||old.author_url,urls:[...new Set([...old.urls,...row.urls])]}:row)}return [...unique.values()].slice(0,300);
   }
   const ignored='nav,header,[data-e2e*="comment"],[class*="comment"],[role="navigation"]';
@@ -51,14 +56,16 @@
   const publicData=({urls,id,...value})=>value;
   // The player appends request parameters and can switch CDN hosts. The TOS
   // object path still identifies the same media; unrelated assets stay separate.
-  const mediaKey=value=>{try{const u=new URL(value);if(/(^|\.)douyinvod\.com$/.test(u.hostname))return u.pathname.match(/\/video\/tos\/.+/)?.[0]||'';if(/(^|\.)douyin\.com$/.test(u.hostname)&&/^\/aweme\/v1\/play\//.test(u.pathname))return u.searchParams.get('video_id')||''}catch{}return ''};
-  globalThis.ZNoteDouyinMetadataForUrl=url=>{const address=urlOf(url),key=mediaKey(address);const matches=records().filter(r=>r.urls.some(u=>u===address||(key&&mediaKey(u)===key)));return matches.length===1?publicData(matches[0]):null};
+  const mediaKey=value=>{try{const u=new URL(value);if(/(^|\.)(?:douyinvod\.com|douyinstatic\.com|douyinvod\.com\.cn)$/.test(u.hostname))return u.pathname.match(/\/video\/tos\/.+/)?.[0]||'';if(/(^|\.)douyin\.com$/.test(u.hostname)&&/^\/aweme\/v1\/play\//.test(u.pathname))return u.searchParams.get('video_id')||''}catch{}return ''};
+  let indexed;
+  const recordIndex=()=>{if(indexed)return indexed;const all=records(),exact=new Map(),keys=new Map();const add=(map,key,row)=>{if(!key)return;const prev=map.get(key);map.set(key,map.has(key)&&prev?.id!==row.id?null:row)};for(const row of all)for(const url of row.urls){add(exact,url,row);add(keys,mediaKey(url),row)}indexed={all,exact,keys};queueMicrotask(()=>indexed=null);return indexed};
+  globalThis.ZNoteDouyinMetadataForUrl=url=>{const address=urlOf(url),index=recordIndex(),row=index.exact.get(address)||index.keys.get(mediaKey(address));return row?publicData(row):null};
   globalThis.ZNoteDouyinMetadata=video=>{
-    const root=rootOf(video),all=records(),src=urlOf(video?.currentSrc||video?.src||''),link=root?.querySelector('a[href*="/video/"]');
+    const root=rootOf(video),all=recordIndex().all,src=urlOf(video?.currentSrc||video?.src||''),link=root?.querySelector('a[href*="/video/"]');
     const id=root?.getAttribute?.('data-aweme-id')||root?.getAttribute?.('data-item-id')||idOf(link?.href)||((!root||root===document||document.querySelectorAll('video').length<=1)?idOf(location.href):'');
     const matched=all.filter(r=>id?r.id===id:src&&r.urls.includes(src));
     const record=matched.length===1?matched[0]:!id&&all.length===1&&document.querySelectorAll('video').length<=1?all[0]:null;
     const dom=authorFrom(root),titleNode=root?.querySelector('[data-e2e="video-desc"],[data-e2e="video-detail-desc"],[data-e2e="user-post-item-desc"]');
-    return {title:record?.title||clean(titleNode?.getAttribute('title')||titleNode?.textContent),author:record?.author||dom.author||'',author_url:record?.author_url||dom.author_url||'',source_url:record?.source_url||(id?'https://www.douyin.com/video/'+id:location.href),metadata_rank:3};
+    return {title:record?.title||clean(titleNode?.getAttribute('title')||titleNode?.textContent),author:record?.author||dom.author||'',author_url:record?.author_url||dom.author_url||'',source_url:record?.source_url||(id?'https://www.douyin.com/video/'+id:location.href),poster:record?.poster||urlOf(video?.poster),work_id:record?.id||id||'',metadata_rank:3};
   };
 })();

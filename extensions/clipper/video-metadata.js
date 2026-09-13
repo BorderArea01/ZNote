@@ -3,13 +3,13 @@
   const text=(root,selector)=>{const el=root?.querySelector(selector);return clean(el?.getAttribute('content')||el?.getAttribute('title')||el?.textContent)};
   const safe=(value)=>{if(typeof value!=='string'||!value.trim())return '';try{const url=new URL(value,location.href);return /^https?:$/.test(url.protocol)&&!url.username&&!url.password?url.href:''}catch{return ''}};
   globalThis.ZNoteVideoMetadata=(video=null)=>{
-    let title='',author='',author_url='',source_url=location.href,rank=1;
+    let title='',author='',author_url='',source_url=location.href,poster=safe(video?.poster),work_id='',rank=1;
     const host=location.hostname;
     const root=video?.closest('article[data-testid="tweet"], [data-e2e="feed-active-video"], [data-e2e="feed-item"], #noteContainer, .note-detail-mask, .note-container, article')||document;
     const authorLink=selector=>{for(const el of root.querySelectorAll(selector)){const name=clean(el.textContent);if(name){author=name;author_url=safe(el.closest('a')?.getAttribute('href'));break}}};
     if(/(^|\.)bilibili\.com$/.test(host)) {title=text(document,'h1.video-title, h1');authorLink('.up-name[href], .up-info-container a[href*="space.bilibili.com"]');}
     else if(/(^|\.)xiaohongshu\.com$/.test(host)){title=text(root,'#detail-title, .title')||text(root,'#detail-desc');authorLink('.author-wrapper a.name, .author-wrapper a[href*="/user/profile/"], .author a.name, .author-wrapper .username, .author .username');}
-    else if(/(^|\.)(douyin|iesdouyin)\.com$/.test(host)&&globalThis.ZNoteDouyinMetadata){const details=globalThis.ZNoteDouyinMetadata(video);title=details.title;author=details.author;author_url=details.author_url;source_url=details.source_url;}
+    else if(/(^|\.)(douyin|iesdouyin)\.com$/.test(host)&&globalThis.ZNoteDouyinMetadata){const details=globalThis.ZNoteDouyinMetadata(video);title=details.title;author=details.author;author_url=details.author_url;source_url=details.source_url;poster=details.poster||poster;work_id=details.work_id||'';}
     else if(/(^|\.)(x|twitter)\.com$/.test(host)&&root!==document){title=text(root,'[data-testid="tweetText"]');authorLink('[data-testid="User-Name"] a[href]:first-child');const time=root.querySelector('time');source_url=safe(time?.closest('a')?.href)||source_url;}
     if(title||author)rank=3;
     if(root!==document){title ||= text(root,'h1,h2,h3,[itemprop="name"]');if(!author)authorLink('[rel="author"], [itemprop="author"] a');if(title||author)rank=3;}
@@ -23,7 +23,7 @@
       title ||= text(document,'meta[property="og:title"],meta[name="twitter:title"]');author ||= text(document,'meta[name="author"],meta[property="article:author"]');
     }
     title ||= clean(video?.getAttribute('title')||video?.getAttribute('aria-label'))||clean(document.title);
-    return {title,author,author_url,source_url,metadata_rank:rank};
+    return {title,author,author_url,source_url,poster,work_id,metadata_rank:rank};
   };
-  chrome.runtime.onMessage.addListener((message,sender,reply)=>{if(message.type!=='video-metadata')return;const video=[...document.querySelectorAll('video')].find(v=>v.currentSrc===message.url||v.src===message.url);reply(globalThis.ZNoteVideoMetadata(video));});
+  chrome.runtime.onMessage.addListener((message,sender,reply)=>{if(message.type!=='video-metadata')return;const video=[...document.querySelectorAll('video')].find(v=>v.currentSrc===message.url||v.src===message.url);const matched=globalThis.ZNoteDouyinMetadataForUrl?.(message.url);reply(matched||(globalThis.ZNoteDouyinMetadataForUrl&&!video?null:globalThis.ZNoteVideoMetadata(video)));});
 })();

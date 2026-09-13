@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZNote 媒体采集",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "description": "悬停高清大图，S 下载、Z 保存知识库；视频嗅探支持 MP4 与 m3u8，保留作品标题、作者与来源。",
   "permissions": [
     "activeTab",
@@ -26,14 +26,28 @@
         "image-candidates.js",
         "preview-layout.js",
         "preview-cache.js",
+        "douyin-records.js",
         "douyin-metadata.js",
         "video-metadata.js",
+        "video-groups.js",
         "overlay.js",
         "connect.js",
         "vendor/article-extract.js"
       ],
       "all_frames": true,
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://*.douyin.com/*",
+        "https://*.iesdouyin.com/*"
+      ],
+      "js": [
+        "vendor/douyin-network.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "background": {

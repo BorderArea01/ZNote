@@ -42,11 +42,12 @@ export function addResource(state, value, allowImages=false) {
   } catch {}
   let resource = state.resources.find((r) => r.url === url.href);
   const rank=Math.max(0,Math.min(3,Number(value.metadata_rank)||0));
-  const metadata={title:String(value.title||'').slice(0,200),author:String(value.author||'').slice(0,200),author_url:String(value.author_url||'').slice(0,4096)};
+  let poster='';try{const p=new URL(value.poster);if(/^https?:$/.test(p.protocol)&&!p.username&&!p.password&&p.href.length<4096)poster=p.href}catch{}
+  const metadata={title:String(value.title||'').slice(0,200),author:String(value.author||'').slice(0,200),author_url:String(value.author_url||'').slice(0,4096),poster,work_id:/^\d{1,30}$/.test(value.work_id||'')?value.work_id:''};
   if (resource) {
     if(rank>=(resource.metadata_rank||0)){
       if(value.source_url)resource.source_url=source;
-      for(const field of ['title','author','author_url'])if(metadata[field])resource[field]=metadata[field];
+      for(const field of ['title','author','author_url','poster','work_id'])if(metadata[field])resource[field]=metadata[field];
       resource.metadata_rank=rank;
     }
     if (value.bytes) resource.bytes = value.bytes;
@@ -66,7 +67,7 @@ export function addResource(state, value, allowImages=false) {
       value.title || url.pathname.split("/").pop() || "网页资源",
     ).slice(0, 180),
     source_url: source,
-    author:metadata.author,author_url:metadata.author_url,metadata_rank:rank,
+    author:metadata.author,author_url:metadata.author_url,poster:metadata.poster,work_id:metadata.work_id,metadata_rank:rank,
     found_at: Date.now(),
   };
   state.resources.push(resource);

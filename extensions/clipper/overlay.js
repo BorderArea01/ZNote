@@ -39,7 +39,8 @@
     pollTimer,
     hoverAllowed = false,
     dockAllowed = false,
-    siteBlocked = true;
+    siteBlocked = true,
+    thumbnailObserver;
   const own = (event) => event.composedPath().includes(host);
   const shortcutHelp = () => `${downloadKey.toUpperCase()} 下载 · ${saveKey.toUpperCase()} 入库`;
   async function refreshSettings() {
@@ -47,7 +48,7 @@
       const config = await send({type: 'media-settings',znotePage:!!document.querySelector('meta[name="znote-app"]')});
       hoverAllowed = config.hover; dockAllowed = config.dock;
       siteBlocked = config.blocked;
-      if(siteBlocked){enabled=false;resources=[];panel.classList.add('hidden');clearInterval(pollTimer);}
+      if(siteBlocked){enabled=false;resources=[];panel.classList.add('hidden');clearInterval(pollTimer);globalThis.ZNoteDouyinObserve?.(false);}
       downloadKey = /^[a-z0-9]$/.test(config.downloadKey) ? config.downloadKey : 's';
       saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'z' ? 's' : 'z');
       downloadButton.textContent = `${downloadKey.toUpperCase()} 下载`;
@@ -75,6 +76,7 @@
     return el;
   };
   const css = `:host{all:initial;font:13px/1.55 system-ui,'Microsoft YaHei',sans-serif;color:#ecedf6}*{box-sizing:border-box}button,select,input{font:inherit}button{cursor:pointer;color:inherit;background:#2a3040;border:1px solid #404b65;border-radius:9px;padding:7px 11px}button:hover{background:#404b65}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #a8b5d3}button.primary{background:#5865ce;border-color:#808def}.dock{backdrop-filter:blur(18px);position:fixed;right:18px;bottom:24px;border:1px solid #a8b5d3;border-radius:24px;background:#1c202b;color:#ecedf6;box-shadow:0 5px 28px #0005;z-index:2147483647;padding:11px 16px;touch-action:none}.panel{position:fixed;right:18px;bottom:80px;width:min(414px,calc(100vw - 24px));max-height:min(710px,calc(100vh - 108px));display:flex;flex-direction:column;background:#14171f;color:#ecedf6;border:1px solid #404b65;border-radius:16px;box-shadow:0 12px 44px #0007;z-index:2147483647;overflow:hidden}.head,.controls,.destination{padding:12px 14px;border-bottom:1px solid #2a3040}.head{display:flex;align-items:center;justify-content:space-between;font-weight:650}.head small{font-size:11px;color:#a8b5d3;font-weight:400}.controls{display:flex;gap:6px;flex-wrap:wrap}.controls button[aria-pressed=true]{background:#404b65}.destination{display:grid;grid-template-columns:1fr 1fr;gap:8px}.destination input,.destination select{width:100%;min-width:0;border:1px solid #404b65;border-radius:7px;background:#1c202b;color:inherit;padding:6px}.destination label{font-size:11px}.list{overflow:auto;min-height:70px;padding:9px 12px;overscroll-behavior:contain}.item{padding:11px 0;border-bottom:1px solid #2a3040}.row{display:flex;gap:10px;align-items:center}.thumb{width:66px;height:48px;object-fit:cover;border-radius:6px;background:#2a3040}.info{min-width:0;flex:1}.title{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px}.meta{display:block;color:#a8b5d3;font-size:11px;word-break:break-all}.actions{display:flex;gap:7px;margin-top:9px}.footer{padding:10px 14px;color:#a8b5d3;font-size:11px;border-top:1px solid #2a3040}.status{padding:0 14px 10px;color:#cbd3e8;overflow-wrap:anywhere;font-size:12px}.preview{backdrop-filter:blur(18px);position:fixed;z-index:2147483646;padding:8px;border:1px solid #a8b5d3;border-radius:12px;background:#14171ff5;color:#ecedf6;box-shadow:0 8px 32px #0007;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);display:flex;flex-direction:column;gap:7px;pointer-events:auto}.preview img{display:block;max-width:min(720px,calc(100vw - 42px));max-height:calc(100vh - 116px);object-fit:contain}.preview .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.preview small{font-size:11px;color:#cbd3e8}.empty{color:#a8b5d3;padding:15px 2px}.hidden{display:none!important}`;
+  const videoCss = '.panel{width:min(440px,calc(100vw - 24px))}.item{padding:14px 2px}.row{align-items:flex-start;gap:12px}.thumb-button{padding:0;width:104px;height:78px;flex:none;overflow:hidden;border:1px solid #384157;border-radius:10px;background:#222735}.thumb{width:100%;height:100%;object-fit:cover;display:block}.thumb-fallback{display:grid;place-items:center;height:100%;color:#b9c5e9;font-size:25px}.title{font-size:13px;line-height:1.5;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}.author{display:block;margin-top:5px;font-size:12px;color:#c2caf0}.unresolved{margin-top:5px;color:#aaaec0}.variants{width:100%;margin-top:10px;background:#202533;color:#cbd3e8;border:1px solid #384157;border-radius:7px;padding:6px;font:inherit;font-size:11px}.actions{display:grid;grid-template-columns:1fr 1fr 1.5fr;margin-top:11px}.actions button{padding:8px 5px}';
   function notify(text) {
     if (status) status.textContent = text;
   }
@@ -82,6 +84,7 @@
     if (btn) btn.disabled = true;
     notify("正在处理…");
     try {
+      await scan();
       const result = await send({
         type: "media-action",
         id: resource.id,
@@ -94,65 +97,46 @@
       if (btn) btn.disabled = false;
     }
   }
+  const selectedVariants=new Map();
   function draw() {
     if (!list) return;
+    thumbnailObserver?.disconnect();
+    thumbnailObserver=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const video=entry.target;video.src=video.dataset.src;video.preload='metadata';video.load();thumbnailObserver.unobserve(video)}},{root:list,rootMargin:'80px'});
     list.replaceChildren();
-    const selected = resources.filter(r=>r.kind==='video'||r.kind==='hls');
-    dock.textContent = `▶ 视频 ${selected.length || ''}`;
-    if (!selected.length)
-      list.append(
-        element("p", "暂未发现视频。播放视频后自动发现 MP4、WebM 或 m3u8。", {
-          class: "empty",
-        }),
-      );
-    for (const r of [...selected].reverse()) {
-      const item = element("article", null, {
-        class: "item",
-        "data-resource-id": r.id,
-      });
-      const row = element("div", null, { class: "row" });
-      if (r.kind === "image") {
-        const img = element("img", null, {
-          class: "thumb",
-          alt: "图片",
-          loading: "lazy",
-          referrerpolicy: "no-referrer",
-        });
-        img.src = r.url;
-        row.append(img);
-      } else
-        row.append(
-          element("span", r.kind === "hls" ? "▶ HLS" : "▶ MP4", {
-            class: "thumb",
-          }),
-        );
-      const info = element("div", null, { class: "info" });
-      info.append(element("span", r.title, { class: "title", title: r.title }));
-      if(r.author)info.append(element('span','作者：'+r.author,{class:'meta'}));
-      info.append(
-        element(
-          "span",
-          `${r.kind === "image" ? "图片" : r.kind === "hls" ? "m3u8 分段视频" : "视频文件"} · ${new URL(r.url).hostname}${r.bytes && r.kind !== "hls" ? " · " + (r.bytes < 1048576 ? (r.bytes / 1024).toFixed(1) + " KB" : (r.bytes / 1048576).toFixed(1) + " MB") : ""}`,
-          { class: "meta" },
-        ),
-      );
-      row.append(info);
-      item.append(row);
-      const actions = element("div", null, { class: "actions" });
-      for (const [text, action] of [
-        ["预览", "preview"],
-        ["下载", "download"],
-        ["保存知识库", "save"],
-      ]) {
-        const btn = button(text, () => act(r, action, btn));
-        actions.append(btn);
+    const groups=globalThis.ZNoteVideoGroups(resources);
+    dock.textContent = '▶ 视频 '+(groups.length||'');
+    if(!groups.length)list.append(element('p','暂未发现视频。播放视频后自动发现 MP4、WebM 或 m3u8。',{class:'empty'}));
+    for(const group of [...groups].reverse()){
+      let r=group.items.find(x=>x.id===selectedVariants.get(group.key))||group.primary;
+      const item=element('article',null,{class:'item','data-resource-id':r.id,'data-work-id':r.work_id||''});
+      const row=element('div',null,{class:'row'});
+      const thumb=button('',()=>act(r,'preview',thumb));thumb.className='thumb-button';thumb.title='预览视频';thumb.setAttribute('aria-label','预览视频封面');
+      const showFrame=()=>{
+        thumb.replaceChildren();
+        if(r.kind==='hls'){thumb.append(element('span','▶',{class:'thumb-fallback'}));thumb.title='点击播放预览';return}
+        const video=element('video',null,{class:'thumb',muted:'',playsinline:'','aria-label':'视频首帧',preload:'none'});video.muted=true;video.dataset.src=r.url;
+        video.addEventListener('error',()=>{thumb.replaceChildren(element('span','▶',{class:'thumb-fallback'}));thumb.title='封面暂不可用，点击播放预览'},{once:true});
+        thumb.append(video);thumbnailObserver.observe(video);
+      };
+      const poster=r.poster||group.items.find(x=>x.poster)?.poster;
+      if(poster){const img=element('img',null,{class:'thumb',alt:r.title+' 封面',loading:'lazy',referrerpolicy:'no-referrer'});img.src=poster;img.addEventListener('error',showFrame,{once:true});thumb.append(img)}else showFrame();
+      const info=element('div',null,{class:'info'});info.append(element('strong',r.title||'未识别标题',{class:'title',title:r.title||''}));
+      info.append(element('span',r.author?'作者：'+r.author:'作者待识别',{class:r.author?'author':'meta unresolved'}));
+      info.append(element('span',(r.kind==='hls'?'m3u8 分段视频':'视频文件')+(group.items.length>1?' · '+group.items.length+' 条线路':'')+(r.bytes?' · '+(r.bytes/1024/1024).toFixed(1)+' MB':''),{class:'meta'}));
+      row.append(thumb,info);item.append(row);
+      if(group.items.length>1){
+        const choices=element('select',null,{class:'variants','aria-label':'视频线路'});
+        group.items.forEach((variant,index)=>{const option=new Option('线路 '+(index+1)+' · '+new URL(variant.url).hostname,variant.id);choices.append(option)});choices.value=r.id;
+        choices.addEventListener('change',()=>{selectedVariants.set(group.key,choices.value);draw()});item.append(choices);
       }
-      item.append(actions);
-      list.append(item);
+      const actions=element('div',null,{class:'actions'});
+      for(const [label,action]of [['预览','preview'],['下载','download'],['保存知识库','save']]){const btn=button(label,()=>act(r,action,btn));if(action==='save')btn.classList.add('primary');actions.append(btn)}
+      item.append(actions);list.append(item);
     }
   }
   function scan() {
     if (!enabled || siteBlocked) return;
+    globalThis.ZNoteDouyinObserve?.(true);
     const found = [];
     const videos=[...document.querySelectorAll('video')];
     const active=videos.filter(v=>!v.paused&&v.getBoundingClientRect().width>0);
@@ -169,7 +153,7 @@
       const details=globalThis.ZNoteDouyinMetadataForUrl?.(r.name);
       if(details||/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(r.name))found.push({...networkMetadata,metadata_rank:1,...details,url:r.name,...(details?{kind:'video'}:{})});
     }
-    send({ type: 'media-scan', resources: found.slice(0,200), metadata:networkMetadata })
+    return send({ type: 'media-scan', resources: found.slice(0,200), metadata:networkMetadata })
       .then((state) => {
         resources = state.resources;
         draw();
@@ -408,7 +392,7 @@
     document.documentElement.append(host);
     root = host.attachShadow({ mode: "open" });
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(css + ":host>div,:host>button{pointer-events:auto}");
+    sheet.replaceSync(css + videoCss + ":host>div,:host>button{pointer-events:auto}");
     root.adoptedStyleSheets = [sheet];
     dock = button("▶ 视频", () =>
       panel.classList.contains("hidden")
@@ -435,6 +419,7 @@
       });
       enabled = state.enabled;
       pause.textContent = enabled ? "暂停嗅探" : "继续嗅探";
+      globalThis.ZNoteDouyinObserve?.(enabled);
       if (enabled) scan();
     });
     controls.append(pause);
@@ -641,6 +626,7 @@
     } catch {}
     await refreshSettings();
     window.addEventListener('focus', refreshSettings);
+    let metadataTimer;window.addEventListener('znote-video-metadata',()=>{clearTimeout(metadataTimer);metadataTimer=setTimeout(scan,100)});
     chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (sender.id !== chrome.runtime.id) return;
       if (message.type === 'media-settings-changed') { refreshSettings(); reply({ok: true}); }
