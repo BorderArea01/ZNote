@@ -5,7 +5,7 @@ import {once} from 'node:events';
 import {mkdtemp,writeFile,readFile,mkdir} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 
-test('Windows background launcher has no visible console, preserves exit codes and owns its child lifetime', {skip:process.platform!=='win32',timeout:40000}, async()=>{
+test('Windows Node child has no visible console, preserves exit codes and follows launcher lifetime', {skip:process.platform!=='win32',timeout:40000}, async()=>{
   await mkdir(resolve('artifacts'),{recursive:true});
   const dir=await mkdtemp(resolve('artifacts/windows-background-')),data=join(dir,'资料 空格'),source=join(dir,'scripts');await mkdir(data);await mkdir(source);
   const probe=join(dir,'probe.ps1');

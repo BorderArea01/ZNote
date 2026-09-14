@@ -4,9 +4,10 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
+using System.Threading;
 
-// Loaded in the hidden, system-provided PowerShell host; no unsigned executable.
-// Wait for the child and return its real exit code to Task Scheduler. Children
+// Loaded in PowerShell inside the system-provided headless conhost.
+// Log the child's real exit code (conhost may not propagate it). Children
 // belong to an owned job so a forced launcher stop also stops the server.
 public static class WindowsServerLauncher
 {
@@ -69,12 +70,27 @@ public static class WindowsServerLauncher
     {
         try
         {
-            if (args.Length != 4) return 2;
+            if (args.Length != 4 && args.Length != 5) return 2;
             string logs = Path.Combine(Path.GetFullPath(args[2]), "logs");
             Directory.CreateDirectory(logs); logPath = Path.Combine(logs, "launcher.log");
             int port;
             if (!int.TryParse(args[3], out port) || port < 1 || port > 65535) throw new ArgumentException("Invalid port");
             OwnProcessTree();
+            if (args.Length == 5)
+            {
+                // Task Scheduler terminates conhost, not necessarily its clients.
+                // Keep an open process handle so PID reuse cannot hide owner exit.
+                var owner = Process.GetProcessById(int.Parse(args[4]));
+                if (owner.ProcessName != "conhost") throw new ArgumentException("Expected conhost owner");
+                var ownerHandle = owner.Handle;
+                Log("host_attached hostPid=" + owner.Id);
+                var watcher = new Thread(() => {
+                    owner.WaitForExit();
+                    Log("host_exit hostPid=" + owner.Id + "; stopping owned server tree");
+                    Environment.Exit(1);
+                });
+                watcher.IsBackground = true; watcher.Start();
+            }
             var info = new ProcessStartInfo(Path.GetFullPath(args[0]), Quote(Path.GetFullPath(args[1])) + " " + Quote(Path.GetFullPath(args[2])) + " " + port);
             info.WorkingDirectory = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(args[1])));
             info.UseShellExecute = false; info.CreateNoWindow = true;

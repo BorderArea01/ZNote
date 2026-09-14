@@ -7,7 +7,11 @@ $ErrorActionPreference = 'Stop'
 try {
     Add-Type -Path (Join-Path $PSScriptRoot 'WindowsServerLauncher.cs')
     $runner = Join-Path $PSScriptRoot 'run-windows-server.mjs'
-    exit ([WindowsServerLauncher]::Run(@($NodePath, $runner, $DataDirectory, [string]$Port)))
+    $hostParentId = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId
+    if ([Diagnostics.Process]::GetProcessById($hostParentId).ProcessName -ne 'conhost') {
+        throw 'Start this script through conhost.exe --headless (use install-windows-server.ps1).'
+    }
+    exit ([WindowsServerLauncher]::Run(@($NodePath, $runner, $DataDirectory, [string]$Port, [string]$hostParentId)))
 } catch {
     $logs = Join-Path $DataDirectory 'logs'
     New-Item -ItemType Directory -Path $logs -Force | Out-Null

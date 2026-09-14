@@ -22,13 +22,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-windows-serv
 
 安装后立即启动 `ZNote-Server`，之后在当前 Windows 用户登录时自动启动。启动器和 Node 均不创建控制台窗口，关闭日常使用的终端不会关闭知识库。每分钟检查任务是否需要启动，意外退出后自动恢复；已有任务运行时会忽略新的启动请求，不会每分钟重启服务。运行不设时间上限，也不会因为切换到电池供电而被计划任务停止。电脑仍需保持开机、不休眠；注销 Windows 用户会停止任务，重新登录后再启动。
 
-计划任务使用 Windows 自带的 PowerShell 以 `-WindowStyle Hidden -NoProfile -NonInteractive` 运行启动脚本，在内存中加载 `scripts/WindowsServerLauncher.cs`，无需安装未签名的启动器 EXE。Node 使用 `CreateNoWindow` 且重定向全部标准输入输出。启动器使用独立的 Windows Job Object 管理进程树，停止计划任务时会同时停止 Node，避免遗留旧服务。旧版直接运行 `node.exe` 的任务需按下文先停止、卸载，再重新安装。
+计划任务先启动 Windows 自带的 `conhost.exe --headless`，再由它运行 PowerShell 启动脚本，避免终端委托机制在 PowerShell 应用隐藏参数之前弹出 Windows Terminal。脚本在内存中加载 `scripts/WindowsServerLauncher.cs`，无需安装未签名的启动器 EXE，也无需关闭 Windows 安全保护。Node 使用 `CreateNoWindow` 且重定向全部标准输入输出。启动器监控 conhost 的退出，并使用独立的 Windows Job Object 管理进程树；停止任务后同时停止 Node，避免遗留旧服务。旧版直接运行 `node.exe` 或 `powershell.exe` 的任务需按下文先停止、卸载，再重新安装。
 
 默认使用仓库下的 `data/` 和端口 `3741`；自定义位置可给安装脚本传入 `-DataDirectory 'D:\ZNoteData' -Port 3741`。输出与退出记录位于数据目录的 `logs/`，单份日志超过 5 MB 后轮换，上一份保留为 `.previous` 文件。目录内可能含运行信息，不要直接公开整个日志目录。
 
 `launcher.log` 额外记录启动器与 Node 的进程编号、原始退出码（十进制与十六进制）和启动失败。即使 Node 被强制结束、来不及写自身退出日志，也能留下外部观察到的退出码。操作系统同时终止整个进程树时，仍需结合 `previous_run_missing_exit` 和计划任务状态判断，不能仅凭缺失日志断言具体原因。
 
-无窗口启动采用 Microsoft 文档中的 [CreateNoWindow](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.createnowindow)；进程联动停止采用 [Windows Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)。
+无窗口宿主采用 Windows Console 的 [headless 模式](https://github.com/microsoft/terminal/blob/main/src/host/ConsoleArguments.cpp)，子进程使用 [CreateNoWindow](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.createnowindow)，进程联动停止使用 [Windows Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)。`conhost` 不保证将子进程退出码传给计划任务，因此即使任务结果显示成功，也应以 `launcher.log` 中的 `child_exit` 为准；每分钟触发器同样会恢复已经退出的任务。
 
 维护或更新时通过计划任务控制服务，不要同时再运行 `npm start`：
 
