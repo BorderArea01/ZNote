@@ -244,3 +244,5 @@ mode 为 create / append / detach。create 需非空组名（最多 200 字）�
 - `POST /api/weixin/jobs/:id/retry`、`POST /api/weixin/jobs/:id/skip`：重试或忽略失败消息。
 
 以上接口仅管理员会话可调用，普通读写令牌不可调用。无需向公网开放微信回调地址；只接收绑定账号发给收集入口的文字与图片。见 [微信收件箱说明](../integrations/weixin/README.md)。
+
+图片直接上传（`/api/assets`、`/api/assets/batch`）单张上限 100 MB。可选表单字段 `image_size_mode=compress`：仅对超过 25 MB 的静态图转换为 WebP，保持尺寸，按质量 90 / 85 / 80 尝试压到 25 MB 内；结果备注标明压缩，无法恢复原字节。无法达到目标或为动图时返回 422，不写入文件。默认或 `original` 保存原文件，备份恢复支持 100 MB 图片。

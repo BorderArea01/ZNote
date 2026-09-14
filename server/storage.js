@@ -1,3 +1,4 @@
+import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { gzip, gunzip, createGunzip } from "node:zlib";
 import { promisify } from "node:util";
 import { createReadStream } from "node:fs";
@@ -34,7 +35,7 @@ export function originalStream(dir, item) {
 export async function originalBuffer(dir, item) {
   const buffer = await readFile(join(dir, "media", item.file_key));
   return item.storage_codec === "gzip"
-    ? decompress(buffer, { maxOutputLength: 25 * 1024 * 1024 })
+    ? decompress(buffer, { maxOutputLength: MAX_IMAGE_BYTES })
     : buffer;
 }
 export async function thumbnail(dir, item) {

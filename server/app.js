@@ -1,3 +1,4 @@
+import { MAX_IMAGE_BYTES, compressLargeImage } from './image-limits.js';
 import {localMediaReferences} from '../shared/local-media.js';
 import {appendMessageBlocks} from '../shared/message-blocks.js';
 import {legacyGalleryPage} from '../shared/gallery-group.js';
@@ -908,7 +909,16 @@ export function createApp({
       group_key: fields.group_key, group_index: fields.group_index, group_title: fields.group_title,
     });
     validateCollection(input.collection_id);
-    const buffer = file.buffer || (await readFile(file.path));
+    let buffer = file.buffer || (await readFile(file.path));
+    if (buffer.length > MAX_IMAGE_BYTES) throw fail(413, '单张图片不能超过 100 MB');
+    if (fields.image_size_mode && !['original', 'compress'].includes(fields.image_size_mode)) throw fail(400, '图片大小处理方式不正确');
+    if (fields.image_size_mode === 'compress') {
+      let compressed;
+      try { compressed = await compressLargeImage(buffer); }
+      catch (error) { throw fail(422, error.message); }
+      buffer = compressed.buffer;
+      if (compressed.quality) input.content = (input.content + `\n\n已低损压缩为 WebP（质量 ${compressed.quality}），原文件 ${(compressed.originalBytes / 1048576).toFixed(1)} MB；此副本无法恢复原文件。`).trim();
+    }
     let metadata;
     try {
       metadata = await sharp(buffer, { limitInputPixels: 80000000 }).metadata();
@@ -992,9 +1002,9 @@ export function createApp({
   const upload = multer({
     dest: join(dataDir, 'uploads'),
     limits: {
-      fileSize: 25 * 1024 * 1024,
+      fileSize: MAX_IMAGE_BYTES,
       files: 1,
-      fields: 11,
+      fields: 12,
       fieldSize: 512000,
     },
   });
@@ -1008,9 +1018,9 @@ export function createApp({
   const batch = multer({
     dest: join(dataDir, "uploads"),
     limits: {
-      fileSize: 25 * 1024 * 1024,
+      fileSize: MAX_IMAGE_BYTES,
       files: 20,
-      fields: 11,
+      fields: 12,
       fieldSize: 512000,
     },
   });
@@ -1264,7 +1274,7 @@ export function createApp({
       return res.status(400).json({
         error:
           err.code === "LIMIT_FILE_SIZE"
-            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '备份不能超过 5 GiB' : '单张图片不能超过 25 MB')
+            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '备份不能超过 5 GiB' : '单张图片不能超过 100 MB')
             : "上传格式或数量超出限制",
       });
     if (String(err.message).includes("UNIQUE constraint"))

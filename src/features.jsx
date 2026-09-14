@@ -206,8 +206,8 @@ export function UploadDialog({
       className="upload-dialog"
     >
       <div className="feature-body">
-        <div className="upload-guidance"><span>{kind === 'video' ? '单个文件 ≤ 500 MB' : '单张图片 ≤ 25 MB'}</span><HelpHint label="批量上传">
-          {kind === 'video' ? '支持 MP4、WebM、MOV，每个不超过 500 MB。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '一次选择多张图片，统一放入知识库并添加多个标签。每张不超过 25 MB。'}
+        <div className="upload-guidance"><span>{kind === 'video' ? '单个文件 ≤ 500 MB' : '单张图片 ≤ 100 MB'}</span><HelpHint label="批量上传">
+          {kind === 'video' ? '支持 MP4、WebM、MOV，每个不超过 500 MB。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '一次选择多张图片，统一放入知识库并添加多个标签。每张不超过 100 MB。'}
         </HelpHint></div>
         <div
           className="upload-drop"

@@ -262,7 +262,7 @@ export const spec = {
       }),
     },
     "/api/assets": {
-      post: operation("上传图片（25 MB，按内容哈希去重）", ref("Item"), {
+      post: operation("上传图片（100 MB，按内容哈希去重）", ref("Item"), {
         requestBody: {
           required: true,
           content: {
@@ -272,6 +272,7 @@ export const spec = {
                 required: ["file"],
                 properties: {
                   file: { type: "string", format: "binary" },
+                  image_size_mode: { type: 'string', enum: ['original', 'compress'], description: '默认保存原文件。compress 仅对大于 25 MB 的静态图保持尺寸转为 WebP，质量 90–80；无法达到目标或为动图返回 422。' },
                   title: str,
                   content: str,
                   tags: { ...str, description: 'JSON 数组字符串，如 ["灵感"]' },

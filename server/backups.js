@@ -1,3 +1,4 @@
+import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { DatabaseSync } from 'node:sqlite';
 import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, unlink, rename, rm, copyFile, open } from 'node:fs/promises';
@@ -121,7 +122,7 @@ async function inspectBackup(stage) {
       if (item.source_url && !/^https?:\/\//i.test(item.source_url)) throw fail(400, '备份来源网址不正确');
       if (!['image', 'note', 'video'].includes(item.kind)) throw fail(400, '备份内容类型不正确');
       if (item.kind === 'note') continue;
-      const limit = item.kind === 'video' ? MAX_VIDEO_BYTES : 25 * 1024 * 1024;
+      const limit = item.kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
       if (item.kind === 'video' && (item.storage_codec !== 'identity' || !['video/mp4', 'video/webm', 'video/quicktime'].includes(item.mime))) throw fail(400, '备份视频格式不正确');
       if (!safeKey(item.file_key) || !['identity', 'gzip'].includes(item.storage_codec || 'identity') || !/^[0-9a-f]{64}$/.test(item.hash)) throw fail(400, '备份原图记录不正确');
       if (item.bytes > limit || item.bytes < 1) throw fail(400, '备份媒体大小不正确');

@@ -311,7 +311,7 @@ npm run clipper:build    # 修改正文提取源码后重新打包扩展脚本
 npm run test:ui          # 浏览器界面测试，需要 Microsoft Edge
 ```
 
-图片单张上限 25 MB，视频单个上限 500 MB，视频播放能力取决于浏览器编码支持。m3u8 支持完整点播流及普通 AES-128，不提供持续直播录制或 DRM / DASH 合并。已验证 Windows / Edge、本机与局域网访问。
+图片直接上传单张上限 100 MB（外链归档和微信接收仍为 25 MB），视频单个上限 500 MB，视频播放能力取决于浏览器编码支持。m3u8 支持完整点播流及普通 AES-128，不提供持续直播录制或 DRM / DASH 合并。已验证 Windows / Edge、本机与局域网访问。
 
 </details>
 
