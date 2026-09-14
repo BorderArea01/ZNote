@@ -1,0 +1,38 @@
+/* Density changes presentation only; selection and grouping keep their owners. */
+.items.grid.compact-grid { grid-template-columns: repeat(auto-fill,minmax(170px,1fr)); gap: 10px; }
+.compact-grid .card-preview { height: 145px; }
+.compact-grid .card-body { padding-top: 10px; }
+.compact-grid .card-body h3 { font-size: 13px; margin-bottom: 6px; }
+.compact-grid .card-tags { min-height: 20px; gap: 4px; }
+.compact-grid .card-meta { margin-top: 8px; padding-top: 8px; font-size: 10px; }
+.compact-grid .item-card { --card-inset-x: 10px; --card-inset-bottom: 8px; --card-footer-button: 30px; }
+.items.compact-list { grid-template-columns: minmax(0,1fr); gap: 5px; }
+.compact-list .card-main { min-height: 66px; }
+.compact-list .card-preview { width: 72px; height: 66px; }
+.compact-list .card-body { gap: 12px; padding-top: 6px; padding-bottom: 6px; }
+.compact-list .card-body h3 { font-size: 13px; }
+.compact-list .card-tags { margin: 0; }
+.compact-list .item-card { --card-inset-x: 10px; --card-inset-bottom: 16px; --card-footer-button: 32px; }
+.items.compact-list .item-card:has(.card-favorite-button) .card-main { min-height: 70px; }
+.items.compact-list .item-card:has(.card-favorite-button) .card-body { min-height: 70px; gap: 4px; padding-top: 6px; padding-bottom: 6px; padding-right: 52px; }
+.items.compact-list .item-card:has(.card-favorite-button) .card-body h3 { margin-right: 0; }
+.items.compact-list .item-card:has(.card-favorite-button) .card-meta { min-height: 18px; height: auto; }
+.items.compact-list.is-selecting .card-actions { position: static; padding: 6px 10px; }
+.compact-list .kind-chip { left: 4px; bottom: 4px; padding: 3px; font-size: 10px; }
+.compact-list .group-chip { max-width: 66px; }
+.compact-list .video-card-preview > :not(.video-cover) { display: none; }
+.note .card-preview > .note-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.note .card-preview:has(.note-cover:not([hidden])) > :is(.note-type,h3,p) { display: none; }
+.note .card-preview > .note-cover[hidden] { display: none; }
+@media(max-width:759px) {
+  .items.grid.compact-grid { grid-template-columns: repeat(auto-fill,minmax(130px,1fr)); gap: 8px; }
+  .compact-grid .card-preview { height: 120px; }
+  .compact-grid .card-body h3 { font-size: 12px; }
+  .compact-grid .card-tags { overflow: hidden; max-height: 24px; }
+  .compact-list .card-body { display: flex; flex-wrap: wrap; gap: 3px 8px; padding-right: 46px !important; }
+  .compact-list .card-body h3 { width: 100%; font-size: 12px; }
+  .compact-list .card-tags { display: none; }
+  .compact-list .card-meta { width: 100%; font-size: 10px; }
+  .compact-list .card-preview { width: 62px; }
+  .view-switch button { min-width: 32px; }
+}

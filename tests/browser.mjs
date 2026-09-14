@@ -135,8 +135,44 @@ try {
     () => document.querySelectorAll(".item-card").length === 2,
   );
   checkpoint("favorite preserves body; Chinese body search");
+  const noteCover=page.locator('.item-card.note .note-cover');
+  await noteCover.waitFor();
+  assert.ok((await noteCover.getAttribute('src')).endsWith('/thumbnail'));
+  const normalHeight=await page.locator('.item-card').first().evaluate(e=>e.getBoundingClientRect().height);
+  await page.getByRole('button',{name:'紧密网格视图',exact:true}).click();
+  await page.locator('.items.compact-grid').waitFor();
+  assert.ok(await page.locator('.item-card').first().evaluate(e=>e.getBoundingClientRect().height)<normalHeight);
+  await page.screenshot({path:'artifacts/compact-grid.png'});
+  await page.getByRole('button',{name:'紧密列表视图',exact:true}).click();
+  await page.locator('.items.compact-list').waitFor();
+  assert.ok(await page.locator('.item-card').first().evaluate(e=>e.getBoundingClientRect().height)<100);
+  await page.screenshot({path:'artifacts/compact-list.png'});
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button',{name:/^设计灵感 \d+$/}).click();
+  await page.locator('.items.compact-list').waitFor();
+  await page.setViewportSize({width:390,height:844});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:'artifacts/compact-list-mobile.png'});
+  await page.getByRole('button',{name:'紧密网格视图',exact:true}).click();
+  await page.screenshot({path:'artifacts/compact-grid-mobile.png'});
+  await page.setViewportSize({width:1440,height:1050});
+  await page.getByRole('button',{name:'网格视图',exact:true}).click();
+  const denseTouch=await browser.newContext({storageState:await context.storageState(),viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const densePage=await denseTouch.newPage();
+  await densePage.goto(base);
+  await densePage.getByRole('button',{name:'打开导航'}).tap();
+  await densePage.locator('.sidebar').getByRole('button',{name:/^设计灵感 \d+$/}).tap();
+  await densePage.getByRole('button',{name:'紧密列表视图',exact:true}).tap();
+  await densePage.locator('.items.compact-list').waitFor();
+  await densePage.getByRole('button',{name:'打开 从图像开始的知识整理',exact:true}).tap();
+  await densePage.locator('.note-detail').waitFor();
+  await densePage.getByRole('button',{name:'关闭窗口',exact:true}).tap();
+  await densePage.getByRole('button',{name:'紧密网格视图',exact:true}).tap();
+  await densePage.locator('.items.compact-grid .note-cover').waitFor();
+  await denseTouch.close();
+  checkpoint('compact layouts, persisted density, mobile boundaries and note first-image cover');
   // A one-image note group uses the image's own card title.
-  await page.locator('.item-card').filter({has:page.locator('img')}).getByRole('button',{name:/^打开 /}).click();
+  await page.locator('.item-card.image').getByRole('button',{name:/^打开 /}).click();
   await wait(
     page
       .locator(".backlinks button")
@@ -208,9 +244,9 @@ try {
     path: resolve("artifacts/desktop.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "列表视图" }).click();
+  await page.getByRole("button", { name: "列表视图", exact:true }).click();
   assert.equal(await page.locator(".items.list .item-card").count(), 6);
-  await page.getByRole("button", { name: "网格视图" }).click();
+  await page.getByRole("button", { name: "网格视图", exact:true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
     path: resolve("artifacts/mobile.png"),

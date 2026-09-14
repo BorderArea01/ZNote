@@ -22,8 +22,9 @@ test('saved views are scoped, validated, conflict-aware, durable and included in
   const before = runtime.db.prepare('SELECT * FROM items ORDER BY id').all();
   let view = await json('/api/saved-views', 'POST', { name: '  建筑参考  ', collection_id: a.id, config: { ...config, tags: ['插画', '参考', '插画'] } });
   assert.equal(view.name, '建筑参考'); assert.deepEqual(view.config.tags, ['参考', '插画']);
-  const other = await json('/api/saved-views', 'POST', { name: '建筑参考', collection_id: b.id, config });
-  const unfiled = await json('/api/saved-views', 'POST', { name: '建筑参考', config });
+  const other = await json('/api/saved-views', 'POST', { name: '建筑参考', collection_id: b.id, config:{...config,layout:'compact-grid'} });
+  const unfiled = await json('/api/saved-views', 'POST', { name: '建筑参考', config:{...config,layout:'compact-list'} });
+  assert.equal(other.config.layout,'compact-grid');assert.equal(unfiled.config.layout,'compact-list');
   const list = library => json('/api/saved-views' + (library ? '?collection=' + library : ''));
   assert.deepEqual((await list(a.id)).views.map(v => v.id), [view.id]); assert.deepEqual((await list(b.id)).views.map(v => v.id), [other.id]); assert.deepEqual((await list()).views.map(v => v.id), [unfiled.id]);
   assert.equal((await request('/api/saved-views', 'POST', { name: '建筑参考', config })).status, 409);

@@ -61,7 +61,7 @@ export const spec = {
         properties: {
           view: { type: 'string', enum: ['all', 'images', 'videos', 'notes', 'favorites', 'trash'] },
           query: { ...str, maxLength: 200 }, tags: { type: 'array', maxItems: 30, items: { ...str, minLength: 1, maxLength: 40 } },
-          mode: { type: 'string', enum: ['all', 'any'] }, sort: { type: 'string', enum: ['updated', 'created', 'title'] }, layout: { type: 'string', enum: ['grid', 'list'] },
+          mode: { type: 'string', enum: ['all', 'any'] }, sort: { type: 'string', enum: ['updated', 'created', 'title'] }, layout: { type: 'string', enum: ['grid', 'list', 'compact-grid', 'compact-list'] },
         },
       },
       SavedView: { type: 'object', properties: {

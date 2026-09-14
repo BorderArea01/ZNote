@@ -14,7 +14,7 @@ export function readBrowse(library, view) {
     tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === 'string').slice(0, 30) : [],
     mode: raw.mode === 'any' ? 'any' : 'all',
     sort: ['updated', 'created', 'title'].includes(raw.sort) ? raw.sort : 'updated',
-    layout: raw.layout === 'list' ? 'list' : 'grid',
+    layout: ['grid','list','compact-grid','compact-list'].includes(raw.layout) ? raw.layout : 'grid',
     anchor: typeof raw.anchor?.id === 'string' && Number.isFinite(raw.anchor.top) ? raw.anchor : null,
   };
 }

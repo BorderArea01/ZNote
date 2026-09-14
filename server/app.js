@@ -177,6 +177,21 @@ export function createApp({
     }
   };
   const groupSize = db.prepare("SELECT count(*) n FROM items WHERE collection_id IS ? AND group_key=? AND kind='image' AND (deleted_at IS NOT NULL)=?");
+  const noteCoverCache = new Map();
+  const noteCover = row => {
+    if(row.kind!=='note')return null;
+    const cached=noteCoverCache.get(row.id);
+    let id;
+    if(cached?.version===row.version)id=cached.id;
+    else {
+      const content=row.content_length>row.content.length?db.prepare('SELECT content FROM items WHERE id=?').get(row.id)?.content:row.content;
+      id=markdownImages(content||'',true)[0]?.url.match(/^\/media\/([^/]+)\//)?.[1]||null;
+      if(noteCoverCache.size>=500)noteCoverCache.delete(noteCoverCache.keys().next().value);
+      noteCoverCache.set(row.id,{version:row.version,id});
+    }
+    // Recheck lifecycle and scope even when the note itself has not changed.
+    return id&&db.prepare("SELECT id FROM items WHERE id=? AND kind='image' AND deleted_at IS NULL AND collection_id IS ?").get(id,row.collection_id)?`/media/${id}/thumbnail`:null;
+  };
   const serialize = (row) =>
     row && {
       ...row,
@@ -184,7 +199,7 @@ export function createApp({
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
       url: row.file_key ? `/media/${row.id}/original` : null,
-      thumbnail_url: ['image','video'].includes(row.kind) ? `/media/${row.id}/thumbnail` : null,
+      thumbnail_url: ['image','video'].includes(row.kind) ? `/media/${row.id}/thumbnail` : noteCover(row),
       file_key: undefined,
       thumbnail_key: undefined,
       hash: undefined,

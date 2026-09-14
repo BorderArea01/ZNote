@@ -12,7 +12,7 @@ export function VirtualItems({ items, layout, restoreId, selecting, children }) 
     const measure = () => {
       frame = 0;
       const css = getComputedStyle(node);
-      const columns = layout === 'list' ? 1 : css.gridTemplateColumns.split(' ').length;
+      const columns = layout.endsWith('list') ? 1 : css.gridTemplateColumns.split(' ').length;
       const card = node.querySelector('.item-card');
       const gap = parseFloat(css.rowGap) || 0;
       const stride = (card?.offsetHeight || 350) + gap;
@@ -56,5 +56,5 @@ export function VirtualItems({ items, layout, restoreId, selecting, children }) 
     }
     if (cursor < rows) rendered.push(<div key="gap-end" aria-hidden="true" style={{ gridColumn: '1 / -1', height: (rows - cursor) * stride - gap }} />);
   }
-  return <div ref={root} className={`items ${layout}${selecting ? ' is-selecting' : ''}`} data-virtual={virtual || undefined} style={{ overflowAnchor: 'none' }}>{virtual ? rendered : items.map(children)}</div>;
+  return <div ref={root} className={`items ${layout.endsWith('list')?'list':'grid'} ${layout}${selecting ? ' is-selecting' : ''}`} data-virtual={virtual || undefined} style={{ overflowAnchor: 'none' }}>{virtual ? rendered : items.map(children)}</div>;
 }

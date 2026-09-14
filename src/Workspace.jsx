@@ -35,6 +35,8 @@ import {
   Check,
   ChevronRight,
   LayoutGrid,
+  Grid3X3,
+  ListFilter,
   List,
   Menu,
   FolderPlus,
@@ -1107,6 +1109,7 @@ export default function Workspace({
                     <option value="title">名称排序</option>
                   </select>
                   <div className="view-switch">
+                    <IconButton label="紧密网格视图" className={layout==='compact-grid'?'chosen':''} onClick={()=>setLayout('compact-grid')}><Grid3X3 size={17}/></IconButton>
                     <IconButton
                       label="网格视图"
                       className={layout === "grid" ? "chosen" : ""}
@@ -1121,6 +1124,7 @@ export default function Workspace({
                     >
                       <List size={17} />
                     </IconButton>
+                    <IconButton label="紧密列表视图" className={layout==='compact-list'?'chosen':''} onClick={()=>setLayout('compact-list')}><ListFilter size={17}/></IconButton>
                   </div>
                   <IconButton label="刷新内容" onClick={refresh}>
                     <RefreshCw size={16} />
@@ -1248,6 +1252,7 @@ export default function Workspace({
                             <div className="video-card-preview">{item.thumbnail_url&&<img className="video-cover" src={item.thumbnail_url} alt="视频首帧" loading="lazy" onError={e=>{e.currentTarget.hidden=true}}/>}<Film size={42} /><strong>点击预览视频</strong><small>{item.video_codec || 'VIDEO'} · {item.duration ? `${Math.round(item.duration)} 秒` : '原文件'}</small></div>
                           ) : (
                             <>
+                              {item.thumbnail_url&&<img className="note-cover" src={item.thumbnail_url} alt={`${item.title} · 正文封面`} loading="lazy" decoding="async" onError={e=>{e.currentTarget.hidden=true}}/>}
                               <span className="note-type">
                                 <FileText size={15} /> MARKDOWN
                               </span>

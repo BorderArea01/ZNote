@@ -64,6 +64,7 @@ import { HelpHint } from './HelpHint.jsx';
 import './polish.css';
 import './preview.css';
 import './group-order.css';
+import './compact-views.css';
 import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import {WeixinSettings} from './WeixinSettings.jsx';
