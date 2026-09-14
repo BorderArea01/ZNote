@@ -1,3 +1,4 @@
+import {isImageGroup} from './image-group.js';
 import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { VirtualItems } from './VirtualItems.jsx';
@@ -137,8 +138,8 @@ export default function Workspace({
   }).filter(Boolean);
   const selectedGroupCounts = new Map();
   chosenItems.forEach(row=>{if(row.group_key)selectedGroupCounts.set(row.group_key,(selectedGroupCounts.get(row.group_key)||0)+1);});
-  const cardSelected = item => item.group_key&&item.group_count ? selectedGroups.has(item.group_key) : selectedIds.has(item.id);
-  const cardPartial = item => item.group_key&&item.group_count&&!cardSelected(item)&&!!selectedGroupCounts.get(item.group_key);
+  const cardSelected = item => isImageGroup(item) ? selectedGroups.has(item.group_key) : selectedIds.has(item.id);
+  const cardPartial = item => isImageGroup(item)&&!cardSelected(item)&&!!selectedGroupCounts.get(item.group_key);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
@@ -469,7 +470,7 @@ export default function Workspace({
     try {
       // Freeze only lightweight IDs; editing a title or sort timestamp cannot
       // move the page boundary and skip an image during continuous organizing.
-      const groupParams = item.group_key && item.group_count
+      const groupParams = isImageGroup(item)
         ? new URLSearchParams({collection:item.collection_id||'unfiled',group_key:item.group_key,gallery:'true'})
         : `${params(0)}&gallery=true`;
       const result = await api(`/api/items?${groupParams}`);
@@ -705,7 +706,7 @@ export default function Workspace({
   }, [view, selecting, selection, batchBusy, groupSelecting, selectionProgress, loading, query, search, params]);
   async function favorite(item) {
     try {
-      if(item.group_key && item.group_count) {
+      if(isImageGroup(item)) {
         const result=await send('/api/item-groups/favorite',{group_key:item.group_key,collection_id:item.collection_id,favorite:!item.favorite,undo:true});saved(result);return;
       }
       const result = await send(
@@ -1217,7 +1218,7 @@ export default function Workspace({
                         <label className="card-select">
                           <input
                             type="checkbox"
-                            aria-label={`选择 ${item.group_key&&item.group_count?item.group_title||item.title:item.title}`}
+                            aria-label={`选择 ${isImageGroup(item)?item.group_title||item.title:item.title}`}
                             checked={cardSelected(item)} ref={node=>{if(node)node.indeterminate=!!cardPartial(item);}}
                             disabled={batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item))}
                             onClick={e => toggleSelection(item.id, e)}
@@ -1232,7 +1233,7 @@ export default function Workspace({
                         onClick={(e) => selecting ? toggleSelection(item.id, e) : (e.ctrlKey||e.metaKey) ? toggleSelectionMode(item) : openItem(item)}
                         aria-pressed={selecting ? cardPartial(item)?'mixed':cardSelected(item) : undefined}
                         disabled={selecting && (batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item)))}
-                        aria-label={`${selecting ? cardSelected(item)?'取消选择':'选择' : '打开'} ${item.group_key && item.group_count ? item.group_title || item.title : item.title}`}
+                        aria-label={`${selecting ? cardSelected(item)?'取消选择':'选择' : '打开'} ${isImageGroup(item) ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
                           {openingItem === item.id && <span className="card-opening"><Loader2 size={16} className="spin"/>正在打开…</span>}
@@ -1260,8 +1261,8 @@ export default function Workspace({
                               </p>
                             </>
                           )}
-                          <span className={`kind-chip${item.group_key && item.group_count ? ' group-chip' : ''}`}>
-                            {item.group_key && item.group_count ? <><Layers size={13} /> {item.group_count} 张</> : item.kind === "image" ? (
+                          <span className={`kind-chip${isImageGroup(item) ? ' group-chip' : ''}`}>
+                            {isImageGroup(item) ? <><Layers size={13} /> {item.group_count} 张</> : item.kind === "image" ? (
                               <Image size={13} />
                             ) : (
                               item.kind === 'video' ? <Film size={13} /> : <FileText size={13} />
@@ -1269,7 +1270,7 @@ export default function Workspace({
                           </span>
                         </div>
                         <div className="card-body">
-                          <h3>{item.group_key && item.group_count ? item.group_title || item.title : item.title}</h3>
+                          <h3>{isImageGroup(item) ? item.group_title || item.title : item.title}</h3>
                           <div className="card-tags">
                             {item.tags.slice(0, 3).map((t) => (
                               <span key={t}># {t}</span>
@@ -1301,8 +1302,8 @@ export default function Workspace({
                         </div>
                       </button>
                       <div className="card-actions">
-                        {selecting&&item.group_key&&item.group_count&&<button className="group-members-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`选择组内图片 ${item.group_title||item.title}`} onClick={()=>selectCards([item],'toggle',{picker:true})}>选择组内图片{selectedGroupCounts.get(item.group_key)?` · ${selectedGroupCounts.get(item.group_key)}`:''}</button>}
-                        {item.kind==='image'&&item.group_key&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部图片的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
+                        {selecting&&isImageGroup(item)&&<button className="group-members-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`选择组内图片 ${item.group_title||item.title}`} onClick={()=>selectCards([item],'toggle',{picker:true})}>选择组内图片{selectedGroupCounts.get(item.group_key)?` · ${selectedGroupCounts.get(item.group_key)}`:''}</button>}
+                        {isImageGroup(item)&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部图片的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
                         {view === "trash" ? (
                           <><IconButton
                             disabled={batchBusy||groupSelecting||!!selectionProgress}

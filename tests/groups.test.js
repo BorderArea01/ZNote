@@ -23,10 +23,10 @@ test('image groups preserve page identity, share bytes, scope libraries and surv
   assert.equal(new Set(pages.map(p=>p.id)).size,3,'identical pages retain order and identity');
   assert.equal((await readdir(join(dir,'data','media'))).length,1,'one physical original');
   assert.equal((await upload(1)).id,pages[2].id,'retries retain identity');
-  const grouped=await json('/api/items?collection='+a.id+'&grouped=true');assert.equal(grouped.total,1);assert.equal(grouped.items[0].id,pages[1].id);assert.equal(grouped.items[0].group_count,3);
+  const grouped=await json('/api/items?collection='+a.id+'&grouped=true');assert.equal(grouped.total,1);assert.equal(grouped.items[0].id,pages[1].id);assert.equal(grouped.items[0].group_count,3);assert.equal(grouped.items[0].group_size,3);const filtered=await json('/api/items?collection='+a.id+'&grouped=true&q='+encodeURIComponent('分镜 0'));assert.equal(filtered.items[0].group_count,1);assert.equal(filtered.items[0].group_size,3);
   assert.equal((await json('/api/items?collection='+a.id)).total,3,'flat API remains compatible');
   assert.deepEqual((await json('/api/items?collection='+a.id+'&group_key=pixiv:art:12345&gallery=true')).ids,[pages[1].id,pages[2].id,pages[0].id]);
-  await upload(0,b.id);assert.equal((await json('/api/items?collection='+b.id+'&grouped=true')).items[0].group_count,1);
+  await upload(0,b.id);assert.equal((await json('/api/items?collection='+b.id+'&grouped=true')).items[0].group_count,1);assert.equal((await json('/api/items?collection='+b.id+'&grouped=true')).items[0].group_size,1);
   assert.equal((await json('/api/items?grouped=true')).total,2,'same work remains separate between libraries');
   await json('/api/item-groups/favorite','POST',{collection_id:a.id,group_key:'pixiv:art:12345',favorite:true});assert.equal((await json('/api/items?collection='+a.id+'&favorite=true')).total,3);
   assert.equal((await json('/api/items?collection='+b.id)).items[0].favorite,false);

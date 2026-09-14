@@ -176,9 +176,11 @@ export function createApp({
       throw e;
     }
   };
+  const groupSize = db.prepare("SELECT count(*) n FROM items WHERE collection_id IS ? AND group_key=? AND kind='image' AND (deleted_at IS NOT NULL)=?");
   const serialize = (row) =>
     row && {
       ...row,
+      group_size: row.kind==='image'&&row.group_key ? groupSize.get(row.collection_id,row.group_key,row.deleted_at?1:0).n : undefined,
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
       url: row.file_key ? `/media/${row.id}/original` : null,

@@ -741,3 +741,5 @@ spec.paths['/api/weixin/new-note']={post:operation('开始新篇；只影响后�
 spec.paths['/api/weixin/login']={post:operation('生成微信登录二维码，后台等待本人扫码确认（管理员）',{type:'object'}),delete:operation('移除微信连接凭据，保留已收内容（管理员）',{type:'object'})};
 spec.paths['/api/weixin/verify']={post:operation('提交手机显示的扫码验证码（管理员）',{type:'object'},{requestBody:body({type:'object',required:['id','code'],properties:{id:str,code:{type:'string',pattern:'^[0-9]{4,8}$'}}})})};
 for(const action of ['retry','skip'])spec.paths['/api/weixin/jobs/{id}/'+action]={post:operation(action==='retry'?'重试失败的微信消息（管理员）':'忽略失败的微信消息（管理员）',{type:'object'},{parameters:[id]})};
+
+spec.components.schemas.Item.allOf[1].properties.group_size={type:'integer',description:'当前知识库内该组的完整成员数；不受搜索、标签或收藏筛选影响，活动内容和回收站分别计算。单成员组按普通图片展示。'};

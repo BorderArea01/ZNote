@@ -1,3 +1,4 @@
+import {isImageGroup} from './image-group.js';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
 import { markdownImages } from '../shared/markdown-images.js';
@@ -583,8 +584,8 @@ function Detail({
             {dirty && <span className="unsaved">未保存</span>}
           </div>
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
-            {item.kind==='image'&&item.group_key&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
-            {item.kind==='image'&&item.group_key&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
+            {isImageGroup(item)&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
+            {isImageGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
             <button onClick={async () => { if (!dirty || await save()) setCopying(true); }} disabled={busy}>复用到其他知识库</button>
           </div>}
@@ -603,7 +604,7 @@ function Detail({
           />
           <div className="metadata-fields">
             <label>
-              <span className="metadata-label"><BookOpen size={15} />{item.kind==='image'&&item.group_key?'知识库 · 整组':'知识库'}</span>
+              <span className="metadata-label"><BookOpen size={15} />{isImageGroup(item)?'知识库 · 整组':'知识库'}</span>
               <select
                 aria-label="所属知识库"
                 value={collection}
