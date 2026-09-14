@@ -29,6 +29,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-windows-serv
 ```powershell
 Disable-ScheduledTask -TaskName ZNote-Server
 Stop-ScheduledTask -TaskName ZNote-Server
+# 等待旧进程释放端口；自定义端口时替换 3741
+$stopDeadline = (Get-Date).AddSeconds(15)
+while (Get-NetTCPConnection -LocalPort 3741 -State Listen -ErrorAction SilentlyContinue) {
+    if ((Get-Date) -gt $stopDeadline) { throw '旧进程仍在监听，请先检查进程归属' }
+    Start-Sleep -Milliseconds 200
+}
 # 完成备份、更新与构建后再启动
 Enable-ScheduledTask -TaskName ZNote-Server
 Start-ScheduledTask -TaskName ZNote-Server
@@ -38,6 +44,23 @@ Get-ScheduledTask -TaskName ZNote-Server
 维护时先禁用任务，避免每分钟的触发器再次启动它。卸载后台任务：先禁用并停止任务，再执行 `Unregister-ScheduledTask -TaskName ZNote-Server -Confirm:$false`，数据不会被删除。更换仓库路径或 Node.js 安装路径后，卸载并重新安装任务。
 
 计划任务恢复与并发设置参照 [Microsoft Task Scheduler 文档](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset)。
+
+### 排查服务退出
+
+后台启动器在数据目录的 `logs/` 保留这些证据：
+
+| 文件 | 记录内容 |
+| --- | --- |
+| `lifecycle.log` | 启动时间、PID、父进程、版本、退出码、关闭信号、异常调用栈；重启时提示上次是否缺少退出记录 |
+| `server.stdout.log` / `server.stderr.log` | 普通输出和错误输出；空错误日志表示尚未写入错误，不代表遗漏文件 |
+| `run-state.json` | 每 30 秒更新最后活动时间、运行时长和内存占用；正常退出时写入退出状态 |
+| `reports/report.*.json` | 程序异常及 Node.js 内存耗尽等致命错误的诊断报告；启动时清理旧报告，保留最近约 10 份 |
+
+崩溃报告使用 [Node.js diagnostic report](https://nodejs.org/api/report.html)，排除环境变量及网络接口信息。报告仍含程序堆栈和本地路径，请按需提取相关错误，不要直接公开全部日志。
+
+强制结束、断电等情况可能来不及执行退出处理；下次启动会记录上一进程最后状态，但不会臆测是谁终止了它。故障时间附近还应对照 Windows 的 System / Application 事件，以及 `Microsoft-Windows-TaskScheduler/Operational` 任务历史。任务历史需要提前启用，未启用时不能补查过去的记录；启用权限取决于系统管理策略。
+
+复现诊断路径的隔离测试：`node --test tests/runtime-diagnostics.test.js`，覆盖普通退出、异常、强制结束后重启和低堆限制下的内存耗尽，不使用正式知识库。
 
 ## 局域网访问
 
