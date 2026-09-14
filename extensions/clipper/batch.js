@@ -12,4 +12,5 @@ try{
   const persist=()=>chrome.storage.session.set({['gallery-'+id]:group});
   const changed=()=>{library?.draw();rows.forEach((row,i)=>row.textContent=library?.label(i)||'待入库');announce();};
   library=libraryBatch(group,persist,changed,()=>false);await persist();await library.connect();
+  if(result.value.startNow)await library.start();
 }catch(e){$('title').textContent='无法打开入库';$('save-status').textContent=e.message;}

@@ -856,7 +856,7 @@ export default function Workspace({
               >
                 <Icon size={18} />
                 {labels[v]}
-                <span>
+                <span className={v === 'images' ? 'image-nav-count' : undefined}>
                   {stats[
                     {
                       all: "total",
@@ -865,7 +865,7 @@ export default function Workspace({
                       notes: "notes",
                       favorites: "favorites",
                     }[v]
-                  ] || 0}
+                  ] || 0}{v === 'images' && <> 张<small>{stats.image_cards || 0} 卡片</small></>}
                 </span>
               </button>
             );

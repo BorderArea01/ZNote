@@ -38,6 +38,12 @@ test('image groups preserve page identity, share bytes, scope libraries and surv
   assert.equal((await json('/api/items?collection='+c.id+'&grouped=true')).items[0].group_count,3);
   for(const i of [0,1,2])await upload(i,a.id,'individual');assert.equal((await json('/api/items?collection='+a.id+'&grouped=true')).total,3,'individual reimport changes presentation without duplication');
   for(const i of [0,1,2])await upload(i);
+  for(const scope of ['', '?collection='+a.id, '?collection='+b.id, '?collection='+c.id, '?collection=unfiled']){
+    const stats=await json('/api/stats'+scope),cards=await json('/api/items'+scope+(scope?'&':'?')+'kind=image&grouped=true');
+    assert.equal(stats.image_cards,cards.total,'Card statistics use the same library scope as grouped browsing');
+  }
+  let stats=await json('/api/stats?collection='+a.id);assert.equal(stats.images,3);assert.equal(stats.image_cards,1);
+  await request('/api/items/'+pages[0].id,'DELETE');stats=await json('/api/stats?collection='+a.id);assert.equal(stats.images,2);assert.equal(stats.image_cards,1);
   const backup=await request('/api/export?mode=backup'),path=join(dir,'backup.zip');await writeFile(path,Buffer.from(await backup.arrayBuffer()));
   const restored=createApp({dataDir:join(dir,'restored')});try{const preview=await restored.backups.preview(path);await restored.backups.restore(preview.id);assert.deepEqual(restored.db.prepare('SELECT id,group_key,group_index,group_title,hash FROM items ORDER BY id').all(),runtime.db.prepare('SELECT id,group_key,group_index,group_title,hash FROM items ORDER BY id').all());}finally{await restored.imports.stop();await restored.backups.stop();await restored.webhooks.stop();restored.db.close()}
 });

@@ -254,6 +254,8 @@ a {
 .sidebar nav button.active span {
   color: #608265;
 }
+.sidebar nav button .image-nav-count { display:flex; flex-direction:column; align-items:flex-end; gap:2px; line-height:1.4; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.image-nav-count small { font-size:10px; font-weight:400; }
 .sidebar nav button:hover,
 .sidebar-bottom > button:hover {
   background: #e9eee5;

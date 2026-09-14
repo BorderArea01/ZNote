@@ -228,13 +228,12 @@ export async function discover(message, sender) {
   if (message.type === "media-destination") {
     if (
       typeof message.collection_id !== "string" ||
-      typeof message.tags !== "string" ||
-      message.tags.length > 1200
+      (message.tags !== undefined && (typeof message.tags !== "string" || message.tags.length > 1200))
     )
       throw new Error("设置格式不正确");
     await chrome.storage.local.set({
       collection_id: message.collection_id,
-      tags: message.tags,
+      ...(message.tags===undefined?{}:{tags:message.tags}),
     });
     return { message: "保存位置已更新" };
   }

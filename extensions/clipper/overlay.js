@@ -502,6 +502,24 @@
     saveButton = button('Z 保存知识库', () => hoverAction('save'));
     originalButton=button('查看原图',()=>turnPage((failedIndex??groupIndex)-requestedIndex,true));originalButton.className='hidden';
     bar.append(downloadButton, saveButton, originalButton, button('关闭', hide));
+    const destinationButton=button('目标知识库',async()=>{
+      destinationButton.disabled=true;
+      try{
+        const config=await send({type:'media-connect'});
+        previewDestination.replaceChildren(new Option('未分类',''),...config.collections.map(c=>new Option(c.name,c.id)));
+        previewDestination.value=config.collection_id;previewDestination.hidden=false;previewDestination.focus();placePreview();
+      }catch(e){previewLabel.textContent=e.message;}finally{destinationButton.disabled=false;}
+    });
+    const previewDestination=element('select',null,{'aria-label':'图片入库目标知识库',hidden:''});
+    previewDestination.style.maxWidth='180px';
+    previewDestination.addEventListener('change',async e=>{
+      if(!e.isTrusted)return;
+      previewDestination.disabled=true;batchSaveButton.disabled=saveButton.disabled=true;
+      try{await send({type:'media-destination',collection_id:previewDestination.value});destinationButton.textContent=previewDestination.selectedOptions[0].textContent;}
+      catch(error){previewLabel.textContent=error.message;}
+      finally{previewDestination.disabled=false;batchSaveButton.disabled=saveButton.disabled=false;}
+    });
+    bar.append(destinationButton,previewDestination);
     bar.querySelectorAll('button').forEach(b=>b.style.padding='5px 7px');
     const sizing = element('label', '展示大小 ', {class:'bar'});
     sizing.style.pointerEvents = 'auto';

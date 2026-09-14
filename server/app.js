@@ -375,6 +375,10 @@ export function createApp({
       .get(...scope.args);
     res.json({
       ...counts,
+      image_cards: db.prepare(`SELECT count(*) n FROM (
+        SELECT 1 FROM items WHERE deleted_at IS NULL AND kind='image'${scope.sql}
+        GROUP BY collection_id, CASE WHEN group_key IS NULL OR group_key='' THEN 'item:'||id ELSE 'group:'||group_key END
+      )`).get(...scope.args).n,
       collections: db.prepare("SELECT count(*) n FROM collections").get().n,
       trash: db
         .prepare(`SELECT count(*) n FROM items WHERE deleted_at IS NOT NULL${scope.sql}`)

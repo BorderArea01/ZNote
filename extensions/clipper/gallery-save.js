@@ -6,7 +6,7 @@ import { galleryGrouping } from './gallery-group.js';
 // stored with its ticket; API credentials stay in the existing connection settings.
 export function libraryBatch(group, persist, changed, downloading) {
   const $ = id => document.getElementById(id);
-  let running = false, ready = false, controller, connection, uploading = false;
+  let running = false, ready = false, controller, connection, uploading = false, needsDestination=false;
   const states = group.saveStates = group.images.map((_, i) =>
     group.saveSchema===1&&['done', 'duplicate', 'failed'].includes(group.saveStates?.[i]) ? group.saveStates[i] : 'pending');
   const complete = state => state === 'done' || state === 'duplicate';
@@ -15,25 +15,31 @@ export function libraryBatch(group, persist, changed, downloading) {
     $('save').disabled = !ready || running || downloading() || count() === states.length;
     $('save').textContent = count() === states.length ? '全部已入库' : states.some(s => s !== 'pending') ? '重试未入库' : '保存全部到知识库';
     $('save-cancel').hidden = !running;
-    $('collection').disabled = $('tags').disabled = !ready || running || !!group.saveTarget;
+    $('tags').disabled = !ready || running || !!group.saveTarget;
+    $('collection').disabled = (!ready&&!needsDestination) || running || !!group.saveTarget;
     $('reconnect').disabled = running;
     $('save-progress').max = states.length;
     $('save-progress').value = count();
   }
   async function connect() {
-    ready = false; changed();
+    ready = false; needsDestination=false; changed();
     try {
       connection = await settings();
-      if (group.saveTarget && serverUrl(connection.server) !== group.saveTarget.server)
+      const destination=group.saveTarget || group.initialTarget;
+      if (destination && serverUrl(connection.server) !== destination.server)
         throw Error('连接地址已更改，请恢复原连接后继续，或从原网页新建批量入库任务');
       const me = await api('/api/me', {}, connection);
       if (me.scope !== 'write') throw Error('批量入库需要 write 写入令牌');
       const collections = await api('/api/collections', {}, connection);
-      const selected = group.saveTarget?.collection_id ?? connection.collection_id;
+      const selected = destination?.collection_id ?? connection.collection_id;
       $('collection').replaceChildren(new Option('未分类', ''), ...collections.map(c => new Option(c.name, c.id)));
-      if (selected && !collections.some(c => c.id === selected)) throw Error('目标知识库已不存在，请从原网页新建任务并选择其他知识库');
+      if (selected && !collections.some(c => c.id === selected)) {
+        if(group.saveTarget)throw Error('目标知识库已不存在，请从原网页新建任务并选择其他知识库');
+        $('collection').value='';needsDestination=true;
+        throw Error('上次的知识库已不存在，请重新选择后点击保存');
+      }
       $('collection').value = selected;
-      $('tags').value = group.saveTarget?.tags ?? connection.tags;
+      $('tags').value = destination?.tags ?? connection.tags;
       ready = true;
       $('save-status').textContent = count() ? `已入库 ${count()} / ${states.length} 张，可继续未完成项。` : '选择知识库后保存整组原图。';
     } catch (e) { $('save-status').textContent = e.message; }
@@ -88,8 +94,16 @@ export function libraryBatch(group, persist, changed, downloading) {
     $('save-status').textContent = uploading ? '正在停止，等待当前上传确认…' : '正在停止…';
   };
   $('reconnect').onclick = connect;
+  $('collection').addEventListener('change',async()=>{
+    try{
+      const latest=await settings();
+      if(serverUrl(latest.server)!==serverUrl(connection.server))throw Error('连接地址已更改，请重新连接');
+      await chrome.storage.local.set({collection_id:$('collection').value});
+      if(!group.saveTarget){group.initialTarget={server:serverUrl(connection.server),collection_id:$('collection').value,tags:$('tags').value};await persist();if(needsDestination)await connect();}
+    }catch(e){$('save-status').textContent=e.message;}
+  });
   return {
-    get running() { return running; }, draw, connect,
+    get running() { return running; }, draw, connect, start:saveAll,
     label: i => ({ done: '已入库', duplicate: '已收录', failed: '入库失败', active: '入库中…', pending: '待入库' })[states[i]],
   };
 }
