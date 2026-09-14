@@ -12,9 +12,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $znoteRoot 'dist/index.html'))) { th
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) { throw "Task $TaskName already exists; inspect and stop/remove it before reinstalling." }
 if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) { throw "Stop the existing server on port $Port before installing." }
 $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-$runner = Join-Path $PSScriptRoot 'run-windows-server.mjs'
-$arguments = '"{0}" "{1}" {2}' -f $runner, $DataDirectory, $Port
-$action = New-ScheduledTaskAction -Execute $nodePath -Argument $arguments -WorkingDirectory $znoteRoot
+$runner = Join-Path $PSScriptRoot 'run-windows-hidden.ps1'
+$launcher = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
+$arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -NodePath "{1}" -DataDirectory "{2}" -Port {3}' -f $runner, $nodePath, $DataDirectory, $Port
+$action = New-ScheduledTaskAction -Execute $launcher -Argument $arguments -WorkingDirectory $znoteRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
 # Periodic activation also recovers an exited launcher. IgnoreNew leaves a
 # healthy running instance alone; disable the task before stopping for maintenance.
