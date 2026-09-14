@@ -2,6 +2,7 @@
 import { read, write, removeJob, writeJob, writeProgress, summaries } from './store.js';
 import { serverURL, api } from './client.js';
 import { ingestRecord } from './ingest.js';
+import {scheduleRetry,retryMessage,waitForRetry} from './retry.js';
 const $ = id => document.getElementById(id);
 let config, job, collections = [], connected = false, running = false, controller, uploading = false, page = 0;
 const success = r => ['done','duplicate'].includes(r.status);
@@ -11,9 +12,9 @@ function draw() {
   $('title').textContent = job.title; $('source').href = job.source;
   const done = job.records.filter(success).length;
   $('progress').max = job.records.length || 1; $('progress').value = done;
-  $('start').disabled = !connected || running || ['queued','running'].includes(job.state) || !job.records.length || done === job.records.length;
+  $('start').disabled = !connected || running || ['queued','running','retry_wait'].includes(job.state) || !job.records.length || done === job.records.length;
   $('start').textContent = done === job.records.length && done ? '全部已入库' : job.target ? '继续 / 重试未完成' : '保存到知识库';
-  $('stop').hidden = !running; $('delete').disabled = running || ['queued','running'].includes(job.state); $('connect').disabled = running;
+  $('stop').hidden = !running; $('delete').disabled = running || ['queued','running','retry_wait'].includes(job.state); $('connect').disabled = running;
   for (const id of ['collection','tags','include-tags']) $(id).disabled = running || !!job.target;
   $('rejected').textContent = job.rejected.length ? `${job.rejected.length} 条未加入：\n` + job.rejected.slice(0,20).map(r => r.title + '：' + r.error).join('\n') : '';
   $('records').replaceChildren();
@@ -21,7 +22,7 @@ function draw() {
     const li = document.createElement('li'), info = document.createElement('div'), title = document.createElement('strong'), meta = document.createElement('small'), state = document.createElement('span'), link = document.createElement('a');
     info.className = 'info'; title.textContent = r.title; meta.textContent = r.error || `${r.author} · ${['插画','漫画','动图','小说'][r.type]}${r.type < 2 ? ' · 第 ' + (r.index + 1) + ' 张' : ''}`;
     if (r.status === 'failed') meta.className = 'error';
-    state.className = 'state'; state.textContent = { done:'已入库',duplicate:'已收录',failed:'失败',active:'处理中…',pending:'待入库' }[r.status];
+    state.className = 'state'; state.textContent = { done:'已入库',duplicate:'已收录',failed:'失败',active:'处理中…',pending:'待入库',retrying:'等待自动重试' }[r.status];
     link.href = r.source; link.target = '_blank'; link.rel = 'noreferrer'; link.textContent = '来源 ↗';
     const preview = r.preview || r.cover;
     if (preview) { const img = document.createElement('img'); img.className = 'thumb'; img.src = preview; img.alt = ''; img.loading = 'lazy'; img.onerror = () => img.remove(); li.append(img); }
@@ -58,7 +59,7 @@ async function listJobs() {
   $('jobs').replaceChildren();
   for (const item of (await summaries()).sort((a,b)=>b.created-a.created)) {
     const button = document.createElement('button'); button.className = 'quiet';
-    button.textContent = `${item.title} · ${item.done}/${item.total}${!item.finalized ? '（准备中断）' : ''}`;
+    button.textContent = `${item.title} · ${item.done}/${item.total}${item.state==='retry_wait'?' · 等待自动重试':item.state==='failed'?' · 失败':item.failed?' · 有失败项':''}${!item.finalized ? '（准备中断）' : ''}`;
     button.onclick = () => { if (!running) selectJob(item.id).catch(e => $('connection-status').textContent = e.message); };
     $('jobs').append(button);
   }
@@ -69,7 +70,7 @@ async function selectJob(id) {
   destination(); history.replaceState(null,'', '?job=' + (job?.id || ''));
 }
 async function run() {
-  if (!job || !config || running || ['queued','running'].includes(job.state)) return;
+  if (!job || !config || running || ['queued','running','retry_wait'].includes(job.state)) return;
   const id = job.id;
   await navigator.locks.request('znote-job:' + id, { ifAvailable: true }, async lock => {
     if (!lock) throw Error('此任务正在另一个窗口入库');
@@ -86,9 +87,18 @@ async function run() {
       await writeJob(job);
       for (const [i, r] of job.records.entries()) {
         if (controller.signal.aborted) break; if (success(r)) continue;
-        r.status = 'active'; r.error = ''; page = Math.floor(i / 50); draw(); $('status').textContent = `正在入库 ${i + 1} / ${job.records.length}：${r.title}`;
+        r.status = 'active'; r.error = ''; r.retryCount=0; page = Math.floor(i / 50); draw(); $('status').textContent = `正在入库 ${i + 1} / ${job.records.length}：${r.title}`;
         try {
-          const item = await ingestRecord(connection, r, target, controller.signal, value => uploading = value);
+          let item;
+          while(true){
+            try {item=await ingestRecord(connection,r,target,controller.signal,value=>uploading=value);break;}
+            catch(error){
+              const at=controller.signal.aborted?0:scheduleRetry(r,error);
+              if(!at)throw error;
+              r.status='retrying';r.error=error.message;await writeProgress(job,r);draw();$('status').textContent=retryMessage(r.retryCount,at);
+              await waitForRetry(at,controller.signal);r.status='active';await writeProgress(job,r);draw();
+            }
+          }
           r.status = item.duplicate ? 'duplicate' : 'done'; r.itemId = item.id;
         } catch (e) { r.status = controller.signal.aborted && !uploading ? 'pending' : 'failed'; r.error = e.message; }
         finally { uploading = false; }
@@ -121,7 +131,7 @@ try {
 
 // The optional detail view observes background jobs; it never claims their lock.
 setInterval(async () => {
-  if (running || !job || !['queued','running'].includes(job.state)) return;
+  if (running || !job || !['queued','running','retry_wait'].includes(job.state)) return;
   const next = await read('job:' + job.id); if (!next) return; job = next;
   $('status').textContent = job.error || job.message || '后台队列处理中'; draw(); await listJobs();
 }, 1500);

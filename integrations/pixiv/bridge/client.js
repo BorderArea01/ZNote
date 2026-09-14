@@ -1,6 +1,7 @@
 // ZNote integration, GPL-3.0-or-later.
 import TurndownService from 'turndown';
 import { pximg } from './records.js';
+import {request, requestError, responseJSON, networkError} from './retry.js';
 const markdown = new TurndownService({ headingStyle: 'atx' });
 export function serverURL(value) {
   const u = new URL(value);
@@ -9,17 +10,20 @@ export function serverURL(value) {
 }
 export async function api(config, path, options = {}) {
   if (!config.token) throw Error('请先填写 ZNote 写入令牌并连接');
-  const r = await fetch(serverURL(config.server) + path, { ...options, credentials: 'omit', redirect: 'error', signal: options.signal || AbortSignal.timeout(60000), headers: { ...options.headers, Authorization: 'Bearer ' + config.token } });
-  let data; try { data = await r.json(); } catch { throw Error('知识库未返回有效响应'); }
-  if (!r.ok) throw Error(data.error || `知识库 HTTP ${r.status}`); return data;
+  const r = await request(serverURL(config.server) + path, { ...options, credentials: 'omit', redirect: 'error', headers: { ...options.headers, Authorization: 'Bearer ' + config.token } },60000);
+  if (!r.ok) {
+    let data; try { data = await r.json(); } catch {}
+    throw requestError(data?.error || `知识库 HTTP ${r.status}`,r);
+  }
+  return responseJSON(r, options.signal);
 }
 export async function media(url, signal, max = 25 * 1024 * 1024) {
-  const r = await fetch(pximg(url), { credentials: 'include', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]) });
-  if (!r.ok) throw Error(`读取原文件失败 HTTP ${r.status}，请确认 Pixiv 登录与网络`);
+  const r = await request(pximg(url), { credentials: 'include', redirect: 'error', signal });
+  if (!r.ok) throw requestError(`读取原文件失败 HTTP ${r.status}，请确认 Pixiv 登录与网络`,r);
   if (Number(r.headers.get('content-length') || 0) > max) { await r.body.cancel(); throw Error('原文件超过本次入库大小限制'); }
   const reader = r.body.getReader(), parts = []; let size = 0;
-  try { while (true) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > max) throw Error('原文件超过本次入库大小限制'); parts.push(value); } }
-  finally { await reader.cancel(); }
+  try { while (true) { const { done, value } = await reader.read().catch(e=>{throw networkError(e,signal)}); if (done) break; size += value.length; if (size > max) throw Error('原文件超过本次入库大小限制'); parts.push(value); } }
+  finally { await reader.cancel().catch(()=>{}); }
   return new Blob(parts, { type: r.headers.get('content-type') || 'application/octet-stream' });
 }
 export function description(html) {
@@ -61,8 +65,8 @@ export async function novelBody(record, saveImage, signal) {
   }
   // Referenced artwork images resolve via the logged-in Pixiv browser session.
   for (const match of text.matchAll(/\[pixivimage:(\d+)(?:-(\d+))?\]/g)) {
-    const r = await fetch(`https://www.pixiv.net/ajax/illust/${match[1]}/pages`, { credentials: 'include', signal });
-    if (!r.ok) throw Error('小说引用插画不可访问'); const data = await r.json();
+    const r = await request(`https://www.pixiv.net/ajax/illust/${match[1]}/pages`, { credentials: 'include', signal });
+    if (!r.ok) throw requestError(`小说引用插画不可访问 HTTP ${r.status}`,r); const data = await responseJSON(r,signal);
     const url = data.body?.[Math.max(0, Number(match[2] || 1) - 1)]?.urls?.original;
     images.push([match[0], pximg(url)]);
   }

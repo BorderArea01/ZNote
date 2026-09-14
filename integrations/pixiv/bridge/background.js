@@ -8,6 +8,7 @@ import {
   summaries,
   removeJob,
   removePrefix,
+  resetJobRetries,
 } from "./store.js";
 import { normalize } from "./records.js";
 const owned = (job, sender) =>
@@ -100,6 +101,7 @@ async function room() {
     await removeJob(j.id);
 }
 async function wake(stop) {
+  await chrome.alarms.create('znote-queue-recovery',{periodInMinutes:1});
   if (!creating)
     creating = (async () => {
       const existing = await chrome.runtime.getContexts({
@@ -261,15 +263,29 @@ async function handle(message, sender) {
         },
       );
     }
+    const attention = j => j.state === 'failed' || j.failed > 0 || j.bookmarkFailed > 0;
     return {
       jobs: [
-        ...all.filter((j) => j.state === "running"),
-        ...all.filter((j) => j.state !== "running"),
+        ...all.filter(attention),
+        ...all.filter((j) => !attention(j) && ['running','retry_wait'].includes(j.state)),
+        ...all.filter((j) => !attention(j) && !['running','retry_wait'].includes(j.state)),
       ].slice(0, 30),
-      pending: all.filter((j) => ["queued", "running"].includes(j.state))
+      pending: all.filter((j) => ["queued", "running", "retry_wait"].includes(j.state))
         .length,
-      failed: all.filter((j) => j.state === "failed").length,
+      failed: all.filter(attention).length,
+      retrying: all.filter(j=>j.state==='retry_wait').length,
     };
+  }
+  if(message.action==='retryFailed') {
+    const failedBookmarks=new Set((await prefix('bookmark:')).filter(b=>b.state==='failed').map(b=>b.job));
+    let retried=0;const errors=[];
+    for(const job of await summaries()) {
+      if(!job.finalized || ['queued','running','retry_wait','collecting','review'].includes(job.state)) continue;
+      if(job.state==='failed' || job.failed || failedBookmarks.has(job.id)) {
+        try {await handle({action:'retry',id:job.id},sender);retried++;} catch(error){errors.push(error.message);}
+      }
+    }
+    return {retried,errors};
   }
   if (
     message.action === "stop" ||
@@ -292,6 +308,7 @@ async function handle(message, sender) {
           if (lock) {
             const next = await read("job:" + job.id);
             next.state = "paused";
+            next.retryAt = 0;
             next.message = "已停止，可继续";
             await writeJob(next);
           }
@@ -319,7 +336,7 @@ async function handle(message, sender) {
         await write("control:" + job.id, "run");
         job.state = "queued";
         job.error = "";
-        await writeJob(job);
+        await resetJobRetries(job);
       },
     );
     if (message.action === "retry") await wake();
@@ -336,7 +353,7 @@ async function handle(message, sender) {
     const destination = await target(message.target);
     const existing = (await summaries()).find(
       (j) =>
-        ["queued", "running"].includes(j.state) &&
+        ["queued", "running", "retry_wait"].includes(j.state) &&
         j.work?.id === String(work.id) &&
         j.work.type === work.type &&
         JSON.stringify(j.target) === JSON.stringify(destination),
@@ -488,11 +505,13 @@ const resume = () =>
   initialized
     .then(async () => {
       if (
-        (await summaries()).some((j) => ["queued", "running"].includes(j.state))
+        (await summaries()).some((j) => ["queued", "running", "retry_wait"].includes(j.state))
       )
         await wake();
+      else await chrome.alarms.clear('znote-queue-recovery');
     })
     .catch(() => {});
 chrome.runtime.onStartup.addListener(resume);
 chrome.runtime.onInstalled.addListener(resume);
+chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name==='znote-queue-recovery') resume();});
 resume();

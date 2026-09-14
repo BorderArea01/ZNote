@@ -24,6 +24,7 @@ frameBuffers.forEach((b,i)=>zip.append(b,{name:`00000${i}.jpg`})); await zip.fin
 const original = 'https://i.pximg.net/img-original/img/2026/01/01/00/00/00/12345_p0.png';
 const common = { id:'12345', title:'森林与清晨', description:'<p>系列说明 <a href="https://www.pixiv.net/users/1">作者主页</a></p>', userId:'1', userName:'测试作者', width:800,height:600,pageCount:2,bookmarkCount:120,illustType:1,tags:{tags:[{tag:'风景',translation:{en:'landscape'}}]},urls:{original,regular:original,small:original,thumb:original},aiType:1,illustAIType:1,isOriginal:true,createDate:'2026-01-01T00:00:00Z',uploadDate:'2026-01-01T00:00:00Z',xRestrict:0,sl:2,bookmarkData:null,likeCount:3,viewCount:12,commentCount:0 };
 let context, worker, page, failSecond = true, loseNoteResponse = false, slowMedia=false;
+let transientMode='',permanentFirst=false;const mediaAttempts=new Map();
 const metaRequests=new Set();
 const directoryIDs=Array.from({length:120},(_,i)=>String(50000+i));
 const directoryFiles=new Map(await Promise.all(directoryIDs.map(async(id,i)=>[id,await sharp({create:{width:64,height:48,channels:3,background:{r:i,g:44,b:212}}}).png().toBuffer()])));
@@ -82,7 +83,14 @@ async function offscreenFixtures(){
   cdp.on('Target.receivedMessageFromTarget',async event=>{
     if(event.sessionId!==sessionId)return;const m=JSON.parse(event.message);if(m.method!=='Fetch.requestPaused')return;
     const {requestId,request}=m.params,u=new URL(request.url);headers.push(request.headers);let status=200,body,contentType='application/json';
-    if(u.hostname.endsWith('pximg.net')){if(slowMedia)await new Promise(r=>setTimeout(r,1000));contentType='image/png';status=failSecond&&u.pathname.includes('_p1')?404:200;body=directoryFiles.get(u.pathname.match(/(\d+)_p/)?.[1])||originals[u.pathname.includes('_p1')?1:0];}
+    if(u.hostname.endsWith('pximg.net')){
+      const count=(mediaAttempts.get(u.pathname)||0)+1;mediaAttempts.set(u.pathname,count);
+      if(transientMode==='disconnect' && u.pathname.includes('_p1') && count===1){await command('Fetch.failRequest',{requestId,errorReason:'InternetDisconnected'});return;}
+      if(slowMedia)await new Promise(r=>setTimeout(r,1000));contentType='image/png';
+      status=failSecond&&u.pathname.includes('_p1')?404:transientMode && transientMode!=='disconnect' && u.pathname.includes('_p1') && (count===1 || transientMode==='always')?503:200;
+      if(permanentFirst && u.pathname.includes('_p0')) status=403;
+      body=directoryFiles.get(u.pathname.match(/(\d+)_p/)?.[1])||originals[u.pathname.includes('_p1')?1:0];
+    }
     else if(u.pathname.match(/^\/ajax\/illust\/\d+$/)){const id=u.pathname.split('/')[3];metaRequests.add(id);body={error:false,body:{...common,id,title:'测试作品 '+id}};}
     else if(u.pathname.endsWith('/pages')){const id=u.pathname.split('/')[3];body={error:false,body:Array.from({length:id==='12345'?2:1},(_,i)=>({urls:{original:original.replace('12345',id).replace('p0','p'+i)}}))};}
     else{status=404;body={error:true,message:'Missing fixture'};}
@@ -149,5 +157,61 @@ try {
   page=await context.newPage();await page.goto('https://www.pixiv.net/users/1/artworks');await page.locator('#znote-pixiv-entry').waitFor();await closeNotices();await page.locator('#znote-pixiv-entry #toggle').click();await worker.evaluate(async()=>{const tabs=await chrome.tabs.query({url:'https://www.pixiv.net/*'});for(const t of tabs)await chrome.tabs.sendMessage(t.id,{msg:'dispatchFollowingData',data:[{user:'1',following:['1'],followedUsersInfo:[],total:1}]}).catch(()=>{})});await page.locator('aside a.pbdHighlightFollowing').waitFor();console.log('PASS original followed-author highlighting remains active');await page.waitForTimeout(1500);assert.equal((await worker.evaluate(()=>chrome.downloads.search({}))).length,0,'Returning to a library-captured directory must not restore it as a native download');await page.screenshot({path:resolve('artifacts/pixiv-inline-desktop.png')});
   await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:resolve('artifacts/pixiv-inline-mobile.png')});
   assert.ok(headers.every(h=>!h.authorization));assert.deepEqual(errors,[]);console.log('PASS inline desktop/mobile, correct library/source/tags, no token leaks');
+  // Exercise the actual offscreen queue against HTTP failures and a disconnected network.
+  await page.setViewportSize({width:1500,height:1000});
+  const retryUI=page.locator('#znote-pixiv-entry');
+  if(await retryUI.locator('#panel').isVisible())await retryUI.locator('#toggle').click();
+  async function enqueueAgain(){
+    const previous=new Set((await allJobs()).map(j=>j.id));
+    await page.locator('.fixture-card img').hover();await retryUI.locator('#hover').click();await retryUI.locator('#group-work').click();
+    for(let i=0;i<100;i++){const job=(await allJobs()).find(j=>!previous.has(j.id));if(job)return job;await page.waitForTimeout(100)}
+    throw Error('Missing retry fixture job');
+  }
+  const countPage=index=>mediaAttempts.get(new URL(original.replace('p0','p'+index)).pathname)||0;
+  transientMode='once';mediaAttempts.clear();let retryJob=await enqueueAgain();
+  let waiting=await waitJob(retryJob.id,'retry_wait');assert.equal(waiting.records[1].retryCount,1);
+  await retryUI.locator('#queue-summary').filter({hasText:'等待自动重试'}).waitFor();
+  assert.ok(await retryUI.locator('#panel').isHidden(),'Retry visible without expanding queue');
+  await page.screenshot({path:resolve('artifacts/pixiv-retry-waiting.png')});
+  // Recreate the offscreen document while the persisted deadline is pending.
+  await worker.evaluate(()=>chrome.offscreen.closeDocument());await offscreenFixtures();
+  await waitJob(retryJob.id,'done');assert.equal(countPage(0),1);assert.equal(countPage(1),2);
+  console.log('PASS automatic 503 retry, persisted deadline after offscreen restart, successful pages skipped');
+  transientMode='disconnect';mediaAttempts.clear();retryJob=await enqueueAgain();
+  await waitJob(retryJob.id,'retry_wait');await waitJob(retryJob.id,'done');assert.equal(countPage(0),1);assert.equal(countPage(1),2);
+  console.log('PASS disconnected request retries automatically');
+  transientMode='always';mediaAttempts.clear();retryJob=await enqueueAgain();await waitJob(retryJob.id,'retry_wait');
+  await retryUI.locator('#toggle').click();await retryUI.locator('[data-job="'+retryJob.id+'"] button').filter({hasText:'停止'}).click();await waitJob(retryJob.id,'paused');
+  const stopped=countPage(1);await page.waitForTimeout(5500);assert.equal(countPage(1),stopped,'Stopped backoff cannot resume itself');
+  transientMode='';await retryUI.locator('[data-job="'+retryJob.id+'"] button').filter({hasText:'重试'}).click();await waitJob(retryJob.id,'done');
+  assert.equal((await dbJob(retryJob.id)).records[1].retryCount,0,'Manual retry resets persisted record counter');
+  await retryUI.locator('#toggle').click();
+  failSecond=true;mediaAttempts.clear();retryJob=await enqueueAgain();await waitJob(retryJob.id,'failed');
+  await retryUI.locator('#retry-failed').waitFor();assert.ok(await retryUI.locator('#panel').isHidden());
+  await page.screenshot({path:resolve('artifacts/pixiv-retry-failure-desktop.png')});
+  const touch=await context.newCDPSession(page);await touch.send('Emulation.setTouchEmulationEnabled',{enabled:true});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:resolve('artifacts/pixiv-retry-failure-mobile.png')});
+  const inspect=await retryUI.locator('#show-failed').boundingBox();await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:inspect.x+inspect.width/2,y:inspect.y+inspect.height/2}]});await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await retryUI.locator('#panel').waitFor();await retryUI.locator('#toggle').click();
+  failSecond=false;await retryUI.locator('#retry-failed').focus();await page.keyboard.press('Enter');await retryUI.locator('#status').filter({hasText:'已重新排队 1 个失败任务'}).waitFor();await waitJob(retryJob.id,'done');
+  assert.equal(countPage(0),1);assert.equal(countPage(1),2);
+  assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE kind='image'").get().n,123,'Retries do not duplicate originals');
+  console.log('PASS stop waiting, explicit resume, collapsed failure actions, touch inspection and keyboard retry, no duplicate originals');
+  await touch.send('Emulation.setTouchEmulationEnabled',{enabled:false});await page.setViewportSize({width:1500,height:1000});
+  transientMode='always';permanentFirst=true;mediaAttempts.clear();retryJob=await enqueueAgain();
+  for(let attempt=1;attempt<=4;attempt++){
+    const state=await waitJob(retryJob.id,'retry_wait');assert.equal(state.records[1].retryCount,attempt);
+    // Advance only the fixture's durable deadline so the real runner can exhaust
+    // its retry budget without waiting three minutes in the integration test.
+    await worker.evaluate(async id=>{
+      const db=await new Promise(resolve=>{const q=indexedDB.open('znote-pixiv',1);q.onsuccess=()=>resolve(q.result)});
+      await new Promise((resolve,reject)=>{const tx=db.transaction('data','readwrite'),store=tx.objectStore('data');for(const key of ['job:'+id,'summary:'+id]){const q=store.get(key);q.onsuccess=()=>{const value=q.result;value.retryAt=Date.now();store.put(value,key)}}tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();
+      const port=chrome.runtime.connect({name:'znote-runner'});port.onMessage.addListener(()=>port.disconnect());port.postMessage({wake:true});
+    },retryJob.id);
+    for(let i=0;i<100;i++){const next=await dbJob(retryJob.id);if(next.state==='failed'||next.records[1].retryCount>attempt)break;await page.waitForTimeout(100)}
+  }
+  const exhausted=await waitJob(retryJob.id,'failed');assert.equal(exhausted.records[1].retryCount,4);assert.equal(countPage(0),1);assert.equal(countPage(1),5);
+  await page.waitForTimeout(1200);assert.equal(countPage(1),5,'No unbounded retry loop');
+  console.log('PASS real queue exhausts four retries and never reattempts a permanent failure while retrying another page');
 } catch(e){if(page&&!page.isClosed()){await page.screenshot({path:resolve('artifacts/pixiv-inline-failure.png'),timeout:5000});console.log('rects',await page.evaluate(()=>{const h=document.getElementById('znote-pixiv-entry');return {host:h?.getBoundingClientRect().toJSON(),panel:h?.shadowRoot.querySelector('#panel').getBoundingClientRect().toJSON(),hover:h?.shadowRoot.querySelector('#hover').getBoundingClientRect().toJSON(),small:document.querySelector('.fixture-small')?.getBoundingClientRect().toJSON()}}))}throw e;} finally {await context?.close();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();}
 

@@ -1,13 +1,14 @@
 // GPL-3.0-or-later. Resolve one explicitly selected work without resetting PPD's crawl.
 import { normalize } from "./records.js";
+import {request, requestError, responseJSON} from './retry.js';
 async function json(path, signal) {
-  const r = await fetch("https://www.pixiv.net/ajax/" + path, {
+  const r = await request("https://www.pixiv.net/ajax/" + path, {
     credentials: "include",
     redirect: "error",
-    signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]),
+    signal,
   });
-  if (!r.ok) throw Error(`Pixiv HTTP ${r.status}，请检查登录与网络`);
-  const data = await r.json();
+  if (!r.ok) throw requestError(`Pixiv HTTP ${r.status}，请检查登录与网络`,r);
+  const data = await responseJSON(r,signal);
   if (data.error || !data.body) throw Error(data.message || "作品暂时无法访问");
   return data.body;
 }

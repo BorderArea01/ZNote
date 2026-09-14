@@ -13,7 +13,8 @@ host.id = "znote-pixiv-entry";
 const root = host.attachShadow({ mode: "open" });
 root.innerHTML = `<style>
 :host{position:fixed;bottom:18px;left:18px;z-index:2147483646;color:#eef0fa;font:13px/1.5 system-ui;--line:#ffffff20}*{box-sizing:border-box}[hidden]{display:none!important}button,select,input{font:inherit;color:inherit;border:1px solid var(--line);border-radius:9px;background:#272b3a;padding:8px 11px}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}button:hover:not(:disabled){background:#394059}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #acb5ff;outline-offset:2px}.primary{background:#6264d7;border-color:#969aff}.primary:hover:not(:disabled){background:#7476e8}.box{background:#181b27f5;border:1px solid #ffffff25;border-radius:16px;box-shadow:0 10px 40px #0005;padding:10px;max-width:calc(100vw - 36px)}.bar{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.brand{font-weight:750;letter-spacing:.4px;padding:0 4px;color:#c1c6ff}select{max-width:160px}#status{max-width:510px;margin:6px 4px 0;color:#bec5dc;overflow-wrap:anywhere;font-size:12px}#status:empty{display:none}#panel{width:500px;max-width:calc(100vw - 58px);max-height:65vh;overflow:auto;margin-bottom:10px;padding:5px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.row input[type=text]{flex:1;min-width:80px}#key{width:42px!important;flex:none}.muted{color:#a9b1c9;font-size:12px}#queue{display:grid;gap:8px;margin:12px 0}.job{border:1px solid var(--line);border-radius:10px;padding:10px}.job strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.job progress{width:100%;height:5px;accent-color:#969aff}.job .row{margin:4px 0}.job button{font-size:12px;padding:4px 8px}.job a{color:#bcc3ff}#hover{position:fixed;box-shadow:0 3px 12px #0007;z-index:2;padding:5px 10px;font-weight:650}.help{cursor:help;border:1px solid #8991b7;border-radius:50%;width:17px;height:17px;text-align:center;color:#b9c0de;font-size:11px}#scopes{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}#scopes button{font-size:12px}@media(max-width:600px){.bar{padding-right:86px}:host{left:8px;bottom:8px}.brand{display:none}.box{max-width:calc(100vw - 16px)}select{max-width:120px}#panel{max-width:calc(100vw - 38px)}}
-</style><button id="hover" class="primary" hidden title="整部作品保存到所选知识库">入库 · Z</button><div class="box"><section id="panel" hidden><div class="row"><strong>入库队列</strong><span class="help" title="作品按钮保存整部作品。目录入库沿用原插件范围与筛选；抓取完成并加入队列后，可离开当前页。">?</span><button id="connect">连接设置</button><button id="jobs">详细任务</button></div><label class="row">附加标签<input id="tags" type="text" placeholder="多个标签用逗号分隔"></label><div class="row"><label><input id="include" type="checkbox" checked> Pixiv 标签</label><label>快捷键 <input id="key" type="text" maxlength="1" value="Z"></label><button id="preferences">记住设置</button></div><div id="scopes"></div><div id="queue"></div><div class="row"><button id="save">保存抓取结果到 ZNote</button><button id="review" title="仅在需要逐项检查时打开独立任务页">检查结果…</button></div></section><div class="bar"><span class="brand">ZNote</span><select id="collection" aria-label="目标知识库"><option value="">未分类</option></select><button id="current" class="primary">本作品入库</button><button id="scope" class="primary">当前范围入库</button><button id="native" title="设置整目录、页数与筛选条件">范围设置</button><button id="toggle" aria-expanded="false">队列</button></div><p id="status" role="status"></p></div>`;
+#toggle[data-attention=true]{background:#513522;border-color:#d89d68;color:#ffe0ba}#queue-notice{margin-top:9px;padding:10px 12px;border:1px solid #5e70a4;border-radius:10px;background:#242e49;color:#dae5ff;max-width:510px}#queue-notice[data-attention=true]{background:#382b22;border-color:#ad7b52;color:#ffe0ba}#queue-summary{font-weight:650}.notice-controls{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.notice-controls button{padding:6px 10px;min-height:34px}.job[data-attention=true]{border-color:#ba855b;background:#302820}.job .error{color:#ffd4af;font-size:12px;overflow-wrap:anywhere}
+</style><button id="hover" class="primary" hidden title="整部作品保存到所选知识库">入库 · Z</button><div class="box"><section id="panel" hidden><div class="row"><strong>入库队列</strong><span class="help" title="作品按钮保存整部作品。目录入库沿用原插件范围与筛选；抓取完成并加入队列后，可离开当前页。">?</span><button id="connect">连接设置</button><button id="jobs">详细任务</button></div><label class="row">附加标签<input id="tags" type="text" placeholder="多个标签用逗号分隔"></label><div class="row"><label><input id="include" type="checkbox" checked> Pixiv 标签</label><label>快捷键 <input id="key" type="text" maxlength="1" value="Z"></label><button id="preferences">记住设置</button></div><div id="scopes"></div><div id="queue"></div><div class="row"><button id="save">保存抓取结果到 ZNote</button><button id="review" title="仅在需要逐项检查时打开独立任务页">检查结果…</button></div></section><div class="bar"><span class="brand">ZNote</span><select id="collection" aria-label="目标知识库"><option value="">未分类</option></select><button id="current" class="primary">本作品入库</button><button id="scope" class="primary">当前范围入库</button><button id="native" title="设置整目录、页数与筛选条件">范围设置</button><button id="toggle" aria-expanded="false">队列</button></div><div id="queue-notice" role="status" hidden><span id="queue-summary"></span><div class="notice-controls" id="failure-actions"><button id="show-failed">查看失败</button><button id="retry-failed">重试失败任务</button></div></div><p id="status" role="status"></p></div>`;
 document.body.append(host);
 const choice = document.createElement("div");
 choice.id = "format-choice";
@@ -58,7 +59,9 @@ let scopeJob: string | undefined,
   crawlStarted = false,
   lastURL = location.href,
   lastJobs = "",
-  pending = 0;
+  pending = 0,
+  failed = 0,
+  retrying = 0;
 const target = () => ({
   collection_id: $("collection").value,
   tags: $("tags").value,
@@ -99,7 +102,12 @@ function draw() {
   $("current").hidden = !currentWork();
   $("current").disabled = !connected;
   $("scope").disabled = !connected || busy || states.busy;
-  $("toggle").textContent = pending ? `队列 · ${pending}` : "队列";
+  $("toggle").textContent = (pending ? `队列 · ${pending}` : "队列") + (failed ? ` · ${failed} 失败` : retrying ? " · 重试中" : "");
+  $("toggle").dataset.attention = String(failed > 0);
+  $("queue-notice").hidden = !failed && !retrying;
+  $("queue-notice").dataset.attention = String(failed > 0);
+  $("queue-summary").textContent = [failed ? `${failed} 个任务存在失败` : '', retrying ? `${retrying} 个任务等待自动重试` : ''].filter(Boolean).join(' · ');
+  $("failure-actions").hidden = !failed;
 }
 async function send(payload: object): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -406,6 +414,8 @@ function decorateScopes() {
 async function poll() {
   const r = await send({ action: "status" });
   pending = r.pending;
+  failed = r.failed || 0;
+  retrying = r.retrying || 0;
   draw();
   const signature = JSON.stringify(r.jobs);
   if (signature === lastJobs) return;
@@ -421,19 +431,20 @@ async function poll() {
     const row = document.createElement("div");
     row.className = "job";
     row.dataset.job = j.id;
+    row.dataset.attention=String(j.state==='failed'||j.failed>0||j.bookmarkFailed>0);
     const title = document.createElement("strong");
     title.textContent = j.title;
     const progress = document.createElement("progress");
     progress.max = j.total || 1;
     progress.value = j.done;
     const info = document.createElement("div");
-    info.className = "muted";
-    info.textContent = `${({ collecting: "抓取中", queued: "排队中", running: "入库中", paused: "已停止", failed: "需重试", done: "已完成", review: "待检查" } as any)[j.state] || j.state} · ${j.done} / ${j.total}${j.failed ? " · " + j.failed + " 项失败" : ""}${j.error ? " · " + j.error : ""}`;
+    info.className = row.dataset.attention==='true' ? "error" : "muted";
+    info.textContent = `${({ collecting: "抓取中", queued: "排队中", running: "入库中", retry_wait: "等待自动重试", paused: "已停止", failed: "需重试", done: "已完成", review: "待检查" } as any)[j.state] || j.state} · ${j.done} / ${j.total}${j.failed ? " · " + j.failed + " 项失败" : ""}${j.error || j.failureReason ? " · " + (j.error || j.failureReason) : ""}${j.state==='retry_wait' ? " · " + j.message : ""}`;
     if (j.bookmarkDone || j.bookmarkPending || j.bookmarkFailed)
       info.textContent += ` · Pixiv 收藏 ${j.bookmarkDone} 项完成${j.bookmarkPending ? "，" + j.bookmarkPending + " 项待同步" : ""}${j.bookmarkFailed ? "，" + j.bookmarkFailed + " 项失败" : ""}`;
     const controls = document.createElement("div");
     controls.className = "row";
-    for (const [action, label] of ["queued", "running"].includes(j.state)
+    for (const [action, label] of ["queued", "running", "retry_wait"].includes(j.state)
       ? [["stop", "停止"]]
       : [
           ["retry", "继续 / 重试"],
@@ -471,6 +482,15 @@ async function poll() {
     $("queue").append(row);
   }
 }
+$("show-failed").onclick = async () => {
+  openPanel();await poll().catch(report);
+  root.querySelector('[data-attention="true"][data-job]')?.scrollIntoView({block:'nearest'});
+};
+$("retry-failed").onclick = async () => {
+  $("retry-failed").disabled=true;
+  try {const result=await send({action:'retryFailed'});report(`已重新排队 ${result.retried} 个失败任务${result.errors?.length ? '；部分任务暂时无法重试：'+result.errors[0] : ''}`);await poll();}
+  catch(error){report(error);}finally{$("retry-failed").disabled=false;}
+};
 $("current").onclick = (e) => {
   const work = currentWork();
   if (e.isTrusted && work) choose(e, () => direct(work));

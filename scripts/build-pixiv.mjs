@@ -75,7 +75,7 @@ if (!Number.isInteger(spec.extensionRevision) || spec.extensionRevision < 1 || s
 manifest.version = spec.version + '.' + spec.extensionRevision; manifest.version_name = `${spec.version} + ZNote ${spec.bridgeVersion}`;
 manifest.key = (await readFile(join(base, 'public-key.txt'), 'utf8')).trim();
 manifest.optional_host_permissions = ['http://*/*', 'https://*/*'];
-manifest.permissions = [...new Set([...manifest.permissions, 'offscreen'])];
+manifest.permissions = [...new Set([...manifest.permissions, 'offscreen', 'alarms'])];
 manifest.options_ui = { page: 'znote/index.html', open_in_tab: true };
 delete manifest.browser_specific_settings; delete manifest.background.scripts; delete manifest.background.preferred_environment;
 await writeFile(join(dist, 'manifest.json'), JSON.stringify(manifest, null, 2));

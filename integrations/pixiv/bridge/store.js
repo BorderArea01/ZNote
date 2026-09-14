@@ -67,6 +67,10 @@ export function summary(job) {
     total: job.records.length,
     done: job.records.filter(success).length,
     failed: job.records.filter((r) => r.status === "failed").length,
+    retrying: job.records.filter((r) => r.status === "retrying").length,
+    retryAt: job.retryAt || 0,
+    retryCount: job.records.find(r=>r.status==='retrying')?.retryCount || job.retryCount || 0,
+    failureReason: job.records.find(r=>r.status==='failed')?.error || '',
     error: job.error || "",
     work: job.work,
     target: job.target,
@@ -134,6 +138,7 @@ export async function writeProgress(job, record) {
         status: record.status,
         error: record.error || "",
         itemId: record.itemId,
+        retryCount: record.retryCount || 0,
       },
       "result:" + job.id + ":" + record.key,
     );
@@ -167,5 +172,20 @@ export async function writeProgress(job, record) {
     }
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Reset only unfinished records; update their result overlays in the same transaction.
+export async function resetJobRetries(job) {
+  job.retryCount = 0; job.retryAt = 0; job.error = '';
+  const database = await db;
+  await new Promise((resolve,reject)=>{
+    const tx=database.transaction('data','readwrite'), store=tx.objectStore('data');
+    for(const record of job.records) if(!success(record)) {
+      record.retryCount=0;record.status='pending';record.error='';
+      store.put({key:record.key,status:record.status,error:'',retryCount:0,itemId:record.itemId},'result:'+job.id+':'+record.key);
+    }
+    store.put(job,'job:'+job.id);store.put(summary(job),'summary:'+job.id);
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
   });
 }

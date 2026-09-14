@@ -95,9 +95,9 @@ try {
   await chooser.setFiles({name:'pixiv-results.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(records))});
   await page.locator('#znote-pixiv-entry').getByText('保存抓取结果到 ZNote（2）',{exact:true}).waitFor({state:'attached'});
   const mixed=await openCapture();await mixed.locator('#connection-status').filter({hasText:'已连接'}).waitFor();await mixed.locator('#collection').selectOption(collection.id);
-  loseNoteResponse=true;await mixed.locator('#start').click();await mixed.locator('#status').filter({hasText:'已入库 1 / 2，1 项失败'}).waitFor();
+  loseNoteResponse=true;await mixed.locator('#start').click();await mixed.locator('#status').filter({hasText:'等待自动重试'}).waitFor();
   let novels=runtime.db.prepare("SELECT * FROM items WHERE kind='note'").all();assert.equal(novels.length,1,'Novel committed despite dropped response');
-  await mixed.locator('#start').click();await mixed.getByRole('button',{name:'全部已入库',exact:true}).waitFor();
+  await mixed.getByRole('button',{name:'全部已入库',exact:true}).waitFor();
   novels=runtime.db.prepare("SELECT * FROM items WHERE kind='note'").all();assert.equal(novels.length,1,'Retry must not duplicate novels');assert.ok(JSON.parse(novels[0].tags).includes('测试作者'));
   assert.ok(novels[0].content.includes('## 第一章'));assert.ok(novels[0].content.includes('[作者](<https://www.pixiv.net/users/1>)'));assert.ok(novels[0].content.includes('/media/'));assert.ok(!/!\[[^\]]*\]\(https?:/.test(novels[0].content));
   const animated=runtime.db.prepare("SELECT * FROM items WHERE source_url='https://www.pixiv.net/artworks/23456'").get();assert.ok(animated);
