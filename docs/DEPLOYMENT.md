@@ -14,11 +14,30 @@ npm start
 
 浏览器打开 `http://localhost:3741`，设置至少 4 个字符的访问密码，支持四位数字。首次初始化默认仅允许从服务器本机进行；日常登录支持局域网。
 
-Windows 需要后台运行时，可在项目目录执行：
+Windows 长期运行建议使用计划任务。先退出已有的 `npm start` 服务，再在项目目录执行一次：
 
 ```powershell
-Start-Process -FilePath (Get-Command node).Source -ArgumentList 'server/index.js' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -RedirectStandardOutput (Join-Path (Get-Location) 'server.log') -RedirectStandardError (Join-Path (Get-Location) 'server-error.log')
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-windows-server.ps1
 ```
+
+安装后立即启动 `ZNote-Server`，之后在当前 Windows 用户登录时自动启动。服务独立于启动终端，每分钟检查任务是否需要启动，意外退出后自动恢复；已有任务运行时会忽略新的启动请求，不会每分钟重启服务。运行不设时间上限，也不会因为切换到电池供电而被计划任务停止。电脑仍需保持开机、不休眠；注销 Windows 用户会停止任务，重新登录后再启动。
+
+默认使用仓库下的 `data/` 和端口 `3741`；自定义位置可给安装脚本传入 `-DataDirectory 'D:\ZNoteData' -Port 3741`。输出与退出记录位于数据目录的 `logs/`，单份日志超过 5 MB 后轮换，上一份保留为 `.previous` 文件。目录内可能含运行信息，不要直接公开整个日志目录。
+
+维护或更新时通过计划任务控制服务，不要同时再运行 `npm start`：
+
+```powershell
+Disable-ScheduledTask -TaskName ZNote-Server
+Stop-ScheduledTask -TaskName ZNote-Server
+# 完成备份、更新与构建后再启动
+Enable-ScheduledTask -TaskName ZNote-Server
+Start-ScheduledTask -TaskName ZNote-Server
+Get-ScheduledTask -TaskName ZNote-Server
+```
+
+维护时先禁用任务，避免每分钟的触发器再次启动它。卸载后台任务：先禁用并停止任务，再执行 `Unregister-ScheduledTask -TaskName ZNote-Server -Confirm:$false`，数据不会被删除。更换仓库路径或 Node.js 安装路径后，卸载并重新安装任务。
+
+计划任务恢复与并发设置参照 [Microsoft Task Scheduler 文档](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset)。
 
 ## 局域网访问
 

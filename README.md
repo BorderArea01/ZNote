@@ -233,6 +233,8 @@ npm start
 
 默认数据目录为 **`data/`**，更新代码时请保留；默认端口 `3741`，可通过 `PORT` 修改。手机上的 `localhost` 指手机自身，访问电脑时请使用电脑的局域网 IP。服务停止后，其他设备无法访问网页或继续收件。
 
+**Windows 长期使用：** 推荐安装 [后台任务](docs/DEPLOYMENT.md#本机运行)，支持登录自动启动、意外退出后重试，避免关闭临时终端后知识库失联。
+
 <details>
 <summary>Docker / NAS 部署</summary>
 
