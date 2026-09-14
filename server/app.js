@@ -923,6 +923,9 @@ export function createApp({
     let existing = fixedId ? null : input.group_key !== undefined
       ? db.prepare("SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_index=? AND ((? IS NOT NULL AND group_key=?) OR (source_url IS ? AND (? IS NULL OR group_key IS NULL OR group_manual=1 OR group_key LIKE 'note:%'))) ORDER BY deleted_at IS NOT NULL").get(digest,input.collection_id,input.group_index,input.group_key??null,input.group_key??null,input.source_url,input.group_key??null)
       : db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL').get(digest,input.collection_id);
+    // A new upload batch owns its grouping. Reuse the file through a new
+    // entry instead of moving an existing asset or leaving it in another group.
+    if(input.group_key?.startsWith('upload:')&&existing?.group_key!==input.group_key)existing=null;
     if(!fixedId&&!existing&&input.group_key){
       const candidates=db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? AND group_key IS NULL AND deleted_at IS NULL').all(digest,input.collection_id).filter(row=>{const old=legacyGalleryPage(row);return old?.group_key===input.group_key&&old.group_index===input.group_index;});
       if(candidates.length===1)existing=candidates[0];

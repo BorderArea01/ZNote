@@ -151,14 +151,17 @@ export function UploadDialog({
   const [runError,setRunError]=useState('');
   const [uploadPage,setUploadPage]=useState(0);
   const [rows, setRows] = useState(() =>
-    files.map((file) => ({
+    files.map((file,index) => ({
       id: Math.random(),
+      group_index:index,
       file,
       status: "pending",
       progress: 0,
     })),
   );
   const [collection, setCollection] = useState(currentCollection || "");
+  const [grouped,setGrouped]=useState(true);
+  const uploadBatch=useRef(null);
   const [tags, setTags] = useState([]);
   const [submitting, setRunning] = useState(false);
   const displayRows=rows.map(original=>{const task=taskById.get(original.task_id);return task?{...original,item:taskStore.result(task.id)||original.item,progress:task.progress,error:task.message,status:task.status==='completed'?(task.duplicate?'duplicate':'done'):task.status==='failed'||task.status==='cancelled'?'error':task.status==='queued'?'pending':'running'}:original});
@@ -172,8 +175,9 @@ export function UploadDialog({
   const addFiles = (files) =>
     setRows((previous) => [
       ...previous,
-      ...[...files].map((file) => ({
+      ...[...files].map((file,index) => ({
         id: Math.random(),
+        group_index:Math.max(-1,...previous.map(r=>r.group_index))+1+index,
         file,
         status: "pending",
         progress: 0,
@@ -185,7 +189,9 @@ export function UploadDialog({
     const pending=displayRows.filter(row=>['pending','error'].includes(row.status));
     try {
       pending.forEach(row=>{if(row.task_id)taskStore.forget(row.task_id)});
-      const tickets=queueUploads(taskStore,pending.map(r=>r.file),collection,tags);queuedIds.current=tickets.map(t=>t.id);
+      if(!uploadBatch.current)uploadBatch.current={collection,tags:[...tags],group:kind==='image'&&grouped&&rows.length>1?{group_key:'upload:'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),group_title:rows[0].file.name.slice(0,200)}:null};
+      const batch=uploadBatch.current;
+      const tickets=queueUploads(taskStore,pending.map(r=>r.file),batch.collection,batch.tags,pending.map(row=>batch.group?{...batch.group,group_index:row.group_index}:undefined));queuedIds.current=tickets.map(t=>t.id);
       tickets.forEach((ticket,index)=>update(pending[index].id,{task_id:ticket.id,status:'running',error:''}));
       await Promise.all(tickets.map(async(ticket,index)=>{const result=await ticket.promise;update(pending[index].id,result.ok?{item:result.value,status:result.value.duplicate?'duplicate':'done',progress:100}:{status:'error',error:result.error.message});}));
       onComplete();
@@ -234,7 +240,7 @@ export function UploadDialog({
             aria-label="上传到知识库"
             value={collection}
             onChange={(e) => setCollection(e.target.value)}
-            disabled={running}
+            disabled={running||!!uploadBatch.current}
           >
             <option value="">未分类</option>
             {collections.map((c) => (
@@ -250,8 +256,9 @@ export function UploadDialog({
           value={tags}
           onChange={setTags}
           collection={collection||null}
-          disabled={running}
+          disabled={running||!!uploadBatch.current}
         />
+        {kind==='image'&&rows.length>1&&<div className="upload-group-choice"><label><input type="checkbox" checked={grouped} onChange={e=>setGrouped(e.target.checked)} disabled={running||!!uploadBatch.current}/>上传后组成图片组</label><HelpHint label="上传图片组">按文件队列顺序组成一组，第一张作为封面并提供组名，不必另外命名。取消勾选则分别入库。失败重试仍归入同一组；不会拆散已有图片组。</HelpHint></div>}
         <div className="upload-queue">
           {displayRows.slice(uploadPage*50,uploadPage*50+50).map((row) => (
             <div className="upload-row" key={row.id}>

@@ -27,12 +27,13 @@ export const bytes = (value) => {
       ? `${(n / 1024).toFixed(1)} KB`
       : `${(n / 1024 / 1024).toFixed(2)} MB`;
 };
-export function uploadFile(file, collection, tags = [], onProgress = () => {}, signal) {
+export function uploadFile(file, collection, tags = [], onProgress = () => {}, signal, grouping) {
   return new Promise((resolve, reject) => {
     const data = new FormData();
     data.set("file", file);
     data.set("title", file.name);
     data.set("tags", JSON.stringify(tags));
+    if(grouping)for(const key of ['group_key','group_index','group_title'])data.set(key,String(grouping[key]));
     if (collection && collection !== "unfiled")
       data.set("collection_id", collection);
     const xhr = new XMLHttpRequest();

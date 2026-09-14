@@ -871,3 +871,6 @@
 .webhook-entry > button { justify-self:start; }
 .webhook-settings .feature-field label { display:grid; gap:8px; width:100%; }
 .webhook-settings .feature-field input { width:100%; }
+.upload-group-choice { display: flex; align-items: center; gap: 8px; margin: 14px 0; }
+.upload-group-choice label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.upload-group-choice input { width: 16px; height: 16px; margin: 0; accent-color: var(--green); }

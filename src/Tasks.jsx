@@ -25,9 +25,9 @@ export function TaskProvider({children}){
   },[store]);
   return <Context.Provider value={store}>{children}</Context.Provider>;
 }
-export function queueUploads(store,files,collection,tags=[]){
+export function queueUploads(store,files,collection,tags=[],grouping=[]){
   const target=collection&&collection!=='unfiled'?collection:null,labelTags=[...tags];
-  return store.enqueue(files.map(file=>({type:'upload',lane:'upload',title:file.name,collection_id:target,size:file.size,cancellable:true,start_message:'正在上传',done_message:'已入库',run:async({signal,update})=>uploadFile(file,target,labelTags,progress=>update({progress,phase:progress===100?'processing':'sending',message:progress===100?'正在验证文件并入库':`上传 ${progress}%`}),signal)})));
+  return store.enqueue(files.map((file,index)=>({type:'upload',lane:'upload',title:file.name,collection_id:target,size:file.size,cancellable:true,start_message:'正在上传',done_message:'已入库',run:async({signal,update})=>uploadFile(file,target,labelTags,progress=>update({progress,phase:progress===100?'processing':'sending',message:progress===100?'正在验证文件并入库':`上传 ${progress}%`}),signal,grouping[index])})));
 }
 export async function startExport(store,query,retryId) {
   const job=await send(retryId?'/api/export-jobs/'+retryId+'/retry':'/api/export-jobs',query||{});
