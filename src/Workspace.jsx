@@ -861,11 +861,11 @@ export default function Workspace({
                 <span className={v === 'images' ? 'image-nav-count' : undefined}>
                   {stats[
                     {
-                      all: "total",
+                      all: "total_cards",
                       images: "images",
                       videos: 'videos',
                       notes: "notes",
-                      favorites: "favorites",
+                      favorites: "favorite_cards",
                     }[v]
                   ] || 0}{v === 'images' && <> 张<small>{stats.image_cards || 0} 卡片</small></>}
                 </span>
@@ -890,7 +890,7 @@ export default function Workspace({
                   <BookOpen size={17} />
                 </span>
                 <b>{c.name}</b>
-                <span>{c.count}</span>
+                <span>{c.card_count ?? c.count}</span>
               </button>
               <IconButton
                 label={`管理 ${c.name}`}
@@ -1049,7 +1049,7 @@ export default function Workspace({
                   >
                     <BookOpen size={32} style={{ color: c.color }} />
                     <h2>{c.name}</h2>
-                    <p>{c.count} 项内容</p>
+                    <p>{c.card_count ?? c.count} 张卡片</p>
                     <span>
                       打开知识库
                       <ChevronRight size={15} />

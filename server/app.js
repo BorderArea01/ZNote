@@ -381,6 +381,11 @@ export function createApp({
   const collectionScope = (value, prefix = '') => value === undefined ? { sql: '', args: [] } :
     value === 'unfiled' ? { sql: ` AND ${prefix}collection_id IS NULL`, args: [] } :
     { sql: ` AND ${prefix}collection_id=?`, args: [z.string().max(100).parse(value)] };
+  const cardIdentity = "CASE WHEN kind='image' AND NULLIF(group_key,'') IS NOT NULL THEN 'group:'||group_key ELSE 'item:'||id END";
+  const countCards = (scope, favorite=false) => db.prepare(`SELECT count(*) n FROM (
+    SELECT 1 FROM items WHERE deleted_at IS NULL${favorite?' AND favorite=1':''}${scope.sql}
+    GROUP BY collection_id, ${cardIdentity}
+  )`).get(...scope.args).n;
   app.get("/api/stats", (req, res) => {
     const scope = collectionScope(req.query.collection);
     const counts = db
@@ -390,6 +395,8 @@ export function createApp({
       .get(...scope.args);
     res.json({
       ...counts,
+      total_cards: countCards(scope),
+      favorite_cards: countCards(scope,true),
       image_cards: db.prepare(`SELECT count(*) n FROM (
         SELECT 1 FROM items WHERE deleted_at IS NULL AND kind='image'${scope.sql}
         GROUP BY collection_id, CASE WHEN group_key IS NULL OR group_key='' THEN 'item:'||id ELSE 'group:'||group_key END
@@ -404,7 +411,9 @@ export function createApp({
     res.json(
       db
         .prepare(
-          `SELECT c.*, (SELECT count(*) FROM items i WHERE i.collection_id=c.id AND deleted_at IS NULL) count FROM collections c ORDER BY created_at`,
+          `SELECT c.*, (SELECT count(*) FROM items i WHERE i.collection_id=c.id AND deleted_at IS NULL) count,
+            (SELECT count(DISTINCT ${cardIdentity}) FROM items WHERE collection_id=c.id AND deleted_at IS NULL) card_count
+            FROM collections c ORDER BY created_at`,
         )
         .all(),
     ),
