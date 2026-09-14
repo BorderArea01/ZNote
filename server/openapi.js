@@ -657,7 +657,6 @@ spec.paths['/api/pixiv/notes'] = { post: operation('Pixiv 小说入库（write�
   requestBody: body({ ...input, required: ['title', 'source_url'] }),
   responses: { 200: response(ref('Item')), 201: response(ref('Item')), ...errorResponses },
 }) };
-for (const artifact of ['download', 'source']) spec.paths['/api/clipper/pixiv/' + artifact] = { get: { summary: artifact === 'download' ? '下载 Pixiv 增强版安装包' : '下载 Pixiv 增强版完整 GPL 对应源码', responses: { 200: { description: 'application/zip' }, 503: { description: '服务端尚未运行 npm run pixiv:build' }, ...errorResponses } } };
 spec.paths['/api/clipper/redeem'] = {post:{summary:'扩展兑换一次性连接凭据',description:'要求 chrome-extension 来源及有效 code；兑换为 write 令牌。不可重放，发起连接的管理员会话注销或过期后失效。',security:[],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['code'],properties:{code:{type:'string',minLength:64,maxLength:64}}}}}},responses:{200:{description:'扩展写入令牌，禁止缓存'},...errorResponses}}};
 
 const trashScope={type:'object',required:['collection_id'],properties:{collection_id:{type:'string',nullable:true},ids:{type:'array',minItems:1,maxItems:10000,items:str,description:'省略表示当前知识库整个回收站'}}};

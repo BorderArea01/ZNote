@@ -169,12 +169,12 @@ ZNote 面向以图片为主的个人资料整理。**一张图片可以是素材
 | :--- | :--- |
 | 普通网页图集、Paw、Pixiv | 识别同页 / 同作品的系列图片，批量入库时保留组与页序 |
 | 小红书、抖音、B 站、X 等 | 结合网页可用资源采集图片或视频，记录来源；作者信息可提取时加入标签 |
-| GIF、APNG 动图 | 收到完整动画文件时保留原文件；Pixiv 动图可通过增强版归档为 APNG |
+| GIF、APNG 动图 | 收到完整动画文件时保留原文件 |
 | 文章与博客 | 提取当前已加载正文，保留 Markdown 链接及可归档的配图 |
 
-**Pixiv 增强版**基于 Powerful Pixiv Downloader，保留原插件的抓取与筛选功能：作品旁点击「入库」，作者、收藏、搜索等目录使用「当前范围入库」。可按作品成组或逐张保存，自动加入作者姓名标签，并沿用原插件的自动收藏设置。知识库选择、任务进度、停止与重试都在 Pixiv 页面内操作。
+**其他插件**可通过 API 接入 ZNote，保存图片、笔记与成组内容，并保留作者标签和来源。专用插件独立维护，不随知识库分发。
 
-普通扩展的系列图片入库在当前页面浮窗中处理；Pixiv 增强版另有后台任务队列。两者的连接方式、更新步骤、动图与小说支持范围分别见 [普通扩展](extensions/clipper/README.md) 和 [Pixiv 增强版](integrations/pixiv/README.md)。
+普通扩展的系列图片入库在当前页面浮窗中处理。安装和更新见 [普通扩展](extensions/clipper/README.md)，其他插件的接入规范见 [API 文档](docs/API.md)。
 
 > 采集效果受登录状态、防盗链、页面加载情况与站点变化影响。平台名称表示已有适配路径，不保证每个链接都可采集。m3u8 合并及平台视频链接解析需要媒体组件，可运行 `npm run media:setup` 安装。
 
@@ -292,7 +292,7 @@ curl http://localhost:3741/api/items \
 | [部署指南](docs/DEPLOYMENT.md) | 本机、局域网、Docker、配置与更新 |
 | [存储与迁移](docs/STORAGE.md) | 去重、无损保存、六种导出与备份恢复 |
 | [微信接入](integrations/weixin/README.md) | 扫码、归档、联网条件与迁移 |
-| [普通扩展](extensions/clipper/README.md) / [Pixiv 增强版](integrations/pixiv/README.md) | 安装、连接、批量入库与格式支持 |
+| [普通扩展](extensions/clipper/README.md) | 安装、连接、批量入库与格式支持 |
 | [API 接入](docs/API.md) / [开发指南](docs/DEVELOPMENT.md) | 鉴权、示例、结构、测试与贡献 |
 | [更新记录](CHANGELOG.md) / [体验优化路线](docs/EXPERIENCE-ROADMAP.md) | 已完成改进与后续方向 |
 | [扩展设计与参考](docs/EXTENSION-DESIGN.md) / [第三方组件](THIRD_PARTY_NOTICES.md) | 开源参考、组件来源与许可证 |

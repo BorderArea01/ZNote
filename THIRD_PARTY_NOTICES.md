@@ -25,4 +25,4 @@
 
 已打包进浏览器扩展的 Readability、Turndown、GFM 和 HLS.js 附带许可证；重建正文脚本使用 `npm run clipper:build`。FFmpeg 与 yt-dlp 可执行文件不进入仓库，由安装脚本或系统提供；其许可证和来源信息应随可执行文件保留。
 
-完整依赖版本与完整性校验记录在根目录和 `clients/desktop/` 的 `package-lock.json`。桌面运行时保留依赖包的许可文本；FFmpeg / yt-dlp 可执行文件不随桌面包分发，可选安装从上游获取并保留来源文件。Pixiv 增强版另附完整 GPL 对应源码。文档图片来源见 [图片说明](docs/images/README.md)，包含原创演示素材和用户提供、已遮挡摘要的微信入口图。
+完整依赖版本与完整性校验记录在根目录和 `clients/desktop/` 的 `package-lock.json`。桌面运行时保留依赖包的许可文本；FFmpeg / yt-dlp 可执行文件不随桌面包分发，可选安装从上游获取并保留来源文件。独立插件的第三方许可由各自项目保留。文档图片来源见 [图片说明](docs/images/README.md)，包含原创演示素材和用户提供、已遮挡摘要的微信入口图。

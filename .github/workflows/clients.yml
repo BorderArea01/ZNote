@@ -27,9 +27,6 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix clients/desktop
       - run: node clients/desktop/node_modules/electron/install.js
-      - run: npm run pixiv:build
-        env:
-          GH_TOKEN: ${{ github.token }}
       - run: npm run desktop:build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false

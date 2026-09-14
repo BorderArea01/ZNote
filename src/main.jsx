@@ -905,8 +905,8 @@ function SettingsPanel({
           <p id="znote-connect-status" role="status" className="muted"></p>
         </section>
         <section>
-          <div className="settings-title"><h3>Pixiv 增强版</h3><HelpHint label="Pixiv 增强版">基于 Powerful Pixiv Downloader，保留作者、收藏、搜索、排行榜抓取及筛选、动图转换、小说下载等功能。新增独立的 ZNote 入库队列，支持原图、漫画、APNG 动图及 Markdown 小说。首次在增强版任务 / 设置中填写写入令牌，之后更新保留连接。</HelpHint></div>
-          <div className="connection-actions"><a className="button" href="/api/clipper/pixiv/download"><Download size={16} />下载 Pixiv 增强版</a><a className="button" href="/api/clipper/pixiv/source">GPL 完整源码</a></div>
+          <div className="settings-title"><h3>其他插件</h3><HelpHint label="其他插件接入">其他插件可通过 ZNote API 保存图片、笔记和套图。请从插件自身的设置中连接知识库，并使用写入令牌；令牌可以在下方管理。专用插件独立维护，不随知识库分发。</HelpHint></div>
+          <div className="connection-actions"><a className="button" href="/api/docs" target="_blank" rel="noreferrer">API 接入文档</a></div>
 
         </section>
         <WebhookSettings />

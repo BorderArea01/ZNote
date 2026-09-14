@@ -19,7 +19,6 @@
     "storage:optimize": "node scripts/optimize-storage.mjs --service-stopped",
     "media:setup": "node scripts/setup-media.mjs",
     "clipper:build": "node scripts/build-clipper.mjs",
-    "pixiv:build": "node scripts/build-pixiv.mjs",
     "pretest": "node scripts/prepare-tests.mjs"
   },
   "dependencies": {

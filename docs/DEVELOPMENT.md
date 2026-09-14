@@ -71,15 +71,13 @@ node tests/themes-ui.mjs
 node tests/knowledge-v083-ui.mjs
 node tests/site-articles-ui.mjs
 node tests/gallery-save-ui.mjs
-npm run pixiv:build
-node tests/pixiv-enhanced-ui.mjs
 ```
 
 `tests/clipper-v08-ui.mjs` 验证一键连接、升级保留设置、预览避让和正文归档。其他历史浏览器脚本的默认构建目录见文件顶部；支持 `UI_DIST` 的脚本可统一指定 `dist`。
 
 `tests/gallery-save-ui.mjs` 转入 `tests/inline-gallery-ui.mjs`，使用受控 Pixiv、Paw 与通用网页和独立真实 API 数据库，验证整组入库的原图字节、标签/来源/页码、知识库隔离、停止与刷新恢复，以及响应丢失后的去重重试。同时验证入库不创建标签页、收起/展开、整页刷新恢复、Paw 的严格 frame-src 策略、宿主页面隔离与窄屏布局。`tests/gallery-ui.mjs` 保留原文件下载回归。任务临时进度遵循 [Chrome storage.session 生命周期](https://developer.chrome.com/docs/extensions/reference/api/storage#property-session)。
 
-`tests/pixiv-enhanced-ui.mjs` 加载完整增强版，调用上游真实抓取 / 导入结果流程，再验证 ZNote 入库、浏览器重启恢复、APNG 每帧像素与时序、小说本地配图和原插件下载。浏览器原生的可选主机权限弹窗不属于页面自动化范围，测试副本仅预授予独立回环 API 主机，发布版仍由用户点击连接时授权。
+专用插件的源码、构建和回归测试在各自的独立项目维护，不参与公开知识库的构建。
 
 测试数据和截图保存在 `artifacts/`。真实网站还会受到账号状态、地区、网络和站点改动影响；受控页面通过不代表所有平台链接均可采集。
 

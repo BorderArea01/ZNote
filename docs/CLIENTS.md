@@ -40,7 +40,7 @@ ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。
 
 普通上传、图片管理、Markdown、API 与现有网页版共用同一个服务。首帧封面、部分平台视频解析和 HLS 合并需要视频组件：在启动页展开「本机视频采集组件」，点击安装后再启动本机库。程序会从上游下载指定版本的 FFmpeg / yt-dlp，验证 SHA-256，并保留来源与许可证；约 50–70 MB。已有服务器继续使用其原有视频组件。平台登录、资源有效期、加密 / DRM 等限制仍然存在。
 
-浏览器悬停采集、视频嗅探、Pixiv 原生页面入库，请在 **Edge / Chrome** 安装设置页提供的扩展。Electron 客户端不代替日常浏览器，也不把采集扩展偷偷装进系统浏览器。
+浏览器悬停采集、视频嗅探，请在 **Edge / Chrome** 安装设置页提供的扩展。Electron 客户端不代替日常浏览器，也不把采集扩展偷偷装进系统浏览器。
 
 ### 签名状态
 
@@ -77,7 +77,6 @@ npm ci
 npm test
 npm ci --prefix clients/desktop
 node clients/desktop/node_modules/electron/install.js
-npm run pixiv:build
 npm run desktop:build
 ```
 
@@ -94,7 +93,7 @@ cd clients/android
 
 未设置签名环境变量时生成 unsigned APK，**不能将它当成可安装发行版**。可用 `ZNOTE_ANDROID_KEYSTORE`、`ZNOTE_ANDROID_STORE_PASSWORD`、`ZNOTE_ANDROID_KEY_ALIAS`、`ZNOTE_ANDROID_KEY_PASSWORD` 签名；或用 Android SDK `apksigner` 对受控构建产物签名。不要提交密钥；请保留同一签名密钥并独立备份，保证未来可覆盖升级。
 
-仓库的 `Build clients` 工作流分别在 Windows、Apple 芯片 Mac、Intel Mac 与 Linux Android 构建机运行。发布前检查测试和签名，把安装包、完整 Pixiv 对应源码及 SHA-256 校验清单一起附上。构建成功不能代替所有设备的实机验收。
+仓库的 `Build clients` 工作流分别在 Windows、Apple 芯片 Mac、Intel Mac 与 Linux Android 构建机运行。发布前检查测试和签名，把安装包、对应版本源码及 SHA-256 校验清单一起附上。构建成功不能代替所有设备的实机验收。
 
 ## 反馈与维护
 
