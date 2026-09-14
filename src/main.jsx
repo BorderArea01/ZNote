@@ -365,6 +365,7 @@ function Detail({
   uploadFiles,
   notify,
   onSearch,
+  onTagSearch,
   onOpen,
   onStep,
   onImageViewed,
@@ -619,15 +620,16 @@ function Detail({
                 ))}
               </select>
             </label>
-            <label>
-              <span className="metadata-label"><Hash size={15} />标签</span>
+            <div>
+              <span className="metadata-label"><Hash size={15} />标签<HelpHint label="标签操作">点击标签检索当前知识库的同标签资源；点击 X 移除标签，保存后生效。</HelpHint></span>
               <TagInput
                 value={tags}
                 onChange={setTags}
+                onTagClick={async tag => { if (!busy && (!dirty || await save())) onTagSearch?.(tag); }}
                 collection={collection||null}
                 disabled={!!item.deleted_at}
               />
-            </label>
+            </div>
           </div>
           </div>
           {item.kind === "note" ? (

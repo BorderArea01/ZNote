@@ -62,6 +62,29 @@ try {
   await page.locator('.sidebar').getByRole('button',{name:/^设计灵感 \d+$/,exact:false}).click();
   await wait(page.getByRole("button", { name: "打开 视觉配色研究" }));
   checkpoint("actual image upload and metadata editing");
+  await page.getByRole('button',{name:'打开 视觉配色研究'}).click();
+  await page.getByRole('button',{name:'检索标签 配色',exact:true}).click();
+  await page.getByRole('button',{name:'移除筛选标签：配色',exact:true}).waitFor();
+  assert.equal(await page.locator('.detail-dialog').count(),0);
+  await page.getByRole('button',{name:'打开 视觉配色研究'}).click();
+  await page.getByRole('button',{name:'移除标签 配色',exact:true}).waitFor();
+  await page.screenshot({path:'artifacts/preview-tags-desktop.png'});
+  await page.getByRole('button',{name:'关闭窗口'}).click();
+  await page.getByRole('button',{name:'移除筛选标签：配色',exact:true}).click();
+  const touchContext=await browser.newContext({storageState:await context.storageState(),viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const touchPage=await touchContext.newPage();
+  await touchPage.goto(base);
+  await touchPage.getByRole('button',{name:'打开导航'}).tap();
+  await touchPage.locator('.sidebar').getByRole('button',{name:/^设计灵感 \d+$/}).tap();
+  await touchPage.getByRole('button',{name:'打开 视觉配色研究'}).tap();
+  await touchPage.getByRole('button',{name:'检索标签 配色',exact:true}).tap();
+  await touchPage.getByRole('button',{name:'移除筛选标签：配色',exact:true}).waitFor();
+  await touchPage.getByRole('button',{name:'打开 视觉配色研究'}).tap();
+  await touchPage.getByRole('button',{name:'移除标签 配色',exact:true}).tap();
+  assert.equal(await touchPage.getByRole('button',{name:'检索标签 配色',exact:true}).count(),0);
+  await touchPage.screenshot({path:'artifacts/preview-tags-touch.png'});
+  await touchContext.close();
+  checkpoint('desktop and touch preview tags search without removing; X alone removes');
   await page.getByRole("button", { name: "新建笔记", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("从图像开始的知识整理");
   await page.getByLabel('所属知识库').selectOption({ label: '设计灵感' });
@@ -109,7 +132,8 @@ try {
     () => document.querySelectorAll(".item-card").length === 2,
   );
   checkpoint("favorite preserves body; Chinese body search");
-  await page.getByRole("button", { name: "打开 从图像开始的知识整理 · 配图", exact: true }).click();
+  // A one-image note group uses the image's own card title.
+  await page.locator('.item-card').filter({has:page.locator('img')}).getByRole('button',{name:/^打开 /}).click();
   await wait(
     page
       .locator(".backlinks button")

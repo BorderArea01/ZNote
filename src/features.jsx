@@ -50,6 +50,7 @@ export function useTheme() {
 export function TagInput({
   value,
   onChange,
+  onTagClick,
   suggestions = [],
   collection,
   label = "标签",
@@ -72,7 +73,7 @@ export function TagInput({
       <div className={`tag-input ${disabled ? "disabled" : ""}`}>
         {value.map((tag) => (
           <span className="tag-pill" key={tag}>
-            {tag}
+            {onTagClick ? <button type="button" className="tag-search-link" aria-label={`检索标签 ${tag}`} onClick={() => onTagClick(tag)}>{tag}</button> : tag}
             <button
               type="button"
               aria-label={`移除标签 ${tag}`}
@@ -107,7 +108,7 @@ export function TagInput({
               e.preventDefault();
               add(draft);
             }
-            if (e.key === "Backspace" && !draft && value.length)
+            if (e.key === "Backspace" && !draft && value.length && !onTagClick)
               onChange(value.slice(0, -1));
           }}
         />

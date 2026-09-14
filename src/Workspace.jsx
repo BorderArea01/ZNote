@@ -1420,6 +1420,7 @@ export default function Workspace({
           suggestions={tags}
           onClose={()=>{setImageExpanded(false);closeDetail();}}
           onSaved={saved}
+          onTagSearch={tag=>{closeDetail();setImageExpanded(false);setView('all');setQuery('');setSearch('');setSelectedTags([tag]);setTagMode('all');setMobile(false);}}
           onSelectGroup={selectGroup}
           groupSelecting={groupSelecting}
           onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
