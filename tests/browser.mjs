@@ -69,6 +69,9 @@ try {
   await page.getByRole('button',{name:'打开 视觉配色研究'}).click();
   await page.getByRole('button',{name:'移除标签 配色',exact:true}).waitFor();
   await page.screenshot({path:'artifacts/preview-tags-desktop.png'});
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark';});
+  await page.screenshot({path:'artifacts/preview-tags-dark.png'});
+  await page.evaluate(()=>{document.documentElement.dataset.theme='light';});
   await page.getByRole('button',{name:'关闭窗口'}).click();
   await page.getByRole('button',{name:'移除筛选标签：配色',exact:true}).click();
   const touchContext=await browser.newContext({storageState:await context.storageState(),viewport:{width:390,height:844},isMobile:true,hasTouch:true});

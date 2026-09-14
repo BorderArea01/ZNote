@@ -101,7 +101,10 @@
   .note-detail .detail-bottom { padding: 8px 12px max(8px,env(safe-area-inset-bottom)); }
 }
 .detail-dialog .metadata-fields > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.detail-dialog .tag-pill .tag-search-link { cursor: pointer; padding: 4px 2px; min-height: 28px; text-align: left; overflow-wrap: anywhere; }
-.detail-dialog .tag-pill button[aria-label^="移除标签"] { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; border-radius: 4px; }
-.detail-dialog .tag-pill button:hover { background: var(--surface-2); }
-.detail-dialog .tag-pill button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+html[data-style] .detail-dialog .tag-pill { padding: 0 2px 0 9px; gap: 2px; border: 1px solid var(--border); border-radius: 7px; max-width: 100%; font-size: 12px; }
+html[data-style] .detail-dialog .tag-pill button { background: transparent; border: 0; border-radius: 4px; box-shadow: none; margin: 0; color: inherit; font: inherit; display: inline-flex; align-items: center; justify-content: center; min-height: 30px; }
+html[data-style] .detail-dialog .tag-pill .tag-search-link { cursor: pointer; padding: 3px 2px 3px 0; text-align: left; overflow-wrap: anywhere; min-width: 0; }
+html[data-style] .detail-dialog .tag-pill button[aria-label^="移除标签"] { min-width: 28px; padding: 0; color: var(--muted); flex: 0 0 28px; }
+html[data-style] .detail-dialog .tag-pill .tag-search-link:hover { color: var(--green); }
+html[data-style] .detail-dialog .tag-pill button[aria-label^="移除标签"]:hover { background: var(--surface-3); color: var(--ink); }
+html[data-style] .detail-dialog .tag-pill button:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
