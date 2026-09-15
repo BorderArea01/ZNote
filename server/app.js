@@ -1,3 +1,4 @@
+import {typeOrderSchema} from './saved-views.js';
 import { MAX_IMAGE_BYTES, compressLargeImage } from './image-limits.js';
 import {localMediaReferences} from '../shared/local-media.js';
 import {appendMessageBlocks} from '../shared/message-blocks.js';
@@ -470,6 +471,7 @@ export function createApp({
         sort: z.enum(["updated", "created", "title"]).default("updated"),
         direction: z.enum(["asc", "desc"]).optional(),
         type_group: z.enum(["true", "false"]).default("false"),
+        type_order:typeOrderSchema,
         limit: z.coerce.number().int().min(1).max(100).default(60),
         offset: z.coerce.number().int().min(0).default(0),
         anchor: z.string().max(100).optional(),
@@ -539,7 +541,11 @@ export function createApp({
       created: `created_at ${direction}, id ${direction}`,
       title: `${orderedTitle} COLLATE NOCASE ${direction}, id ${direction}`,
     }[q.sort];
-    const typeSort="CASE WHEN kind='image' AND group_key IS NULL THEN 0 WHEN kind='image' THEN 1 WHEN kind='note' THEN 2 WHEN kind='video' THEN 3 ELSE 4 END";
+    // Match the card's full-library group size, including NULL/unfiled scopes.
+    // Filtering down to one member must not turn a real group into a single card.
+    const imageType="CASE WHEN group_key IS NOT NULL AND EXISTS (SELECT 1 FROM items member WHERE member.kind='image' AND member.collection_id IS items.collection_id AND member.group_key=items.group_key AND (member.deleted_at IS NULL)=(items.deleted_at IS NULL) AND member.id<>items.id) THEN 'group' ELSE 'image' END";
+    const cardType=`CASE WHEN kind='image' THEN (${imageType}) ELSE kind END`;
+    const typeSort=`CASE (${cardType}) ${q.type_order.split(',').map((type,index)=>`WHEN '${type}' THEN ${index}`).join(' ')} ELSE 4 END`;
     const sort=q.type_group==='true'?`${typeSort}, ${valueSort}`:valueSort;
     if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...args).map(item => item.id) });
     const projection = q.summary === 'true'
@@ -552,7 +558,7 @@ export function createApp({
       // Seek within the same filtered and grouped result, never fetch every
       // preceding page merely to restore a browser's reading position.
       const source = q.grouped === 'true' ? groupedQuery : `SELECT * FROM items WHERE ${clause}`;
-      const position = db.prepare(`SELECT position FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY ${sort}) - 1 AS position FROM (${source})) WHERE id=?`).get(...args, q.anchor)?.position;
+      const position = db.prepare(`SELECT position FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY ${sort}) - 1 AS position FROM (${source}) AS items) WHERE id=?`).get(...args, q.anchor)?.position;
       offset = position === undefined ? 0 : Math.floor(position / q.limit) * q.limit;
     }
     if(q.grouped==='true') {

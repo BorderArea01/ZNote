@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 const fail = (status, message) => Object.assign(Error(message), { status });
+export const typeOrderSchema=z.string().default('image,group,note,video').refine(s=>{const values=s.split(',');return values.length===4&&new Set(values).size===4&&values.every(v=>['image','group','note','video'].includes(v));},'类型顺序必须包含四种类型且不重复');
 export const savedViewConfig = z.object({
   view: z.enum(['all', 'images', 'videos', 'notes', 'favorites', 'trash']),
   query: z.string().max(200),
   tags: z.array(z.string().trim().min(1).max(40)).max(30).transform(tags => [...new Set(tags)].sort()),
-  mode: z.enum(['all', 'any']), sort: z.enum(['updated', 'created', 'title']), direction: z.enum(['asc','desc']).optional(), type_group: z.boolean().default(false), layout: z.enum(['grid', 'list', 'compact-grid', 'compact-list']),
+  mode: z.enum(['all', 'any']), sort: z.enum(['updated', 'created', 'title']), direction: z.enum(['asc','desc']).optional(), type_group: z.boolean().default(false), type_order:typeOrderSchema, layout: z.enum(['grid', 'list', 'compact-grid', 'compact-list']),
 }).strict().transform(config=>({...config,direction:config.direction||(config.sort==='title'?'asc':'desc')}));
 const name = z.string().trim().min(1).max(80);
 const input = z.object({ name, config: savedViewConfig, collection_id: z.uuid().nullable().default(null) }).strict();

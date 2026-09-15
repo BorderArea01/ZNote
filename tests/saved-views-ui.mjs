@@ -29,7 +29,7 @@ try {
   await page.getByPlaceholder('搜索标题、正文或标签…').fill('城市');
   await page.getByRole('button', { name: '筛选标签：建筑', exact: true }).click(); await page.getByRole('button', { name: '筛选标签：参考', exact: true }).click();
   await page.getByRole('combobox', { name: '标签匹配方式', exact: true }).selectOption('any');
-  await page.getByRole('combobox', { name: '排序方式', exact: true }).selectOption('title');await page.getByRole('combobox',{name:'排序方向',exact:true}).selectOption('asc');await page.getByRole('combobox',{name:'内容排列',exact:true}).selectOption('grouped');await page.getByRole('button', { name: '列表视图', exact: true }).click(); await loaded(page, 2);
+  await page.locator('.sort-trigger').click();await page.getByRole('combobox', { name: '排序方式', exact: true }).selectOption('title');await page.getByRole('combobox',{name:'排序方向',exact:true}).selectOption('asc');await page.getByRole('checkbox',{name:'按类型分区',exact:true}).check();await page.getByRole('button',{name:'完成',exact:true}).click();await page.getByRole('button', { name: '列表视图', exact: true }).click(); await loaded(page, 2);
   await page.locator('.toolbar').getByRole('button', { name: '保存当前筛选', exact: true }).click();
   await form().getByRole('textbox', { name: '筛选名称', exact: true }).fill('城市参考');
   await form().getByRole('textbox', { name: '筛选名称', exact: true }).press('Control+k');
@@ -37,7 +37,7 @@ try {
   await form().getByRole('button', { name: '保存筛选', exact: true }).click();
   await list(page).getByRole('button', { name: '城市参考', exact: true }).waitFor();
   const stored = runtime.db.prepare('SELECT * FROM saved_views WHERE collection_id=?').get(a.id);
-  assert.deepEqual(JSON.parse(stored.config), { view: 'images', query: '城市', tags: ['参考', '建筑'], mode: 'any', sort: 'title', direction:'asc',type_group:true,layout: 'list' });
+  assert.deepEqual(JSON.parse(stored.config), { view: 'images', query: '城市', tags: ['参考', '建筑'], mode: 'any', sort: 'title', direction:'asc',type_group:true,type_order:'image,group,note,video',layout: 'list' });
   await page.locator('.sidebar').getByRole('button', { name: /^图文笔记/ }).click(); await loaded(page, 1);
   await list(page).getByRole('button', { name: '城市参考', exact: true }).click(); await loaded(page, 2);
   assert.equal(await page.getByPlaceholder('搜索标题、正文或标签…').inputValue(), '城市'); assert.equal(await page.getByRole('combobox', { name: '标签匹配方式' }).inputValue(), 'any');
@@ -47,7 +47,7 @@ try {
   assert.ok((await otherContext.request.post(base + '/api/auth/login', { data: { password: '0917' } })).ok());
   await other.goto(base); await loaded(other, 5); await other.getByRole('button', { name: '打开导航', exact: true }).click();
   await list(other).getByRole('button', { name: '城市参考', exact: true }).click(); await loaded(other, 3);
-  assert.equal(await other.getByRole('combobox', { name: '排序方式' }).inputValue(), 'title');assert.equal(await other.getByRole('combobox',{name:'排序方向'}).inputValue(),'asc');assert.equal(await other.getByRole('combobox',{name:'内容排列'}).inputValue(),'grouped');
+  await other.locator('.sort-trigger').click();assert.equal(await other.getByRole('combobox', { name: '排序方式' }).inputValue(), 'title');assert.equal(await other.getByRole('combobox',{name:'排序方向'}).inputValue(),'asc');assert.equal(await other.getByRole('checkbox',{name:'按类型分区',exact:true}).isChecked(),true);await other.getByRole('button',{name:'完成',exact:true}).click();
   assert.equal(await other.locator('.sidebar').evaluate(el => el.classList.contains('mobile-open')), false);
   await other.evaluate(() => { document.documentElement.dataset.theme = 'dark'; document.documentElement.dataset.palette = 'slate'; });
   await other.locator('.toolbar').getByRole('button', { name: '保存当前筛选', exact: true }).click();
@@ -59,7 +59,7 @@ try {
   const configB = { view: 'notes', query: '山川', tags: ['独立'], mode: 'all', sort: 'created', layout: 'grid' };
   await post('/api/saved-views', { name: '城市参考', collection_id: b.id, config: configB });
   await choose(page, '独立笔记'); await list(page).getByRole('button', { name: '城市参考', exact: true }).click(); await loaded(page, 1);
-  assert.equal(await page.getByPlaceholder('搜索标题、正文或标签…').inputValue(), '山川'); assert.equal(await page.getByRole('combobox', { name: '排序方式' }).inputValue(), 'created');
+  assert.equal(await page.getByPlaceholder('搜索标题、正文或标签…').inputValue(), '山川'); await page.locator('.sort-trigger').click();assert.equal(await page.getByRole('combobox', { name: '排序方式' }).inputValue(), 'created');await page.getByRole('button',{name:'完成',exact:true}).click();
   assert.equal(await page.getByRole('button', { name: '筛选标签：建筑', exact: true }).count(), 0);
   await choose(page, '建筑素材'); await list(page).getByRole('button', { name: '管理筛选 城市参考', exact: true }).click();
   await form().getByRole('textbox', { name: '筛选名称' }).fill('本机修改');

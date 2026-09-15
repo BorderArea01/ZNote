@@ -13,7 +13,7 @@ try{
  runtime.db.exec('BEGIN');for(let i=1;i<1800;i++){const row={...original,id:randomUUID(),title:'素材 '+String(i).padStart(4,'0'),content:'完整说明 [来源](https://example.com) '+('正文'.repeat(1000))};insert.run(...columns.map(c=>row[c]));ids.push(row.id)}runtime.db.exec('COMMIT');
  const note=await post('/api/items',{collection_id:b.id,title:'长篇笔记',content:'正文'.repeat(10000)+'末尾不能丢失'});
  await context.addInitScript(()=>{if(localStorage.getItem('znote:auto-pages')===null)localStorage.setItem('znote:auto-pages','false')});
- await page.goto(base);await loaded();await page.getByRole('combobox',{name:'排序方式'}).selectOption('title');await loaded();
+ await page.goto(base);await loaded();await page.locator('.sort-trigger').click();await page.getByRole('combobox',{name:'排序方式'}).selectOption('title');await page.getByRole('button',{name:'完成',exact:true}).click();await loaded();
  await page.getByRole('button',{name:'选择内容',exact:true}).click();await loaded();await page.getByRole('button',{name:'选择 素材 0001',exact:true}).click();
  await page.getByRole('checkbox',{name:'滚动自动加载',exact:true}).check();await page.waitForFunction(()=>Number(document.querySelector('.browse-pagination')?.dataset.windowSize)>=120);await stable();
  const idleStart=requests.length;await page.waitForTimeout(650);assert.equal(requests.length,idleStart,'idle footer must not pull the whole library');

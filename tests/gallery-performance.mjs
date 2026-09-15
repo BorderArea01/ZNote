@@ -47,7 +47,7 @@ try {
   report.initial_thumbnail_requests = requests.filter(u => u.endsWith('/thumbnail')).length;
   assert.ok(report.initial_thumbnail_requests < 60, 'Offscreen thumbnails should remain lazy');
   assert.equal(await page.locator('.item-card').count(), 60);
-  await page.getByLabel('排序方式').selectOption('title');
+  await page.locator('.sort-trigger').click();await page.getByLabel('排序方式').selectOption('title');await page.getByRole('button',{name:'完成',exact:true}).click();
   await page.getByRole('button', { name: '打开 图像0000.png', exact: true }).waitFor();
   await page.waitForFunction(() => {
     const images = [...document.querySelectorAll('.item-card img')].filter(img => {

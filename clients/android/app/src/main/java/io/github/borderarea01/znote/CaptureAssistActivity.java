@@ -28,6 +28,7 @@ public class CaptureAssistActivity extends Activity {
             else {if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}
         }));
         root.addView(button("粘贴链接采集",()->startActivity(new Intent(this,FloatingShareActivity.class).putExtra("read_clipboard",true))));
+        root.addView(button("采集运行诊断",()->{String log="尚无记录";try{log=new String(java.nio.file.Files.readAllBytes(new java.io.File(getFilesDir(),"capture-diagnostics.log").toPath()),java.nio.charset.StandardCharsets.UTF_8);if(log.length()>6000)log=log.substring(log.length()-6000);}catch(Exception ignored){}final String value=log;new AlertDialog.Builder(this).setTitle("采集运行诊断").setMessage(value).setPositiveButton("复制诊断",(d,w)->((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("ZNote 采集诊断",value))).setNegativeButton("关闭",null).show();}));
         root.addView(button("返回",this::finish));
     }
     private void command(String action){

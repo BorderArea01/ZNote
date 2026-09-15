@@ -19,7 +19,7 @@ try {
  const other=await post('/api/items',{title:'另一知识库的笔记',collection_id:b.id,content:'保留',tags:['待整理']});
  await context.request.patch(base+'/api/preferences',{data:{default_collection_id:a.id}});
  await context.addInitScript(()=>localStorage.setItem('znote:auto-pages','false'));
- await page.goto(base);await ready();await page.getByLabel('排序方式').selectOption('title');await ready();
+ await page.goto(base);await ready();await page.locator('.sort-trigger').click();await page.getByLabel('排序方式').selectOption('title');await page.getByRole('button',{name:'完成',exact:true}).click();await ready();
  await page.getByLabel('滚动自动加载',{exact:true}).uncheck();
  await page.locator('.card-main').nth(1).click({modifiers:['Control']});await count(1);await ready();
  await page.locator('.card-main').nth(4).click({modifiers:['Shift']});await count(4);

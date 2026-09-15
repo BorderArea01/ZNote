@@ -21,4 +21,14 @@ test('list sorting supports direction, stable type sections and single-image gal
   assert.deepEqual((await json('/api/items?collection='+library+'&gallery=true&gallery_scope=singles&sort=title&direction=asc')).ids,[singleB,singleA]);
   assert.equal((await request('/api/items?direction=DROP')).status,400);
   assert.ok(!typed.some(i=>i.id===groupB));
+  runtime.db.prepare('UPDATE items SET collection_id=NULL WHERE collection_id=?').run(library);
+  const orphan=add('image','孤立单图','legacy:one',0);runtime.db.prepare('UPDATE items SET collection_id=NULL WHERE id=?').run(orphan);
+  const unfiled='/api/items?collection=unfiled&grouped=true&type_group=true&sort=title&direction=asc';
+  const grouped=(await json(unfiled)).items;
+  assert.deepEqual(grouped.map(i=>i.id),[singleB,singleA,orphan,groupA,note,video]);
+  const custom=unfiled+'&type_order=video,note,group,image';
+  assert.deepEqual((await json(custom)).items.map(i=>i.id),[video,note,groupA,singleB,singleA,orphan]);
+  assert.equal((await json(custom+'&anchor='+groupA+'&limit=2')).offset,2);
+  assert.equal((await request(unfiled+'&type_order=image,image,note,video')).status,400);
+
 });

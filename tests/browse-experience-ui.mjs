@@ -48,7 +48,7 @@ try {
   const filtered = await get(`/api/items?collection=${a.id}&sort=title&grouped=true&tags=${encodeURIComponent(JSON.stringify(['插画', '参考']))}&anchor=${ids[9001]}`);
   assert.equal(filtered.total, 5000); assert.ok(filtered.items.some(i => i.id === ids[9001]));
   assert.equal((await get(`/api/items?collection=${b.id}&anchor=${ids[9001]}`)).offset, 0);
-  await page.goto(base); await loaded(); await page.getByRole('combobox', { name: '排序方式' }).selectOption('title'); await loaded();
+  await page.goto(base); await loaded(); await page.locator('.sort-trigger').click();await page.getByRole('combobox', { name: '排序方式' }).selectOption('title');await page.getByRole('button',{name:'完成',exact:true}).click(); await loaded();
   for (let n = 0; n < 5; n++) { await page.getByRole('button', { name: '加载更多内容', exact: true }).click(); await page.getByRole('button', { name: '加载更多内容', exact: true }).waitFor(); }
   await page.waitForFunction(() => document.querySelector('[data-virtual]'));
   report.mountedCardsFor360 = await page.locator('.item-card').count(); assert.ok(report.mountedCardsFor360 < 60);
@@ -113,7 +113,7 @@ try {
   assert.equal(await page.getByRole('textbox', { name: '搜索内容', exact: true }).inputValue(), '图片 09');
   assert.equal(await page.getByRole('combobox', { name: '标签匹配方式', exact: true }).inputValue(), 'any');
   assert.equal(await page.locator('.tag-options [aria-pressed=true]').count(), 2);
-  assert.equal(await page.getByRole('combobox', { name: '排序方式' }).inputValue(), 'title');
+  await page.locator('.sort-trigger').click();assert.equal(await page.getByRole('combobox', { name: '排序方式' }).inputValue(), 'title');await page.getByRole('button',{name:'完成',exact:true}).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: resolve('artifacts/v0914-browse-desktop.png') });
   await choose('独立笔记库'); await loaded();

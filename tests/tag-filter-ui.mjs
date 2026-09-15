@@ -29,7 +29,7 @@ try {
   await post('/api/items', { title: '附带笔记', tags: ['旅行', '风景'], collection_id: library.id });
   for (let batch = 0; batch < 2; batch++) await post('/api/items', { title: `标签词表${batch}`, collection_id: other.id, tags: Array.from({ length: 20 }, (_, n) => `标签${batch * 20 + n}`) });
   await page.goto(base); await page.getByRole('button', { name: '旅行照片 65', exact: true }).click();
-  await page.getByLabel('排序方式').selectOption('title');
+  await page.locator('.sort-trigger').click();await page.getByLabel('排序方式').selectOption('title');await page.getByRole('button',{name:'完成',exact:true}).click();
   await toggle('旅行'); await count(60);
   await page.getByRole('button', { name: '连续浏览图片', exact: true }).click();
   await page.getByText('第 1 / 62 张', { exact: true }).waitFor();

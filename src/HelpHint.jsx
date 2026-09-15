@@ -44,6 +44,6 @@ export function HelpHint({ label = '帮助', children }) {
     {open && createPortal(<div ref={bubble} id={id} role="tooltip" className="help-tooltip" style={position}
       onPointerEnter={() => clearTimeout(timer.current)} onPointerLeave={leave}>
       <strong>{label}</strong><div>{children}</div>
-    </div>, document.body)}
+    </div>, trigger.current?.closest('dialog') || document.body)}
   </>;
 }
