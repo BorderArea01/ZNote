@@ -48,7 +48,7 @@ public class CaptureAssistService extends AccessibilityService {
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
     @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;render();}
-    private void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);if(!diagnostics.isShutdown())diagnostics.execute(()->writeDiagnostic(event,detail));}
+    void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);if(!diagnostics.isShutdown())diagnostics.execute(()->writeDiagnostic(event,detail));}
     private void writeDiagnostic(String event,String detail){try{java.io.File file=new java.io.File(getFilesDir(),"capture-diagnostics.log");if(file.length()>65536){java.io.File previous=new java.io.File(getFilesDir(),"capture-diagnostics.previous.log");if(previous.exists())previous.delete();file.renameTo(previous);}try(java.io.FileWriter out=new java.io.FileWriter(file,true)){out.write(System.currentTimeMillis()+" pid="+android.os.Process.myPid()+" "+event+" "+detail+"\n");}}catch(java.io.IOException ignored){}}
     private int width(){return getResources().getDisplayMetrics().widthPixels;}
     private int height(){return getResources().getDisplayMetrics().heightPixels;}
@@ -179,7 +179,7 @@ public class CaptureAssistService extends AccessibilityService {
     private void open(String value){openPanel(value,"",0,value.isEmpty());}
     private void openPanel(String value,String owner,long after,boolean clipboard){
         lastMessage="";cancel();expanded=false;render();
-        try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after));}
+        record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after));}
         catch(Exception e){message("无法打开采集面板，请重试");}
     }
     void notifyReady(){

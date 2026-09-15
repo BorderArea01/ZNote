@@ -5,6 +5,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <application android:label="ZNote" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:supportsRtl="true">
+    <provider android:name=".CaptureSessionProvider" android:authorities="${applicationId}.capture-session" android:exported="false"/>
     <activity android:name=".UpdateActivity" android:label="应用更新" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/>
     <service android:name=".CaptureAssistService" android:process=":capture" android:label="ZNote 点击采集" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled floating capture control, available while browsing other apps; reads the current page only on explicit tap."/>
@@ -12,8 +13,8 @@
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/capture_accessibility"/>
     </service>
     <activity android:process=":capture" android:name=".CaptureAssistActivity" android:label="悬浮采集" android:exported="false"/>
-    <activity android:name=".FloatingShareActivity" android:theme="@style/CapturePanel" android:exported="false" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize|stateAlwaysHidden"/>
-    <activity android:name=".ShareActivity" android:label="保存到 ZNote" android:exported="true" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+    <activity android:process=":capture" android:name=".FloatingShareActivity" android:theme="@style/CapturePanel" android:exported="false" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize|stateAlwaysHidden"/>
+    <activity android:process=":capture" android:name=".ShareActivity" android:label="保存到 ZNote" android:exported="true" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
       <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="text/plain"/><data android:mimeType="image/*"/><data android:mimeType="video/*"/></intent-filter>
       <intent-filter><action android:name="android.intent.action.SEND_MULTIPLE"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="image/*"/><data android:mimeType="video/*"/></intent-filter>
     </activity>
