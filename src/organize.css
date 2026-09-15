@@ -1,0 +1,10 @@
+.organize-dialog .organize-body{display:grid;gap:20px;padding:24px;color:var(--ink)}
+.organize-dialog .organize-section{display:grid;gap:12px;margin:0;font-size:14px}
+.organize-dialog .organize-toggle,.organize-dialog .organize-heading{display:flex;align-items:center;gap:10px;min-height:28px;margin:0;font-weight:600}
+.organize-dialog .organize-toggle{cursor:pointer}
+.organize-dialog .organize-toggle input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:var(--green)}
+.organize-dialog .organize-section select{width:100%;min-width:0;min-height:44px;border-radius:10px;padding:10px 12px;color:var(--ink);background:var(--surface);border:1px solid var(--border)}
+.organize-dialog .organize-section select:disabled{opacity:.5;cursor:not-allowed}
+.organize-dialog .organize-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:20px;border-top:1px solid var(--border)}
+.organize-dialog .organize-actions button{min-height:44px;min-width:84px}
+@media(max-width:520px){.organize-dialog .organize-body{padding:20px;gap:20px}.organize-dialog .organize-actions button{flex:1}}

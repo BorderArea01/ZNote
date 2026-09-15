@@ -8,7 +8,19 @@ import {extractCapturePage,fetchCapturePage} from '../server/capture-page.js';
 import {sharedUrls} from '../shared/share-input.js';
 import {markdownImages} from '../shared/markdown-images.js';
 import {captureImageCandidates} from '../server/capture-images.js';
+import {platformUrl} from '../server/imports.js';
+import {downloadCaptureVideo} from '../server/capture-video.js';
 const xhs=(images=['https://cdn.example/one.jpg','https://cdn.example/two.jpg'])=>`<html><head><title>小红书</title></head><body><script>window.__INITIAL_STATE__=${JSON.stringify({note:{noteDetailMap:{abcd:{note:{noteId:'abcd',title:'旅行手账',desc:'第一行\n第二行',user:{nickname:'旅行作者'},imageList:images.map(urlDefault=>({urlDefault}))}}}}})};</script></body></html>`;
+test('mobile platform variants retain work identity, author and native playback data',async()=>{
+  assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).host,'www.bilibili.com');
+  assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).searchParams.get('p'),'2');
+  const record={noteId:'abcd',type:'video',title:'作品',user:{nickName:'作者'},video:{media:{stream:{h264:[{width:720,height:1280,masterUrl:'https://cdn.example/video.mp4',backupUrls:['https://backup.example/video.mp4']}]}}}};
+  const html='<script>window.__SETUP_SERVER_STATE__='+JSON.stringify({LAUNCHER_SSR_STORE_PAGE_DATA:{noteData:record}})+';</script>';
+  const plan=extractCapturePage(html,'https://www.xiaohongshu.com/discovery/item/abcd');assert.equal(plan.kind,'video');assert.equal(plan.author,'作者');assert.equal(plan.video_urls.length,2);
+  assert.throws(()=>extractCapturePage(html,'https://www.xiaohongshu.com/discovery/item/ffff'),/完整数据/);
+  const dir=await mkdtemp(resolve('artifacts/capture-video-'));
+  await assert.rejects(downloadCaptureVideo({plan:{...plan,video_urls:['http://127.0.0.1/private']},dir,signal:AbortSignal.timeout(1000),progress:()=>{}}),/内网/);
+});
 test('platform images prefer original variants without altering unrelated signatures or artwork marks',()=>{
   const display='https://sns-webpic-qc.xhscdn.com/20260915/signature/1040g2sg0token!nd_dft_wlteh_webp_3?sign=keep';
   assert.deepEqual(captureImageCandidates({urlDefault:display},'xhs','https://www.xiaohongshu.com/explore/abcd'),['https://sns-img-bd.xhscdn.com/1040g2sg0token',display]);

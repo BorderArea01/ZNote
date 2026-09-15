@@ -22,6 +22,8 @@ export function platformUrl(value) {
     (h === 'xhslink.com' && /^\/(?:a\/)?[\w-]+\/?$/.test(p)) ||
     (['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com'].includes(h) && /^\/[\w]+\/status\/\d+/.test(p));
   if (!valid) throw fail(400, '目前支持哔哩哔哩、抖音、小红书和 X 的单条视频链接（不支持主页或直播）');
+  // The restricted extractor list excludes the mobile redirect extractor.
+  if (h === 'm.bilibili.com' || h === 'bilibili.com') url.hostname = 'www.bilibili.com';
   url.protocol = 'https:'; url.hash = ''; return url.href;
 }
 
@@ -69,11 +71,11 @@ function run(command, args, { signal, cwd, onText = () => {}, timeout = 600000, 
 }
 function friendlyError(text) {
   if (text.includes('ERROR:')) text = text.slice(text.lastIndexOf('ERROR:'));
-  if (/cookies|login|sign in|confirm.*bot|403|412|429|blocked|risk|captcha|验证|登录/i.test(text)) return '平台要求登录、验证或限制了访问。请在浏览器打开原页面；可下载后上传文件，图片可用右键采集。';
+  if (/cookies|login|sign in|confirm.*bot|403|412|429|blocked|risk|captcha|验证|登录/i.test(text)) return '平台要求登录、验证或限制了服务器访问，未能取得媒体文件。任务已保留，可重试或从原 App 分享媒体文件给 ZNote。';
   if (/too large|max.filesize|larger than/i.test(text)) return '视频超过 500 MB，未入库';
   if (/not available|unavailable|404|removed|private|not found/i.test(text)) return '视频已删除、非公开或暂不可访问，请检查原页面';
   if (/timed out|resolve|connection|network|SSL|TLS|protocol/i.test(text)) return '无法连接资源平台，请检查服务器网络后重试';
-  if (/no video|no formats|unsupported url|extract/i.test(text)) return '未解析到可下载的视频；可能是图文帖子、分享链接失效或平台规则变化。图片请使用右键采集。';
+  if (/no video|no formats|unsupported url|extract/i.test(text)) return '平台未返回可用的视频地址，可能是解析规则变化或访问受限。任务已保留；可重试，或从原 App 分享媒体文件给 ZNote。';
   return '平台未返回可用视频，采集未完成。请检查原页面或下载后上传文件。';
 }
 export { run as runMediaCommand };

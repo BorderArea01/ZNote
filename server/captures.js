@@ -9,6 +9,7 @@ import { videoDetails } from '../shared/video-details.js';
 import { fetchRemoteImage } from './remote-images.js';
 import { fetchCapturePage, extractCapturePage } from './capture-page.js';
 import { downloadVideo } from './imports.js';
+import { downloadCaptureVideo } from './capture-video.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
@@ -47,7 +48,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const root=join(dataDir,'capture-downloads');await mkdir(root,{recursive:true});
       const dir=await mkdtemp(join(root,'job-'));
       try{
-        const file=await video({url:plan.url,dir,signal,progress:message=>patch(job.id,{message})});signal.throwIfAborted();
+        const options={url:plan.url,plan,dir,signal,progress:message=>patch(job.id,{message})};
+        const file=await (plan.video_urls?.length?downloadCaptureVideo(options):video(options));signal.throwIfAborted();
         const details=videoDetails({...file,title:file.title||plan.title,author:plan.author||file.author},job.input.tags);
         const item=await saveVideo(file,{...details,content:[details.content,file.description||''].filter(Boolean).join('\n\n'),source_url:plan.url,collection_id:job.input.collection_id});
         patch(job.id,{status:'completed',message:'视频已入库',item_id:item.id,title:item.title});
@@ -112,7 +114,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:input.text.slice(0,100),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
       jobs.push(job);write(jobs);schedule();return exposed(job);
     },
-    retry(id){const job=this.get(id);if(job.status!=='failed')throw fail(409,'只有失败的采集任务可以重试');validateCollection(job.collection_id);patch(id,{status:'queued',message:'等待重新采集'});schedule();return this.get(id);},
+    retry(id){const job=this.get(id);if(job.status!=='failed')throw fail(409,'只有失败的采集任务可以重试');validateCollection(job.collection_id);const previous=read().find(j=>j.id===id);patch(id,{status:'queued',message:'等待重新采集',...(previous.plan?.kind==='video'?{plan:null}:{})});schedule();return this.get(id);},
     remove(id){const job=this.get(id);if(!['completed','failed'].includes(job.status))throw fail(409,'请等待任务结束后再移除记录');write(read().filter(j=>j.id!==id));return {removed:true};},
     async wait(id,signal){while(true){signal.throwIfAborted();const job=this.get(id);if(job.status==='completed')return job;if(job.status==='failed')throw fail(422,job.message);await sleep(200,undefined,{signal});}},
     async cancelAll(){for(const job of read())if(job.status==='queued')patch(job.id,{status:'failed',message:'采集已停止，可重试'});active?.controller.abort();await pending;},

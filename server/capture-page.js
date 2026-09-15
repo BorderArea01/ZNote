@@ -43,7 +43,7 @@ export async function fetchCapturePage(value, signal, redirects = 0) {
 // Parse only JSON data. Never execute platform scripts, even in a VM.
 function scriptData(raw) {
   let value = raw.trim();
-  const assignment = value.match(/(?:window|self|globalThis)\.(?:__INITIAL_STATE__|_ROUTER_DATA)\s*=\s*/);
+  const assignment = value.match(/(?:window|self|globalThis)\.(?:__INITIAL_STATE__|__SETUP_SERVER_STATE__|_ROUTER_DATA)\s*=\s*/);
   if (assignment) {
     value = value.slice(assignment.index + assignment[0].length);
     let depth = 0, quoted = false, escaped = false, output = '';
@@ -76,20 +76,24 @@ export function extractCapturePage(html, url) {
   const xhs = /(^|\.)xiaohongshu\.com$/.test(host), dy = /(^|\.)(douyin|iesdouyin)\.com$/.test(host);
   const id = xhs ? u.pathname.match(/\/(?:explore|discovery\/item)\/([a-f\d]+)/i)?.[1] : u.pathname.match(/\/(?:video|note)\/(\d+)/)?.[1] || u.searchParams.get('modal_id');
   if (xhs || dy) {
-    for (const script of [...document.querySelectorAll('script:not([src])')].slice(0,150)) {
+    for (const script of [...document.querySelectorAll('script:not([src])')].slice(0,150).sort((a,b)=>Number(b.textContent.includes('window.__SETUP_SERVER_STATE__='))-Number(a.textContent.includes('window.__SETUP_SERVER_STATE__=')))) {
       let raw = script.textContent;
       if (script.id === 'RENDER_DATA') { try { raw = decodeURIComponent(raw); } catch { continue; } }
       const record = id && findRecord(scriptData(raw), id, xhs ? 'xhs' : 'douyin');
       if (!record) continue;
-      if (xhs && record.type === 'video' || dy && !record.images?.length && !record.image_post_info?.images?.length) return { kind: 'video', url, title: record.title || record.desc?.split('\n')[0] || '', author: record.user?.nickname || record.author?.nickname || '' };
+      if (xhs && record.type === 'video' || dy && !record.images?.length && !record.image_post_info?.images?.length) {
+        const streams=xhs?record.video?.media?.stream?.h264||[]:[];
+        const candidates=xhs?[...streams].sort((a,b)=>(b.width*b.height-a.width*a.height)||(b.videoBitrate-a.videoBitrate)).flatMap(s=>[s.masterUrl,...(s.backupUrls||[])]):record.video?.play_addr?.url_list||[];
+        return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8) };
+      }
       const images = (xhs ? record.imageList || [] : record.images || record.image_post_info?.images || []).map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
       if (!images.length || images.length > 100) throw fail('未取得完整图集或图集超过 100 张');
       const urls = images.map(v => v[0]);
       if (urls.some(v => !v)) throw fail('图集中有无法解析的图片地址');
-      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, author: record.user?.nickname || record.author?.nickname || '' };
+      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || '' };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.
-    if (dy || /video/i.test(meta('og:type'))) return { kind: 'video', url };
+    if (dy && !/\/note\//.test(u.pathname) || /video/i.test(meta('og:type'))) return { kind: 'video', url };
     throw fail('平台未提供这篇作品的完整数据，可能需要登录或验证；可从原 App 直接分享图片，或用浏览器扩展采集');
   }
   if (/(^|\.)(bilibili\.com|b23\.tv|x\.com|twitter\.com)$/.test(host)) return { kind: 'video', url };

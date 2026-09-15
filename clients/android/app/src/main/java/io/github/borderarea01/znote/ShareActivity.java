@@ -31,6 +31,7 @@ public class ShareActivity extends Activity {
     private boolean busy=false,visible=false,ready=false;
     private boolean clipboardPending;
     private int clipboardAttempts;
+    private final ClipboardManager.OnPrimaryClipChangedListener clipboardListener=()->{if(clipboardPending&&hasWindowFocus())handler.post(this::readClipboard);};
     private boolean floating(){return this instanceof FloatingShareActivity;}
     private void resizePanel(){if(floating()){WindowManager.LayoutParams p=getWindow().getAttributes();p.width=Math.min(dp(360),getResources().getDisplayMetrics().widthPixels-dp(24));p.height=Math.min(dp(560),getResources().getDisplayMetrics().heightPixels-dp(100));p.x=0;p.y=0;getWindow().setAttributes(p);}}
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);resizePanel();}
@@ -85,18 +86,19 @@ public class ShareActivity extends Activity {
             ClipDescription description=clipboard.getPrimaryClipDescription();
             long after=getIntent().getLongExtra("copied_after",0);
             ClipData clip=description!=null&&description.getTimestamp()>=after?clipboard.getPrimaryClip():null;
-            String value=clip!=null&&clip.getItemCount()>0?String.valueOf(clip.getItemAt(0).getText()):"";
+            CharSequence clipText=clip!=null&&clip.getItemCount()>0?clip.getItemAt(0).getText():null;
+            String value=clipText!=null?clipText.toString():clip!=null&&clip.getItemCount()>0&&clip.getItemAt(0).getUri()!=null?clip.getItemAt(0).getUri().toString():"";
             String url=CaptureAssistService.link(value),owner=getIntent().getStringExtra("source_package");
             if(!url.isEmpty()&&CaptureAssistService.acceptsLink(owner,url)){
                 clipboardPending=false;text.setText(value);status.setText("已读取分享链接，确认知识库后保存");return;
             }
         }catch(SecurityException ignored){}
-        if(++clipboardAttempts<8){handler.postDelayed(this::readClipboard,180);return;}
+        if(++clipboardAttempts<20){handler.postDelayed(this::readClipboard,200);return;}
         clipboardPending=false;status.setText("未读到本次分享链接，可直接在上方输入框长按粘贴");text.requestFocus();
     }
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}
-    @Override protected void onResume(){super.onResume();visible=true;if(!busy)loadCollections();else if(!jobId.isEmpty())poll();}
-    @Override protected void onPause(){visible=false;handler.removeCallbacksAndMessages(null);super.onPause();}
+    @Override protected void onResume(){super.onResume();visible=true;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).addPrimaryClipChangedListener(clipboardListener);if(!busy)loadCollections();else if(!jobId.isEmpty())poll();}
+    @Override protected void onPause(){visible=false;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).removePrimaryClipChangedListener(clipboardListener);handler.removeCallbacksAndMessages(null);super.onPause();}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putString("requestId",requestId);state.putString("jobId",jobId);state.putInt("uploaded",uploaded);}
     private void ui(Runnable run){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())run.run();});}
     private void loadCollections(){
