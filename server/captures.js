@@ -10,6 +10,7 @@ import { fetchRemoteImage } from './remote-images.js';
 import { fetchCapturePage, extractCapturePage } from './capture-page.js';
 import { downloadVideo } from './imports.js';
 import { downloadCaptureVideo } from './capture-video.js';
+import {douyinWork,renderDouyinCapture} from './capture-browser.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
@@ -39,7 +40,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
         const item=await saveImage(resource.buffer,{id,title:job.input.text===job.source_url?'分享图片':job.input.text.slice(0,200),source_url:resource.url,collection_id:job.input.collection_id,tags:job.input.tags});
         patch(job.id,{status:'completed',message:'图片已入库',item_id:item.id,title:item.title});return;
       }
-      plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);
+      try{plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);}catch(e){if(!douyinWork(resource.url))throw e;}
+      if(douyinWork(resource.url)&&!plan?.images?.length&&!plan?.video_urls?.length){patch(job.id,{message:'正在读取抖音作品页面'});plan=await renderDouyinCapture(resource.url,signal);}
       if(plan.content?.length>450000)throw fail(413,'正文过长，未入库');
       patch(job.id,{plan,title:plan.title||job.title});
     }
