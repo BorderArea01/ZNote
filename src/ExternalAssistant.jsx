@@ -6,7 +6,7 @@ function read(){try{return localStorage.getItem(key)||''}catch{return ''}}
 function defaultUrl(){const url=new URL(location.origin);url.port='3743';return url.href;}
 function normalize(value){const url=new URL(value);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('请填写 HTTP / HTTPS 助手地址，不要包含令牌');return url.href;}
 export function ExternalAssistantLink({collection}){
-  return <button className="text-button" onClick={()=>{const url=new URL(normalize(read()||defaultUrl()));url.searchParams.set('collection',collection||'unfiled');window.open(url.href,'_blank','noopener,noreferrer')}}><Sparkles size={16}/>知识库助手</button>;
+  return <button className="text-button external-assistant-link" aria-label="知识库助手" onClick={()=>{const url=new URL(normalize(read()||defaultUrl()));url.searchParams.set('collection',collection||'unfiled');window.open(url.href,'_blank','noopener,noreferrer')}}><Sparkles size={16}/><span>知识库助手</span></button>;
 }
 export function ExternalAssistantSettings(){
   const [value,setValue]=useState(read),[message,setMessage]=useState('');

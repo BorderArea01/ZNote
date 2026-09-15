@@ -1,4 +1,10 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {ReadingSync} from '../src/reading-sync.js';
+test('unfiled history rejects other libraries and drops moved entries',async()=>{
+ const client=new ReadingSync(null,()=>{},async()=>({collection_id:'another-library',version:0,epoch:'e',entries:[{item_id:'wrong',collection_id:'another-library'}]}));
+ await client.load();assert.equal(client.state.status,'error');assert.equal(client.state.data,null);
+ client.request=async()=>({collection_id:null,version:0,epoch:'e',entries:[{item_id:'own',collection_id:null},{item_id:'moved',collection_id:'another-library'}]});
+ await client.load();assert.equal(client.state.status,'ready');assert.deepEqual(client.state.data.entries.map(e=>e.item_id),['own']);client.dispose();
+});
 test('reading sync coalesces, survives a lost response, protects newer devices and ignores stale reads',async()=>{
  const storage=new Map();globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
  let server={version:0,epoch:'epoch',entries:[]},lastId='',lost=false,pauseRead=null,gate=null;const writes=[];

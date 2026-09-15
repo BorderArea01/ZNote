@@ -874,3 +874,14 @@
 .upload-group-choice { display: flex; align-items: center; gap: 8px; margin: 14px 0; }
 .upload-group-choice label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
 .upload-group-choice input { width: 16px; height: 16px; margin: 0; accent-color: var(--green); }
+@media(max-width:640px){
+  .topbar{padding-inline:12px;gap:8px;}
+  .topbar .breadcrumbs{min-width:0;flex:1;}
+  .topbar .breadcrumbs>span,.topbar .breadcrumbs>svg{display:none;}
+  .topbar .breadcrumbs strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .topbar .breadcrumbs>.icon-button{flex-shrink:0;}
+  .topbar .topbar-right{flex-shrink:0;gap:4px;}
+  .topbar .external-assistant-link{width:36px;height:40px;padding:0;justify-content:center;}
+  .topbar .external-assistant-link>span{display:none;}
+  .topbar .external-assistant-link>svg{flex-shrink:0;}
+}

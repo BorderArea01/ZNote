@@ -12,7 +12,7 @@ import { downloadVideo } from './imports.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
-export const captureInput = z.object({ text: z.string().trim().min(1).max(16000), collection_id: z.string().nullable().default(null), tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]), request_id: z.string().regex(/^[a-zA-Z0-9:_-]{1,160}$/).optional() });
+export const captureInput = z.object({ text: z.string().trim().min(1).max(16000), image_mode:z.enum(["group","note"]).default("note"), collection_id: z.string().nullable().default(null), tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]), request_id: z.string().regex(/^[a-zA-Z0-9:_-]{1,160}$/).optional() });
 export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, exists, page = fetchCapturePage, image = fetchRemoteImage, video = downloadVideo }) {
   const read = () => JSON.parse(db.prepare('SELECT value FROM settings WHERE key=?').get(KEY)?.value || '[]');
   const write = jobs => {const text=JSON.stringify(jobs);if(text.length>16*1024*1024)throw fail(429,'采集记录已满，请清理完成或失败的任务');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,text);};
@@ -54,6 +54,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       }finally{await rm(dir,{recursive:true,force:true});}
       return;
     }
+    const album=job.input.image_mode==='group'&&plan.images?.length>0;
+    const groupKey=album?(plan.images.length>1?'capture:'+id:null):'note:'+id;
     const tags=[...new Set([...job.input.tags, ...(plan.author?[String(plan.author).slice(0,40)]:[])])];
     let content=plan.content||'';
     if(plan.images)content += '\n\n'+plan.images.map((url,index)=>`![配图 ${index+1}](<${url}>)`).join('\n\n');
@@ -64,7 +66,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       signal.throwIfAborted();patch(job.id,{message:`正在保存配图 ${index+1}/${urls.length}`});
       const imageId=stableId(job.id+':image:'+index);
       let item=existing(imageId,job.input.collection_id);
-      if(item && item.group_key!=='note:'+id)throw fail(409,'已保存的配图被重新分组，请恢复后重试');
+      if(item && item.group_key!==groupKey)throw fail(409,'已保存的配图被重新分组，请恢复后重试');
       if(!item){
         const candidates=plan.image_candidates?.find(values=>values[0]===url)||[url];let buffer,lastError;
         for(const [attempt,candidate] of candidates.entries()){
@@ -73,12 +75,13 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
           catch(e){lastError=e;}
         }
         if(!buffer)throw lastError||fail(422,'配图无法下载');
-        signal.throwIfAborted();item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${index+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,group_key:'note:'+id,group_index:index,group_title:(plan.title||'网页采集').slice(0,200)});
+        signal.throwIfAborted();item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${index+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,content:album?plan.content||'':'',group_key:groupKey,group_index:index,group_title:(plan.title||'网页采集').slice(0,200)});
       }
       mapping.set(url,`/media/${item.id}/original`);
     }
     signal.throwIfAborted();validateCollection(job.input.collection_id);
     for(let index=0;index<urls.length;index++)if(!existing(stableId(job.id+':image:'+index),job.input.collection_id))throw fail(409,'配图已移除，请检查后重试');
+    if(album){const first=existing(stableId(job.id+':image:0'),job.input.collection_id);patch(job.id,{status:'completed',message:usedFallback?'图片组已入库，使用了备用图片版本':'图片组已入库，正文已保存在备注',item_id:first.id,title:plan.title});return;}
     content=replaceMarkdownImages(content,markdownImages(content),mapping);
     const item=saveNote({id,title:(plan.title||'网页采集').slice(0,200),content,source_url:plan.url,collection_id:job.input.collection_id,tags});
     patch(job.id,{status:'completed',message:usedFallback?'图文已入库；部分首选图片不可用，已使用备用版本，可能含平台水印':'图文已入库，配图已保存到本地',item_id:item.id,title:item.title});
@@ -102,7 +105,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const input=captureInput.parse(raw);validateCollection(input.collection_id);
       const urls=sharedUrls(input.text);if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
       const jobs=read(), found=input.request_id&&jobs.find(j=>j.request_id===input.request_id);
-      if(found){if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id)throw fail(409,'这次分享编号已用于其他内容');return exposed(found);}
+      if(found){if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'note')!==input.image_mode)throw fail(409,'这次分享编号已用于其他内容');return exposed(found);}
       if(stopped)throw fail(503,'服务正在停止');
       if(jobs.filter(j=>['queued','running'].includes(j.status)).length>=16)throw fail(429,'采集队列已满，请稍后重试');
       while(jobs.length>=100){const index=jobs.findIndex(j=>j.status==='completed');if(index<0)throw fail(429,'请先处理失败的采集任务');jobs.splice(index,1);}

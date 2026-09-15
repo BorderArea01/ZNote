@@ -10,7 +10,7 @@ export function registerVideoProgress({app,db,transaction}) {
   const stored=key=>db.prepare('SELECT * FROM video_progress WHERE scope=?').get(key);
   const item=id=>db.prepare('SELECT id,kind,title,hash,duration,collection_id,deleted_at FROM items WHERE id=?').get(id);
   const valid=(entries,library)=>entries.flatMap(entry=>{const row=item(entry.item_id);return row?.kind==='video'&&!row.deleted_at&&row.collection_id===library&&row.hash===entry.hash?[{entry,row}]:[];});
-  const result=library=>{const old=stored(scope(library));return{version:old?.version||0,epoch:epoch(),entries:valid(old?videoEntries.parse(JSON.parse(old.entries)):[],library).map(({entry:{hash,...entry},row})=>({...entry,title:row.title,thumbnail_url:`/media/${row.id}/thumbnail`}))};};
+  const result=library=>{const old=stored(scope(library));return{collection_id:library,version:old?.version||0,epoch:epoch(),entries:valid(old?videoEntries.parse(JSON.parse(old.entries)):[],library).map(({entry:{hash,...entry},row})=>({...entry,collection_id:row.collection_id,title:row.title,thumbnail_url:`/media/${row.id}/thumbnail`}))};};
   app.get('/api/video-progress',(req,res)=>{const key=z.union([z.uuid(),z.literal('unfiled')]).default('unfiled').parse(req.query.collection);res.json(result(key==='unfiled'?null:key));});
   for(const method of ['post','delete'])app[method]('/api/video-progress',(req,res)=>{
     const input=inputSchema.parse(req.body);

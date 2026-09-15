@@ -17,6 +17,10 @@ export class ReadingSync {
     if(this.active||this.next)this.persist(true);
   }
   emit(value={}) { Object.assign(this.state,value);if(!this.disposed)this.onChange({...this.state}); }
+  scoped(data) {
+    if(Object.hasOwn(data,'collection_id')&&data.collection_id!==this.library)throw Error('浏览记录知识库不匹配，请刷新重试');
+    return {...data,entries:(data.entries||[]).filter(entry=>!Object.hasOwn(entry,'collection_id')||entry.collection_id===this.library)};
+  }
   persist(claim=false) {
     try {
       const map=read(this.storageKey);if(!claim&&map[this.key]?.owner&&map[this.key].owner!==this.owner)return;
@@ -26,7 +30,7 @@ export class ReadingSync {
   }
   async load() {
     const generation=this.generation,read=++this.readGeneration;
-    try { const data=await this.request(this.endpoint+'?collection='+this.key);if(this.disposed||generation!==this.generation||read!==this.readGeneration)return;const pending=this.active||this.next;this.emit({data,status:this.restoreUnknown?'conflict':pending?(['conflict','error'].includes(this.state.status)?this.state.status:'pending'):'ready',error:pending?this.state.error:''});if(this.recorded&&!this.active&&this.next&&!this.restoreUnknown)this.timer=setTimeout(()=>this.flush(),600); }
+    try { const data=this.scoped(await this.request(this.endpoint+'?collection='+this.key));if(this.disposed||generation!==this.generation||read!==this.readGeneration)return;const pending=this.active||this.next;this.emit({data,status:this.restoreUnknown?'conflict':pending?(['conflict','error'].includes(this.state.status)?this.state.status:'pending'):'ready',error:pending?this.state.error:''});if(this.recorded&&!this.active&&this.next&&!this.restoreUnknown)this.timer=setTimeout(()=>this.flush(),600); }
     catch(e){if(!this.disposed&&generation===this.generation&&read===this.readGeneration)this.emit({status:'error',error:e.message});}
   }
   record(itemId) {
@@ -47,7 +51,7 @@ export class ReadingSync {
     try {
       const data=await this.request(this.endpoint,{method:action.method,body:JSON.stringify(action.body),keepalive:true,signal:this.controller.signal});
       if(generation!==this.generation)return;
-      this.state.data=data;this.active=null;this.prepare();this.persist();this.emit({status:this.active?'pending':'ready',error:''});
+      this.state.data=this.scoped(data);this.active=null;this.prepare();this.persist();this.emit({status:this.active?'pending':'ready',error:''});
       if(this.active)this.timer=setTimeout(()=>this.flush(),this.disposed?0:600);
     }catch(e){if(generation===this.generation)this.emit({status:e.status===409?'conflict':'error',error:e.message});}
     finally{this.busy=false;}

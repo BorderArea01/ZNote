@@ -5,5 +5,6 @@
     android:notificationTimeout="500"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
     android:isAccessibilityTool="false"
     android:settingsActivity="io.github.borderarea01.znote.CaptureAssistActivity" />

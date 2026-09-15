@@ -8,14 +8,14 @@ export function useReadingProgress(library,enabled,revision,kind='image') {
   const client=useRef(null),[state,setState]=useState({data:null,status:'loading',error:''});
   useEffect(()=>{
     if(!enabled){client.current=null;setState({data:null,status:'loading',error:''});return;}
-    const sync=new ReadingSync(library,state=>setState({...state,library}),undefined,kind==='video'?{endpoint:'/api/video-progress',storageKey:'znote:video-pending:v1'}:undefined);client.current=sync;setState({...sync.state,library});sync.load();
+    let sync;sync=new ReadingSync(library,state=>{if(client.current===sync)setState({...state,library});},undefined,kind==='video'?{endpoint:'/api/video-progress',storageKey:'znote:video-pending:v1'}:undefined);client.current=sync;setState({...sync.state,library});sync.load();
     const hide=()=>{if(!['error','conflict'].includes(sync.state.status))sync.flush();};const leave=()=>{if(document.hidden)hide();};
     const focus=()=>{if(!sync.busy&&!sync.active&&!sync.next)sync.load();};
     document.addEventListener('visibilitychange',leave);window.addEventListener('pagehide',hide);window.addEventListener('focus',focus);
     return()=>{sync.dispose();document.removeEventListener('visibilitychange',leave);window.removeEventListener('pagehide',hide);window.removeEventListener('focus',focus);};
   },[library,enabled,kind]);
   useEffect(()=>{if(client.current&&!client.current.busy)client.current.load();},[revision]);
-  const owned=client.current;
+  const owned={record:id=>{if(client.current?.library===library)client.current.record(id);},allowItem:id=>{if(client.current?.library===library)client.current.allowItem(id);},cancelItems:(ids,options)=>{if(client.current?.library===library)client.current.cancelItems(ids,options);}};
   return {...(state.library===library?state:{data:null,status:'loading',error:''}),record:id=>owned?.record(id),allowItem:id=>owned?.allowItem(id),cancelItems:ids=>owned?.cancelItems(ids,{block:kind==='video'}),leave:()=>{const sync=client.current;if(sync&&!['error','conflict'].includes(sync.state.status))sync.flush();},retry:()=>client.current?.retry(),replace:()=>client.current?.replaceWithLatest(),discard:()=>client.current?.discard(),reload:()=>client.current?.load(),clear:()=>client.current?.clear(),hasPending:!!(client.current?.active||client.current?.next),clearing:client.current?.active?.method==='DELETE'&&!client.current?.next};
 }
 export function ReadingProgress({progress,onOpen,disabled,open,setOpen}) {

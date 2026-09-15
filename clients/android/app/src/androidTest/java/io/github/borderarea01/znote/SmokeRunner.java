@@ -54,7 +54,11 @@ public class SmokeRunner extends Instrumentation {
         if(CaptureAssistService.current==null)throw new Exception("Capture accessibility service did not connect");
         runOnMainSync(()->CaptureAssistService.current.showBubble());
         // An unsupported app must not have its content or old clipboard imported.
-        overlayTouch("Z");overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书或抖音的作品页使用");overlayTouch("收起");
+        android.graphics.Rect first=overlayControl("Z");Thread.sleep(400);first=overlayControl("Z");long started=SystemClock.uptimeMillis();
+        MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0),firstUp=MotionEvent.obtain(started,started+60,1,first.centerX(),first.centerY(),0);
+        automation().injectInputEvent(firstDown,true);automation().injectInputEvent(firstUp,true);firstDown.recycle();firstUp.recycle();
+        overlayControl("获取当前页面");long elapsed=SystemClock.uptimeMillis()-started;if(elapsed>1200)throw new Exception("First bubble tap too slow: "+elapsed+"ms");checkpoint("First bubble tap expanded in "+elapsed+"ms");
+        overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书或抖音的作品页使用");overlayTouch("收起");
         android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,time+i*35,i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();}
         Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left");
@@ -101,6 +105,8 @@ public class SmokeRunner extends Instrumentation {
         automation().executeShellCommand("input keyevent 4").close();
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
         checkpoint("System Back closes image detail while retaining library");
+        js("window.__refreshSeen=false;window.addEventListener('znote:refresh',()=>window.__refreshSeen=true,{once:true});true");
+        touchText("↻");until("window.__refreshSeen===true&&!!document.querySelector('.item-card')");checkpoint("Visible native refresh updates library without reloading the WebView");
         js("document.querySelector('.card-main').click();true");until("!!document.querySelector('.detail-dialog')");
         runOnMainSync(()->button(activity.getWindow().getDecorView(),"‹").performClick());
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");

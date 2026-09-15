@@ -24,6 +24,7 @@ public class ShareActivity extends Activity {
     private String origin="",requestId=UUID.randomUUID().toString(),jobId="";
     private EditText text;
     private Spinner collection;
+    private Spinner imageMode;
     private TextView status;
     private Button save;
     private boolean busy=false,visible=false,ready=false;
@@ -49,6 +50,10 @@ public class ShareActivity extends Activity {
         Button help=button("?",()->new AlertDialog.Builder(this).setTitle("手机采集").setMessage("分享或粘贴一个作品链接，服务器负责下载正文、图片或视频。也可直接接收其他 App 分享的图片、视频，不用先存到相册。\n\n局域网保存需要手机能连接服务器。外出时可将链接发给微信 ClawBot，并在微信收件设置开启链接采集。平台要求登录或验证时，任务会保留失败原因。") .setPositiveButton("知道了",null).show());help.setContentDescription("手机采集说明");heading.addView(help,new LinearLayout.LayoutParams(dp(52),dp(48)));root.addView(heading);
         text=new EditText(this);text.setTextColor(0xffe7ebf5);text.setHintTextColor(0xffa1abc0);text.setHint(files.isEmpty()?"粘贴 App 分享文字或网页链接":"备注（可选）");text.setMinLines(3);text.setMaxLines(7);text.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(16000)});text.setText(shared);root.addView(text);
         root.addView(label("目标知识库",15));collection=new Spinner(this);root.addView(collection,new LinearLayout.LayoutParams(-1,dp(52)));
+        if(files.isEmpty()){
+            root.addView(label("图集保存方式",15));imageMode=new Spinner(this);
+            ArrayAdapter<String> modes=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,new String[]{"图片组 · 正文存备注","图文笔记 · 配图成组"}){@Override public View getView(int p,View v,ViewGroup parent){TextView label=(TextView)super.getView(p,v,parent);label.setTextColor(0xffe7ebf5);return label;}};modes.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);imageMode.setAdapter(modes);imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);root.addView(imageMode,new LinearLayout.LayoutParams(-1,dp(48)));
+        }
         save=button("保存到知识库",this::submit);save.setEnabled(false);root.addView(save);
         status=label("正在连接知识库…",14);status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);root.addView(status);
         root.addView(button("悬浮采集设置",()->startActivity(new Intent(this,CaptureAssistActivity.class))));
@@ -74,10 +79,11 @@ public class ShareActivity extends Activity {
         String value=text.getText().toString().trim();if(files.isEmpty()&&value.isEmpty()){status.setText("请粘贴一个作品链接");return;}
         int selected=collection.getSelectedItemPosition();if(selected<0||selected>=collectionIds.size())return;
         String target=collectionIds.get(selected);preferences().edit().putString("share_collection",target).apply();
+        boolean asNote=imageMode!=null&&imageMode.getSelectedItemPosition()==1;preferences().edit().putBoolean("capture_as_note",asNote).apply();if(imageMode!=null)imageMode.setEnabled(false);
         busy=true;save.setEnabled(false);collection.setEnabled(false);text.setEnabled(false);status.setText("正在提交…");
         worker.execute(()->{try{
             if(files.isEmpty()){
-                JSONObject input=new JSONObject().put("text",value).put("collection_id",target.isEmpty()?JSONObject.NULL:target).put("request_id","android:"+requestId);
+                JSONObject input=new JSONObject().put("text",value).put("image_mode",asNote?"note":"group").put("collection_id",target.isEmpty()?JSONObject.NULL:target).put("request_id","android:"+requestId);
                 JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(this::poll);
             }else{
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}

@@ -171,6 +171,7 @@ export default function Workspace({
     recordUndo(result); refresh();
   };
   const taskRefresh=useRef();taskRefresh.current=()=>refresh();
+  useEffect(()=>{const reload=()=>taskRefresh.current?.();window.addEventListener('znote:refresh',reload);return()=>window.removeEventListener('znote:refresh',reload);},[]);
   useEffect(()=>{let last=taskStore.getSnapshot().changes,timer;const unsubscribe=taskStore.subscribe(()=>{const current=taskStore.getSnapshot().changes;if(last!==current){last=current;clearTimeout(timer);timer=setTimeout(()=>taskRefresh.current(),500);}});return()=>{unsubscribe();clearTimeout(timer)}},[taskStore]);
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
   const [autoPages, setAutoPages] = useState(readAutoPages), [pageError, setPageError] = useState(null);
@@ -1022,6 +1023,7 @@ export default function Workspace({
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
+            <IconButton label="刷新内容" onClick={refresh}><RefreshCw size={18}/></IconButton>
             {view!=='home'&&<ExternalAssistantLink collection={actualCollection}/>}
             <TaskButton onClick={()=>setTasksOpen(true)}/>
             <IconButton
@@ -1188,9 +1190,6 @@ export default function Workspace({
                     </IconButton>
                     <IconButton label="紧密列表视图" className={layout==='compact-list'?'chosen':''} onClick={()=>setLayout('compact-list')}><ListFilter size={17}/></IconButton>
                   </div>
-                  <IconButton label="刷新内容" onClick={refresh}>
-                    <RefreshCw size={16} />
-                  </IconButton>
                   <IconButton label="保存当前筛选" onClick={() => editSavedView(null)}><BookmarkPlus size={16}/></IconButton>
                 </div>
               </section>

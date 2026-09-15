@@ -20,10 +20,10 @@ export function registerReadingProgress({app,db,transaction}) {
   }
   function result(library) {
     const state=stored(scope(library));
-    return {version:state?.version||0,epoch:epoch(),entries:valid(state?readingEntries.parse(JSON.parse(state.entries)):[],library).map(({entry,row})=>{
+    return {collection_id:library,version:state?.version||0,epoch:epoch(),entries:valid(state?readingEntries.parse(JSON.parse(state.entries)):[],library).map(({entry,row})=>{
       const order=row.group_order ?? row.group_index;
       const count=row.group_key ? db.prepare("SELECT count(*) total,COALESCE(sum((COALESCE(group_order,group_index),group_index,id)<(?,?,?)),0)+1 position FROM items WHERE kind='image' AND deleted_at IS NULL AND collection_id IS ? AND group_key=?").get(order,row.group_index,row.id,library,row.group_key) : {total:1,position:1};
-      return {...entry,title:row.group_title||row.title,item_title:row.title,...count,thumbnail_url:`/media/${row.id}/thumbnail`};
+      return {...entry,collection_id:row.collection_id,title:row.group_title||row.title,item_title:row.title,...count,thumbnail_url:`/media/${row.id}/thumbnail`};
     })};
   }
   app.get('/api/reading-progress',(req,res)=>{
