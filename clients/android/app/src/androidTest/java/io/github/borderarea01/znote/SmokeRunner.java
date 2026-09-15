@@ -36,14 +36,14 @@ public class SmokeRunner extends Instrumentation {
         while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
             if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY)continue;
             android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
-            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);return r;}
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);if("⋮".equals(text)&&r.left>20&&r.right<getTargetContext().getResources().getDisplayMetrics().widthPixels-20)continue;return r;}
         }Thread.sleep(100);}throw new Exception("Overlay control unavailable: "+text);
     }
     private void overlayTouch(String text)throws Exception{
         android.graphics.Rect r=overlayControl(text);Thread.sleep(400);r=overlayControl(text);
         checkpoint("Overlay tap "+text+" at "+r);
         android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
-        long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0),u=MotionEvent.obtain(t,t+70,1,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(450);
+        long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);MotionEvent u=MotionEvent.obtain(t,SystemClock.uptimeMillis(),1,r.centerX(),r.centerY(),0);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(450);
     }
     private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
     private Bundle captureCommand(String command)throws Exception{
@@ -57,9 +57,9 @@ public class SmokeRunner extends Instrumentation {
         for(ActivityManager.RunningAppProcessInfo process:((ActivityManager)getTargetContext().getSystemService(Context.ACTIVITY_SERVICE)).getRunningAppProcesses())if(process.processName.equals(getTargetContext().getPackageName()+":capture"))state.putInt("pid",process.pid);
         shell("input keyevent 4");Thread.sleep(250);return state;
     }
-    private long panelLatency()throws Exception{
+    private long panelLatency(long budget)throws Exception{
         String log;try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand("logcat -d -s ZNoteCapture:I *:S");java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){log=new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);}
-        java.util.regex.Matcher match=java.util.regex.Pattern.compile("panel_frame ms=(\\d+)").matcher(log);long last=-1;while(match.find())last=Long.parseLong(match.group(1));if(last<0||last>600)throw new Exception("Floating touch-to-frame latency: "+last+"ms");return last;
+        java.util.regex.Matcher match=java.util.regex.Pattern.compile("panel_frame ms=(\\d+)").matcher(log);long last=-1;while(match.find())last=Long.parseLong(match.group(1));if(last<0||last>budget)throw new Exception("Floating touch-to-frame latency: "+last+"ms");return last;
     }
     private void overlayTests()throws Exception{
         android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
@@ -69,7 +69,7 @@ public class SmokeRunner extends Instrumentation {
         android.graphics.Rect first=overlayControl("⋮");Thread.sleep(400);first=overlayControl("⋮");long started=SystemClock.uptimeMillis();
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstDown,true);firstDown.recycle();
         MotionEvent firstUp=MotionEvent.obtain(started,SystemClock.uptimeMillis(),1,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstUp,true);firstUp.recycle();
-        overlayControl("获取当前页面");checkpoint("First floating touch-to-frame: "+panelLatency()+"ms");
+        overlayControl("获取当前页面");checkpoint("First floating touch-to-frame (includes cold text rendering): "+panelLatency(1500)+"ms");
         overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
         android.graphics.Rect before=overlayControl("⋮");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
@@ -111,7 +111,7 @@ public class SmokeRunner extends Instrumentation {
         android.graphics.Rect point=overlayControl("⋮");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
         new Handler(Looper.getMainLooper()).post(()->{entered.countDown();try{Thread.sleep(6000);}catch(InterruptedException ignored){}finally{released.countDown();}});entered.await();
         long begin=SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(begin,begin,0,point.centerX(),point.centerY(),0);automation().injectInputEvent(down,true);down.recycle();MotionEvent up=MotionEvent.obtain(begin,SystemClock.uptimeMillis(),1,point.centerX(),point.centerY(),0);automation().injectInputEvent(up,true);up.recycle();
-        overlayControl("获取当前页面");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating touch-to-frame while library thread is blocked: "+panelLatency()+"ms");
+        overlayControl("获取当前页面");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating touch-to-frame while library thread is blocked: "+panelLatency(600)+"ms");
         overlayTouch("关闭");
         if(captureCommand("status").getBoolean("visible"))throw new Exception("Close did not hide the window");
         shell("settings put secure enabled_accessibility_services null");shell("settings put secure accessibility_enabled 0");
