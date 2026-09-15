@@ -1,7 +1,7 @@
 import { createApp } from "./app.js";
 import { VERSION } from './version.js';
 const port = Number(process.env.PORT || 3741);
-const { app, db, backups, webhooks, imports, trash, weixin } = createApp({ dataDir: process.env.DATA_DIR, port });
+const { app, db, backups, webhooks, imports, captures, trash, weixin } = createApp({ dataDir: process.env.DATA_DIR, port });
 backups.start();
 webhooks.start();
 trash.start();
@@ -17,6 +17,7 @@ for (const signal of ["SIGINT", "SIGTERM"])
       await weixin.stop();
       await trash.stop();
       await imports.stop();
+      await captures.stop();
       await backups.stop();
       await webhooks.stop();
       db.close();

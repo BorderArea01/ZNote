@@ -15,6 +15,7 @@
 | Vite / esbuild | 网页和扩展构建 | [Vite MIT](https://github.com/vitejs/vite) / [esbuild MIT](https://github.com/evanw/esbuild) |
 | Express | HTTP API | [MIT](https://github.com/expressjs/express) |
 | Sharp | 图像读取与缩略图 | [Apache-2.0](https://github.com/lovell/sharp)；其原生依赖另有许可 |
+| LinkeDOM 0.18.12 | 服务端 HTML 解析（不运行网页脚本） | [ISC](https://github.com/WebReflection/linkedom/blob/main/LICENSE) |
 | Mozilla Readability 0.6.0 | 正文提取 | [Apache-2.0](extensions/clipper/vendor/readability-LICENSE.md) |
 | Turndown 7.2.4 | HTML 转 Markdown | [MIT](extensions/clipper/vendor/turndown-LICENSE) |
 | turndown-plugin-gfm 1.0.2 | Markdown 表格等扩展 | [MIT](extensions/clipper/vendor/turndown-gfm-LICENSE) |

@@ -18,6 +18,7 @@ public class SmokeRunner extends Instrumentation {
     private Button button(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return(Button)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){Button b=button(g.getChildAt(i),text);if(b!=null)return b;}}return null;}
     private String js(String source)throws Exception{CompletableFuture<String> result=new CompletableFuture<>();runOnMainSync(()->{WebView web=(WebView)find(activity.getWindow().getDecorView(),WebView.class);if(web==null)result.complete("null");else web.evaluateJavascript(source,result::complete);});return result.get(8,TimeUnit.SECONDS);}
     private void until(String source)throws Exception{long deadline=System.currentTimeMillis()+30000;while(System.currentTimeMillis()<deadline){if("true".equals(js(source)))return;Thread.sleep(250);}throw new Exception("WebView condition timed out: "+source+" body="+js("document.body.innerText.slice(0,400)+String(window.__result)"));}
+    private void nativeUntil(Activity target,String expected)throws Exception{long deadline=System.currentTimeMillis()+30000;while(System.currentTimeMillis()<deadline){String[] value={""};runOnMainSync(()->value[0]=nativeText(target.getWindow().getDecorView()));if(value[0].contains(expected))return;Thread.sleep(250);}throw new Exception("Native share did not reach: "+expected);}
     @Override public void onStart(){Bundle report=new Bundle();try{
         try{MainActivity.normalize("http://10.attacker.com");throw new Exception("public HTTP was accepted");}catch(Exception e){if(e.getMessage().equals("public HTTP was accepted"))throw e;}
         activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -49,7 +50,28 @@ public class SmokeRunner extends Instrumentation {
         runOnMainSync(()->button(activity.getWindow().getDecorView(),"‹").performClick());
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
         if(activity.isFinishing()||activity.isDestroyed())throw new Exception("Back destroyed the client");
-        screenshot();
+        Intent probe=new Intent(Intent.ACTION_SEND).setType("text/plain");
+        if(getTargetContext().getPackageManager().queryIntentActivities(probe,0).stream().noneMatch(r->r.activityInfo.name.endsWith("ShareActivity")))throw new Exception("Share entry is missing from the system resolver");
+        java.util.ArrayList<android.net.Uri> shares=new java.util.ArrayList<>();
+        for(int i=0;i<2;i++){
+            ContentValues values=new ContentValues();values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,"share-smoke-"+i+".png");values.put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png");
+            android.net.Uri uri=getTargetContext().getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
+            android.graphics.Bitmap bmp=android.graphics.Bitmap.createBitmap(80,60,android.graphics.Bitmap.Config.ARGB_8888);bmp.eraseColor(i==0?0xff6171bd:0xff7c9f70);
+            try(java.io.OutputStream out=getTargetContext().getContentResolver().openOutputStream(uri)){bmp.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}bmp.recycle();shares.add(uri);
+        }
+        ShareActivity share=(ShareActivity)startActivitySync(new Intent(getTargetContext(),ShareActivity.class).setAction(Intent.ACTION_SEND_MULTIPLE).setType("image/png").putParcelableArrayListExtra(Intent.EXTRA_STREAM,shares).putExtra(Intent.EXTRA_TEXT,"分享备注\n保留换行\nhttps://example.com/source").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        nativeUntil(share,"已连接");
+        runOnMainSync(()->button(share.getWindow().getDecorView(),"?").performClick());getUiAutomation().executeShellCommand("input keyevent 4").close();
+        runOnMainSync(()->button(share.getWindow().getDecorView(),"保存到知识库").performClick());nativeUntil(share,"已保存 2 个媒体文件");
+        screenshot();checkpoint("Android system share streamed two images to the LAN server without local downloads");
+        runOnMainSync(share::finish);Thread.sleep(500);
+        js("window.__shareCheck='pending';fetch('/api/items?kind=image&grouped=false&limit=100').then(r=>r.json()).then(r=>{const items=r.items.filter(i=>i.source_url==='https://example.com/source');window.__shareCheck=items.length===2&&items.every(i=>i.group_key===items[0].group_key)?'ok':JSON.stringify(items)});true");
+        until("window.__shareCheck==='ok'");checkpoint("Shared images retain a common group and clickable provenance");
+        ShareActivity linkShare=(ShareActivity)startActivitySync(new Intent(getTargetContext(),ShareActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"测试失败恢复 http://127.0.0.1/private").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        nativeUntil(linkShare,"已连接");runOnMainSync(()->button(linkShare.getWindow().getDecorView(),"保存到知识库").performClick());
+        nativeUntil(linkShare,"不能采集本机或内网地址");nativeUntil(linkShare,"重试采集");checkpoint("Shared links reach the server queue; failures remain visible with retry");
+        runOnMainSync(linkShare::finish);
+        for(android.net.Uri uri:shares)getTargetContext().getContentResolver().delete(uri,null,null);
         report.putString("stream","\nZNOTE_ANDROID_SMOKE_PASS\n");finish(Activity.RESULT_OK,report);
     }catch(Throwable e){String[] nativeState={""};if(activity!=null)runOnMainSync(()->nativeState[0]=nativeText(activity.getWindow().getDecorView()));String failure="\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\nNative UI: "+nativeState[0]+"\n";checkpoint(failure);screenshot();report.putString("stream",failure);finish(Activity.RESULT_CANCELED,report);}}
 }

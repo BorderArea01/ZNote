@@ -2,6 +2,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {API_BASE,createWeixinClient,weixinUrl} from './weixin-client.js';
 import {writeMessageBlocks} from '../shared/message-blocks.js';
+import {sharedUrls} from '../shared/share-input.js';
 import {createWeixinGrouping,WEIXIN_MODES,WEIXIN_TIME_ZONE,weixinDay,weixinNewNoteCommand} from './weixin-grouping.js';
 const KEY='weixin_inbox_v1';
 const fault=message=>Object.assign(Error(message),{status:400});
@@ -14,14 +15,14 @@ export function weixinMessageKey(message,account){
   if(typeof id!=='string'||!id||id.length>256)throw fault('微信消息缺少可靠的编号，未自动入库');
   return createHash('sha256').update(JSON.stringify([account.bot,message.from_user_id,id])).digest('hex');
 }
-export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,transaction,work,validateCollection,observeMessage=()=>{},client=createWeixinClient()}){
-  const defaults=()=>({enabled:false,collection_id:null,tags:['微信'],merge_mode:'daily',account:null,cursor:'',jobs:[]});
+export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,transaction,work,validateCollection,captures,observeMessage=()=>{},client=createWeixinClient()}){
+  const defaults=()=>({enabled:false,capture_links:false,collection_id:null,tags:['微信'],merge_mode:'daily',account:null,cursor:'',jobs:[]});
   const read=()=>{const row=db.prepare('SELECT value FROM settings WHERE key=?').get(KEY);return row?{...defaults(),...JSON.parse(row.value)}:defaults();};
   const write=state=>{const value=JSON.stringify(state);if(value.length>2*1024*1024)throw fault('微信收件箱已满，请先处理失败消息');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,value);};
   const patch=fn=>{const state=read();fn(state);write(state);return state;};
   let loop,controller,qr,loginController,loginWork,status='未连接',lastError='',activeJob=null;
   const grouping=createWeixinGrouping({db,exists});
-  function publicState(){const s=read(),failed=s.jobs.filter(j=>j.state==='failed');return {connected:!!s.account,enabled:s.enabled,collection_id:s.collection_id,tags:s.tags,merge_mode:s.merge_mode,time_zone:WEIXIN_TIME_ZONE,current_note:grouping.current(s),failed_count:failed.length,status,lastError,active:activeJob,login:qr?{id:qr.id,status:qr.status,image:qr.image,error:qr.error||''}:null,jobs:[...failed,...s.jobs.filter(j=>j.state!=='failed').reverse()].slice(0,30).map(({id,title,state,error,created_at,items=[]})=>({id,title,state,error,created_at,items}))};}
+  function publicState(){const s=read(),failed=s.jobs.filter(j=>j.state==='failed');return {connected:!!s.account,enabled:s.enabled,capture_links:s.capture_links,collection_id:s.collection_id,tags:s.tags,merge_mode:s.merge_mode,time_zone:WEIXIN_TIME_ZONE,current_note:grouping.current(s),failed_count:failed.length,status,lastError,active:activeJob,login:qr?{id:qr.id,status:qr.status,image:qr.image,error:qr.error||''}:null,jobs:[...failed,...s.jobs.filter(j=>j.state!=='failed').reverse()].slice(0,30).map(({id,title,state,error,created_at,items=[]})=>({id,title,state,error,created_at,items}))};}
   function current(account){return read().account?.token===account.token;}
   function jobPatch(id,fn){patch(s=>{const j=s.jobs.find(j=>j.id===id);if(j)fn(j)});}
   function finish(job,items){grouping.complete(job,items);jobPatch(job.id,j=>{j.items=items;j.state='done';j.error='';delete j.message});}
@@ -48,6 +49,16 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
         if(!job.target&&note&&exists(noteId)){transaction(()=>finish(job,[noteId]));return;}
         checkTarget(job);
         let imageIndex=0;const content=[];
+        if(captures&&job.capture_links){
+          const urls=sharedUrls(text);
+          if(urls.length>5)throw fault('一条微信消息最多采集 5 个链接，请分开发送');
+          for(const [index,url] of urls.entries()){
+            let task=captures.add({text:url,collection_id:job.collection_id,tags:job.tags.slice(0,20),request_id:'weixin:'+job.id+':'+index});
+            if(task.status==='failed')task=captures.retry(task.id);
+            const result=await captures.wait(task.id,signal);
+            content.push(`[已归档：${String(result.title||'分享内容').replace(/[\[\]\\\n]/g,' ')}](/?item=${result.item_id})`);
+          }
+        }
         for(const part of list){
           signal.throwIfAborted();
           if(part.type===1){content.push(part.text_item?.text||'');continue;}
@@ -93,7 +104,7 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
         const id=weixinMessageKey(message,s.account);if(s.jobs.some(j=>j.id===id)||grouping.receipt(id))continue;
         const text=(message.item_list||[]).filter(i=>i.type===1).map(i=>i.text_item?.text||'').join(' ');
         const time=Number(message.create_time_ms),created_at=new Date(Number.isFinite(time)&&time>0&&time<Date.now()+86400000?time:Date.now()).toISOString();
-        const job={id,owner:s.account.user,title:text.trim().replace(/\s+/g,' ').slice(0,100)||'微信图片 '+weixinDay(created_at),state:'pending',created_at,collection_id:s.collection_id,tags:[...new Set(['微信',...s.tags])],message};
+        const job={id,owner:s.account.user,title:text.trim().replace(/\s+/g,' ').slice(0,100)||'微信图片 '+weixinDay(created_at),state:'pending',created_at,capture_links:s.capture_links,collection_id:s.collection_id,tags:[...new Set(['微信',...s.tags])],message};
         const command=s.merge_mode!=='message'&&weixinNewNoteCommand(message);
         if(command){grouping.target(s,created_at,{rotate:true,title:command.title});job.state='done';job.items=[];delete job.message;grouping.complete(job,[]);}
         else if(s.merge_mode!=='message')job.target=grouping.target(s,created_at);
@@ -112,8 +123,9 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
   async function configure(input){
     if(typeof input.enabled!=='boolean'||!(input.collection_id===null||typeof input.collection_id==='string')||!Array.isArray(input.tags)||input.tags.length>20||input.tags.some(t=>typeof t!=='string'||!t.trim()||t.length>40))throw fault('微信收件设置无效');
     if(input.merge_mode!==undefined&&!WEIXIN_MODES.includes(input.merge_mode))throw fault('无效的收件合并方式');
+    if(input.capture_links!==undefined&&typeof input.capture_links!=='boolean')throw fault('链接采集设置无效');
     validateCollection(input.collection_id);await stop();
-    patch(s=>{s.enabled=input.enabled;s.collection_id=input.collection_id;s.tags=[...new Set(input.tags.map(t=>t.trim()))];if(input.merge_mode!==undefined)s.merge_mode=input.merge_mode;});start();return publicState();
+    patch(s=>{s.enabled=input.enabled;if(input.capture_links!==undefined)s.capture_links=input.capture_links;s.collection_id=input.collection_id;s.tags=[...new Set(input.tags.map(t=>t.trim()))];if(input.merge_mode!==undefined)s.merge_mode=input.merge_mode;});start();return publicState();
   }
   async function newNote(title=''){
     if(typeof title!=='string'||title.length>80||/[\r\n]/.test(title))throw fault('新篇标题最多 80 字，不能包含换行');

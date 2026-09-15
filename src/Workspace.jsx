@@ -402,6 +402,17 @@ export default function Workspace({
     setCollection(id);
     restoreBrowse(id);
   };
+  useEffect(()=>{
+    const url=new URL(location.href),id=url.searchParams.get('item');
+    if(!id)return;
+    url.searchParams.delete('item');history.replaceState(history.state,'',url);
+    let cancelled=false;
+    api('/api/items/'+encodeURIComponent(id)).then(item=>{
+      if(cancelled)return;if(item.deleted_at)throw Error('此内容已在回收站');
+      chooseCollection(item.collection_id||'unfiled');setGallery(item.kind==='image'?[item]:[]);setSelected(item);
+    }).catch(e=>{if(!cancelled)notify(e.message);});
+    return()=>{cancelled=true};
+  },[]);
   const goHome = () => {
     if (preferences.default_collection_id)
       chooseCollection(preferences.default_collection_id);

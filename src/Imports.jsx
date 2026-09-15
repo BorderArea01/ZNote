@@ -4,6 +4,7 @@ import { HelpHint } from './HelpHint.jsx';
 import { api, send } from './api.js';
 import './imports.css';
 import {useTaskStore,useTaskSnapshot} from './Tasks.jsx';
+import {CapturePanel} from './CapturePanel.jsx';
 
 export function ImportsDialog({ collections, currentCollection, onClose, onComplete, onOpen }) {
   const taskStore=useTaskStore(),{remote}=useTaskSnapshot(),jobs=remote.imports;
@@ -17,8 +18,10 @@ export function ImportsDialog({ collections, currentCollection, onClose, onCompl
     try { await send('/api/imports', { url: url.trim(), collection_id: collection || null, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }); taskStore.refreshRemote(); setUrl(''); }
     catch (e) { setError(e.message); } finally { setBusy(false); }
   }
-  return <Dialog title="网络视频采集" onClose={onClose} className="import-dialog">
+  return <Dialog title="网络采集" onClose={onClose} className="import-dialog">
     <div className="import-body">
+      <CapturePanel collections={collections} currentCollection={currentCollection} onComplete={onComplete} onOpen={onOpen}/>
+      <details><summary>视频专用采集与旧任务</summary>
       <div className="inline-heading"><h3>保存网页视频</h3><HelpHint label="网络视频采集">粘贴哔哩哔哩、抖音、小红书或 X 的单条视频链接，来源自动写进备注。单条最多 500 MB，音视频合并不重新编码。需要登录或验证的资源可能无法获取；图片可用浏览器扩展采集。</HelpHint></div>
       <form onSubmit={submit} className="import-form">
         <label>视频页面链接<input required type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.bilibili.com/video/…" /></label>
@@ -34,6 +37,7 @@ export function ImportsDialog({ collections, currentCollection, onClose, onCompl
         <p role="status">{job.message}</p>
         {job.status === 'completed' ? <button onClick={() => onOpen(job.item_id)}>打开视频</button> : ['queued','running'].includes(job.status) ? <button onClick={async () => { try { await send('/api/imports/' + job.id, {}, 'DELETE'); } catch (e) { setError(e.message); } }}>取消采集</button> : ['failed','cancelled'].includes(job.status) ? <button onClick={() => setUrl(job.source_url)}>重新填写此链接</button> : null}
       </article>)}</div>
+      </details>
     </div>
   </Dialog>;
 }

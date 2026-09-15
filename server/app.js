@@ -50,6 +50,7 @@ import { registerClipper } from './clipper.js';
 import { createClipperPairing } from './clipper-pair.js';
 import { withSource } from './source.js';
 import { createImportManager } from './imports.js';
+import { createCaptureManager } from './captures.js';
 import { registerStreamRoutes } from './streams.js';
 import { registerGroupOrderRoutes } from './group-order.js';
 import { registerTags } from './tags.js';
@@ -110,6 +111,7 @@ export function createApp({
   webhookOptions = {},
   weixinClient,
   importOptions = {},
+  captureOptions = {},
   imageDownload = fetchRemoteImage,
 } = {}) {
   const db = openDatabase(dataDir);
@@ -1121,6 +1123,16 @@ export function createApp({
     if (snapshotting) throw fail(409, '正在导出完整备份，请稍后重新采集');
     return maintenance.work(() => saveVideo(file, { ...input, tags: JSON.stringify(input.tags) }));
   } });
+  const captures = createCaptureManager({db,dataDir,validateCollection,work:operation=>maintenance.work(operation),
+    exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
+    saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:fields.title,size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),
+    saveNote:({id,...fields})=>insert(itemInput.parse(fields),null,id),
+    saveVideo:(file,fields)=>saveVideo(file,{...fields,tags:JSON.stringify(fields.tags)}),...captureOptions});
+  app.get('/api/captures',(req,res)=>res.json({jobs:captures.list()}));
+  app.post('/api/captures',(req,res)=>res.status(202).json(captures.add(req.body)));
+  app.get('/api/captures/:id',(req,res)=>res.json(captures.get(req.params.id)));
+  app.delete('/api/captures/:id',(req,res)=>res.json(captures.remove(req.params.id)));
+  app.post('/api/captures/:id/retry',(req,res)=>res.status(202).json(captures.retry(req.params.id)));
   registerStreamRoutes(app, { dataDir, saveVideo });
   app.get('/api/imports', (req, res) => res.json({ jobs: imports.list() }));
   app.get('/api/imports/:id', (req, res) => res.json(imports.get(req.params.id)));
@@ -1207,7 +1219,7 @@ export function createApp({
   const webhooks = createWebhookManager({ db, maintenance, ...webhookOptions });
   registerWebhookRoutes(app, webhooks, admin);
   registerClipper(app);
-  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { exportJobs.clear(); trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
+  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { exportJobs.clear(); trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await captures.cancelAll(); await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
@@ -1234,7 +1246,7 @@ export function createApp({
       ),
   );
   const weixinNotifications=createWeixinNotifications({db,client:weixinClient});
-  const weixin=createWeixinInbox({db,client:weixinClient,observeMessage:weixinNotifications.captureContext,validateCollection,transaction,work:operation=>maintenance.work(operation),
+  const weixin=createWeixinInbox({db,client:weixinClient,captures,observeMessage:weixinNotifications.captureContext,validateCollection,transaction,work:operation=>maintenance.work(operation),
     exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
     saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:'微信图片',size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),
     saveNote:({id,...fields},commit)=>insert(itemInput.parse(fields),null,id,commit),
@@ -1304,5 +1316,5 @@ export function createApp({
     }
     db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('note_groups_v1','true');
   });
-  return { app, db, backups, webhooks, imports, trash, weixin, weixinNotifications, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
+  return { app, db, backups, webhooks, imports, captures, trash, weixin, weixinNotifications, maintenance, diagnostics: () => ({ thumbnail_active: thumbnailQueue.active, thumbnail_peak: thumbnailQueue.peak, thumbnail_pending: thumbnailQueue.pending.length, preview_cache_bytes: previewBytes }) };
 }

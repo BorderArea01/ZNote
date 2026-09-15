@@ -9,13 +9,14 @@ const json=(path,method,body)=>send(path,body,method);
 export function WeixinSettings({collections,onOpen}){
   const [state,setState]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[collection,setCollection]=useState(''),[tags,setTags]=useState('微信'),[qrImage,setQrImage]=useState(''),[code,setCode]=useState('');
   const initialized=useRef(false),mounted=useRef(true);
+  const [captureLinks,setCaptureLinks]=useState(false);
   const [mode,setMode]=useState('daily'),[newTitle,setNewTitle]=useState('');
-  const accept=data=>{if(!mounted.current)return;setState(data);if(!initialized.current){setCollection(data.collection_id||'');setTags(data.tags.join(', '));setMode(data.merge_mode||'daily');initialized.current=true;}};
+  const accept=data=>{if(!mounted.current)return;setState(data);if(!initialized.current){setCollection(data.collection_id||'');setTags(data.tags.join(', '));setMode(data.merge_mode||'daily');setCaptureLinks(!!data.capture_links);initialized.current=true;}};
   const load=()=>api('/api/weixin').then(accept).catch(e=>{if(mounted.current)setError(e.message)});
   useEffect(()=>{mounted.current=true;let timer,stopped=false;const poll=async()=>{if(!document.hidden)await load();if(!stopped)timer=setTimeout(poll,3000)};poll();return()=>{stopped=true;mounted.current=false;clearTimeout(timer)};},[]);
   useEffect(()=>{let valid=true;setQrImage('');if(state?.login?.image)QRCode.toDataURL(state.login.image,{width:240,margin:2}).then(value=>{if(valid)setQrImage(value)}).catch(()=>setError('二维码生成失败，请重试'));return()=>{valid=false};},[state?.login?.image]);
   const act=async fn=>{setBusy(true);setError('');try{accept(await fn())}catch(e){setError(e.message)}finally{if(mounted.current)setBusy(false)}};
-  const config=enabled=>json('/api/weixin','PATCH',{enabled,collection_id:collection||null,merge_mode:mode,tags:tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean)});
+  const config=enabled=>json('/api/weixin','PATCH',{enabled,capture_links:captureLinks,collection_id:collection||null,merge_mode:mode,tags:tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean)});
   const login=state?.login,showQr=login&&['wait','scaned','scaned_but_redirect','need_verifycode'].includes(login.status);
   const labels={pending:'等待入库',working:'正在入库',done:'已入库',failed:'失败',skipped:'已忽略'};
   return <section className="weixin-settings">
@@ -25,6 +26,7 @@ export function WeixinSettings({collections,onOpen}){
       <div className="weixin-fields"><label>默认知识库<select aria-label="微信默认知识库" value={collection} onChange={e=>setCollection(e.target.value)} disabled={busy}><option value="">未分类</option>{collections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>入库标签<input aria-label="微信入库标签" value={tags} onChange={e=>setTags(e.target.value)} placeholder="用逗号分隔" disabled={busy}/></label></div>
       <div className="weixin-grouping"><label><span className="field-help-label">归档方式<HelpHint label="归档方式">按天合并：同一天的文字和图片依次追加，跨天自动新建。手动分篇：持续追加到当前篇，换话题时开始新篇。配图统一成组。</HelpHint></span><select aria-label="微信归档方式" value={mode} onChange={e=>setMode(e.target.value)} disabled={busy}><option value="daily">按天合并（北京时间）</option><option value="session">手动分篇，持续追加</option><option value="message">每条单独保存</option></select></label>
       </div>
+      <div className="inline-heading"><label><input type="checkbox" checked={captureLinks} onChange={e=>setCaptureLinks(e.target.checked)} disabled={busy}/>采集消息里的链接</label><HelpHint label="微信链接采集">发送作品分享链接，服务器下载正文、配图或视频，并在收件笔记里附上归档入口。需要登录或验证时保留失败记录。关闭时仅保存消息文字；仅影响新消息。</HelpHint></div>
       <div className="connection-actions">
         <button disabled={busy} className="primary" onClick={()=>act(async()=>{await config(state.enabled);return json('/api/weixin/login','POST',{})})}>{busy?'处理中…':state.connected?'重新扫码连接':'扫码连接微信'}</button>
         <button disabled={busy} onClick={()=>act(()=>config(state.enabled))}>保存收件设置</button>

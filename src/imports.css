@@ -8,3 +8,10 @@
 .import-job p { font-size: 13px; line-height: 1.6; }
 .import-body > .muted { font-size: 12px; line-height: 1.7; }
 .import-dialog { width: min(640px, calc(100vw - 24px)); }
+.capture-panel { padding-top: 12px; margin-bottom: 24px; }
+.capture-panel textarea { width: 100%; min-width: 0; resize: vertical; }
+.capture-panel .import-jobs { max-height: 38vh; overflow: auto; overscroll-behavior: contain; }
+.capture-panel .import-job strong { display: block; overflow-wrap: anywhere; }
+.capture-panel .import-job button { margin-top: 8px; margin-right: 8px; }
+.import-body > details { padding-top: 16px; border-top: 1px solid var(--border); }
+.import-body > details > summary { cursor: pointer; padding-bottom: 16px; }
