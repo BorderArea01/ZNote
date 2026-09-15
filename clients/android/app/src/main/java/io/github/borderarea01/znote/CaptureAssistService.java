@@ -68,13 +68,16 @@ public class CaptureAssistService extends AccessibilityService {
     private static boolean social(String pkg){return pkg.equals("com.xingin.xhs")||pkg.equals("com.ss.android.ugc.aweme")||pkg.equals("com.ss.android.ugc.aweme.lite");}
     private static boolean browser(String pkg){return Arrays.asList("com.android.chrome","com.chrome.beta","com.microsoft.emmx","org.mozilla.firefox","org.mozilla.fenix","com.sec.android.app.sbrowser","com.heytap.browser","com.vivo.browser","com.UCMobile").contains(pkg);}
     private AccessibilityNodeInfo page(){
+        // A click can change an address bar/share menu without a window-state event.
+        // Fetch one fresh snapshot on demand instead of subscribing to every page mutation.
+        if(Build.VERSION.SDK_INT>=33)clearCache();
         for(AccessibilityWindowInfo w:getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_APPLICATION&&(w.isActive()||w.isFocused())){AccessibilityNodeInfo root=w.getRoot();if(root!=null)return root;}
         return getRootInActiveWindow();
     }
     private interface Match {boolean test(AccessibilityNodeInfo node);}
     private AccessibilityNodeInfo find(AccessibilityNodeInfo root,Match match){
         ArrayDeque<AccessibilityNodeInfo> queue=new ArrayDeque<>();queue.add(root);int count=0;
-        while(!queue.isEmpty()&&count++<600){AccessibilityNodeInfo n=queue.removeFirst();if(n.isVisibleToUser()&&!n.isPassword()&&match.test(n)){for(AccessibilityNodeInfo rest:queue)rest.recycle();return n;}for(int i=0;i<n.getChildCount()&&queue.size()<600;i++){AccessibilityNodeInfo child=n.getChild(i);if(child!=null)queue.add(child);}n.recycle();}
+        while(!queue.isEmpty()&&count++<600){AccessibilityNodeInfo n=queue.removeFirst();if(Build.VERSION.SDK_INT<33&&!n.refresh()){n.recycle();continue;}if(n.isVisibleToUser()&&!n.isPassword()&&match.test(n)){for(AccessibilityNodeInfo rest:queue)rest.recycle();return n;}for(int i=0;i<n.getChildCount()&&queue.size()<600;i++){AccessibilityNodeInfo child=n.getChild(i);if(child!=null)queue.add(child);}n.recycle();}
         for(AccessibilityNodeInfo n:queue)n.recycle();return null;
     }
     private String pkg(AccessibilityNodeInfo n){return n.getPackageName()==null?"":n.getPackageName().toString();}
@@ -95,6 +98,7 @@ public class CaptureAssistService extends AccessibilityService {
     private void readBrowser(AccessibilityNodeInfo root,boolean focused){
         AccessibilityNodeInfo address=find(root,n->{String id=n.getViewIdResourceName();return id!=null&&id.matches(".*:id/(url_bar|urlbar_view|mozac_browser_toolbar_url_view|toolbar_url_view|location_bar_edit_text|url_input)");});
         if(address==null){message("请显示浏览器地址栏，或用分享 / 复制链接采集");return;}
+        address.refresh();
         String value=link(label(address));
         if(focused&&!value.isEmpty()&&!value.contains("…")){address.recycle();if(editedAddress){performGlobalAction(GLOBAL_ACTION_BACK);handler.postDelayed(()->open(value),200);}else open(value);return;}
         if(!focused&&click(address)){editedAddress=true;handler.postDelayed(()->{AccessibilityNodeInfo next=page();if(next==null||!sourcePackage.equals(pkg(next))){if(next!=null)next.recycle();message("页面已切换，请重新采集");return;}readBrowser(next,true);},450);}
