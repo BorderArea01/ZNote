@@ -39,6 +39,9 @@ trap 'kill "$EMULATOR_PID" "$SERVER_PID" "$UPDATE_PID" 2>/dev/null || true' EXIT
 # A successful self-update terminates instrumentation as Android replaces the app.
 timeout 100 adb shell am instrument -w -e update_upgrade true io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner > artifacts/android-emulator/update-result.txt 2>&1 || true
 adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/update-screen.png artifacts/android-emulator/ || true
+adb logcat -d -v threadtime > artifacts/android-emulator/update-log.txt
+adb shell uiautomator dump /sdcard/update-ui.xml >/dev/null 2>&1 || true
+adb pull /sdcard/update-ui.xml artifacts/android-emulator/ || true
 grep -q ZNOTE_UPDATE_INSTALL_CONFIRM artifacts/android-emulator/update-result.txt
 for attempt in $(seq 1 20); do
   adb shell dumpsys package io.github.borderarea01.znote > artifacts/android-emulator/updated-package.txt

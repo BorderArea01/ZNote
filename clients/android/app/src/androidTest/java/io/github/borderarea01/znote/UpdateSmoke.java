@@ -43,12 +43,12 @@ final class UpdateSmoke {
         Activity page=test.startActivitySync(new Intent(c,UpdateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));tap("? 更新说明");tap("知道了");
         // Restore the screen while preserving Android's downloaded artifact.
         test.runOnMainSync(page::finish);Thread.sleep(300);page=test.startActivitySync(new Intent(c,UpdateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        android.graphics.Bitmap screenshot=automation().takeScreenshot();try(OutputStream out=new FileOutputStream(new File(c.getExternalFilesDir(null),"update-screen.png"))){screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}screenshot.recycle();
+        Thread.sleep(800);android.graphics.Bitmap screenshot=automation().takeScreenshot();try(OutputStream out=new FileOutputStream(new File(c.getExternalFilesDir(null),"update-screen.png"))){screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}screenshot.recycle();
         shell("appops set "+c.getPackageName()+" REQUEST_INSTALL_PACKAGES deny");tap("安装更新");Thread.sleep(400);shell("input keyevent 4");Thread.sleep(400);
         if(!file.exists())throw new Exception("Permission refusal deleted downloaded update");
         shell("appops set "+c.getPackageName()+" REQUEST_INSTALL_PACKAGES allow");tap("安装更新");tap("Cancel");Thread.sleep(300);
         if(!file.exists())throw new Exception("Installer cancellation deleted update");report("Update screen restore, permission refusal and installer cancellation passed");
-        tap("安装更新");report("ZNOTE_UPDATE_INSTALL_CONFIRM");tap("Update");
+        report("Opening installer again after cancellation");tap("安装更新");report("ZNOTE_UPDATE_INSTALL_CONFIRM");tap("Update");
         Thread.sleep(15000);throw new Exception("Self update did not replace the process");
     }
 }

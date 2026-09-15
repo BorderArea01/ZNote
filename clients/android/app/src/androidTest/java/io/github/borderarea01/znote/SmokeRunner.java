@@ -181,5 +181,5 @@ public class SmokeRunner extends Instrumentation {
         for(android.net.Uri uri:shares)getTargetContext().getContentResolver().delete(uri,null,null);
         overlayTests();
         report.putString("stream","\nZNOTE_ANDROID_SMOKE_PASS\n");finish(Activity.RESULT_OK,report);
-    }catch(Throwable e){String[] nativeState={""};if(activity!=null)runOnMainSync(()->nativeState[0]=nativeText(activity.getWindow().getDecorView()));String failure="\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\nNative UI: "+nativeState[0]+"\n";checkpoint(failure);screenshot();report.putString("stream",failure);finish(Activity.RESULT_CANCELED,report);}}
+    }catch(Throwable e){String[] nativeState={""};if(activity!=null)runOnMainSync(()->nativeState[0]=nativeText(activity.getWindow().getDecorView()));String failure="\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\nNative UI: "+nativeState[0]+"\n";checkpoint(failure);if(activity!=null)screenshot();report.putString("stream",failure);finish(Activity.RESULT_CANCELED,report);}}
 }
