@@ -1,0 +1,5 @@
+.typed-items{display:grid;gap:30px;min-width:0}
+.item-type-section{min-width:0}
+.item-type-heading{display:flex;align-items:center;gap:14px;margin:0 0 14px;font-size:14px;font-weight:600;line-height:1.5;color:var(--ink)}
+.item-type-heading::after{content:"";height:1px;flex:1;background:var(--border)}
+@media(max-width:760px){.typed-items{gap:24px}.item-type-heading{margin-bottom:12px}}

@@ -12,6 +12,14 @@ try{
  const orphan=add('image','孤立单张','legacy:one'),group=add('image','组合甲','test:group');add('image','组合乙','test:group');add('note','笔记');const video=add('video','视频');
  await page.goto(base);await page.locator('.sidebar').getByRole('button',{name:/^未分类/}).click();await page.locator('.item-card').nth(3).waitFor();
  await page.locator('.sort-trigger').click();await page.getByRole('checkbox',{name:'按类型分区',exact:true}).check();await page.waitForFunction(id=>document.querySelector('.item-card')?.dataset.itemId===id,orphan);
+ await page.getByRole('button',{name:'完成',exact:true}).click();
+ assert.deepEqual(await page.locator('.item-type-section').evaluateAll(nodes=>nodes.map(n=>n.dataset.itemType)),['image','group','note','video']);
+ const bounds=await page.locator('.item-type-section').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));assert.ok(bounds.every((r,i)=>!i||r.top>bounds[i-1].bottom),'Each type must occupy its own section');
+ await page.screenshot({path:resolve(dir,'desktop-sections.png'),fullPage:true});
+ await page.getByRole('button',{name:'选择内容',exact:true}).click();
+ await page.locator(`[data-item-id="${group}"] .card-main`).click();await page.getByText('已选 2 项',{exact:true}).waitFor();
+ assert.equal(await page.locator('.item-card').count(),4);assert.equal(await page.locator('.item-type-section').count(),4);
+ await page.getByRole('button',{name:'退出多选',exact:true}).click();await page.locator('.sort-trigger').click();
  await page.screenshot({path:resolve(dir,'desktop-sort.png')});
  await page.setViewportSize({width:390,height:844});
  for(let i=0;i<3;i++)await page.getByRole('button',{name:'视频上移',exact:true}).tap();
@@ -22,6 +30,9 @@ try{
  await page.reload();await page.waitForFunction(id=>document.querySelector('.item-card')?.dataset.itemId===id,video);
  await page.locator('.sort-trigger').tap();assert.equal(await page.locator('.type-order li').first().innerText().then(s=>s.includes('视频')),true);
  await page.keyboard.press('Escape');await page.locator('.sort-dialog').waitFor({state:'detached'});
+ assert.deepEqual(await page.locator('.item-type-section').evaluateAll(nodes=>nodes.map(n=>n.dataset.itemType)),['video','image','group','note']);
+ await page.screenshot({path:resolve(dir,'mobile-sections.png'),fullPage:true});
+ await page.locator('.sort-trigger').tap();await page.getByRole('checkbox',{name:'按类型分区',exact:true}).uncheck();await page.getByRole('button',{name:'完成',exact:true}).tap();assert.equal(await page.locator('.item-type-section').count(),0);assert.equal(await page.locator('.item-card').count(),4);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
  console.log('PASS unfiled classification, custom type order, mobile hints, dismissal, persistence; '+dir);
 }finally{await browser.close();for(const key of ['captures','weixin','trash','imports','backups','webhooks'])await runtime[key].stop();await new Promise(r=>server.close(r));runtime.db.close();}

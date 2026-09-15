@@ -3,7 +3,7 @@ import {isImageGroup} from './image-group.js';
 import {detachImageFromGroup} from './group-detach.js';
 import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
-import { VirtualItems } from './VirtualItems.jsx';
+import { TypedItems } from './TypedItems.jsx';
 import { PageLoader, readAutoPages, saveAutoPages } from './PageLoader.jsx';
 import { ReadingProgress, useReadingProgress } from './ReadingProgress.jsx';
 import { VideoHistory } from './VideoProgress.jsx';
@@ -1266,7 +1266,7 @@ export default function Workspace({
                 <>
                 {resumeBrowse?.library===collection&&resumeBrowse.view===view&&resumeBrowse.query===query&&resumeBrowse.sort===sort&&resumeBrowse.direction===direction&&resumeBrowse.type_group===typeGrouping&&resumeBrowse.type_order===typeOrder&&resumeBrowse.mode===tagMode&&resumeBrowse.tags.join('\0')===selectedTags.join('\0')&&pageOffset===0&&<div className="browse-resume"><button onClick={resumeLastBrowse}>继续上次浏览位置</button><HelpHint label="浏览位置">当前先显示列表开头。选择继续后会回到此知识库和分类上次看到的内容；筛选、排序和视图设置已经保留。</HelpHint><button aria-label="忽略上次浏览位置" onClick={()=>setResumeBrowse(null)}><X size={14}/></button></div>}
                 {(awayFromStart||pageOffset>0) && !selecting && !selected && <div className="floating-action-dock browse-window-actions"><button disabled={paging} onClick={jumpToStart}><ArrowUpToLine size={15}/>{sort==='title'?'回到列表开头':'回到最新内容'}</button>{pageOffset>0&&<button disabled={paging} onClick={() => loadPage(true)}><ChevronUp size={15}/>{paging ? '正在加载…' : sort==='title'?'加载靠前内容':'加载较新内容'}</button>}<span className="dock-divider" aria-hidden="true"/><button onClick={()=>toggleSelectionMode()}><CheckCheck size={15}/>多选</button><HelpHint label="分页导航">向下浏览约一屏后即可直接回到列表开头。长列表只在内存中保留当前位置附近 300 项摘要和少量可见卡片；当前筛选和已选内容保留。</HelpHint></div>}
-                <VirtualItems selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
+                <TypedItems grouped={typeGrouping} order={typeOrder} selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
                     <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&cardSelected(item)?' is-selected':selecting&&cardPartial(item)?' is-partial':''}`} key={item.id}>
                       {selecting && (
@@ -1389,7 +1389,7 @@ export default function Workspace({
                       )}
                     </article>
                   )}
-                </VirtualItems>
+                </TypedItems>
                 </>
               )}
               {!!items.length && !loading && <div className="browse-pagination" data-window-size={items.length} data-window-offset={pageOffset}>
