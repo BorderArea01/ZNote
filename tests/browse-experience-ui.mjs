@@ -11,7 +11,7 @@ const runtime = createApp({ dataDir: dir, staticDir: resolve(process.env.UI_DIST
 const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
 const base = 'http://127.0.0.1:' + server.address().port;
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, hasTouch: true });
 const page = await context.newPage(), errors = [], report = {};
 // This regression exercises explicit previous/next controls and Shift ranges;
 // automatic traversal has its own long-session test.
@@ -57,19 +57,17 @@ try {
   await choose('独立笔记库'); await loaded(); assert.equal(await page.locator('.item-card').count(), 1);
   await page.getByRole('button', { name: '列表视图', exact: true }).click();
   await choose('万图测试库'); await loaded(); await page.waitForTimeout(450);
+  assert.equal((await page.locator('.browse-pagination').getAttribute('data-window-offset')), '0');
+  await page.getByRole('button', { name: '继续上次浏览位置', exact: true }).tap(); await loaded(); await page.waitForTimeout(450);
   const restored = await position(); assert.equal(restored.id, anchor.id); assert.ok(Math.abs(restored.top - anchor.top) < 5);
   assert.ok(await page.locator('.items.grid').count());
-  await page.getByRole('button', { name: '加载前面的内容', exact: true }).waitFor();
+  await page.getByRole('button', { name: '加载靠前内容', exact: true }).waitFor();
+  await page.screenshot({path:resolve('artifacts/browse-window-actions.png')});
+  await page.getByRole('button', { name: '回到列表开头', exact: true }).tap(); await loaded();
+  assert.equal(await page.locator('.browse-pagination').getAttribute('data-window-offset'), '0');
   await page.reload(); await loaded(); await page.waitForTimeout(350);
-  assert.equal((await position()).id, anchor.id);
-  for (let i = 0; i < 2; i++) {
-    // Trigger without scrolling the target out of view; prepending pages must
-    // retain its position even when the list crosses the virtualization limit.
-    const response = page.waitForResponse(r => r.url().includes('/api/items?') && r.status() === 200);
-    await page.getByRole('button', { name: '加载前面的内容', exact: true }).evaluate(el => el.click());
-    await response; await page.waitForTimeout(350);
-    assert.equal((await position()).id, anchor.id); assert.ok(Math.abs((await position()).top - anchor.top) < 5);
-  }
+  assert.equal((await page.locator('.browse-pagination').getAttribute('data-window-offset')), '0');
+  assert.equal(await page.getByRole('button', { name: '继续上次浏览位置', exact: true }).count(), 0);
   await page.getByRole('button', { name: '选择内容', exact: true }).click(); await loaded();
   await page.evaluate(() => scrollTo(0, 0));
   const cards = page.locator('.card-main');

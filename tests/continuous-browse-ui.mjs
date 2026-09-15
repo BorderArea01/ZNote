@@ -31,7 +31,7 @@ try{
  // Concurrent writes stop offset traversal rather than skipping or duplicating.
  const beforeChange=await windowState();await context.request.patch(base+'/api/items/'+ids[100],{data:{version:1,favorite:true}});await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));await page.locator('.browse-page-error').getByRole('button',{name:'刷新内容',exact:true}).waitFor();assert.deepEqual(await windowState(),beforeChange);
  await page.getByRole('checkbox',{name:'滚动自动加载',exact:true}).uncheck();await page.locator('.browse-page-error').getByRole('button',{name:'刷新内容',exact:true}).click();await loaded();
- const anchor=await position();await page.getByRole('button',{name:'加载前面的内容',exact:true}).evaluate(e=>e.click());await stable();await page.waitForTimeout(100);assert.equal((await position()).id,anchor.id);assert.ok(Math.abs((await position()).top-anchor.top)<5);
+ const anchor=await position();await page.getByRole('button',{name:'加载靠前内容',exact:true}).evaluate(e=>e.click());await stable();await page.waitForTimeout(100);assert.equal((await position()).id,anchor.id);assert.ok(Math.abs((await position()).top-anchor.top)<5);
  // Summaries are never passed into editors as complete content.
  await page.route('**/api/items?**',async route=>{if(new URL(route.request().url()).searchParams.has('cursor'))await new Promise(r=>setTimeout(r,500));await route.continue()});
  const pending=page.waitForRequest(r=>r.url().includes('/api/items?')&&new URL(r.url()).searchParams.has('cursor'));await page.getByRole('button',{name:'加载更多内容',exact:true}).evaluate(e=>e.click());await pending;

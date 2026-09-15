@@ -1,6 +1,6 @@
 const KEY = 'znote:browse:v1';
 const views = new Set(['all', 'images', 'videos', 'notes', 'favorites', 'trash']);
-const defaults = { query: '', tags: [], mode: 'all', sort: 'updated', layout: 'grid', anchor: null };
+const defaults = { query: '', tags: [], mode: 'all', sort: 'updated', layout: 'grid', anchor: null, offset: 0, awayFromStart: false };
 function read() {
   try { const value = JSON.parse(localStorage.getItem(KEY)); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
   catch { return {}; }
@@ -16,6 +16,8 @@ export function readBrowse(library, view) {
     sort: ['updated', 'created', 'title'].includes(raw.sort) ? raw.sort : 'updated',
     layout: ['grid','list','compact-grid','compact-list'].includes(raw.layout) ? raw.layout : 'grid',
     anchor: typeof raw.anchor?.id === 'string' && Number.isFinite(raw.anchor.top) ? raw.anchor : null,
+    offset: Number.isInteger(raw.offset) && raw.offset > 0 ? raw.offset : 0,
+    awayFromStart: raw.awayFromStart === true || (Number.isInteger(raw.offset) && raw.offset > 0),
   };
 }
 export function writeBrowse(library, view, state) {

@@ -167,6 +167,7 @@ export default function Workspace({
   useEffect(()=>{let last=taskStore.getSnapshot().changes,timer;const unsubscribe=taskStore.subscribe(()=>{const current=taskStore.getSnapshot().changes;if(last!==current){last=current;clearTimeout(timer);timer=setTimeout(()=>taskRefresh.current(),500);}});return()=>{unsubscribe();clearTimeout(timer)}},[taskStore]);
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
   const [autoPages, setAutoPages] = useState(readAutoPages), [pageError, setPageError] = useState(null);
+  const [resumeBrowse, setResumeBrowse] = useState(null);
   const selectedRowsRef = useRef(chosenItems); selectedRowsRef.current = chosenItems;
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
   const pagingRequest = useRef(null), restoreAnchor = useRef(null), pendingBrowse = useRef(null);
@@ -177,15 +178,16 @@ export default function Workspace({
     if(collection===nextCollection&&view===nextView)return;
     routeTrail.current.push({collection,view});
   }
-  browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, layout, loading };
+  browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, layout, loading, offset: pageOffset };
   function rememberBrowse() {
     const state = browsing.current;
     if (!state || state.loading) return;
-    writeBrowse(state.library, state.view, { query: state.query, tags: state.tags, mode: state.mode, sort: state.sort, layout: state.layout, anchor: captureAnchor() });
+    writeBrowse(state.library, state.view, { query: state.query, tags: state.tags, mode: state.mode, sort: state.sort, layout: state.layout, anchor: captureAnchor(), offset: state.offset, awayFromStart: state.offset > 0 || window.scrollY > 600 });
   }
-  function restoreBrowse(id, targetView) {
+  function restoreBrowse(id, targetView, restorePosition = false) {
     const saved = readBrowse(id, targetView);
-    pendingBrowse.current = saved.anchor;
+    pendingBrowse.current = restorePosition ? saved.anchor : null;
+    setResumeBrowse(!restorePosition && saved.anchor && saved.awayFromStart ? { library:id, ...saved } : null);
     setView(saved.view); setQuery(saved.query); setSearch(saved.query);
     setSelectedTags(saved.tags); setTagMode(saved.mode); setSort(saved.sort); setLayout(saved.layout);
   }
@@ -369,7 +371,15 @@ export default function Workspace({
     setSelectedTags([]); setQuery(''); setSearch('');
     setSelection([]); setSelecting(false); setMobile(false);
     // Re-entering the current scope must also fetch again after clearing it.
-    pendingBrowse.current = null; setUpdatesAvailable(false); setRevision(n => n + 1);
+    pendingBrowse.current = null; setResumeBrowse(null); setUpdatesAvailable(false); setRevision(n => n + 1);
+  };
+  const resumeLastBrowse = () => {
+    if (!resumeBrowse || resumeBrowse.library !== collection || resumeBrowse.view !== view || resumeBrowse.query !== query || resumeBrowse.sort !== sort || resumeBrowse.mode !== tagMode || resumeBrowse.tags.join('\0') !== selectedTags.join('\0')) return;
+    pendingBrowse.current = resumeBrowse.anchor; setResumeBrowse(null); setUpdatesAvailable(false); setRevision(n => n + 1);
+  };
+  const jumpToStart = () => {
+    pendingBrowse.current = null; restoreAnchor.current = {id:'',top:0}; setResumeBrowse(null); setUpdatesAvailable(false);
+    window.scrollTo({top:0,behavior:'instant'}); setRevision(n => n + 1);
   };
   const chooseCollection = (id) => {
     if(id!==collection)rememberRoute(id,'all');
@@ -397,7 +407,7 @@ export default function Workspace({
         const home = prefs.default_collection_id;
         if (home === "unfiled" || libs.some((c) => c.id === home)) {
           setCollection(home);
-          restoreBrowse(home);
+          restoreBrowse(home, undefined, false);
         }
         setReady(true);
       })
@@ -602,7 +612,7 @@ export default function Workspace({
       const entry=routeTrail.current.pop();
       if(!entry.collection||entry.collection==='unfiled'||collections.some(c=>c.id===entry.collection)){previous=entry;break;}
     }
-    if(previous){resetScope();setStats({});setCollection(previous.collection);if(previous.view==='home')setView('home');else restoreBrowse(previous.collection||'unfiled',previous.view);return true;}
+    if(previous){resetScope();setStats({});setCollection(previous.collection);if(previous.view==='home')setView('home');else restoreBrowse(previous.collection||'unfiled',previous.view,true);return true;}
     if(view!=='home'){resetScope();setView('home');setCollection(null);return true;}
     return false;
   },ready);
@@ -1214,7 +1224,8 @@ export default function Workspace({
                 </div>
               ) : (
                 <>
-                {pageOffset > 0 && <button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : '加载前面的内容'}</button>}
+                {resumeBrowse?.library===collection&&resumeBrowse.view===view&&resumeBrowse.query===query&&resumeBrowse.sort===sort&&resumeBrowse.mode===tagMode&&resumeBrowse.tags.join('\0')===selectedTags.join('\0')&&pageOffset===0&&<div className="browse-resume"><button onClick={resumeLastBrowse}>继续上次浏览位置</button><HelpHint label="浏览位置">当前先显示列表开头。选择继续后会回到此知识库和分类上次看到的内容；筛选、排序和视图设置已经保留。</HelpHint><button aria-label="忽略上次浏览位置" onClick={()=>setResumeBrowse(null)}><X size={14}/></button></div>}
+                {pageOffset > 0 && <div className="browse-window-actions"><button className="load-more" disabled={paging} onClick={jumpToStart}>{sort==='title'?'回到列表开头':'回到最新内容'}</button><button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : sort==='title'?'加载靠前内容':'加载较新内容'}</button><HelpHint label="分页导航">浏览很长的列表时，只保留当前位置附近的内容以降低内存占用。可逐批向前加载，也可直接回到列表开头；当前筛选和已选内容保留。</HelpHint></div>}
                 <VirtualItems selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
                     <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&cardSelected(item)?' is-selected':selecting&&cardPartial(item)?' is-partial':''}`} key={item.id}>
