@@ -114,7 +114,7 @@ public class SmokeRunner extends Instrumentation {
         overlayControl("获取当前页面");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating touch-to-frame while library thread is blocked: "+panelLatency(600)+"ms");
         overlayTouch("关闭");
         if(captureCommand("status").getInt("pid")!=state.getInt("pid"))throw new Exception("Capture process restarted during window interactions");
-        String diagnostics=java.nio.file.Files.readString(new java.io.File(getTargetContext().getFilesDir(),"capture-diagnostics.log").toPath());
+        String diagnostics=new String(java.nio.file.Files.readAllBytes(new java.io.File(getTargetContext().getFilesDir(),"capture-diagnostics.log").toPath()),java.nio.charset.StandardCharsets.UTF_8);
         if(!diagnostics.contains("process_start")||!diagnostics.contains("panel_frame")||!diagnostics.contains("toggle open"))throw new Exception("Persistent capture diagnostics missing");
         checkpoint("Repeated window interactions retain one process and persistent startup/frame diagnostics");
         if(captureCommand("status").getBoolean("visible"))throw new Exception("Close did not hide the window");
