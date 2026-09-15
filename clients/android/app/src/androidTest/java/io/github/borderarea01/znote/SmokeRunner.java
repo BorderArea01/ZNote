@@ -38,7 +38,14 @@ public class SmokeRunner extends Instrumentation {
             for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);return r;}
         }Thread.sleep(100);}throw new Exception("Overlay control unavailable: "+text);
     }
-    private void overlayTouch(String text)throws Exception{android.graphics.Rect r=overlayControl(text);long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0),u=MotionEvent.obtain(t,t+70,1,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(250);}
+    private void overlayTouch(String text)throws Exception{
+        android.graphics.Rect r=overlayControl(text);Thread.sleep(400);r=overlayControl(text);
+        checkpoint("Overlay tap "+text+" at "+r);
+        java.lang.reflect.Field field=CaptureAssistService.class.getDeclaredField("bubble");field.setAccessible(true);View[] actual={null};runOnMainSync(()->{try{actual[0]=(View)field.get(CaptureAssistService.current);}catch(Exception ignored){}});
+        if(actual[0]!=null)runOnMainSync(()->checkpoint("Overlay native tree: "+nativeText(actual[0])));
+        android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
+        long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0),u=MotionEvent.obtain(t,t+70,1,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(450);
+    }
     private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
     private void overlayTests()throws Exception{
         android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);

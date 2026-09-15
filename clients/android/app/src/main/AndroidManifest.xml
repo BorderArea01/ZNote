@@ -6,7 +6,7 @@
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/capture_accessibility"/>
     </service>
     <activity android:name=".CaptureAssistActivity" android:label="悬浮采集" android:exported="false"/>
-    <activity android:name=".ShareActivity" android:label="保存到 ZNote" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+    <activity android:name=".ShareActivity" android:label="保存到 ZNote" android:exported="true" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
       <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="text/plain"/><data android:mimeType="image/*"/><data android:mimeType="video/*"/></intent-filter>
       <intent-filter><action android:name="android.intent.action.SEND_MULTIPLE"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="image/*"/><data android:mimeType="video/*"/></intent-filter>
     </activity>
