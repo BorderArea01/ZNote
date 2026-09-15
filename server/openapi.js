@@ -61,7 +61,7 @@ export const spec = {
         properties: {
           view: { type: 'string', enum: ['all', 'images', 'videos', 'notes', 'favorites', 'trash'] },
           query: { ...str, maxLength: 200 }, tags: { type: 'array', maxItems: 30, items: { ...str, minLength: 1, maxLength: 40 } },
-          mode: { type: 'string', enum: ['all', 'any'] }, sort: { type: 'string', enum: ['updated', 'created', 'title'] }, layout: { type: 'string', enum: ['grid', 'list', 'compact-grid', 'compact-list'] },
+          mode: { type: 'string', enum: ['all', 'any'] }, sort: { type: 'string', enum: ['updated', 'created', 'title'] }, direction:{type:'string',enum:['asc','desc'],description:'省略时名称为正序，时间为倒序'},type_group:{type:'boolean',default:false},layout: { type: 'string', enum: ['grid', 'list', 'compact-grid', 'compact-list'] },
         },
       },
       SavedView: { type: 'object', properties: {
@@ -605,6 +605,9 @@ spec.paths['/api/backups'] = {
 spec.paths['/api/clipper/download'] = { get: { summary: '下载浏览器采集扩展 ZIP（需要登录或 API 令牌）', responses: { 200: { description: '可在 Chrome/Edge 加载的 MV3 扩展', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
 spec.paths['/api/items'].get.parameters.push({ name: 'gallery', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'false' }, description: 'true 返回当前过滤范围内按排序冻结的图片 ID 列表 {ids:[]}，忽略 limit/offset；不读取图片二进制，用于连续整理时保持顺序' });
 spec.paths['/api/items'].get.parameters.push(
+  {name:'direction',in:'query',schema:{type:'string',enum:['asc','desc']},description:'排序方向；省略时名称为正序，时间为倒序。按类型分区时用于每种类型内部排序。'},
+  {name:'type_group',in:'query',schema:{type:'string',enum:['true','false'],default:'false'},description:'true 依次排列单图、图片组、笔记、视频，各类型内部继续使用 sort 和 direction。'},
+  {name:'gallery_scope',in:'query',schema:{type:'string',enum:['all','singles'],default:'all'},description:'gallery=true 时可用；singles 仅返回不属于图片组的独立图片，避免翻入图片组。'},
   {name:'anchor',in:'query',schema:{type:'string',maxLength:100},description:'定位当前筛选和分组结果中该内容所在分页，返回实际 offset；不存在时回到第一页。gallery=true 时忽略。'},
   {name:'grouped',in:'query',schema:{type:'string',enum:['true','false'],default:'false'},description:'按作品组折叠，封面为首个匹配页，返回 group_count；total 为折叠后数量。默认保持逐条 API 行为。'},
   {name:'group_key',in:'query',schema:str,description:'限定作品组；与 collection 配合，gallery=true 时按 group_order 展示顺序返回各页 ID，未排序时沿用 group_index。'}

@@ -235,6 +235,7 @@ html[data-style="minimal"] .item-card:hover { box-shadow: 0 5px 20px #0000000d; 
 .group-organize-error button { flex:none; }
 .group-target-pages { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-top:8px; font-size:12px; }
 @media(max-width:620px) { .group-organize-body { grid-template-columns:1fr; gap:16px; padding:16px; } .group-plan-grid { max-height:160px; } .group-organize-footer { padding:12px 16px; } .group-organize-error { flex-wrap:wrap; } }
+@media(max-width:760px) { .toolbar-options { width:100%; max-width:100%; height:auto; margin-left:0; overflow-x:auto; scrollbar-width:none; } .toolbar-options::-webkit-scrollbar { display:none; } .toolbar-options>* { flex:none; } }
 
 .zoom-surface:focus-visible{outline:2px solid #9caefa;outline-offset:-6px}
 .zoom-error{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px);padding:16px;border:1px solid #6d7890;border-radius:12px;background:#171d2d;color:#f0f3ff}

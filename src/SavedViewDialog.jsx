@@ -5,7 +5,7 @@ import { savedViewLabels, viewSignature } from '../shared/saved-views.js';
 
 function Conditions({ config }) {
   return <div className="saved-view-conditions" aria-label="保存的筛选条件">
-    <div className="saved-view-chips"><span>{savedViewLabels[config.view]}</span><span>{{ updated:'最近更新', created:'最近创建', title:'名称排序' }[config.sort]}</span><span>{{grid:'网格',list:'列表','compact-grid':'紧密网格','compact-list':'紧密列表'}[config.layout]}</span></div>
+    <div className="saved-view-chips"><span>{savedViewLabels[config.view]}</span><span>{{ updated:'更新时间', created:'创建时间', title:'名称排序' }[config.sort]} · {(config.direction||'desc')==='asc'?'正序':'倒序'}</span>{config.type_group&&<span>按类型分区</span>}<span>{{grid:'网格',list:'列表','compact-grid':'紧密网格','compact-list':'紧密列表'}[config.layout]}</span></div>
     {config.query && <p>关键词：<strong>{config.query}</strong></p>}
     {!!config.tags.length && <><p>{config.mode === 'all' ? '同时包含这些标签' : '包含任一标签'}</p><div className="saved-view-chips">{config.tags.map(tag => <span key={tag}># {tag}</span>)}</div></>}
   </div>;

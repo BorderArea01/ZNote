@@ -106,6 +106,8 @@ export default function Workspace({
     [loadError, setLoadError] = useState(""),
     [revision, setRevision] = useState(0);
   const [sort, setSort] = useState("updated"),
+    [direction,setDirection]=useState('desc'),
+    [typeGrouping,setTypeGrouping]=useState(false),
     [layout, setLayout] = useState("grid"),
     [selected, setSelected] = useState(null),
     [settings, setSettings] = useState(false),
@@ -184,18 +186,18 @@ export default function Workspace({
     if(collection===nextCollection&&view===nextView)return;
     routeTrail.current.push({collection,view});
   }
-  browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, layout, loading, offset: pageOffset };
+  browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, direction, type_group:typeGrouping, layout, loading, offset: pageOffset };
   function rememberBrowse() {
     const state = browsing.current;
     if (!state || state.loading) return;
-    writeBrowse(state.library, state.view, { query: state.query, tags: state.tags, mode: state.mode, sort: state.sort, layout: state.layout, anchor: captureAnchor(), offset: state.offset, awayFromStart: state.offset > 0 || window.scrollY > 600 });
+    writeBrowse(state.library, state.view, { query: state.query, tags: state.tags, mode: state.mode, sort: state.sort, direction:state.direction, type_group:state.type_group, layout: state.layout, anchor: captureAnchor(), offset: state.offset, awayFromStart: state.offset > 0 || window.scrollY > 600 });
   }
   function restoreBrowse(id, targetView, restorePosition = false) {
     const saved = readBrowse(id, targetView);
     pendingBrowse.current = restorePosition ? saved.anchor : null;
     setResumeBrowse(!restorePosition && saved.anchor && saved.awayFromStart ? { library:id, ...saved } : null);
     setView(saved.view); setQuery(saved.query); setSearch(saved.query);
-    setSelectedTags(saved.tags); setTagMode(saved.mode); setSort(saved.sort); setLayout(saved.layout);
+    setSelectedTags(saved.tags); setTagMode(saved.mode); setSort(saved.sort); setDirection(saved.direction); setTypeGrouping(saved.type_group); setLayout(saved.layout);
   }
   useEffect(() => {
     let timer;
@@ -212,7 +214,7 @@ export default function Workspace({
     window.addEventListener('scroll', schedule, {passive:true}); window.addEventListener('resize', schedule); measure();
     return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule); };
   }, []);
-  useEffect(() => { if (ready && !loading) rememberBrowse(); }, [ready, loading, query, selectedTags, tagMode, sort, layout, view, collection]);
+  useEffect(() => { if (ready && !loading) rememberBrowse(); }, [ready, loading, query, selectedTags, tagMode, sort, direction, typeGrouping, layout, view, collection]);
   useLayoutEffect(() => {
     if (loading) return;
     const anchor = restoreAnchor.current;
@@ -290,13 +292,13 @@ export default function Workspace({
   const savedViews = useSavedViews(actualCollection, ready && view !== 'home');
   const sidebarTags=useTagPage(actualCollection,{limit:30,revision,enabled:ready&&view!=='home'}),tags=sidebarTags.tags;
   const [savedViewEditor, setSavedViewEditor] = useState(null);
-  const currentViewConfig = { view, query, tags: selectedTags, mode: tagMode, sort, layout };
+  const currentViewConfig = { view, query, tags: selectedTags, mode: tagMode, sort, direction, type_group:typeGrouping, layout };
   const editSavedView = row => setSavedViewEditor({ row, current: currentViewConfig, library: actualCollection });
   const applySavedView = row => {
     if (row.collection_id !== actualCollection) return;
     resetScope(); const config = row.config;
     setView(config.view); setQuery(config.query); setSearch(config.query); setSelectedTags(config.tags);
-    setTagMode(config.mode); setSort(config.sort); setLayout(config.layout);
+    setTagMode(config.mode); setSort(config.sort); setDirection(config.direction||'desc'); setTypeGrouping(config.type_group===true); setLayout(config.layout);
   };
   function openPurge(ids){closeDetail();setPurging({collectionId:actualCollection,ids,libraryName:collections.find(c=>c.id===actualCollection)?.name||'未分类'});}
   async function selectCards(cards, mode='toggle', {enter=false,picker=false,announce=false}={}) {
@@ -445,6 +447,8 @@ export default function Workspace({
     (offset) => {
       const p = new URLSearchParams({
         sort,
+        direction,
+        type_group:String(typeGrouping),
         offset: String(offset),
         limit: "60",
         summary: 'true',
@@ -463,7 +467,7 @@ export default function Workspace({
       if (view === "trash") p.set("trash", "true");
       return p.toString();
     },
-    [sort, search, collection, selectedTags, tagMode, view],
+    [sort, direction, typeGrouping, search, collection, selectedTags, tagMode, view],
   );
   async function openItem(item) {
     const current = ++detailGeneration.current;
@@ -497,7 +501,7 @@ export default function Workspace({
       // move the page boundary and skip an image during continuous organizing.
       const groupParams = isImageGroup(item)
         ? new URLSearchParams({collection:item.collection_id||'unfiled',group_key:item.group_key,gallery:'true'})
-        : `${params(0)}&gallery=true`;
+        : `${params(0)}&gallery=true&gallery_scope=singles`;
       const result = await api(`/api/items?${groupParams}`);
       if (current !== detailGeneration.current) return;
       setGallery(result.ids.map(id => ({ id, thumbnail_url: `/media/${id}/thumbnail` })));
@@ -1142,10 +1146,19 @@ export default function Workspace({
                     value={sort}
                     onChange={(e) => setSort(e.target.value)}
                   >
-                    <option value="updated">最近更新</option>
-                    <option value="created">最近创建</option>
-                    <option value="title">名称排序</option>
+                    <option value="updated">更新时间</option>
+                    <option value="created">创建时间</option>
+                    <option value="title">名称</option>
                   </select>
+                  <select aria-label="排序方向" value={direction} onChange={e=>setDirection(e.target.value)}>
+                    <option value="desc">倒序</option>
+                    <option value="asc">正序</option>
+                  </select>
+                  <select aria-label="内容排列" value={typeGrouping?'grouped':'mixed'} onChange={e=>setTypeGrouping(e.target.value==='grouped')}>
+                    <option value="mixed">混合排列</option>
+                    <option value="grouped">按类型分区</option>
+                  </select>
+                  <HelpHint label="排序说明">正序或倒序作用于所选字段。“按类型分区”依次排列单图、图片组、笔记和视频，各区内部再按所选字段排序。</HelpHint>
                   <div className="view-switch">
                     <IconButton label="紧密网格视图" className={layout==='compact-grid'?'chosen':''} onClick={()=>setLayout('compact-grid')}><Grid3X3 size={17}/></IconButton>
                     <IconButton

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import {useAppBack} from './back-navigation.js';
+let modalLocks=0,previousOverflow='';
 export function IconButton({ label, children, ...props }) {
   return (
     <button
@@ -22,6 +23,11 @@ export function Dialog({ title, onClose, children, className = "" }) {
     if([...document.querySelectorAll('[role="dialog"]')].at(-1)!==ref.current)return false;
     return Promise.resolve(onClose());
   },true,100);
+  useEffect(()=>{
+    const root=document.documentElement;
+    if(modalLocks++===0){previousOverflow=root.style.overflow;root.style.overflow='hidden';}
+    return()=>{if(--modalLocks===0)root.style.overflow=previousOverflow};
+  },[]);
   useEffect(() => {
     const previous = document.activeElement;
     // A nested viewer may have already claimed focus during the same mount.

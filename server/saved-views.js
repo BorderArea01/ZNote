@@ -5,12 +5,12 @@ export const savedViewConfig = z.object({
   view: z.enum(['all', 'images', 'videos', 'notes', 'favorites', 'trash']),
   query: z.string().max(200),
   tags: z.array(z.string().trim().min(1).max(40)).max(30).transform(tags => [...new Set(tags)].sort()),
-  mode: z.enum(['all', 'any']), sort: z.enum(['updated', 'created', 'title']), layout: z.enum(['grid', 'list', 'compact-grid', 'compact-list']),
-}).strict();
+  mode: z.enum(['all', 'any']), sort: z.enum(['updated', 'created', 'title']), direction: z.enum(['asc','desc']).optional(), type_group: z.boolean().default(false), layout: z.enum(['grid', 'list', 'compact-grid', 'compact-list']),
+}).strict().transform(config=>({...config,direction:config.direction||(config.sort==='title'?'asc':'desc')}));
 const name = z.string().trim().min(1).max(80);
 const input = z.object({ name, config: savedViewConfig, collection_id: z.uuid().nullable().default(null) }).strict();
 const update = z.object({ name: name.optional(), config: savedViewConfig.optional(), version: z.number().int().positive() }).strict();
-const serialize = row => ({ ...row, config: JSON.parse(row.config) });
+const serialize = row => {const config=JSON.parse(row.config);return {...row,config:{...config,direction:['asc','desc'].includes(config.direction)?config.direction:config.sort==='title'?'asc':'desc',type_group:config.type_group===true}}};
 
 export function registerSavedViews({ app, db, transaction }) {
   function scope(value) {

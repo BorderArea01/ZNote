@@ -466,12 +466,15 @@ export function createApp({
         favorite: z.enum(["true", "false"]).optional(),
         trash: z.enum(["true", "false"]).optional(),
         sort: z.enum(["updated", "created", "title"]).default("updated"),
+        direction: z.enum(["asc", "desc"]).optional(),
+        type_group: z.enum(["true", "false"]).default("false"),
         limit: z.coerce.number().int().min(1).max(100).default(60),
         offset: z.coerce.number().int().min(0).default(0),
         anchor: z.string().max(100).optional(),
         summary: z.enum(['true', 'false']).default('false'),
         cursor: z.coerce.number().int().nonnegative().optional(),
         gallery: z.enum(['true', 'false']).default('false'),
+        gallery_scope: z.enum(['all', 'singles']).default('all'),
         grouped: z.enum(['true','false']).default('false'),
         group_key: z.string().max(200).optional(),
       })
@@ -525,12 +528,17 @@ export function createApp({
     }
     if (q.favorite === "true") where.push("favorite=1");
     if (q.group_key) { where.push('group_key=?'); args.push(q.group_key); }
+    if (q.gallery === 'true' && q.gallery_scope === 'singles') where.push('group_key IS NULL');
     const clause = where.join(" AND ");
-    const sort = {
-      updated: "updated_at DESC, id",
-      created: "created_at DESC, id",
-      title: "title COLLATE NOCASE, id",
+    const direction=(q.direction||(q.sort==='title'?'asc':'desc')).toUpperCase();
+    const orderedTitle=q.grouped==='true'?"COALESCE(NULLIF(group_title,''),title)":"title";
+    const valueSort = {
+      updated: `updated_at ${direction}, id ${direction}`,
+      created: `created_at ${direction}, id ${direction}`,
+      title: `${orderedTitle} COLLATE NOCASE ${direction}, id ${direction}`,
     }[q.sort];
+    const typeSort="CASE WHEN kind='image' AND group_key IS NULL THEN 0 WHEN kind='image' THEN 1 WHEN kind='note' THEN 2 WHEN kind='video' THEN 3 ELSE 4 END";
+    const sort=q.type_group==='true'?`${typeSort}, ${valueSort}`:valueSort;
     if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...args).map(item => item.id) });
     const projection = q.summary === 'true'
       ? db.prepare('PRAGMA table_info(items)').all().map(({name}) => name === 'content' ? "CASE WHEN kind='note' THEN substr(content,1,1000) ELSE '' END AS content" : name).join(',') + ',length(content) AS content_length'

@@ -1,6 +1,6 @@
 const KEY = 'znote:browse:v1';
 const views = new Set(['all', 'images', 'videos', 'notes', 'favorites', 'trash']);
-const defaults = { query: '', tags: [], mode: 'all', sort: 'updated', layout: 'grid', anchor: null, offset: 0, awayFromStart: false };
+const defaults = { query: '', tags: [], mode: 'all', sort: 'updated', direction: 'desc', type_group: false, layout: 'grid', anchor: null, offset: 0, awayFromStart: false };
 function read() {
   try { const value = JSON.parse(localStorage.getItem(KEY)); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
   catch { return {}; }
@@ -14,6 +14,8 @@ export function readBrowse(library, view) {
     tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === 'string').slice(0, 30) : [],
     mode: raw.mode === 'any' ? 'any' : 'all',
     sort: ['updated', 'created', 'title'].includes(raw.sort) ? raw.sort : 'updated',
+    direction: ['asc','desc'].includes(raw.direction) ? raw.direction : raw.sort === 'title' ? 'asc' : 'desc',
+    type_group: raw.type_group === true,
     layout: ['grid','list','compact-grid','compact-list'].includes(raw.layout) ? raw.layout : 'grid',
     anchor: typeof raw.anchor?.id === 'string' && Number.isFinite(raw.anchor.top) ? raw.anchor : null,
     offset: Number.isInteger(raw.offset) && raw.offset > 0 ? raw.offset : 0,
