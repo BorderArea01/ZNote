@@ -1,4 +1,5 @@
 import {isImageGroup} from './image-group.js';
+import {detachImageFromGroup} from './group-detach.js';
 import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { VirtualItems } from './VirtualItems.jsx';
@@ -131,6 +132,7 @@ export default function Workspace({
   const [purging,setPurging]=useState(null);
   const [selectionRows,setSelectionRows]=useState({}),[groupSelecting,setGroupSelecting]=useState(false);
   const groupRequest=useRef(0);
+  const detailDetachPlan=useRef(null);
   const [groupPicker,setGroupPicker]=useState(null);
   const [selectionProgress, setSelectionProgress] = useState(null), [knownGroups, setKnownGroups] = useState({});
   const selectionRequest = useRef(null);
@@ -306,7 +308,7 @@ export default function Workspace({
       if(request!==groupRequest.current||current!==generation.current)return;
       const members=result.rows.map(row=>({...itemById.get(row.id),...selectionRows[row.id],...row}));
       setKnownGroups(previous=>({...previous,...result.groups}));
-      if(picker){setToast('');setGroupPicker({title:cards[0].group_title||cards[0].title,rows:members});return;}
+      if(picker){setToast('');setGroupPicker({title:cards[0].group_title||cards[0].title,groupKey:cards[0].group_key,rows:members});return;}
       const memberIds=members.map(row=>row.id);
       let ids;
       if(mode==='invert'){
@@ -753,6 +755,21 @@ export default function Workspace({
     } catch (e) {
       if(item.kind==='video')videoProgress.allowItem(item.id);
       notify(e.message);
+    }
+  }
+  async function detachFromGroup(row,retryPlan=null) {
+    try {
+      const result=await detachImageFromGroup(row,retryPlan||((detailDetachPlan.current?.id===row.id&&detailDetachPlan.current.plan)||null));
+      detailDetachPlan.current=null;
+      const key=row.group_key;
+      if(key)setKnownGroups(previous=>({...previous,[key]:(previous[key]||[]).filter(id=>id!==row.id)}));
+      if(selected?.id===row.id){setGallery(result.item?[result.item]:null);setSelected(result.item||null)}
+      saved(result.item?{...result,items:[result.item]}:result);
+      notify('已将 1 张图片移出图片组，可撤销',result.undo);
+      return result;
+    } catch(e) {
+      detailDetachPlan.current=e.retryPlan?{id:row.id,plan:e.retryPlan}:null;
+      throw e;
     }
   }
   async function batchTrash() {
@@ -1452,6 +1469,7 @@ export default function Workspace({
           onSaved={saved}
           onTagSearch={tag=>{closeDetail();setImageExpanded(false);setView('all');setQuery('');setSearch('');setSelectedTags([tag]);setTagMode('all');setMobile(false);}}
           onSelectGroup={selectGroup}
+          onDetachGroup={detachFromGroup}
           groupSelecting={groupSelecting}
           onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
           onDelete={remove}
@@ -1482,7 +1500,7 @@ export default function Workspace({
         />
       )}
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
-      {groupPicker&&<GroupSelectionDialog group={groupPicker} selected={selectedIds} onClose={()=>setGroupPicker(null)} onApply={ids=>{const next=changeSelection(changeSelection(selection,groupPicker.rows.map(row=>row.id),'remove'),ids,'add');setSelectionRows(previous=>({...previous,...Object.fromEntries(groupPicker.rows.map(row=>[row.id,row]))}));setSelection(next);setGroupPicker(null);}}/>}
+      {groupPicker&&<GroupSelectionDialog group={groupPicker} selected={selectedIds} onClose={()=>setGroupPicker(null)} onApply={ids=>{const next=changeSelection(changeSelection(selection,groupPicker.rows.map(row=>row.id),'remove'),ids,'add');setSelectionRows(previous=>({...previous,...Object.fromEntries(groupPicker.rows.map(row=>[row.id,row]))}));setSelection(next);setGroupPicker(null);}} onDetach={detachFromGroup} onDetached={()=>setGroupPicker(null)}/>}
       {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={result => { saved(result); notify('已完成批量整理',result?.undo); }} />}
       {groupOrganizing && <React.Suspense fallback={null}><GroupOrganizeDialog items={chosenItems} library={actualCollection} onClose={() => setGroupOrganizing(false)} onDone={result => { setSelecting(false); setSelection([]); setSelectionRows({}); saved(result); notify(`已整理 ${result.changed_count} 张图片${result.copied_count ? `，其中 ${result.copied_count} 张共享笔记原图` : ''}`,result.undo); }}/></React.Suspense>}
       {settings && (

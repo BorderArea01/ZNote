@@ -52,6 +52,7 @@ import {
   Sparkles,
   MoreHorizontal,
   Undo2,
+  Unlink,
   History,
 } from "lucide-react";
 import "./style.css";
@@ -359,6 +360,7 @@ function Detail({
   onSaved,
   onGroupOrdered,
   onSelectGroup,
+  onDetachGroup,
   groupSelecting,
   onDelete,
   onRestore,
@@ -474,7 +476,7 @@ function Detail({
       const failures=result.image_archive?.failures||[];
       if(failures.length)setError(`${failures.length} 张配图暂未归档：${failures[0].error}。可再次点击归档重试。`);
       notify(result.moved_count?`已移动整组 ${result.moved_count} 张图片${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存',failures.length?null:result.undo);
-      return true;
+      return result;
     } catch (e) {
       videoProgress?.allowItem(item.id);
       setError(e.message);
@@ -487,6 +489,14 @@ function Detail({
     if (busy || galleryBusy || copying || sorting) return;
     if (dirty && !(await save())) return;
     return onStep?.(delta);
+  }
+  async function detachCurrent(){
+    if(busy||!onDetachGroup)return;
+    const current=dirty?await save():item;if(!current)return;
+    setBusy(true);setError('');
+    try{const result=await onDetachGroup(current);if(result.item)setItem(result.item)}
+    catch(e){setError(e.status?e.message:'尚未确认移出结果，请再次点击“移出图片组”；不会重复操作。')}
+    finally{setBusy(false)}
   }
   const swipeDisabled=busy||galleryBusy||copying||sorting||!!lightbox;
   const imageSwipe=useImageSwipe({identity:item.id,disabled:swipeDisabled,onTap:()=>setLightbox(item.url),onSwipe:delta=>{if(delta<0?previousAvailable:nextAvailable)void step(delta);}});
@@ -588,6 +598,7 @@ function Detail({
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
             {isImageGroup(item)&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
             {isImageGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
+            {isImageGroup(item)&&!item.group_key?.startsWith('note:')&&onDetachGroup&&<button onClick={detachCurrent} disabled={busy}><Unlink size={14}/>移出图片组</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
             <button onClick={async () => { if (!dirty || await save()) setCopying(true); }} disabled={busy}>复用到其他知识库</button>
           </div>}
