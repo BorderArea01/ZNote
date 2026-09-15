@@ -1,5 +1,5 @@
 export const PAGE_SIZE = 60;
-export const WINDOW_LIMIT = 600;
+export const WINDOW_LIMIT = 300;
 
 // Pages belong to one server event cursor. Never silently deduplicate a shifted
 // offset: that would make later pages skip records.

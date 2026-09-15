@@ -53,6 +53,7 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-virtual]'));
   report.mountedCardsFor360 = await page.locator('.item-card').count(); assert.ok(report.mountedCardsFor360 < 60);
   await page.evaluate(() => window.scrollTo(0, 17000)); await page.waitForTimeout(450);
+  await page.getByRole('button', { name: '回到列表开头', exact: true }).waitFor();
   const anchor = await position(); assert.ok(anchor);
   await choose('独立笔记库'); await loaded(); assert.equal(await page.locator('.item-card').count(), 1);
   await page.getByRole('button', { name: '列表视图', exact: true }).click();
@@ -69,7 +70,7 @@ try {
   assert.equal((await page.locator('.browse-pagination').getAttribute('data-window-offset')), '0');
   assert.equal(await page.getByRole('button', { name: '继续上次浏览位置', exact: true }).count(), 0);
   await page.getByRole('button', { name: '选择内容', exact: true }).click(); await loaded();
-  await page.evaluate(() => scrollTo(0, 0));
+  await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(100);
   const cards = page.locator('.card-main');
   await cards.nth(1).click(); await cards.nth(7).click({ modifiers: ['Shift'] });
   await page.getByText('已选 7 项', { exact: true }).waitFor();
@@ -78,9 +79,10 @@ try {
   // Preserve off-page row versions too, so actions after a refresh still work.
   await page.getByRole('button', { name: '加载更多内容', exact: true }).click();
   await page.getByRole('button', { name: '加载更多内容', exact: true }).waitFor();
-  await page.locator('.card-main').nth(70).click();
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight - innerHeight)); await page.waitForTimeout(100);
+  await page.locator('.card-main').last().click();
   await page.getByText('已选 4 项', { exact: true }).waitFor();
-  await page.evaluate(() => scrollTo(0, 0));
+  await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(150);
   const beforeFocus = await page.locator('.item-card').first().getAttribute('data-item-id');
   await post('/api/items', { collection_id: a.id, title: '新增笔记', content: '来自其他设备' });
   await page.evaluate(() => dispatchEvent(new Event('focus')));

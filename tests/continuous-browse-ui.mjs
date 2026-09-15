@@ -18,7 +18,7 @@ try{
  await page.getByRole('checkbox',{name:'滚动自动加载',exact:true}).check();await page.waitForFunction(()=>Number(document.querySelector('.browse-pagination')?.dataset.windowSize)>=120);await stable();
  const idleStart=requests.length;await page.waitForTimeout(650);assert.equal(requests.length,idleStart,'idle footer must not pull the whole library');
  await page.route('**/api/items?**',async route=>{await new Promise(r=>setTimeout(r,120));await route.continue()});
- let peak=0;for(let i=0;i<20;i++){await nextPage();const s=await windowState();assert.ok(s.size<=600);peak=Math.max(peak,await page.locator('.item-card').count());}
+ let peak=0;for(let i=0;i<20;i++){await nextPage();const s=await windowState();assert.ok(s.size<=300);peak=Math.max(peak,await page.locator('.item-card').count());}
  const state=await windowState();assert.ok(state.offset>0);assert.ok(peak<100);assert.ok(await page.getByText('已选 1 项',{exact:true}).count());
  await page.getByRole('checkbox',{name:'滚动自动加载',exact:true}).uncheck();await stable();
  // Cache eviction never discards selected rows or breaks bulk operations.
@@ -38,5 +38,5 @@ try{
  await page.locator('.collections-nav').getByRole('button',{name:/^另一个库 /}).click();await loaded();await page.waitForTimeout(600);assert.equal(await page.locator('.item-card').count(),1);assert.equal(await page.locator('.item-card').getAttribute('data-item-id'),note.id);await page.getByRole('button',{name:'打开 长篇笔记',exact:true}).click();await page.getByRole('dialog').waitFor();assert.ok(await page.getByText(/末尾不能丢失/).count());await page.keyboard.press('Escape');
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.palette='slate'});await page.waitForTimeout(250);await page.screenshot({path:resolve('artifacts/v0919-browse-mobile.png')});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.reload();await loaded();assert.equal(await page.getByRole('checkbox',{name:'滚动自动加载',exact:true}).isChecked(),false);assert.deepEqual(errors,[]);
- const report={peakMountedCards:peak,windowAfterLongBrowse:state,pageRequests:requests.length,checks:['automatic next pages','600-record bound','retained selection','retry without loop','changed cursor pauses','previous page anchor','full note detail','mobile','persisted manual mode']};await writeFile('artifacts/v0919-browse-verification.json',JSON.stringify(report,null,2));console.log('PASS',JSON.stringify(report));
+ const report={peakMountedCards:peak,windowAfterLongBrowse:state,pageRequests:requests.length,checks:['automatic next pages','300-record bound','retained selection','retry without loop','changed cursor pauses','previous page anchor','full note detail','mobile','persisted manual mode']};await writeFile('artifacts/v0919-browse-verification.json',JSON.stringify(report,null,2));console.log('PASS',JSON.stringify(report));
 }finally{await browser.close();await runtime.trash.stop();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close()}

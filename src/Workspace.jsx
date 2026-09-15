@@ -168,6 +168,7 @@ export default function Workspace({
   const [pageOffset, setPageOffset] = useState(0), [paging, setPaging] = useState(false);
   const [autoPages, setAutoPages] = useState(readAutoPages), [pageError, setPageError] = useState(null);
   const [resumeBrowse, setResumeBrowse] = useState(null);
+  const [awayFromStart, setAwayFromStart] = useState(false);
   const selectedRowsRef = useRef(chosenItems); selectedRowsRef.current = chosenItems;
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
   const pagingRequest = useRef(null), restoreAnchor = useRef(null), pendingBrowse = useRef(null);
@@ -198,6 +199,13 @@ export default function Workspace({
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('pagehide', rememberBrowse); document.addEventListener('visibilitychange', leave);
     return () => { clearTimeout(timer); window.removeEventListener('scroll', schedule); window.removeEventListener('pagehide', rememberBrowse); document.removeEventListener('visibilitychange', leave); };
+  }, []);
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => { frame = 0; setAwayFromStart(old => { const next = window.scrollY > Math.max(600, innerHeight * .8); return old === next ? old : next; }); };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    window.addEventListener('scroll', schedule, {passive:true}); window.addEventListener('resize', schedule); measure();
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule); };
   }, []);
   useEffect(() => { if (ready && !loading) rememberBrowse(); }, [ready, loading, query, selectedTags, tagMode, sort, layout, view, collection]);
   useLayoutEffect(() => {
@@ -378,8 +386,8 @@ export default function Workspace({
     pendingBrowse.current = resumeBrowse.anchor; setResumeBrowse(null); setUpdatesAvailable(false); setRevision(n => n + 1);
   };
   const jumpToStart = () => {
-    pendingBrowse.current = null; restoreAnchor.current = {id:'',top:0}; setResumeBrowse(null); setUpdatesAvailable(false);
-    window.scrollTo({top:0,behavior:'instant'}); setRevision(n => n + 1);
+    pendingBrowse.current = null; restoreAnchor.current = {id:'',top:0}; setResumeBrowse(null); setUpdatesAvailable(false); setAwayFromStart(false);
+    window.scrollTo({top:0,behavior:'instant'}); if (pageOffset > 0) setRevision(n => n + 1);
   };
   const chooseCollection = (id) => {
     if(id!==collection)rememberRoute(id,'all');
@@ -1225,7 +1233,7 @@ export default function Workspace({
               ) : (
                 <>
                 {resumeBrowse?.library===collection&&resumeBrowse.view===view&&resumeBrowse.query===query&&resumeBrowse.sort===sort&&resumeBrowse.mode===tagMode&&resumeBrowse.tags.join('\0')===selectedTags.join('\0')&&pageOffset===0&&<div className="browse-resume"><button onClick={resumeLastBrowse}>继续上次浏览位置</button><HelpHint label="浏览位置">当前先显示列表开头。选择继续后会回到此知识库和分类上次看到的内容；筛选、排序和视图设置已经保留。</HelpHint><button aria-label="忽略上次浏览位置" onClick={()=>setResumeBrowse(null)}><X size={14}/></button></div>}
-                {pageOffset > 0 && <div className="browse-window-actions"><button className="load-more" disabled={paging} onClick={jumpToStart}>{sort==='title'?'回到列表开头':'回到最新内容'}</button><button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : sort==='title'?'加载靠前内容':'加载较新内容'}</button><HelpHint label="分页导航">浏览很长的列表时，只保留当前位置附近的内容以降低内存占用。可逐批向前加载，也可直接回到列表开头；当前筛选和已选内容保留。</HelpHint></div>}
+                {(awayFromStart||pageOffset>0) && !selecting && !selected && <div className="browse-window-actions"><button className="load-more" disabled={paging} onClick={jumpToStart}>{sort==='title'?'回到列表开头':'回到最新内容'}</button>{pageOffset>0&&<button className="load-more" disabled={paging} onClick={() => loadPage(true)}>{paging ? '正在加载…' : sort==='title'?'加载靠前内容':'加载较新内容'}</button>}<HelpHint label="分页导航">向下浏览约一屏后即可直接回到列表开头。长列表只在内存中保留当前位置附近 300 项摘要和少量可见卡片；当前筛选和已选内容保留。</HelpHint></div>}
                 <VirtualItems selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
                     <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&cardSelected(item)?' is-selected':selecting&&cardPartial(item)?' is-partial':''}`} key={item.id}>
@@ -1353,7 +1361,7 @@ export default function Workspace({
                 </>
               )}
               {!!items.length && !loading && <div className="browse-pagination" data-window-size={items.length} data-window-offset={pageOffset}>
-                <div className="browse-pagination-meta"><span>显示 {pageOffset + 1}–{pageOffset + items.length} / {total} 项</span><label><input type="checkbox" checked={autoPages} onChange={e => { setAutoPages(e.target.checked); saveAutoPages(e.target.checked); }}/>滚动自动加载</label><HelpHint label="连续浏览">列表只保留附近 600 项摘要，向前可加载之前的内容；已选内容保留。打开详情再读取完整正文。网络失败或内容更新时暂停加载。</HelpHint></div>
+                <div className="browse-pagination-meta"><span>显示 {pageOffset + 1}–{pageOffset + items.length} / {total} 项</span><label><input type="checkbox" checked={autoPages} onChange={e => { setAutoPages(e.target.checked); saveAutoPages(e.target.checked); }}/>滚动自动加载</label><HelpHint label="连续浏览">列表只保留附近 300 项摘要，向前可加载之前的内容；已选内容保留。打开详情再读取完整正文。网络失败或内容更新时暂停加载。</HelpHint></div>
                 {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen && !readingOpen && !tasksOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
               </div>}
             </>

@@ -885,7 +885,7 @@ export function createApp({
     previewCache.delete(id);
     previewCache.set(id, buffer);
     previewBytes += buffer.length;
-    while (previewBytes > 32 * 1024 * 1024) {
+    while (previewBytes > 16 * 1024 * 1024) {
       const first = previewCache.keys().next().value;
       previewBytes -= previewCache.get(first).length;
       previewCache.delete(first);

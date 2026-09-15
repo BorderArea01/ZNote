@@ -8,9 +8,9 @@ import {extendPageWindow} from '../src/page-window.js';
 
 test('bounded page window traverses forward and backward without losing order',()=>{
  const all=Array.from({length:1847},(_,id)=>({id:String(id)})); let items=all.slice(0,60),offset=0;
- while(offset+items.length<all.length){const next=offset+items.length; ({items,offset}=extendPageWindow(items,offset,{offset:next,items:all.slice(next,next+60)},false));assert.ok(items.length<=600);assert.deepEqual(items,all.slice(offset,offset+items.length));}
+ while(offset+items.length<all.length){const next=offset+items.length; ({items,offset}=extendPageWindow(items,offset,{offset:next,items:all.slice(next,next+60)},false));assert.ok(items.length<=300);assert.deepEqual(items,all.slice(offset,offset+items.length));}
  assert.equal(offset+items.length,1847);
- while(offset){const next=Math.max(0,offset-60);({items,offset}=extendPageWindow(items,offset,{offset:next,items:all.slice(next,offset)},true));assert.ok(items.length<=600);assert.deepEqual(items,all.slice(offset,offset+items.length));}
+ while(offset){const next=Math.max(0,offset-60);({items,offset}=extendPageWindow(items,offset,{offset:next,items:all.slice(next,offset)},true));assert.ok(items.length<=300);assert.deepEqual(items,all.slice(offset,offset+items.length));}
  assert.throws(()=>extendPageWindow(items,0,{offset:600,items:[items[0]]},false));
 });
 

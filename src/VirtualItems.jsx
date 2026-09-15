@@ -5,7 +5,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 export function VirtualItems({ items, layout, restoreId, selecting, children }) {
   const root = useRef(null);
   const [windowed, setWindowed] = useState({ start: 0, end: 60, columns: 1, stride: 350, gap: 0, focused: -1 });
-  const virtual = items.length > 120;
+  const virtual = items.length > 60;
   useLayoutEffect(() => {
     const node = root.current;
     let frame = 0;
@@ -16,8 +16,8 @@ export function VirtualItems({ items, layout, restoreId, selecting, children }) 
       const card = node.querySelector('.item-card');
       const gap = parseFloat(css.rowGap) || 0;
       const stride = (card?.offsetHeight || 350) + gap;
-      const first = Math.max(0, Math.floor(-node.getBoundingClientRect().top / stride) - 3);
-      const visible = Math.ceil(innerHeight / stride) + 7;
+      const first = Math.max(0, Math.floor(-node.getBoundingClientRect().top / stride) - 2);
+      const visible = Math.ceil(innerHeight / stride) + 5;
       const start = Math.min(first, Math.max(0, Math.ceil(items.length / columns) - visible)) * columns;
       const focusedId = document.activeElement?.closest('.item-card')?.dataset.itemId;
       const focused = focusedId ? items.findIndex(i => i.id === focusedId) : -1;
