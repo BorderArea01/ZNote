@@ -13,6 +13,7 @@ public class PageActivity extends Activity {
     TextView title=new TextView(this);title.setText("手机采集交互测试\n\n图标分享按钮 · 独立分享面板\n\n仅用于验证交互，不代替真实 App 验收。");title.setTextSize(21);page.addView(title);
     if(getIntent().getBooleanExtra("list",false)){TextView list=new TextView(this);list.setText("稍后再看\n视频甲\n视频乙\n视频丙");page.addView(list);return;}
     if(!browser){Button share=new Button(this);share.setText("");share.setContentDescription("分享，按钮");share.setCompoundDrawablesWithIntrinsicBounds(android.R.drawable.ic_menu_share,0,0,0);page.addView(share);share.setOnClickListener(v->{
+        if(getIntent().getBooleanExtra("slow",false))try{Thread.sleep(5000);}catch(InterruptedException ignored){}
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(20,20,20,20);TextView header=new TextView(this);header.setText("分享至");header.setTextSize(22);panel.addView(header);
         LinearLayout tile=new LinearLayout(this);tile.setPadding(30,30,30,30);TextView icon=new TextView(this);icon.setText("↗");tile.addView(icon);TextView label=new TextView(this);label.setText("复制\n链接");tile.addView(label);panel.addView(tile);
         AlertDialog dialog=new AlertDialog.Builder(this).setView(panel).create();tile.setOnClickListener(w->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("作品","分享作品 "+url+"，复制本条信息打开 App"));dialog.dismiss();});dialog.show();dialog.getWindow().setGravity(Gravity.BOTTOM);

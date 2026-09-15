@@ -17,6 +17,7 @@ import java.util.regex.*;
 
 /** One user-triggered operation at a time. No tree traversal on the UI thread. */
 public class CaptureAssistService extends AccessibilityService {
+    static CaptureAssistService current; // Settings activity shares only this lightweight process.
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService reader=Executors.newSingleThreadExecutor();
     private WindowManager manager;
@@ -28,23 +29,18 @@ public class CaptureAssistService extends AccessibilityService {
     private Future<?> operation;
     private final java.util.concurrent.atomic.AtomicBoolean reading=new java.util.concurrent.atomic.AtomicBoolean();
     private String lastMessage="";
-    private final BroadcastReceiver controls=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent intent){
-        String command=intent.getStringExtra("command");
-        record("control",String.valueOf(command));
-        try{if("show".equals(command)){prefs().edit().putBoolean("capture_bubble",true).apply();showBubble();}
-        else if("hide".equals(command)){prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();}
-        else if("cancel".equals(command)){cancel();message("已取消，可重新采集");}}
-        catch(RuntimeException e){record("window",e.getClass().getSimpleName());}
-        ResultReceiver reply=intent.getParcelableExtra("reply");if(reply!=null){Bundle state=new Bundle();state.putBoolean("visible",bubble!=null&&bubble.isAttachedToWindow());state.putBoolean("busy",busy);state.putInt("pid",android.os.Process.myPid());state.putString("message",lastMessage);reply.send(0,state);record("control_replied",String.valueOf(command));}
-    }};
-    private SharedPreferences prefs(){return getSharedPreferences("MainActivity",MODE_PRIVATE);}
+    private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
-    @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag") // Android 10–12 use our signature permission; 13+ also reject exported delivery.
-    @Override public void onCreate(){super.onCreate();if(Build.VERSION.SDK_INT>=33)registerReceiver(controls,new IntentFilter(CaptureControl.ACTION),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(controls,new IntentFilter(CaptureControl.ACTION),getPackageName()+".CAPTURE_CONTROL",null);}
-    @Override protected void onServiceConnected(){manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);record("connected","ready");if(prefs().getBoolean("capture_bubble",true))showBubble();}
+    @Override public void onCreate(){
+        super.onCreate();
+        // SharedPreferences is not a multi-process store. Migrate only the three
+        // capture keys, then leave the main process's connection settings alone.
+        if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
+    }
+    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);record("connected","ready");if(prefs().getBoolean("capture_bubble",true))showBubble();}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
-    @Override public void onDestroy(){unregisterReceiver(controls);hideBubble();reader.shutdownNow();super.onDestroy();}
+    @Override public void onDestroy(){hideBubble();reader.shutdownNow();if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;render();}
     private void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);}
     private int width(){return getResources().getDisplayMetrics().widthPixels;}
@@ -54,6 +50,9 @@ public class CaptureAssistService extends AccessibilityService {
         TextView b=new TextView(this);b.setText(text);b.setContentDescription(description);b.setTextSize(14);b.setSingleLine(true);b.setEllipsize(android.text.TextUtils.TruncateAt.END);b.setTextColor(0xffecedf5);b.setGravity(Gravity.CENTER);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setFocusable(true);b.setClickable(true);
         b.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x336f82ff),shape(0x00202020,10),shape(0xffffffff,10)));b.setOnClickListener(v->{try{action.run();}catch(RuntimeException e){record("control_failed",e.getClass().getSimpleName());Toast.makeText(this,"操作未完成，请重新显示悬浮窗",Toast.LENGTH_LONG).show();}});return b;
     }
+    boolean visible(){return bubble!=null&&bubble.isAttachedToWindow();}
+    boolean capturing(){return busy;}
+    void setVisible(boolean value){prefs().edit().putBoolean("capture_bubble",value).apply();if(value)showBubble();else hideBubble();}
     public void showBubble(){
         if(manager==null)return;
         if(bubble!=null&&!bubble.isAttachedToWindow())bubble=null;

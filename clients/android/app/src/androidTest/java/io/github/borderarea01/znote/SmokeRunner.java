@@ -47,12 +47,20 @@ public class SmokeRunner extends Instrumentation {
     }
     private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
     private Bundle captureCommand(String command)throws Exception{
-        CompletableFuture<Bundle> result=new CompletableFuture<>();CaptureControl.send(getTargetContext(),command,new ResultReceiver(null){@Override protected void onReceiveResult(int code,Bundle data){result.complete(data);}});try{return result.get(5,TimeUnit.SECONDS);}catch(TimeoutException e){throw new Exception("Capture command timed out: "+command+" target="+getTargetContext().getPackageName(),e);}
+        getTargetContext().startActivity(new Intent(getTargetContext(),CaptureAssistActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(400);
+        if(!"status".equals(command))touchText("show".equals(command)?"显示悬浮窗":"关闭悬浮窗");
+        long deadline=SystemClock.uptimeMillis()+5000;Bundle state=null;
+        while(SystemClock.uptimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
+            if(root!=null){for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("采集辅助已连接")){String text=String.valueOf(node.getText());state=new Bundle();state.putBoolean("visible",text.contains("已显示"));}root.recycle();}if(state!=null)break;Thread.sleep(100);
+        }
+        if(state==null)throw new Exception("Capture settings could not control window: "+command);
+        for(ActivityManager.RunningAppProcessInfo process:((ActivityManager)getTargetContext().getSystemService(Context.ACTIVITY_SERVICE)).getRunningAppProcesses())if(process.processName.equals(getTargetContext().getPackageName()+":capture"))state.putInt("pid",process.pid);
+        shell("input keyevent 4");Thread.sleep(250);return state;
     }
     private void overlayTests()throws Exception{
         android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
         shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");
-        Thread.sleep(1000);Bundle state=captureCommand("show");if(state.getInt("pid")==android.os.Process.myPid())throw new Exception("Capture must not share the WebView process");
+        Thread.sleep(1000);Bundle state=captureCommand("show");if(state.getInt("pid")==0||state.getInt("pid")==android.os.Process.myPid())throw new Exception("Capture must not share the WebView process");
         // An unsupported app must not have its content or old clipboard imported.
         android.graphics.Rect first=overlayControl("Z");Thread.sleep(400);first=overlayControl("Z");long started=SystemClock.uptimeMillis();
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0),firstUp=MotionEvent.obtain(started,started+60,1,first.centerX(),first.centerY(),0);
@@ -74,6 +82,9 @@ public class SmokeRunner extends Instrumentation {
             nativeUntil(captured,expected);runOnMainSync(captured::finish);Thread.sleep(350);
             checkpoint("On-demand current-link flow passed for simulated "+pkg);
         }
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
+        overlayTouch("Z");ActivityMonitor cancelled=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("Z");overlayControl("获取当前页面");
+        if(waitForMonitorWithTimeout(cancelled,6000)!=null)throw new Exception("Cancelled capture opened a stale share page");removeMonitor(cancelled);overlayTouch("收起");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
         overlayTouch("Z");overlayTouch("获取当前页面");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
         overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("Z");

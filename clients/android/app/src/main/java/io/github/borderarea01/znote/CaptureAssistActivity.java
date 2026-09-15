@@ -3,9 +3,6 @@ package io.github.borderarea01.znote;
 import android.app.*;
 import android.content.*;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.ResultReceiver;
 import android.provider.Settings;
 import android.view.*;
 import android.widget.*;
@@ -13,8 +10,6 @@ import android.widget.*;
 /** Explicit, optional setup. The system accessibility permission is never silently enabled. */
 public class CaptureAssistActivity extends Activity {
     private TextView status;
-    private final Handler handler=new Handler(Looper.getMainLooper());
-    private int request=0;
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private Button button(String text,Runnable run){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setOnClickListener(v->run.run());return b;}
     @Override public void onCreate(Bundle state){
@@ -32,10 +27,10 @@ public class CaptureAssistActivity extends Activity {
         root.addView(button("返回",this::finish));
     }
     private void command(String action){
-        final int token=++request;status.setText("正在连接采集辅助…");
-        Runnable timeout=()->{if(token==request)status.setText("采集辅助未连接，请在系统设置中重新开启 ZNote 点击采集");};handler.postDelayed(timeout,1500);
-        CaptureControl.send(this,action,new ResultReceiver(handler){@Override protected void onReceiveResult(int code,Bundle state){if(token!=request||isFinishing())return;handler.removeCallbacks(timeout);status.setText("采集辅助已连接 · "+(state.getBoolean("visible")?"悬浮窗已显示":"悬浮窗已关闭")+(state.getBoolean("busy")?" · 正在识别":""));}});
+        CaptureAssistService service=CaptureAssistService.current;
+        if(service==null){status.setText("采集辅助未连接，请在系统设置中重新开启 ZNote 点击采集");return;}
+        if("show".equals(action))service.setVisible(true);else if("hide".equals(action))service.setVisible(false);
+        status.setText("采集辅助已连接 · "+(service.visible()?"悬浮窗已显示":"悬浮窗已关闭")+(service.capturing()?" · 正在识别":""));
     }
     @Override protected void onResume(){super.onResume();command("status");}
-    @Override protected void onDestroy(){request++;handler.removeCallbacksAndMessages(null);super.onDestroy();}
 }
