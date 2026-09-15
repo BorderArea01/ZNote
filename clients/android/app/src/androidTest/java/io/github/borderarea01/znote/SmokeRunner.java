@@ -70,7 +70,7 @@ public class SmokeRunner extends Instrumentation {
         android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
         Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
-        captureCommand("hide");captureCommand("show");if(overlayControl("Z").left>20)throw new Exception("Dock position not retained");
+        captureCommand("hide");captureCommand("show");android.graphics.Rect restored=overlayControl("Z");if(restored.left>20||Math.abs(restored.top-after.top)>15)throw new Exception("Dock position not retained: "+after+" -> "+restored);
         checkpoint("Floating capture drag, edge collapse, persisted placement and unsupported-page recovery passed");
         for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
@@ -124,8 +124,8 @@ public class SmokeRunner extends Instrumentation {
         automation().executeShellCommand("input keyevent 4").close();
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
         checkpoint("System Back closes image detail while retaining library");
-        js("window.__refreshSeen=false;window.addEventListener('znote:refresh',()=>window.__refreshSeen=true,{once:true});true");
-        touchText("↻");until("window.__refreshSeen===true&&!!document.querySelector('.item-card')");checkpoint("Visible native refresh updates library without reloading the WebView");
+        js("window.__refreshSeen=false;window.__beforeRefresh=document.querySelector('.card-main');window.addEventListener('znote:refresh',()=>window.__refreshSeen=true,{once:true});true");
+        touchText("↻");until("window.__refreshSeen===true&&!window.__beforeRefresh.isConnected&&!document.querySelector('.loading-state')&&!!document.querySelector('.item-card')");checkpoint("Visible native refresh updates library without reloading the WebView");
         js("document.querySelector('.card-main').click();true");until("!!document.querySelector('.detail-dialog')");
         runOnMainSync(()->button(activity.getWindow().getDecorView(),"‹").performClick());
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
