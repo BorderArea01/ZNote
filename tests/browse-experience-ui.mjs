@@ -54,6 +54,9 @@ try {
   report.mountedCardsFor360 = await page.locator('.item-card').count(); assert.ok(report.mountedCardsFor360 < 60);
   await page.evaluate(() => window.scrollTo(0, 17000)); await page.waitForTimeout(450);
   await page.getByRole('button', { name: '回到列表开头', exact: true }).waitFor();
+  await page.getByRole('button', { name: '多选', exact: true }).tap(); await page.getByRole('button', { name: '退出多选', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '回到列表开头', exact: true }).count(), 0);
+  await page.getByRole('button', { name: '退出多选', exact: true }).tap(); await loaded();
   const anchor = await position(); assert.ok(anchor);
   await choose('独立笔记库'); await loaded(); assert.equal(await page.locator('.item-card').count(), 1);
   await page.getByRole('button', { name: '列表视图', exact: true }).click();

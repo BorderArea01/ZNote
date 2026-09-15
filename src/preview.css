@@ -67,7 +67,7 @@
 .note-detail .metadata-fields select { flex: none; min-height: 36px; }
 .note-detail .metadata-fields .tag-input-group { margin: 0; }
 .note-detail .tag-suggestions:empty { display: none; }
-.note-detail .detail-editor-content > .editor-toolbar { flex: 0 0 auto; margin: 0; padding: 6px 20px; }
+.note-detail .detail-editor-content > .note-editor-toolbar { flex:0 0 auto; width:calc(100% - 40px); margin:6px 20px; padding:5px; }
 .note-detail .detail-editor-content > .draft-conflict { flex:0 0 auto; margin:8px 20px 4px; max-height:30%; overflow:auto; }
 .note-detail .detail-editor-content > .markdown-preview, .note-detail .markdown-editor { flex: 1 1 0; min-height: 0; max-height: none; height: auto; width: calc(100% - 40px); margin: 0 20px; overflow: auto; overscroll-behavior: contain; resize: none; padding: 12px; }
 .note-detail .backlinks { flex: 0 0 auto; max-height: 66px; overflow: auto; margin: 8px 20px; padding-top: 6px; gap: 4px; }
@@ -95,7 +95,7 @@
   .note-gallery-dialog { width: 100%; height: 100dvh; max-height: 100dvh; }
   .note-detail { height: 100dvh; max-height: 100dvh; }
   .note-detail .note-properties { padding: 8px 12px 0; }
-  .note-detail .detail-editor-content > .editor-toolbar { padding: 6px 12px; }
+  .note-detail .detail-editor-content > .note-editor-toolbar { width:calc(100% - 24px); margin:4px 12px; padding:5px; }
   .note-detail .detail-editor-content > .draft-conflict { margin:8px 12px 4px; }
   .note-detail .detail-editor-content > .markdown-preview, .note-detail .markdown-editor { width: calc(100% - 24px); margin: 0 12px; }
   .note-detail .detail-bottom { padding: 8px 12px max(8px,env(safe-area-inset-bottom)); }

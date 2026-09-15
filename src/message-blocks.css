@@ -1,7 +1,7 @@
 /* A compact toolbar with related actions kept together, in every theme. */
-.note-detail .note-editor-toolbar { gap:12px; justify-content:space-between; border-bottom:1px solid var(--border); margin-bottom:6px; flex-wrap:wrap; }
+.note-detail .note-editor-toolbar { gap:8px; justify-content:space-between; width:calc(100% - 40px); margin:6px 20px; padding:5px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); box-shadow:0 3px 12px #0000000d; flex-wrap:wrap; }
 .note-detail .note-editor-toolbar > .note-editor-modes { flex:0 0 auto; gap:3px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:3px; }
-.note-detail .note-editor-toolbar > .note-editor-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; padding:0; background:transparent; }
+.note-detail .note-editor-toolbar > .note-editor-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:3px; padding:0; background:transparent; }
 .note-detail .note-editor-toolbar button { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:34px; padding:7px 10px; font-size:12px; line-height:1.2; color:var(--muted); border-radius:7px; }
 .note-detail .note-editor-toolbar button svg { flex-shrink:0; }
 .note-detail .note-editor-toolbar button:hover { color:var(--ink); background:var(--surface-2); }
@@ -28,7 +28,7 @@
 .message-block-editor { display:block; width:calc(100% - 24px); min-height:160px; max-height:50vh; resize:vertical; margin:12px; padding:12px; font:13px/1.9 "Cascadia Code",Consolas,monospace; tab-size:4; }
 .message-add { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; border:1px dashed var(--border); background:transparent; color:var(--muted); padding:10px; font-size:12px; }
 @media (max-width:600px) {
-  .note-detail .note-editor-toolbar { gap:6px; flex-wrap:nowrap; }
+  .note-detail .note-editor-toolbar { gap:4px; width:calc(100% - 24px); margin:4px 12px; flex-wrap:nowrap; }
   .note-detail .note-editor-toolbar > .note-editor-actions { gap:0; flex-wrap:nowrap; }
   .note-detail .note-editor-actions button { width:32px; padding:6px; }
   .note-detail .note-editor-actions button > span { display:none; }

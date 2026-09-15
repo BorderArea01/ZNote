@@ -17,7 +17,7 @@ export function SelectionEntry({selecting, disabled, onToggle}) {
     <button ref={entry} className="text-button" disabled={disabled} onClick={onToggle}>
       {selecting ? '退出选择' : '选择内容'}
     </button>
-    {above && !selecting && <button className="floating-selection-entry" aria-label="在当前位置多选" disabled={disabled} onClick={onToggle}>
+    {above && !selecting && <button className="floating-action-dock floating-selection-entry" aria-label="在当前位置多选" disabled={disabled} onClick={onToggle}>
       <CheckCheck size={18}/><span>多选</span>
     </button>}
   </>;
