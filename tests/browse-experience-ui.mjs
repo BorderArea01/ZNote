@@ -55,7 +55,7 @@ try {
   await page.evaluate(() => window.scrollTo(0, 17000)); await page.waitForTimeout(450);
   await page.getByRole('button', { name: '回到列表开头', exact: true }).waitFor();
   await page.getByRole('button', { name: '多选', exact: true }).tap(); await page.getByRole('button', { name: '退出多选', exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: '回到列表开头', exact: true }).count(), 0);
+  assert.equal(await page.locator('.browse-window-actions').count(), 0); // Selection has its own navigation; only the browsing dock must hide.
   await page.getByRole('button', { name: '退出多选', exact: true }).tap(); await loaded();
   const anchor = await position(); assert.ok(anchor);
   await choose('独立笔记库'); await loaded(); assert.equal(await page.locator('.item-card').count(), 1);

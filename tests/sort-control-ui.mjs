@@ -18,7 +18,7 @@ try{
  await page.waitForFunction(id=>document.querySelector('.item-card')?.dataset.itemId===id,video);
  assert.ok(await page.getByRole('button',{name:'视频上移',exact:true}).isDisabled());
  await page.getByRole('button',{name:'排序说明',exact:true}).tap();await page.getByRole('tooltip').waitFor();assert.ok(await page.getByRole('tooltip').isVisible());await page.getByRole('button',{name:'排序说明',exact:true}).tap();
- await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.palette='slate';});await page.screenshot({path:resolve(dir,'mobile-sort.png')});await page.getByRole('button',{name:'完成',exact:true}).tap();
+ await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.palette='slate';});await page.waitForTimeout(400);await page.screenshot({path:resolve(dir,'mobile-sort.png')});await page.getByRole('button',{name:'完成',exact:true}).tap();
  await page.reload();await page.waitForFunction(id=>document.querySelector('.item-card')?.dataset.itemId===id,video);
  await page.locator('.sort-trigger').tap();assert.equal(await page.locator('.type-order li').first().innerText().then(s=>s.includes('视频')),true);
  await page.keyboard.press('Escape');await page.locator('.sort-dialog').waitFor({state:'detached'});
