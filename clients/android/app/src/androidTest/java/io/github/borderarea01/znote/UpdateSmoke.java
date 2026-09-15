@@ -21,6 +21,7 @@ final class UpdateSmoke {
         long end=SystemClock.uptimeMillis()+10000;
         while(SystemClock.uptimeMillis()<end){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(root!=null){for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.equalsIgnoreCase(String.valueOf(n.getText()))&&n.isVisibleToUser()){if(n.refresh()&&n.isEnabled()&&n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){Thread.sleep(500);return;}}}Thread.sleep(150);}throw new Exception("Missing update control: "+text);
     }
+    private void awaitText(String text)throws Exception{long end=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<end){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.equalsIgnoreCase(String.valueOf(n.getText()))&&n.isVisibleToUser()&&n.isEnabled())return;Thread.sleep(150);}throw new Exception("Missing stable update screen: "+text);}
     static void catalog()throws Exception{
         if(AppUpdates.compare("0.10.0-beta.10","0.10.0-beta.9")<=0||AppUpdates.compare("0.10.0","0.10.0-beta.99")<=0)throw new Exception("Version order failed");
         JSONObject asset=new JSONObject().put("name","ZNote-0.10.0-beta.11-android.apk").put("browser_download_url",AppUpdates.REPOSITORY+"releases/download/android-v0.10.0-beta.11/ZNote-0.10.0-beta.11-android.apk").put("digest","sha256:"+"a".repeat(64)).put("size",123);
@@ -46,7 +47,7 @@ final class UpdateSmoke {
         Thread.sleep(800);android.graphics.Bitmap screenshot=automation().takeScreenshot();try(OutputStream out=new FileOutputStream(new File(c.getExternalFilesDir(null),"update-screen.png"))){screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}screenshot.recycle();
         shell("appops set "+c.getPackageName()+" REQUEST_INSTALL_PACKAGES deny");tap("安装更新");Thread.sleep(400);shell("input keyevent 4");Thread.sleep(400);
         if(!file.exists())throw new Exception("Permission refusal deleted downloaded update");
-        shell("appops set "+c.getPackageName()+" REQUEST_INSTALL_PACKAGES allow");tap("安装更新");tap("Cancel");Thread.sleep(300);
+        shell("appops set "+c.getPackageName()+" REQUEST_INSTALL_PACKAGES allow");tap("安装更新");awaitText("Update");tap("Cancel");awaitText("安装更新");
         if(!file.exists())throw new Exception("Installer cancellation deleted update");report("Update screen restore, permission refusal and installer cancellation passed");
         report("Opening installer again after cancellation");tap("安装更新");report("ZNOTE_UPDATE_INSTALL_CONFIRM");tap("Update");
         Thread.sleep(15000);throw new Exception("Self update did not replace the process");

@@ -43,12 +43,19 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();}
+    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
     @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;render();}
     void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);if(!diagnostics.isShutdown())diagnostics.execute(()->writeDiagnostic(event,detail));}
+    private void recordEnvironment(){if(diagnostics.isShutdown())return;diagnostics.execute(()->{try{
+        android.app.ActivityManager am=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
+        PowerManager power=(PowerManager)getSystemService(POWER_SERVICE);
+        android.app.ActivityManager.RunningAppProcessInfo state=new android.app.ActivityManager.RunningAppProcessInfo();android.app.ActivityManager.getMyMemoryState(state);
+        record("environment","device="+Build.MANUFACTURER+"/"+Build.MODEL+" android="+Build.VERSION.RELEASE+" sdk="+Build.VERSION.SDK_INT+" background_restricted="+am.isBackgroundRestricted()+" battery_exempt="+power.isIgnoringBatteryOptimizations(getPackageName())+" importance="+state.importance);
+        }catch(RuntimeException ignored){}});
+    }
     private void writeDiagnostic(String event,String detail){try{java.io.File file=new java.io.File(getFilesDir(),"capture-diagnostics.log");if(file.length()>65536){java.io.File previous=new java.io.File(getFilesDir(),"capture-diagnostics.previous.log");if(previous.exists())previous.delete();file.renameTo(previous);}try(java.io.FileWriter out=new java.io.FileWriter(file,true)){out.write(System.currentTimeMillis()+" pid="+android.os.Process.myPid()+" "+event+" "+detail+"\n");}}catch(java.io.IOException ignored){}}
     private int width(){return getResources().getDisplayMetrics().widthPixels;}
     private int height(){return getResources().getDisplayMetrics().heightPixels;}
@@ -98,7 +105,7 @@ public class CaptureAssistService extends AccessibilityService {
         panel.setVisibility(expanded?View.VISIBLE:View.GONE);dock();
     }
     private void drag(View handle){handle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;boolean moved;final int slop=ViewConfiguration.get(CaptureAssistService.this).getScaledTouchSlop();public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
-        case MotionEvent.ACTION_DOWN:record("touch_dispatch","delay_ms="+Math.max(0,SystemClock.uptimeMillis()-e.getEventTime()));x=e.getRawX();y=e.getRawY();ox=layout.x;oy=layout.y;moved=false;v.setPressed(true);return true;
+        case MotionEvent.ACTION_DOWN:recordEnvironment();record("touch_dispatch","delay_ms="+Math.max(0,SystemClock.uptimeMillis()-e.getEventTime()));x=e.getRawX();y=e.getRawY();ox=layout.x;oy=layout.y;moved=false;v.setPressed(true);return true;
         case MotionEvent.ACTION_MOVE:float dx=e.getRawX()-x,dy=e.getRawY()-y;if(Math.hypot(dx,dy)>slop)moved=true;if(moved){v.setPressed(false);layout.x=Math.max(0,Math.min(width()-layout.width,ox+(int)dx));layout.y=Math.max(dp(24),Math.min(height()-bubble.getHeight()-dp(32),oy+(int)dy));updateWindow();}return true;
         case MotionEvent.ACTION_UP:v.setPressed(false);if(!moved){tapAt=e.getEventTime();v.performClick();}else{prefs().edit().putBoolean("capture_right",layout.x+layout.width/2>width()/2).putFloat("capture_y",Math.max(0,Math.min(1,layout.y/(float)Math.max(1,height()-dp(96))))).apply();expanded=false;render();}return true;
         case MotionEvent.ACTION_CANCEL:v.setPressed(false);dock();return true;default:return false;}}});}

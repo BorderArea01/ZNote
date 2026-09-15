@@ -58,6 +58,7 @@ public class SmokeRunner extends Instrumentation {
         }
         if(state==null)throw new Exception("Capture settings could not control window: "+command);
         for(ActivityManager.RunningAppProcessInfo process:((ActivityManager)getTargetContext().getSystemService(Context.ACTIVITY_SERVICE)).getRunningAppProcesses())if(process.processName.equals(getTargetContext().getPackageName()+":capture"))state.putInt("pid",process.pid);
+        android.graphics.Bitmap settingsShot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-settings.png"))){settingsShot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}settingsShot.recycle();
         shell("input keyevent 4");Thread.sleep(250);return state;
     }
     private long panelLatency(long budget)throws Exception{

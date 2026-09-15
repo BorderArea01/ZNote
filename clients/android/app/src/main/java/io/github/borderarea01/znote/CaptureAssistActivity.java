@@ -27,7 +27,7 @@ public class CaptureAssistActivity extends Activity {
         Button hide=button("关闭悬浮窗",()->command("hide"));NativeUi.quiet(hide);visibility.addView(hide,new LinearLayout.LayoutParams(0,dp(48),1));
         LinearLayout system=NativeUi.card(root,"后台与通知");
         NativeUi.row(system,button("后台运行 / 电池设置",()->{try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+getPackageName())));}catch(RuntimeException e){status.setText("请在系统应用管理中打开 ZNote 的电池与后台运行设置");}}));
-        NativeUi.row(system,button("? 悬浮窗消失或响应慢",()->new AlertDialog.Builder(this).setTitle("保持采集入口可用").setMessage("悬浮窗开启时，ZNote 使用前台服务和通知栏管理入口；关闭悬浮窗后停止前台运行。\n\n部分系统还会限制应用后台运行。可在 ZNote 的系统应用设置中检查电池限制与自启动。若无障碍采集辅助已被系统关闭，需要你重新开启，应用不能自行恢复权限。\n\n采集运行诊断会记录服务启动、系统退出原因及点击排队耗时，可复制给维护者定位卡顿。") .setPositiveButton("知道了",null).show()));
+        NativeUi.row(system,button("? 悬浮窗消失或响应慢",()->new AlertDialog.Builder(this).setTitle("保持采集入口可用").setMessage("悬浮窗开启时，ZNote 使用前台服务和通知栏管理入口；关闭悬浮窗后停止前台运行。\n\n荣耀 MagicOS 9：在系统设置搜索“应用启动管理”，找到 ZNote，关闭自动管理，允许自启动、关联启动和后台活动；也可在最近任务中给 ZNote 加锁。这些系统开关只能由你设置。其他系统可在应用设置中检查电池与后台限制。若无障碍采集辅助已被系统关闭，需要你重新开启，应用不能自行恢复权限。\n\n采集运行诊断会记录服务启动、系统退出原因及点击排队耗时，可复制给维护者定位卡顿。") .setPositiveButton("知道了",null).show()));
         NativeUi.row(system,button("开启通知栏管理入口",()->{
             if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},37);
             else {if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}
@@ -42,7 +42,7 @@ public class CaptureAssistActivity extends Activity {
         CaptureAssistService service=CaptureAssistService.current;
         if(service==null){String enabled=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);boolean permitted=false;if(enabled!=null)for(String name:enabled.split(":")){ComponentName component=ComponentName.unflattenFromString(name);if(component!=null&&component.equals(new ComponentName(this,CaptureAssistService.class)))permitted=true;}status.setText(permitted?"无障碍权限已开启，但采集服务尚未连接；请检查后台运行限制，或在系统设置中重新开启采集辅助":"无障碍采集辅助已关闭；请点击下方管理入口重新开启");return;}
         if("show".equals(action))service.setVisible(true);else if("hide".equals(action))service.setVisible(false);
-        status.setText("采集辅助已连接 · "+(service.visible()?"悬浮窗已显示":"悬浮窗已关闭")+(service.capturing()?" · 正在识别":""));
+        status.setText((((android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE)).isBackgroundRestricted()?"系统已限制后台运行 · ":"")+"采集辅助已连接 · "+(service.visible()?"悬浮窗已显示":"悬浮窗已关闭")+(service.capturing()?" · 正在识别":""));
     }
     @Override protected void onResume(){super.onResume();String action=getIntent().getStringExtra("capture_action");getIntent().removeExtra("capture_action");command(action==null?"status":action);if("show".equals(action))finish();}
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants){super.onRequestPermissionsResult(code,permissions,grants);if(code==37){if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();status.setText(grants.length>0&&grants[0]==android.content.pm.PackageManager.PERMISSION_GRANTED?"通知栏管理入口已开启":"通知未获允许，可在系统设置中开启；悬浮采集仍可使用");}}
