@@ -55,13 +55,13 @@ try {
  // The floating entry works at the current scroll position on desktop and mobile.
  for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
    await page.setViewportSize(viewport);await page.locator('.card-main').nth(20).scrollIntoViewIfNeeded();
-   const entry=page.getByRole('button',{name:'在当前位置多选',exact:true});await entry.waitFor();
+   const entry=page.locator('.browse-window-actions button:visible, .floating-selection-entry:visible').filter({hasText:'多选'});await entry.waitFor();
    const anchor=await page.locator('.card-main').nth(20).evaluate(el=>({id:el.closest('.item-card').dataset.itemId,top:el.getBoundingClientRect().top}));
    await page.screenshot({path:resolve(`artifacts/selection-entry-${viewport.width}.png`)});
    await entry.click();await count(0);await ready();
    const card=page.locator(`[data-item-id="${anchor.id}"] .card-main`);const after=await card.evaluate(el=>el.getBoundingClientRect().top);
    assert.ok(Math.abs(anchor.top-after)<12,`Floating entry moved the card: ${anchor.top} -> ${after}`);
-   const bar=await page.locator('.selection-bar').boundingBox();assert.ok(bar.y>=0&&bar.y+bar.height<viewport.height);
+   const bar=await page.locator('.selection-bar').boundingBox();assert.ok(bar.y>=0&&bar.y+bar.height<viewport.height);assert.ok(bar.height<(viewport.width>760?70:120),`Selection toolbar is too tall: ${bar.height}`);
    await card.click();await count(1);await page.locator('.selection-operations').getByRole('button',{name:/^(收藏所选|取消收藏)$/}).click();await count(1);await page.waitForFunction(()=>!document.querySelector('.selection-working')&&!document.querySelector('.selection-exit')?.disabled);
    await page.keyboard.press('Escape');await count(0);await page.keyboard.press('Escape');await page.locator('.batch-toolbar').waitFor({state:'hidden'});await ready();
  }

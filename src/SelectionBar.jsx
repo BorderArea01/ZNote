@@ -1,8 +1,8 @@
 import React from 'react';
-import { Hash, Layers, Star, Trash2, RefreshCw, X, Loader2, FolderInput, CheckCheck, FlipHorizontal2 } from 'lucide-react';
+import { Hash, Layers, Star, Trash2, RefreshCw, X, Loader2, FolderInput, CheckCheck, FlipHorizontal2, ArrowUpToLine, ChevronUp } from 'lucide-react';
 import { HelpHint } from './HelpHint.jsx';
 
-export function SelectionBar({ count, loadedCount, allLoaded, someLoaded, total, locked, progress, working, trash, imagesOnly, allFavorite, onLoaded, onAll, onInvert, onClear, onExit, onCancel, onTags, onOrganize, onGroup, onFavorite, onTrash, onPurge }) {
+export function SelectionBar({ count, loadedCount, allLoaded, someLoaded, total, locked, progress, working, trash, imagesOnly, allFavorite, showStart, showPrevious, startLabel, previousLabel, onStart, onPrevious, onLoaded, onAll, onInvert, onClear, onExit, onCancel, onTags, onOrganize, onGroup, onFavorite, onTrash, onPurge }) {
   const disabled = !count || locked;
   return <section className="selection-bar batch-toolbar" aria-label="批量管理">
     <div className="selection-summary">
@@ -14,6 +14,8 @@ export function SelectionBar({ count, loadedCount, allLoaded, someLoaded, total,
     </div>
     <div className="selection-controls">
       <div className="selection-picking">
+        {showStart&&<button disabled={locked} onClick={onStart}><ArrowUpToLine size={15}/>{startLabel}</button>}
+        {showPrevious&&<button disabled={locked} onClick={onPrevious}><ChevronUp size={15}/>{previousLabel}</button>}
         <button disabled={locked||!total} onClick={onAll}><CheckCheck size={15}/>全选筛选结果</button>
         <button disabled={locked||!loadedCount} onClick={onInvert}><FlipHorizontal2 size={15}/>反选已加载</button>
         <button disabled={!count||locked} onClick={onClear}>清除选择</button>

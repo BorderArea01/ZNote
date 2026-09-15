@@ -1186,6 +1186,9 @@ export default function Workspace({
                 progress={selectionProgress} working={batchBusy||groupSelecting} trash={view==='trash'}
                 imagesOnly={chosenItems.length===selection.length&&chosenItems.every(i=>i.kind==='image')}
                 allFavorite={chosenItems.length===selection.length&&chosenItems.every(i=>i.favorite)}
+                showStart={awayFromStart||pageOffset>0} showPrevious={pageOffset>0}
+                startLabel={sort==='title'?'回到列表开头':'回到最新'} previousLabel={sort==='title'?'加载靠前':'加载较新'}
+                onStart={jumpToStart} onPrevious={()=>loadPage(true)}
                 onLoaded={e=>selectCards(items,e.target.checked?'add':'remove')}
                 onAll={selectFiltered} onInvert={()=>selectCards(items,'invert')}
                 onClear={clearSelection} onExit={()=>toggleSelectionMode()} onCancel={cancelSelectionRequest}

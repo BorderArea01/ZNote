@@ -20,6 +20,7 @@ try{
  await page.route('**/api/items?**',async route=>{await new Promise(r=>setTimeout(r,120));await route.continue()});
  let peak=0;for(let i=0;i<20;i++){await nextPage();const s=await windowState();assert.ok(s.size<=300);peak=Math.max(peak,await page.locator('.item-card').count());}
  const state=await windowState();assert.ok(state.offset>0);assert.ok(peak<100);assert.ok(await page.getByText('已选 1 项',{exact:true}).count());
+ const selectedAnchor=await position();await page.getByRole('button',{name:'加载靠前',exact:true}).click();await stable();await page.waitForTimeout(100);const previousState=await windowState();assert.ok(previousState.offset<state.offset);assert.equal((await position()).id,selectedAnchor.id);assert.ok(await page.getByText('已选 1 项',{exact:true}).count());
  await page.getByRole('checkbox',{name:'滚动自动加载',exact:true}).uncheck();await stable();
  // Cache eviction never discards selected rows or breaks bulk operations.
  await page.getByRole('button',{name:'移动 / 收藏',exact:true}).click();const organize=page.getByRole('dialog',{name:'批量整理 1 项内容',exact:true});await organize.getByRole('combobox',{name:'批量收藏状态'}).selectOption('yes');await organize.getByRole('button',{name:'确认整理',exact:true}).click();await organize.waitFor({state:'hidden'});await loaded();assert.equal(runtime.db.prepare('SELECT favorite FROM items WHERE id=?').get(ids[1]).favorite,1);
