@@ -38,7 +38,7 @@ public class CaptureAssistService extends AccessibilityService {
     private int height(){return getResources().getDisplayMetrics().heightPixels;}
     private GradientDrawable shape(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
     private TextView control(String text,String description,Runnable action){
-        TextView b=new TextView(this);b.setText(text);b.setContentDescription(description);b.setTextSize(14);b.setTextColor(0xffecedf5);b.setGravity(Gravity.CENTER);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setFocusable(true);b.setClickable(true);
+        TextView b=new TextView(this);b.setText(text);b.setContentDescription(description);b.setTextSize(14);b.setSingleLine(true);b.setEllipsize(android.text.TextUtils.TruncateAt.END);b.setTextColor(0xffecedf5);b.setGravity(Gravity.CENTER);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setFocusable(true);b.setClickable(true);
         b.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x336f82ff),shape(0x00202020,10),shape(0xffffffff,10)));b.setOnClickListener(v->action.run());return b;
     }
     public void showBubble(){
@@ -60,7 +60,7 @@ public class CaptureAssistService extends AccessibilityService {
         TextView handle=control(expanded?"⠿  ZNote":"Z","ZNote 悬浮采集，拖动换位置",()->{expanded=!expanded;render();});handle.setTextSize(expanded?14:19);handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);
         if(expanded){
             TextView capture=control(busy?"正在识别…":"获取当前页面","获取当前页面",this::capture);capture.setBackground(shape(0xff5968cf,11));capture.setEnabled(!busy);bubble.addView(capture);
-            LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴链接","粘贴链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("关闭","关闭悬浮采集",()->{prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();}),new LinearLayout.LayoutParams(0,-2,1));bubble.addView(actions);
+            LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴","粘贴链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("关闭","关闭悬浮采集",()->{prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();}),new LinearLayout.LayoutParams(0,-2,1));bubble.addView(actions);
             status=new TextView(this);status.setTextColor(0xffbcc3db);status.setTextSize(12);status.setPadding(dp(6),dp(8),dp(6),dp(2));status.setVisibility(View.GONE);status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);bubble.addView(status);
         }else status=null;dock();
     }

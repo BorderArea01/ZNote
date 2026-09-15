@@ -13,6 +13,7 @@ public class SmokeRunner extends Instrumentation {
     private UiAutomation automation(){return getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);}
     private void checkpoint(String text){Bundle update=new Bundle();update.putString("stream","\n"+text+"\n");sendStatus(0,update);}
     private String nativeText(View v){String result=v instanceof TextView?((TextView)v).getText().toString()+" | ":"";if(v instanceof ViewGroup){ViewGroup group=(ViewGroup)v;for(int i=0;i<group.getChildCount();i++)result+=nativeText(group.getChildAt(i));}return result;}
+    private void singleLineControls(View v){if(v instanceof TextView&&v.isClickable()&&((TextView)v).getLineCount()>1)throw new AssertionError("Floating control wraps: "+((TextView)v).getText());if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)singleLineControls(g.getChildAt(i));}}
     private void screenshot(){try{android.graphics.Bitmap shot=automation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}}
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     private View find(View v,Class<?> type){if(type.isInstance(v))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=find(g.getChildAt(i),type);if(r!=null)return r;}}return null;}
@@ -42,7 +43,7 @@ public class SmokeRunner extends Instrumentation {
         android.graphics.Rect r=overlayControl(text);Thread.sleep(400);r=overlayControl(text);
         checkpoint("Overlay tap "+text+" at "+r);
         java.lang.reflect.Field field=CaptureAssistService.class.getDeclaredField("bubble");field.setAccessible(true);View[] actual={null};runOnMainSync(()->{try{actual[0]=(View)field.get(CaptureAssistService.current);}catch(Exception ignored){}});
-        if(actual[0]!=null)runOnMainSync(()->checkpoint("Overlay native tree: "+nativeText(actual[0])));
+        if(actual[0]!=null)runOnMainSync(()->{singleLineControls(actual[0]);checkpoint("Overlay native tree: "+nativeText(actual[0]));});
         android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
         long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0),u=MotionEvent.obtain(t,t+70,1,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(450);
     }
