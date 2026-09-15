@@ -10,9 +10,10 @@ import java.util.concurrent.*;
 // Runs in an isolated emulator against a disposable host library. No user device or data.
 public class SmokeRunner extends Instrumentation {
     private MainActivity activity;
+    private UiAutomation automation(){return getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);}
     private void checkpoint(String text){Bundle update=new Bundle();update.putString("stream","\n"+text+"\n");sendStatus(0,update);}
     private String nativeText(View v){String result=v instanceof TextView?((TextView)v).getText().toString()+" | ":"";if(v instanceof ViewGroup){ViewGroup group=(ViewGroup)v;for(int i=0;i<group.getChildCount();i++)result+=nativeText(group.getChildAt(i));}return result;}
-    private void screenshot(){try{android.graphics.Bitmap shot=getUiAutomation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}}
+    private void screenshot(){try{android.graphics.Bitmap shot=automation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}}
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     private View find(View v,Class<?> type){if(type.isInstance(v))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=find(g.getChildAt(i),type);if(r!=null)return r;}}return null;}
     private Button button(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return(Button)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){Button b=button(g.getChildAt(i),text);if(b!=null)return b;}}return null;}
@@ -21,13 +22,50 @@ public class SmokeRunner extends Instrumentation {
     private void nativeUntil(Activity target,String expected)throws Exception{long deadline=System.currentTimeMillis()+30000;while(System.currentTimeMillis()<deadline){String[] value={""};runOnMainSync(()->value[0]=nativeText(target.getWindow().getDecorView()));if(value[0].contains(expected))return;Thread.sleep(250);}throw new Exception("Native share did not reach: "+expected);}
     private void touchText(String text)throws Exception{
         waitForIdleSync();long deadline=System.currentTimeMillis()+5000;
-        while(System.currentTimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();
+        while(System.currentTimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
             if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(node.getText()==null?"":node.getText())){
                 android.graphics.Rect bounds=new android.graphics.Rect();node.getBoundsInScreen(bounds);long time=SystemClock.uptimeMillis();
                 MotionEvent down=MotionEvent.obtain(time,time,MotionEvent.ACTION_DOWN,bounds.centerX(),bounds.centerY(),0),up=MotionEvent.obtain(time,time+80,MotionEvent.ACTION_UP,bounds.centerX(),bounds.centerY(),0);
-                getUiAutomation().injectInputEvent(down,true);getUiAutomation().injectInputEvent(up,true);down.recycle();up.recycle();Thread.sleep(300);return;
+                automation().injectInputEvent(down,true);automation().injectInputEvent(up,true);down.recycle();up.recycle();Thread.sleep(300);return;
             }Thread.sleep(100);
         }throw new Exception("Touchable control not found: "+text);
+    }
+    private android.graphics.Rect overlayControl(String text)throws Exception{
+        long deadline=System.currentTimeMillis()+5000;
+        while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
+            if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY)continue;
+            android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);return r;}
+        }Thread.sleep(100);}throw new Exception("Overlay control unavailable: "+text);
+    }
+    private void overlayTouch(String text)throws Exception{android.graphics.Rect r=overlayControl(text);long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0),u=MotionEvent.obtain(t,t+70,1,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(250);}
+    private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
+    private void overlayTests()throws Exception{
+        android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
+        shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");
+        long deadline=System.currentTimeMillis()+10000;while(CaptureAssistService.current==null&&System.currentTimeMillis()<deadline)Thread.sleep(100);
+        if(CaptureAssistService.current==null)throw new Exception("Capture accessibility service did not connect");
+        runOnMainSync(()->CaptureAssistService.current.showBubble());
+        // An unsupported app must not have its content or old clipboard imported.
+        overlayTouch("Z");overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书或抖音的作品页使用");overlayTouch("收起");
+        android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
+        for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,time+i*35,i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();}
+        Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left");
+        runOnMainSync(()->{CaptureAssistService.current.hideBubble();CaptureAssistService.current.showBubble();});if(overlayControl("Z").left>20)throw new Exception("Dock position not retained");
+        checkpoint("Floating capture drag, edge collapse, persisted placement and unsupported-page recovery passed");
+        for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme"}){
+            getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
+            overlayTouch("Z");
+            if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
+            ActivityMonitor monitor=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");Activity captured=waitForMonitorWithTimeout(monitor,10000);removeMonitor(monitor);
+            if(captured==null)throw new Exception("Current-page capture did not open for "+pkg);
+            String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.com/a/fixture-note":"https://v.douyin.com/fixture-work/";
+            nativeUntil(captured,expected);runOnMainSync(captured::finish);Thread.sleep(350);
+            checkpoint("On-demand current-link flow passed for simulated "+pkg);
+        }
+        overlayTouch("Z");overlayTouch("关闭");
+        if(getTargetContext().getSharedPreferences("MainActivity",0).getBoolean("capture_bubble",true))throw new Exception("Close did not persist");
+        shell("settings put secure enabled_accessibility_services null");shell("settings put secure accessibility_enabled 0");
     }
     @Override public void onStart(){Bundle report=new Bundle();try{
         try{MainActivity.normalize("http://10.attacker.com");throw new Exception("public HTTP was accepted");}catch(Exception e){if(e.getMessage().equals("public HTTP was accepted"))throw e;}
@@ -50,10 +88,10 @@ public class SmokeRunner extends Instrumentation {
         until("!!document.querySelector('.detail-dialog')");
         js("document.querySelector('.image-stage button').click();true");
         until("!!document.querySelector('.zoom-viewer')");
-        getUiAutomation().executeShellCommand("input keyevent 4").close();
+        automation().executeShellCommand("input keyevent 4").close();
         until("!document.querySelector('.zoom-viewer')&&!!document.querySelector('.detail-dialog')");
         checkpoint("System Back closes zoom while retaining image detail");
-        getUiAutomation().executeShellCommand("input keyevent 4").close();
+        automation().executeShellCommand("input keyevent 4").close();
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
         checkpoint("System Back closes image detail while retaining library");
         js("document.querySelector('.card-main').click();true");until("!!document.querySelector('.detail-dialog')");
@@ -82,6 +120,7 @@ public class SmokeRunner extends Instrumentation {
         nativeUntil(linkShare,"不能采集本机或内网地址");nativeUntil(linkShare,"重试采集");checkpoint("Shared links reach the server queue; failures remain visible with retry");
         runOnMainSync(linkShare::finish);
         for(android.net.Uri uri:shares)getTargetContext().getContentResolver().delete(uri,null,null);
+        overlayTests();
         report.putString("stream","\nZNOTE_ANDROID_SMOKE_PASS\n");finish(Activity.RESULT_OK,report);
     }catch(Throwable e){String[] nativeState={""};if(activity!=null)runOnMainSync(()->nativeState[0]=nativeText(activity.getWindow().getDecorView()));String failure="\nZNOTE_ANDROID_SMOKE_FAIL: "+e+"\nNative UI: "+nativeState[0]+"\n";checkpoint(failure);screenshot();report.putString("stream",failure);finish(Activity.RESULT_CANCELED,report);}}
 }

@@ -1,0 +1,13 @@
+// Installed only into the disposable CI emulator; never included in a ZNote APK/release.
+plugins { id 'com.android.application' }
+android {
+    namespace 'io.github.borderarea01.capturefixture'
+    compileSdk 36
+    defaultConfig { minSdk 29; targetSdk 35; versionCode 1; versionName '1' }
+    flavorDimensions 'page'
+    productFlavors {
+        browser { dimension 'page'; applicationId 'com.chrome.beta' }
+        xhs { dimension 'page'; applicationId 'com.xingin.xhs' }
+        douyin { dimension 'page'; applicationId 'com.ss.android.ugc.aweme' }
+    }
+}

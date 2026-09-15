@@ -18,6 +18,8 @@ timeout 240 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null
 adb shell input keyevent 82
 adb install clients/android/app/build/outputs/apk/debug/app-debug.apk
 adb install clients/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-timeout 120 adb shell am instrument -w io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner | tee artifacts/android-emulator/result.txt
+for fixture in clients/android/capturefixture/build/outputs/apk/*/debug/*.apk; do adb install "$fixture"; done
+timeout 180 adb shell am instrument -w io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner | tee artifacts/android-emulator/result.txt
 adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/client-smoke.png artifacts/android-emulator/ || true
+adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/capture-overlay.png artifacts/android-emulator/ || true
 grep -q ZNOTE_ANDROID_SMOKE_PASS artifacts/android-emulator/result.txt

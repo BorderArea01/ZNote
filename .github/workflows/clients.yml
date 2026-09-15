@@ -73,7 +73,7 @@ jobs:
       - run: npm run build
       - name: Build unsigned release for controlled signing
         working-directory: clients/android
-        run: bash gradlew --no-daemon assembleRelease lintRelease assembleDebug assembleDebugAndroidTest
+        run: bash gradlew --no-daemon :app:assembleRelease :app:lintRelease :app:assembleDebug :app:assembleDebugAndroidTest :capturefixture:assembleDebug
       - name: Exercise Android client in isolated emulator
         run: bash scripts/test-android-emulator.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

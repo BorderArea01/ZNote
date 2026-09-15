@@ -51,6 +51,7 @@ public class ShareActivity extends Activity {
         root.addView(label("目标知识库",15));collection=new Spinner(this);root.addView(collection,new LinearLayout.LayoutParams(-1,dp(52)));
         save=button("保存到知识库",this::submit);save.setEnabled(false);root.addView(save);
         status=label("正在连接知识库…",14);status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);root.addView(status);
+        root.addView(button("悬浮采集设置",()->startActivity(new Intent(this,CaptureAssistActivity.class))));
         root.addView(button("打开知识库 / 登录",()->startActivity(new Intent(this,MainActivity.class))));root.addView(button("返回原 App",this::finish));
     }
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}

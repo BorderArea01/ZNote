@@ -7,7 +7,16 @@ import {createApp} from '../server/app.js';
 import {extractCapturePage,fetchCapturePage} from '../server/capture-page.js';
 import {sharedUrls} from '../shared/share-input.js';
 import {markdownImages} from '../shared/markdown-images.js';
+import {captureImageCandidates} from '../server/capture-images.js';
 const xhs=(images=['https://cdn.example/one.jpg','https://cdn.example/two.jpg'])=>`<html><head><title>小红书</title></head><body><script>window.__INITIAL_STATE__=${JSON.stringify({note:{noteDetailMap:{abcd:{note:{noteId:'abcd',title:'旅行手账',desc:'第一行\n第二行',user:{nickname:'旅行作者'},imageList:images.map(urlDefault=>({urlDefault}))}}}}})};</script></body></html>`;
+test('platform images prefer original variants without altering unrelated signatures or artwork marks',()=>{
+  const display='https://sns-webpic-qc.xhscdn.com/20260915/signature/1040g2sg0token!nd_dft_wlteh_webp_3?sign=keep';
+  assert.deepEqual(captureImageCandidates({urlDefault:display},'xhs','https://www.xiaohongshu.com/explore/abcd'),['https://sns-img-bd.xhscdn.com/1040g2sg0token',display]);
+  const signed='https://cdn.example/image.jpg?sign=keep&watermark=author';
+  assert.deepEqual(captureImageCandidates({urlDefault:signed},'xhs','https://example.com'),[signed]);
+  assert.deepEqual(captureImageCandidates({url_list:['https://cdn.example/display'],origin_url:'https://cdn.example/original',download_url_list:['https://cdn.example/watermark']},'douyin','https://www.douyin.com'),['https://cdn.example/original','https://cdn.example/display','https://cdn.example/watermark']);
+  const plan=extractCapturePage(xhs([display]),'https://www.xiaohongshu.com/explore/abcd');assert.equal(plan.images[0],plan.image_candidates[0][0]);assert.equal(plan.image_candidates[0].length,2);
+});
 test('share parsing and article extraction preserve links, line breaks and exact platform work',()=>{
   assert.deepEqual(sharedUrls('分享给你 https://xhslink.com/a/abcd。'),['https://xhslink.com/a/abcd']);
   const note=extractCapturePage(xhs(),'https://www.xiaohongshu.com/explore/abcd');assert.equal(note.author,'旅行作者');assert.equal(note.images.length,2);assert.match(note.content,/第一行\n第二行/);

@@ -59,20 +59,29 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     if(plan.images)content += '\n\n'+plan.images.map((url,index)=>`![配图 ${index+1}](<${url}>)`).join('\n\n');
     const urls=[...new Set(markdownImages(content).map(v=>v.url))];
     if(urls.length>100)throw fail(413,'单次正文配图最多 100 张');
-    const mapping=new Map();
+    const mapping=new Map();let usedFallback=Boolean(job.image_fallback);
     for(const [index,url] of urls.entries()){
       signal.throwIfAborted();patch(job.id,{message:`正在保存配图 ${index+1}/${urls.length}`});
       const imageId=stableId(job.id+':image:'+index);
       let item=existing(imageId,job.input.collection_id);
       if(item && item.group_key!=='note:'+id)throw fail(409,'已保存的配图被重新分组，请恢复后重试');
-      if(!item){const buffer=await image(url);signal.throwIfAborted();item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${index+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,group_key:'note:'+id,group_index:index,group_title:(plan.title||'网页采集').slice(0,200)});}
+      if(!item){
+        const candidates=plan.image_candidates?.find(values=>values[0]===url)||[url];let buffer,lastError;
+        for(const [attempt,candidate] of candidates.entries()){
+          signal.throwIfAborted();
+          try { buffer=await image(candidate); if(attempt>0){usedFallback=true;patch(job.id,{image_fallback:true});} break; }
+          catch(e){lastError=e;}
+        }
+        if(!buffer)throw lastError||fail(422,'配图无法下载');
+        signal.throwIfAborted();item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${index+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,group_key:'note:'+id,group_index:index,group_title:(plan.title||'网页采集').slice(0,200)});
+      }
       mapping.set(url,`/media/${item.id}/original`);
     }
     signal.throwIfAborted();validateCollection(job.input.collection_id);
     for(let index=0;index<urls.length;index++)if(!existing(stableId(job.id+':image:'+index),job.input.collection_id))throw fail(409,'配图已移除，请检查后重试');
     content=replaceMarkdownImages(content,markdownImages(content),mapping);
     const item=saveNote({id,title:(plan.title||'网页采集').slice(0,200),content,source_url:plan.url,collection_id:job.input.collection_id,tags});
-    patch(job.id,{status:'completed',message:'图文已入库，配图已保存到本地',item_id:item.id,title:item.title});
+    patch(job.id,{status:'completed',message:usedFallback?'图文已入库；部分首选图片不可用，已使用备用版本，可能含平台水印':'图文已入库，配图已保存到本地',item_id:item.id,title:item.title});
   }
   async function pump(){
     if(active||stopped)return;

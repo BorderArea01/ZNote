@@ -7,6 +7,7 @@ import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { publicAddress } from './remote-images.js';
+import { captureImageCandidates } from './capture-images.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 export async function fetchCapturePage(value, signal, redirects = 0) {
@@ -81,11 +82,11 @@ export function extractCapturePage(html, url) {
       const record = id && findRecord(scriptData(raw), id, xhs ? 'xhs' : 'douyin');
       if (!record) continue;
       if (xhs && record.type === 'video' || dy && !record.images?.length && !record.image_post_info?.images?.length) return { kind: 'video', url, title: record.title || record.desc?.split('\n')[0] || '', author: record.user?.nickname || record.author?.nickname || '' };
-      const images = xhs ? (record.imageList || []).map(i => i.infoList?.find(v => v.imageScene === 'WB_DFT')?.url || i.urlDefault || i.url) : (record.images || record.image_post_info?.images || []).map(i => i.url_list?.[0] || i.display_image?.url_list?.[0]);
+      const images = (xhs ? record.imageList || [] : record.images || record.image_post_info?.images || []).map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
       if (!images.length || images.length > 100) throw fail('未取得完整图集或图集超过 100 张');
-      const urls = images.map(v => v && absolute(v, url));
+      const urls = images.map(v => v[0]);
       if (urls.some(v => !v)) throw fail('图集中有无法解析的图片地址');
-      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, author: record.user?.nickname || record.author?.nickname || '' };
+      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, author: record.user?.nickname || record.author?.nickname || '' };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.
     if (dy || /video/i.test(meta('og:type'))) return { kind: 'video', url };
@@ -95,7 +96,7 @@ export function extractCapturePage(html, url) {
   const title = meta('og:title') || document.title || '网页采集', author = meta('author');
   for (const node of document.querySelectorAll('script,style,noscript,iframe,form,nav,footer,header,svg')) node.remove();
   for (const image of document.querySelectorAll('img')) {
-    const src = absolute(image.getAttribute('data-src') || image.getAttribute('data-original') || image.getAttribute('src') || '', url);
+    const src = absolute(image.getAttribute('data-original') || image.getAttribute('data-src') || image.getAttribute('src') || '', url);
     if (src) image.setAttribute('src', src); else image.remove();
     image.removeAttribute('srcset');
   }

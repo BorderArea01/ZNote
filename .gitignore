@@ -28,6 +28,7 @@ clients/desktop/build/icons/
 clients/android/.gradle/
 clients/android/build/
 clients/android/app/build/
+clients/android/capturefixture/build/
 clients/android/local.properties
 *.jks
 *.keystore
