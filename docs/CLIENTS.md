@@ -1,6 +1,6 @@
 # 在电脑和手机上使用 ZNote
 
-ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。当前客户端版本为 **0.10.0-beta.1**，属于公开测试版。
+ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。Android 客户端当前为 **0.10.0-beta.10**，桌面客户端为 **0.10.0-beta.1**，均属于公开测试版。
 
 → [下载 Release](https://github.com/BorderArea01/ZNote/releases) · [报告问题](https://github.com/BorderArea01/ZNote/issues/new/choose) · [交流与建议](https://github.com/BorderArea01/ZNote/discussions)
 
