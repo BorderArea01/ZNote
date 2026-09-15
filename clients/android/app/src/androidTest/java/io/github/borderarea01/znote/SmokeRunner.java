@@ -73,7 +73,7 @@ public class SmokeRunner extends Instrumentation {
         captureCommand("hide");captureCommand("show");if(overlayControl("Z").left>20)throw new Exception("Dock position not retained");
         checkpoint("Floating capture drag, edge collapse, persisted placement and unsupported-page recovery passed");
         for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
-            getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
+            getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
             overlayTouch("Z");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
             ActivityMonitor monitor=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");Activity captured=waitForMonitorWithTimeout(monitor,10000);removeMonitor(monitor);
@@ -82,10 +82,10 @@ public class SmokeRunner extends Instrumentation {
             nativeUntil(captured,expected);runOnMainSync(captured::finish);Thread.sleep(350);
             checkpoint("On-demand current-link flow passed for simulated "+pkg);
         }
-        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
         overlayTouch("Z");ActivityMonitor cancelled=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("Z");overlayControl("获取当前页面");
         if(waitForMonitorWithTimeout(cancelled,6000)!=null)throw new Exception("Cancelled capture opened a stale share page");removeMonitor(cancelled);overlayTouch("收起");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
-        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
         overlayTouch("Z");overlayTouch("获取当前页面");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
         overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("Z");
         checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
