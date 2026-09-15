@@ -68,8 +68,8 @@ public class SmokeRunner extends Instrumentation {
         overlayControl("获取当前页面");long elapsed=SystemClock.uptimeMillis()-started;if(elapsed>1200)throw new Exception("First bubble tap too slow: "+elapsed+"ms");checkpoint("First bubble tap expanded in "+elapsed+"ms");
         overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
         android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
-        for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,time+i*35,i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();}
-        Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left");
+        for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
+        Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
         captureCommand("hide");captureCommand("show");if(overlayControl("Z").left>20)throw new Exception("Dock position not retained");
         checkpoint("Floating capture drag, edge collapse, persisted placement and unsupported-page recovery passed");
         for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
