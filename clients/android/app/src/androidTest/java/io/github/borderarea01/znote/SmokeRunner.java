@@ -128,6 +128,9 @@ public class SmokeRunner extends Instrumentation {
     @Override public void onStart(){Bundle report=new Bundle();try{
         if(updateUpgrade){new UpdateSmoke(this).run();return;}
         UpdateSmoke.catalog();
+        long serverDeadline=SystemClock.uptimeMillis()+30000;boolean reachable=false;
+        while(SystemClock.uptimeMillis()<serverDeadline){java.net.HttpURLConnection probe=(java.net.HttpURLConnection)new java.net.URL("http://10.0.2.2:3742/api/health").openConnection();probe.setConnectTimeout(2000);probe.setReadTimeout(2000);try{if(probe.getResponseCode()==200){reachable=true;break;}}catch(java.io.IOException ignored){}finally{probe.disconnect();}Thread.sleep(300);}
+        if(!reachable)throw new Exception("Disposable host server is not reachable from emulator");
         try{MainActivity.normalize("http://10.attacker.com");throw new Exception("public HTTP was accepted");}catch(Exception e){if(e.getMessage().equals("public HTTP was accepted"))throw e;}
         activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         runOnMainSync(()->{EditText address=(EditText)find(activity.getWindow().getDecorView(),EditText.class);address.setText("http://10.0.2.2:3742");button(activity.getWindow().getDecorView(),"连接并打开").performClick();});
