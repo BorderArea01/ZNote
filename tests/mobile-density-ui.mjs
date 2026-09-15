@@ -26,7 +26,9 @@ try{
   if(width===390){await page.screenshot({path:resolve(dir,'compact-mobile.png')});}
  }
  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'选择内容',exact:true}).tap();await page.getByRole('button',{name:'选择 海边照片组',exact:true}).tap();
- assert.equal(await page.locator('.item-card').count(),8);await page.locator('.item-card.is-selected').waitFor();await page.screenshot({path:resolve(dir,'compact-selection.png')});
+ assert.equal(await page.locator('.item-card').count(),8);await page.locator('.item-card.is-selected').waitFor();
+ const selected=page.locator('.item-card.is-selected'),check=await selected.locator('.card-select').boundingBox(),members=await selected.locator('.group-members-button').boundingBox();assert.ok(members.y>=check.y+check.height,'Group actions must not cover the checkbox');
+ await page.screenshot({path:resolve(dir,'compact-selection.png')});
  await page.getByRole('button',{name:'退出选择',exact:true}).tap();await page.getByRole('button',{name:'打开 海边照片组',exact:true}).tap();await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'关闭窗口',exact:true}).tap();
  await page.reload();await page.locator('.items.compact-grid').waitFor();assert.equal(await columns(),3);
  await page.setViewportSize({width:1366,height:900});assert.ok(await columns()>3);assert.deepEqual(errors,[]);
