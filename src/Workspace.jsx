@@ -1,3 +1,4 @@
+import {ContentActions} from './ContentActions.jsx';
 import {SortControl,DEFAULT_TYPE_ORDER} from './SortControl.jsx';
 import {isImageGroup} from './image-group.js';
 import {detachImageFromGroup} from './group-detach.js';
@@ -1067,7 +1068,7 @@ export default function Workspace({
                 </HelpHint>
               </h1>
             </div>
-            <div className="heading-actions">
+            <ContentActions>
               <button onClick={() => setExporting(true)}>
                 <Download size={16} />
                 导出
@@ -1082,7 +1083,7 @@ export default function Workspace({
               </button>
               <button onClick={() => { setUploadKind('video'); setUploadBatch([]); }}><Film size={16} />上传视频</button>
               <button onClick={() => setImporting(true)}><ArrowUpRight size={16} />网络采集</button>
-            </div>
+            </ContentActions>
           </section>
           {view === "home" ? (
             <>

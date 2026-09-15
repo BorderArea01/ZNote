@@ -1,0 +1,15 @@
+.desktop-content-actions{display:contents}
+.heading-actions .mobile-content-actions{display:none}
+.content-actions-list{display:grid;gap:8px;padding:4px}
+.content-actions-list button{justify-content:flex-start;min-height:48px;gap:12px;padding:12px 16px;font-size:15px;border-radius:12px}
+.dialog.content-actions-dialog{width:min(400px,calc(100vw - 32px));max-width:400px;border-radius:20px}
+.content-actions-dialog .content-actions-list{padding:16px}
+.content-actions-dialog .dialog-header{padding:0 20px}
+@media(max-width:760px){
+  .heading-actions .desktop-content-actions{display:none}
+  .heading-actions .mobile-content-actions{display:inline-flex;min-height:44px;padding:10px 16px;gap:6px}
+  main .page-heading{flex-direction:row;align-items:center;gap:12px}
+  main .page-heading>div:first-child{min-width:0;flex:1}
+  main .page-heading h1{font-size:23px;flex-wrap:wrap;gap:8px}
+  main .page-heading .heading-actions{display:flex;flex-shrink:0;align-self:center;width:auto;padding-top:0;flex-wrap:nowrap}
+}

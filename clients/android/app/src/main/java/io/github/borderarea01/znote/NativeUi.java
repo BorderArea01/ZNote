@@ -20,5 +20,5 @@ final class NativeUi {
     static void quiet(Button b){b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33737fed),shape(b.getContext(),0x00000000,12),null));}
     static TextView label(Context c,String text,int size){TextView t=new TextView(c);t.setText(text);t.setTextColor(TEXT);t.setTextSize(size);return t;}
     static LinearLayout card(LinearLayout root,String title){Context c=root.getContext();TextView heading=label(c,title,13);heading.setTextColor(MUTED);LinearLayout.LayoutParams h=new LinearLayout.LayoutParams(-1,-2);h.setMargins(dp(c,4),dp(c,24),0,dp(c,10));root.addView(heading,h);LinearLayout card=new LinearLayout(c);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(c,12),dp(c,8),dp(c,12),dp(c,8));card.setBackground(shape(c,SURFACE,18));root.addView(card);return card;}
-    static void row(LinearLayout root,Button b){quiet(b);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(root.getContext(),52));p.setMargins(0,dp(root.getContext(),2),0,dp(root.getContext(),2));root.addView(b,p);}
+    static void row(LinearLayout root,Button b){quiet(b);b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(root.getContext(),52));p.setMargins(0,dp(root.getContext(),2),0,dp(root.getContext(),2));root.addView(b,p);}
 }

@@ -154,7 +154,7 @@ public class SmokeRunner extends Instrumentation {
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
         checkpoint("System Back closes image detail while retaining library");
         js("window.__refreshSeen=false;window.__beforeRefresh=document.querySelector('.card-main');window.addEventListener('znote:refresh',()=>window.__refreshSeen=true,{once:true});true");
-        touchText("↻");until("window.__refreshSeen===true&&!window.__beforeRefresh.isConnected&&!document.querySelector('.loading-state')&&!!document.querySelector('.item-card')");checkpoint("Visible native refresh updates library without reloading the WebView");
+        touchText("⋯");touchText("刷新知识库");until("window.__refreshSeen===true&&!window.__beforeRefresh.isConnected&&!document.querySelector('.loading-state')&&!!document.querySelector('.item-card')");checkpoint("Visible native refresh updates library without reloading the WebView");
         js("document.querySelector('.card-main').click();true");until("!!document.querySelector('.detail-dialog')");
         runOnMainSync(()->button(activity.getWindow().getDecorView(),"‹").performClick());
         until("!document.querySelector('[role=dialog]')&&!!document.querySelector('.item-card')");
@@ -172,7 +172,7 @@ public class SmokeRunner extends Instrumentation {
         nativeUntil(share,"已连接");
         touchText("?");touchText("知道了");
         touchText("保存到知识库");nativeUntil(share,"已保存 2 个媒体文件");Thread.sleep(500);
-        screenshot();checkpoint("Android system share streamed two images to the LAN server without local downloads");touchText("继续采集");nativeUntil(null,"可粘贴下一条分享链接");touchText("保存到知识库");nativeUntil(null,"请粘贴一个作品链接");checkpoint("Completed capture resets for the next item without a disabled saved button");
+        screenshot();checkpoint("Android system share streamed two images to the LAN server without local downloads");touchText("继续采集");nativeUntil(null,"已连接");touchText("保存到知识库");nativeUntil(null,"请粘贴一个作品链接");checkpoint("Completed capture resets for the next item without a disabled saved button");
         closeCapture();Thread.sleep(500);
         js("window.__shareCheck='pending';fetch('/api/items?kind=image&grouped=false&limit=100').then(r=>r.json()).then(r=>{const items=r.items.filter(i=>i.source_url==='https://example.com/source');window.__shareCheck=items.length===2&&items.every(i=>i.group_key===items[0].group_key)?'ok':JSON.stringify(items)});true");
         until("window.__shareCheck==='ok'");checkpoint("Shared images retain a common group and clickable provenance");
