@@ -70,6 +70,7 @@ chrome.webNavigation.onCommitted.addListener((details) => {
   }).catch(() => {});
 });
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  chrome.tabs.sendMessage(details.tabId,{type:'media-page-changed',url:details.url},{frameId:details.frameId}).catch(()=>{});
   if (details.frameId !== 0) return;
   serial(async () => {
     const old = states[details.tabId];
@@ -183,8 +184,13 @@ export async function discover(message, sender) {
   else if(states[tabId]?.blocked)await serial(async()=>{delete states[tabId];await persist()});
   if(message.type==='media-settings')return {blocked,hover:!blocked&&config.hover!==false,dock:!blocked&&config.dock!==false,downloadKey:config.downloadKey,saveKey:config.saveKey,previewWidth:config.previewWidth};
   if(blocked && !['media-options','media-stop','media-clear'].includes(message.type))throw Error('此网站已停用 ZNote 资源嗅探，可在扩展设置管理黑名单');
-  if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action);
+  if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action, message.inline===true);
   if (message.type === 'media-gallery-resume') return pendingInlineGalleries(sender);
+  if(message.type==='media-gallery-position'){
+    const p=message.position;
+    if(p!==undefined){if(!Number.isFinite(p?.x)||!Number.isFinite(p?.y)||Math.abs(p.x)>100000||Math.abs(p.y)>100000)throw Error('浮窗位置无效');await chrome.storage.local.set({galleryPanelPosition:{x:p.x,y:p.y}});return {};}
+    return (await chrome.storage.local.get('galleryPanelPosition')).galleryPanelPosition||null;
+  }
   if (message.type === "media-action") {
     const resource = await serial(async () =>
       [...(states[tabId]?.resources||[]),...(states[tabId]?.hoverResources||[])].find((r) => r.id === message.id),

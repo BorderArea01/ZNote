@@ -28,11 +28,13 @@ export function workLocation(target, loc = location) {
   return null;
 }
 export async function workImages(target, doc = document, loc = location) {
+  loc=new URL(loc.href); // Freeze this request's route while an SPA navigation is in flight.
   const host=loc.hostname.replace(/^www\./,''),page_url=loc.href,selected=workLocation(target,loc);
   let source_url=page_url,title=doc.title,images,previews;
   if(host==='pixiv.net'||/^pawchive\.(pw|st)$/.test(host)) {
     if(!selected)return null;source_url=selected.href;
-    let cached=cache.get(source_url);
+    const live=host!=='pixiv.net'&&selected.pathname===loc.pathname;
+    let cached=live?null:cache.get(source_url);
     if(!cached||Date.now()-cached.time>60000) {
       const promise=(async()=>{
         let root=doc;
@@ -44,7 +46,7 @@ export async function workImages(target, doc = document, loc = location) {
         }
         return siteArticle(root,selected);
       })();
-      cached={time:Date.now(),promise};cache.delete(source_url);cache.set(source_url,cached);
+      cached={time:Date.now(),promise};if(!live){cache.delete(source_url);cache.set(source_url,cached);}
       while(cache.size>8)cache.delete(cache.keys().next().value);
       promise.catch(()=>{if(cache.get(source_url)===cached)cache.delete(source_url);});
     }

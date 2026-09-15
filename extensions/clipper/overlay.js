@@ -8,6 +8,7 @@
   let host,
     root,
     inlineGallery,
+    pawControls,
     dock,
     panel,
     preview,
@@ -50,6 +51,10 @@
       const config = await send({type: 'media-settings',znotePage:!!document.querySelector('meta[name="znote-app"]')});
       hoverAllowed = config.hover; dockAllowed = config.dock;
       siteBlocked = config.blocked;
+      if(window===top&&/^pawchive\.(pw|st)$/.test(location.hostname.replace(/^www\./,''))){
+        if(!siteBlocked&&!pawControls){inlineGallery ||= new globalThis.ZNoteInlineGallery(root,{persistent:true});pawControls=new globalThis.ZNotePawControls(root,inlineGallery,send);}
+        pawControls?.setEnabled(!siteBlocked);
+      }
       if(siteBlocked){enabled=false;resources=[];panel.classList.add('hidden');clearInterval(pollTimer);globalThis.ZNoteDouyinObserve?.(false);}
       downloadKey = /^[a-z0-9]$/.test(config.downloadKey) ? config.downloadKey : 's';
       saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'z' ? 's' : 'z');
@@ -536,7 +541,7 @@
     const openBatch = async(action)=>{
       if(!imageGroup)return; batchButton.disabled=batchSaveButton.disabled=true;
       if((imageGroup.page_url||imageGroup.source_url)!==location.href){hide();batchButton.disabled=batchSaveButton.disabled=false;return;}
-      try { const result=await send({type:'media-gallery',group:imageGroup,action});if(result.inline){inlineGallery ||= new globalThis.ZNoteInlineGallery(root);inlineGallery.open(result.id);hide();} }
+      try { const result=await send({type:'media-gallery',group:imageGroup,action,inline:!!pawControls});if(result.inline){inlineGallery ||= new globalThis.ZNoteInlineGallery(root);inlineGallery.open(result.id);hide();} }
       catch(e) {previewLabel.textContent=e.message;}
       finally {batchButton.disabled=batchSaveButton.disabled=false;}
     };
@@ -558,6 +563,15 @@
       if(Date.now()-lastWheel<220)return;lastWheel=Date.now();turnPage(Math.sign(e.deltaY));
     },{passive:false,capture:true});
     window.addEventListener('resize', placePreview);
+    window.addEventListener('znote-hide-preview',hide);
+    let pageURL=location.href;
+    const pageChanged=()=>{if(pageURL===location.href)return;pageURL=location.href;hide();pawControls?.checkRoute();};
+    for(const event of ['popstate','hashchange','pageshow','znote-page-changed'])window.addEventListener(event,pageChanged);
+    window.addEventListener('znote-work-updated',()=>{
+      pageChanged();
+      if(!hovered?.isConnected||preview.classList.contains('hidden')||hoverBusy||!hoverAllowed)return;
+      const token=++hoverToken;groupLoading=true;drawGroup();loadGroup(hovered,token,globalThis.ZNoteWorkImages(hovered).catch(error=>({error})));
+    });
     window.addEventListener('scroll', () => { if (hovered) hide(); }, {passive:true});
     root.append(preview);
     preview.addEventListener("mouseenter", () => {
@@ -572,6 +586,7 @@
       "mousemove",
       (e) => {
         if (!e.isTrusted) return;
+        pageChanged();
         pointer = { x: e.clientX, y: e.clientY };
         // The companion retains Pixiv's own enhanced preview and wheel controls.
         // Avoid two hover viewers competing when both ZNote extensions are loaded.
@@ -616,7 +631,7 @@
             .some(
               (n) =>
                 n?.isContentEditable ||
-                /^(INPUT|TEXTAREA|SELECT)$/.test(n?.tagName),
+                /^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY)$/.test(n?.tagName),
             )
         )
           return;
@@ -651,6 +666,7 @@
     window.addEventListener('znote-video-metadata',scheduleScan);
     chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (sender.id !== chrome.runtime.id) return;
+      if(message.type==='media-page-changed'){pageChanged();reply({ok:true});}
       if (message.type === 'media-settings-changed') { refreshSettings(); reply({ok: true}); }
       if (message.type === "open-media-panel") {
         open().then(()=>reply(siteBlocked?{ok:false,error:'此网站已停用媒体采集，可在扩展设置中管理黑名单'}:{ok:true}),()=>reply({ok:false,error:'无法打开媒体浮窗，请刷新页面重试'}));
