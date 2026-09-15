@@ -17,5 +17,13 @@ try {
  await page.setContent('<main><h1>Paw 多图作品</h1><figure><a href="https://file.pawchive.pw/data/first.png?f=a.png"><img id="work" src="https://img.pawchive.pw/small.png"></a></figure><a class="fileThumb" href="https://file.pawchive.pw/data/second.png?f=b.png"><img src="https://img.pawchive.pw/small2.png"></a><article class="post-card--preview"><img id="other" src="https://file.pawchive.pw/other.png"></article></main>');
  const paw=await page.evaluate(async()=>{const source=new URL('https://pawchive.pw/fanbox/user/1/post/2');return{group:await Groups.workImages(document.querySelector('#work'),document,source),other:await Groups.workImages(document.querySelector('#other'),document,source)};});
  assert.equal(paw.group.images.length,2);assert.ok(paw.group.images.every(url=>url.startsWith('https://file.pawchive.pw/data/')));assert.equal(paw.other,null);
+ await page.setContent('<main><article class="post-card--preview"><a href="https://pawchive.pw/fanbox/user/1/post/3"><img id="work" src="https://img.pawchive.pw/thumbnail/data/cover.jpg"></a></article></main>');
+ const recovery=await page.evaluate(async()=>{
+  let calls=0;globalThis.fetch=async()=>({ok:true,text:async()=>++calls===1?'<main><div class="post__content">正文</div><div class="post__files"><figure><img src="https://img.pawchive.pw/thumbnail/data/cover.jpg"></figure></div></main>':'<main><figure><a href="https://file.pawchive.pw/data/original.png"><img src="https://img.pawchive.pw/thumbnail/data/cover.jpg"></a></figure></main>'});
+  const target=document.querySelector('#work'),loc=new URL('https://pawchive.pw/fanbox/user/1');let error;
+  try{await Groups.workImages(target,document,loc);}catch(e){error=e.message;}
+  return{error,group:await Groups.workImages(target,document,loc),calls};
+ });
+ assert.match(recovery.error,/原图链接/);assert.equal(recovery.calls,2,'Thumbnail-only/login state must not poison the work cache');assert.deepEqual(recovery.group.images,['https://file.pawchive.pw/data/original.png']);
  console.log('PASS: Pixiv original page order, thumbnail matching, request cache and recommendation exclusion; Paw original attachments grouped without recommendation cards');
 } finally {await browser.close();}

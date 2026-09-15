@@ -340,7 +340,8 @@
   async function loadGroup(target, token, result) {
     try {
       const group = await result;
-      if (!group || token !== hoverToken) return;
+      if (token !== hoverToken) return;
+      if (!group) {previewLabel.textContent=`${previewImage.naturalWidth} × ${previewImage.naturalHeight} · ${shortcutHelp()}`;return;}
       if(group.error)throw group.error;
       if((group.page_url||group.source_url)!==location.href)return;
       // Match originals to scaled Pixiv thumbnails without confusing another work.

@@ -44,7 +44,11 @@ export async function workImages(target, doc = document, loc = location) {
           const html=await response.text();if(html.length>5*1024*1024)throw Error('作品页面过大');
           root=new DOMParser().parseFromString(html,'text/html');
         }
-        return siteArticle(root,selected);
+        const article=await siteArticle(root,selected);
+        // Anonymous Paw pages can contain only thumbnails. Never silently treat
+        // those as originals, and do not cache this state across login/retry.
+        if(/^pawchive\./.test(host)&&!article.document.querySelector('[data-znote-work-image]'))throw Error('未找到套图原图链接，请确认 Paw 已登录且作品已加载完成');
+        return article;
       })();
       cached={time:Date.now(),promise};if(!live){cache.delete(source_url);cache.set(source_url,cached);}
       while(cache.size>8)cache.delete(cache.keys().next().value);
