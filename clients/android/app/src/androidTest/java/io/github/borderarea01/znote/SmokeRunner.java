@@ -42,41 +42,48 @@ public class SmokeRunner extends Instrumentation {
     private void overlayTouch(String text)throws Exception{
         android.graphics.Rect r=overlayControl(text);Thread.sleep(400);r=overlayControl(text);
         checkpoint("Overlay tap "+text+" at "+r);
-        java.lang.reflect.Field field=CaptureAssistService.class.getDeclaredField("bubble");field.setAccessible(true);View[] actual={null};runOnMainSync(()->{try{actual[0]=(View)field.get(CaptureAssistService.current);}catch(Exception ignored){}});
-        if(actual[0]!=null)runOnMainSync(()->{singleLineControls(actual[0]);checkpoint("Overlay native tree: "+nativeText(actual[0]));});
         android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
         long t=SystemClock.uptimeMillis();MotionEvent d=MotionEvent.obtain(t,t,0,r.centerX(),r.centerY(),0),u=MotionEvent.obtain(t,t+70,1,r.centerX(),r.centerY(),0);automation().injectInputEvent(d,true);automation().injectInputEvent(u,true);d.recycle();u.recycle();Thread.sleep(450);
     }
     private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
+    private Bundle captureCommand(String command)throws Exception{
+        CompletableFuture<Bundle> result=new CompletableFuture<>();CaptureControl.send(getTargetContext(),command,new ResultReceiver(new Handler(Looper.getMainLooper())){@Override protected void onReceiveResult(int code,Bundle data){result.complete(data);}});return result.get(5,TimeUnit.SECONDS);
+    }
     private void overlayTests()throws Exception{
         android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
         shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");
-        long deadline=System.currentTimeMillis()+10000;while(CaptureAssistService.current==null&&System.currentTimeMillis()<deadline)Thread.sleep(100);
-        if(CaptureAssistService.current==null)throw new Exception("Capture accessibility service did not connect");
-        runOnMainSync(()->CaptureAssistService.current.showBubble());
+        Thread.sleep(1000);Bundle state=captureCommand("show");if(state.getInt("pid")==android.os.Process.myPid())throw new Exception("Capture must not share the WebView process");
         // An unsupported app must not have its content or old clipboard imported.
         android.graphics.Rect first=overlayControl("Z");Thread.sleep(400);first=overlayControl("Z");long started=SystemClock.uptimeMillis();
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0),firstUp=MotionEvent.obtain(started,started+60,1,first.centerX(),first.centerY(),0);
         automation().injectInputEvent(firstDown,true);automation().injectInputEvent(firstUp,true);firstDown.recycle();firstUp.recycle();
         overlayControl("获取当前页面");long elapsed=SystemClock.uptimeMillis()-started;if(elapsed>1200)throw new Exception("First bubble tap too slow: "+elapsed+"ms");checkpoint("First bubble tap expanded in "+elapsed+"ms");
-        overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书或抖音的作品页使用");overlayTouch("收起");
+        overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
         android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,time+i*35,i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();}
         Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left");
-        runOnMainSync(()->{CaptureAssistService.current.hideBubble();CaptureAssistService.current.showBubble();});if(overlayControl("Z").left>20)throw new Exception("Dock position not retained");
+        captureCommand("hide");captureCommand("show");if(overlayControl("Z").left>20)throw new Exception("Dock position not retained");
         checkpoint("Floating capture drag, edge collapse, persisted placement and unsupported-page recovery passed");
-        for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme"}){
+        for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
             overlayTouch("Z");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
             ActivityMonitor monitor=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");Activity captured=waitForMonitorWithTimeout(monitor,10000);removeMonitor(monitor);
             if(captured==null)throw new Exception("Current-page capture did not open for "+pkg);
-            String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.com/a/fixture-note":"https://v.douyin.com/fixture-work/";
+            String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.com/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
             nativeUntil(captured,expected);runOnMainSync(captured::finish);Thread.sleep(350);
             checkpoint("On-demand current-link flow passed for simulated "+pkg);
         }
-        overlayTouch("Z");overlayTouch("关闭");
-        if(getTargetContext().getSharedPreferences("MainActivity",0).getBoolean("capture_bubble",true))throw new Exception("Close did not persist");
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(600);
+        overlayTouch("Z");overlayTouch("获取当前页面");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+        overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("Z");
+        checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
+        android.graphics.Rect point=overlayControl("Z");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
+        new Handler(Looper.getMainLooper()).post(()->{entered.countDown();try{Thread.sleep(2500);}catch(InterruptedException ignored){}finally{released.countDown();}});entered.await();
+        long begin=SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(begin,begin,0,point.centerX(),point.centerY(),0),up=MotionEvent.obtain(begin,begin+60,1,point.centerX(),point.centerY(),0);automation().injectInputEvent(down,true);automation().injectInputEvent(up,true);down.recycle();up.recycle();
+        overlayControl("获取当前页面");long latency=SystemClock.uptimeMillis()-begin;if(latency>1200)throw new Exception("Host UI blocked floating window: "+latency+"ms");released.await();checkpoint("Floating window opens in "+latency+"ms while the library UI thread is blocked");
+        overlayTouch("关闭");
+        if(captureCommand("status").getBoolean("visible"))throw new Exception("Close did not hide the window");
         shell("settings put secure enabled_accessibility_services null");shell("settings put secure accessibility_enabled 0");
     }
     @Override public void onStart(){Bundle report=new Bundle();try{

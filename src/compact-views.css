@@ -25,8 +25,20 @@
 .note .card-preview:has(.note-cover:not([hidden])) > :is(.note-type,h3,p) { display: none; }
 .note .card-preview > .note-cover[hidden] { display: none; }
 @media(max-width:759px) {
-  .items.grid.compact-grid { grid-template-columns: repeat(auto-fill,minmax(130px,1fr)); gap: 8px; }
-  .compact-grid .card-preview { height: 120px; }
+  .items.grid.compact-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+  .compact-grid .card-preview { height: auto; aspect-ratio: 1; }
+  .compact-grid .item-card { --card-inset-x: 6px; --card-inset-bottom: 6px; --card-footer-button: 30px; min-width: 0; }
+  .compact-grid .card-body { padding: 8px 6px 6px; }
+  .compact-grid .card-body h3 { margin-right: 0; }
+  .compact-grid .card-meta { flex-wrap: wrap; gap: 3px; font-size: 9px; }
+  .items.compact-grid .item-card:has(.card-favorite-button) .card-meta { padding-right: calc(var(--card-footer-button) + 4px); }
+  .compact-grid .card-meta-text > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .compact-grid .card-meta-text > span + span { display: none; }
+  .compact-grid .kind-chip { right: 5px; bottom: 5px; }
+  .items.compact-grid.is-selecting .card-preview { height: 148px; aspect-ratio: auto; }
+  .items.compact-grid.is-selecting .card-actions { top: 48px; right: 5px; left: 5px; bottom: auto; flex-direction: column; align-items: stretch; }
+  .items.compact-grid.is-selecting .card-actions button { min-width: 0; min-height: 40px; padding: 6px 3px; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .compact-grid .note .card-preview { padding: 10px; }
   .compact-grid .card-body h3 { font-size: 12px; }
   .compact-grid .card-tags { overflow: hidden; max-height: 24px; }
   .compact-list .card-body { display: flex; flex-wrap: wrap; gap: 3px 8px; padding-right: 46px !important; }
@@ -36,3 +48,4 @@
   .compact-list .card-preview { width: 62px; }
   .view-switch button { min-width: 32px; }
 }
+@media(max-width:759px) and (pointer:coarse) { .compact-grid .item-card { --card-footer-button: 40px; } }
