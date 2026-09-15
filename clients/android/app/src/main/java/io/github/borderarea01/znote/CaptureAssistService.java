@@ -38,10 +38,10 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);record("connected","ready");if(prefs().getBoolean("capture_bubble",true))showBubble();}
+    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);record("connected","ready");if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
-    @Override public void onDestroy(){hideBubble();reader.shutdownNow();if(current==this)current=null;super.onDestroy();}
+    @Override public void onDestroy(){hideBubble();reader.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;render();}
     private void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);}
     private int width(){return getResources().getDisplayMetrics().widthPixels;}
@@ -53,7 +53,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     boolean visible(){return bubble!=null;}
     boolean capturing(){return busy;}
-    void setVisible(boolean value){prefs().edit().putBoolean("capture_bubble",value).apply();if(value)showBubble();else hideBubble();}
+    void setVisible(boolean value){prefs().edit().putBoolean("capture_bubble",value).apply();if(value)showBubble();else hideBubble();notifyReady();}
     public void showBubble(){
         if(manager==null)return;
         if(bubble!=null){render();if(bubble!=null)return;}
@@ -66,7 +66,7 @@ public class CaptureAssistService extends AccessibilityService {
     private void updateWindow(){if(bubble!=null)try{manager.updateViewLayout(bubble,layout);}catch(RuntimeException e){bubble=null;record("detached",e.getClass().getSimpleName());}}
     private void cancel(){generation++;if(operation!=null)operation.cancel(true);operation=null;busy=false;handler.removeCallbacksAndMessages(null);if(bubble!=null){layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;updateWindow();}}
     private void dock(){
-        if(bubble==null)return;int w=expanded?Math.min(dp(228),width()-dp(24)):dp(48);layout.width=w;
+        if(bubble==null)return;int w=expanded?Math.min(dp(228),width()-dp(24)):dp(28);layout.width=w;
         layout.x=prefs().getBoolean("capture_right",true)?Math.max(0,width()-w):0;
         int anchor=Math.round(prefs().getFloat("capture_y",.32f)*Math.max(dp(32),height()-dp(96)));
         bubble.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(Math.max(dp(48),height()-dp(64)),View.MeasureSpec.AT_MOST));
@@ -75,10 +75,10 @@ public class CaptureAssistService extends AccessibilityService {
     private void render(){
         if(bubble==null)return;bubble.removeAllViews();bubble.setPadding(expanded?dp(8):0,expanded?dp(4):0,expanded?dp(8):0,expanded?dp(8):0);
         GradientDrawable bg=shape(0xff191c27,expanded?18:16);bg.setStroke(dp(1),0xff3c4258);bubble.setBackground(bg);layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-        TextView handle=control(expanded?"⠿  ZNote":"Z","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;render();if(expanded)measureFrame(started);});handle.setTextSize(expanded?14:19);handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);
+        TextView handle=control(expanded?"⠿  ZNote":"⋮","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;render();if(expanded)measureFrame(started);});handle.setPadding(0,dp(8),0,dp(8));handle.setTextSize(expanded?14:19);handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);
         if(expanded){
             TextView capture=control(busy?"正在识别…":"获取当前页面","获取当前页面",this::capture);capture.setBackground(shape(0xff5968cf,11));capture.setEnabled(!busy);bubble.addView(capture);if(busy)bubble.addView(control("取消识别","取消识别",()->{cancel();message("已取消，可重新采集");}));
-            LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴","粘贴链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("关闭","关闭悬浮采集",()->{prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();}),new LinearLayout.LayoutParams(0,-2,1));bubble.addView(actions);
+            LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴","粘贴链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("关闭","关闭悬浮采集",()->{prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();notifyReady();}),new LinearLayout.LayoutParams(0,-2,1));bubble.addView(actions);
             status=new TextView(this);status.setTextColor(0xffbcc3db);status.setTextSize(12);status.setPadding(dp(6),dp(8),dp(6),dp(2));status.setText(lastMessage);status.setVisibility(lastMessage.isEmpty()?View.GONE:View.VISIBLE);status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);bubble.addView(status);
         }else status=null;dock();
     }
@@ -140,7 +140,7 @@ public class CaptureAssistService extends AccessibilityService {
                 if(copy==null){AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");long until=SystemClock.uptimeMillis()+5000;while(copy==null&&SystemClock.uptimeMillis()<until){Thread.sleep(180);check(token);copy=button(owner,true,token);}}
                 if(copy==null)throw new Exception("分享菜单中未识别到复制链接，请保持菜单打开后重试");
                 long copiedAfter=System.currentTimeMillis();if(!click(copy,token))throw new Exception("复制链接按钮未响应，请重试");
-                value=copiedLink(owner,copiedAfter,token);
+                check(token);handler.post(()->{if(token==generation)openClipboard(owner,copiedAfter);});return;
             }
             check(token);final String result=value;handler.post(()->{if(token==generation)open(result);});
         }catch(InterruptedException ignored){}catch(Exception e){record("capture_failed",e.getClass().getSimpleName());handler.post(()->{if(token==generation)message(e.getMessage()==null?"采集未完成，请重试":e.getMessage());});}finally{reading.set(false);record("capture_finished","ms="+(SystemClock.uptimeMillis()-started));}});
@@ -153,11 +153,26 @@ public class CaptureAssistService extends AccessibilityService {
             if(attempt==0){if(click(address,token)){Thread.sleep(250);continue;}break;}address.recycle();break;
         }throw new Exception("请显示完整地址栏，或用浏览器分享给 ZNote");
     }
-    private String copiedLink(String owner,long after,int token)throws Exception{
-        CompletableFuture<Boolean> focus=new CompletableFuture<>();handler.post(()->{if(token!=generation||bubble==null){focus.complete(false);return;}try{layout.flags=WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;updateWindow();if(bubble==null){focus.complete(false);return;}bubble.setFocusableInTouchMode(true);bubble.requestFocus();focus.complete(true);}catch(RuntimeException e){focus.completeExceptionally(e);}});if(!focus.get(2,TimeUnit.SECONDS))throw new InterruptedException();
-        ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-        for(int i=0;i<12;i++){Thread.sleep(150);check(token);try{ClipDescription d=clipboard.getPrimaryClipDescription();ClipData c=d!=null&&d.getTimestamp()>=after?clipboard.getPrimaryClip():null;String value=c!=null&&c.getItemCount()>0?link(String.valueOf(c.getItemAt(0).getText())):"";String host=Uri.parse(value).getHost();if(host!=null&&(bilibili(owner)?host.matches("(^|.*\\.)(bilibili\\.com|b23\\.tv)"):owner.equals("com.xingin.xhs")?host.matches("(^|.*\\.)(xiaohongshu\\.com|xhslink\\.com)"):host.matches("(^|.*\\.)(douyin\\.com|iesdouyin\\.com)")))return value;}catch(SecurityException ignored){}}
-        throw new Exception("系统未提供本次复制的链接，请重试采集");
+    static boolean acceptsLink(String owner,String value){
+        if(owner==null||owner.isEmpty())return true;
+        String host=Uri.parse(value).getHost();if(host==null)return false;
+        host=host.toLowerCase(Locale.ROOT);
+        String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com"}:new String[]{"douyin.com","iesdouyin.com"};
+        for(String domain:domains)if(host.equals(domain)||host.endsWith("."+domain))return true;return false;
     }
-    private void open(String value){lastMessage="";cancel();expanded=false;render();try{startActivity(new Intent(this,ShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(Intent.EXTRA_TEXT,value));}catch(Exception e){message("无法打开采集页，请重试");}}
+    private void openClipboard(String owner,long after){openPanel("",owner,after,true);}
+    private void open(String value){openPanel(value,"",0,value.isEmpty());}
+    private void openPanel(String value,String owner,long after,boolean clipboard){
+        lastMessage="";cancel();expanded=false;render();
+        try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after));}
+        catch(Exception e){message("无法打开采集面板，请重试");}
+    }
+    void notifyReady(){
+        android.app.NotificationManager notifications=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        notifications.createNotificationChannel(new android.app.NotificationChannel("capture_ready","悬浮采集管理",android.app.NotificationManager.IMPORTANCE_LOW));
+        if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        android.app.PendingIntent settings=android.app.PendingIntent.getActivity(this,1,new Intent(this,CaptureAssistActivity.class),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+        android.app.PendingIntent show=android.app.PendingIntent.getActivity(this,2,new Intent(this,CaptureAssistActivity.class).putExtra("capture_action","show"),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+        notifications.notify(3741,new android.app.Notification.Builder(this,"capture_ready").setSmallIcon(R.drawable.ic_capture_notification).setContentTitle("ZNote · 采集辅助已连接").setContentText(visible()?"悬浮入口已就绪 · 点击管理":"悬浮窗已关闭 · 点击重新显示").setOngoing(true).setOnlyAlertOnce(true).setContentIntent(settings).addAction(new android.app.Notification.Action.Builder(null,"显示悬浮窗",show).build()).addAction(new android.app.Notification.Action.Builder(null,"采集设置",settings).build()).build());
+    }
 }

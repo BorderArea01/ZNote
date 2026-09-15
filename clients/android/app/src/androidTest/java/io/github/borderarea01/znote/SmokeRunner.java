@@ -63,37 +63,52 @@ public class SmokeRunner extends Instrumentation {
     }
     private void overlayTests()throws Exception{
         android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
-        shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");
+        shell("pm grant io.github.borderarea01.znote android.permission.POST_NOTIFICATIONS");shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");
         Thread.sleep(1000);Bundle state=captureCommand("show");if(state.getInt("pid")==0||state.getInt("pid")==android.os.Process.myPid())throw new Exception("Capture must not share the WebView process");
         // An unsupported app must not have its content or old clipboard imported.
-        android.graphics.Rect first=overlayControl("Z");Thread.sleep(400);first=overlayControl("Z");long started=SystemClock.uptimeMillis();
+        android.graphics.Rect first=overlayControl("⋮");Thread.sleep(400);first=overlayControl("⋮");long started=SystemClock.uptimeMillis();
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstDown,true);firstDown.recycle();
         MotionEvent firstUp=MotionEvent.obtain(started,SystemClock.uptimeMillis(),1,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstUp,true);firstUp.recycle();
         overlayControl("获取当前页面");checkpoint("First floating touch-to-frame: "+panelLatency()+"ms");
         overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
-        android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
+        android.graphics.Rect before=overlayControl("⋮");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
-        Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
-        captureCommand("hide");captureCommand("show");android.graphics.Rect restored=overlayControl("Z");if(restored.left>20||Math.abs(restored.top-after.top)>15)throw new Exception("Dock position not retained: "+after+" -> "+restored);
-        checkpoint("Floating capture drag, edge collapse, persisted placement and unsupported-page recovery passed");
+        Thread.sleep(300);android.graphics.Rect after=overlayControl("⋮");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
+        captureCommand("hide");captureCommand("show");android.graphics.Rect restored=overlayControl("⋮");if(restored.left>20||Math.abs(restored.top-after.top)>15)throw new Exception("Dock position not retained: "+after+" -> "+restored);
+        if(restored.width()>getTargetContext().getResources().getDisplayMetrics().density*30)throw new Exception("Collapsed handle did not shrink");
+        android.app.NotificationManager nm=(android.app.NotificationManager)getTargetContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->n.getId()==3741))throw new Exception("Capture management notification missing");
+        checkpoint("Floating capture drag, compact handle, notification, persisted placement and unsupported-page recovery passed");
         for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-            overlayTouch("Z");
+            overlayTouch("⋮");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
-            ActivityMonitor monitor=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");Activity captured=waitForMonitorWithTimeout(monitor,10000);removeMonitor(monitor);
+            ActivityMonitor monitor=addMonitor(FloatingShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");Activity captured=waitForMonitorWithTimeout(monitor,10000);removeMonitor(monitor);
             if(captured==null)throw new Exception("Current-page capture did not open for "+pkg);
             String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.com/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
-            nativeUntil(captured,expected);runOnMainSync(captured::finish);Thread.sleep(350);
+            nativeUntil(captured,expected);
+            if(pkg.equals("com.xingin.xhs")){
+                android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-panel.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
+                if(captured.getWindow().getAttributes().height>=getTargetContext().getResources().getDisplayMetrics().heightPixels)throw new Exception("Capture panel replaced the full screen");
+            }
+            runOnMainSync(captured::finish);Thread.sleep(350);
             checkpoint("On-demand current-link flow passed for simulated "+pkg);
         }
+        FloatingShareActivity fallback=(FloatingShareActivity)startActivitySync(new Intent(getTargetContext(),FloatingShareActivity.class).putExtra("read_clipboard",true).putExtra("copied_after",System.currentTimeMillis()+60000).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        nativeUntil(fallback,"未读到本次分享链接");
+        runOnMainSync(()->((android.content.ClipboardManager)getTargetContext().getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("fixture","http://127.0.0.1/manual-fallback")));
+        touchText("读取剪贴板 / 粘贴链接");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
+        runOnMainSync(()->button(fallback.getWindow().getDecorView(),"保存到知识库").performClick());nativeUntil(fallback,"不能采集本机或内网地址");
+        checkpoint("Stale clipboard is rejected, explicit paste works in the small panel, server failures remain retryable");
+        runOnMainSync(fallback::finish);
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("Z");ActivityMonitor cancelled=addMonitor(ShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("Z");overlayControl("获取当前页面");
+        overlayTouch("⋮");ActivityMonitor cancelled=addMonitor(FloatingShareActivity.class.getName(),null,false);overlayTouch("获取当前页面");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("⋮");overlayControl("获取当前页面");
         if(waitForMonitorWithTimeout(cancelled,6000)!=null)throw new Exception("Cancelled capture opened a stale share page");removeMonitor(cancelled);overlayTouch("收起");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("Z");overlayTouch("获取当前页面");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
-        overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("Z");
+        overlayTouch("⋮");overlayTouch("获取当前页面");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+        overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("⋮");
         checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
-        android.graphics.Rect point=overlayControl("Z");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
+        android.graphics.Rect point=overlayControl("⋮");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
         new Handler(Looper.getMainLooper()).post(()->{entered.countDown();try{Thread.sleep(6000);}catch(InterruptedException ignored){}finally{released.countDown();}});entered.await();
         long begin=SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(begin,begin,0,point.centerX(),point.centerY(),0);automation().injectInputEvent(down,true);down.recycle();MotionEvent up=MotionEvent.obtain(begin,SystemClock.uptimeMillis(),1,point.centerX(),point.centerY(),0);automation().injectInputEvent(up,true);up.recycle();
         overlayControl("获取当前页面");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating touch-to-frame while library thread is blocked: "+panelLatency()+"ms");

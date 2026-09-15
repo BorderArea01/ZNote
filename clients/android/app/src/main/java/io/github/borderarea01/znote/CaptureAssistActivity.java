@@ -23,7 +23,11 @@ public class CaptureAssistActivity extends Activity {
         root.addView(button("开启 / 管理采集辅助",()->new AlertDialog.Builder(this).setTitle("开启点击采集").setMessage(getString(R.string.capture_accessibility_description)).setNegativeButton("取消",null).setPositiveButton("前往系统设置",(d,w)->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).show()));
         root.addView(button("显示悬浮窗",()->command("show")));
         root.addView(button("关闭悬浮窗",()->command("hide")));
-        root.addView(button("粘贴链接采集",()->startActivity(new Intent(this,ShareActivity.class))));
+        root.addView(button("开启通知栏管理入口",()->{
+            if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},37);
+            else {if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}
+        }));
+        root.addView(button("粘贴链接采集",()->startActivity(new Intent(this,FloatingShareActivity.class).putExtra("read_clipboard",true))));
         root.addView(button("返回",this::finish));
     }
     private void command(String action){
@@ -32,5 +36,6 @@ public class CaptureAssistActivity extends Activity {
         if("show".equals(action))service.setVisible(true);else if("hide".equals(action))service.setVisible(false);
         status.setText("采集辅助已连接 · "+(service.visible()?"悬浮窗已显示":"悬浮窗已关闭")+(service.capturing()?" · 正在识别":""));
     }
-    @Override protected void onResume(){super.onResume();command("status");}
+    @Override protected void onResume(){super.onResume();String action=getIntent().getStringExtra("capture_action");getIntent().removeExtra("capture_action");command(action==null?"status":action);if("show".equals(action))finish();}
+    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants){super.onRequestPermissionsResult(code,permissions,grants);if(code==37){if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();status.setText(grants.length>0&&grants[0]==android.content.pm.PackageManager.PERMISSION_GRANTED?"通知栏管理入口已开启":"通知未获允许，可在系统设置中开启；悬浮采集仍可使用");}}
 }

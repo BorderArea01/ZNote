@@ -28,6 +28,9 @@ public class ShareActivity extends Activity {
     private TextView status;
     private Button save;
     private boolean busy=false,visible=false,ready=false;
+    private boolean clipboardPending;
+    private int clipboardAttempts;
+    private boolean floating(){return this instanceof FloatingShareActivity;}
     private int uploaded=0;
     private SharedPreferences preferences(){return getSharedPreferences("MainActivity",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
@@ -35,6 +38,7 @@ public class ShareActivity extends Activity {
     private Button button(String value,Runnable click){Button b=new Button(this);b.setText(value);b.setAllCaps(false);b.setOnClickListener(v->click.run());return b;}
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        clipboardPending=floating()&&getIntent().getBooleanExtra("read_clipboard",false)&&state==null;
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");uploaded=state.getInt("uploaded",0);}
         Intent intent=getIntent();CharSequence extra=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);String shared=extra==null?null:extra.toString();
         if(shared==null)shared="";
@@ -45,10 +49,19 @@ public class ShareActivity extends Activity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff161b28);root.setPadding(dp(24),dp(24),dp(24),dp(20));
         root.setOnApplyWindowInsetsListener((v,i)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets s=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(24)+s.left,dp(24)+s.top,dp(24)+s.right,dp(20)+s.bottom);}return i;});
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
-        root.addView(label("保存到 ZNote",26));
+        if(floating()){
+            root.setPadding(dp(18),dp(12),dp(18),dp(12));root.setOnApplyWindowInsetsListener(null);
+            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xff191c27);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),0xff424b66);root.setBackground(bg);
+            int width=Math.min(dp(360),getResources().getDisplayMetrics().widthPixels-dp(24));
+            getWindow().setLayout(width,Math.min(dp(560),getResources().getDisplayMetrics().heightPixels-dp(100)));
+            getWindow().setGravity(Gravity.CENTER);setFinishOnTouchOutside(false);
+        }
+        TextView panelTitle=label(floating()?"⠿  保存到 ZNote":"保存到 ZNote",floating()?20:26);root.addView(panelTitle);
+        if(floating())panelTitle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;public boolean onTouch(View v,android.view.MotionEvent e){WindowManager.LayoutParams p=getWindow().getAttributes();if(e.getActionMasked()==MotionEvent.ACTION_DOWN){x=e.getRawX();y=e.getRawY();ox=p.x;oy=p.y;return true;}if(e.getActionMasked()==MotionEvent.ACTION_MOVE){int maxX=Math.max(0,(getResources().getDisplayMetrics().widthPixels-p.width)/2),maxY=Math.max(0,(getResources().getDisplayMetrics().heightPixels-p.height)/2);p.x=Math.max(-maxX,Math.min(maxX,ox+(int)(e.getRawX()-x)));p.y=Math.max(-maxY,Math.min(maxY,oy+(int)(e.getRawY()-y)));getWindow().setAttributes(p);return true;}return true;}});
         LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);heading.addView(label(files.isEmpty()?"分享链接":"已接收 "+files.size()+" 个媒体文件",15),new LinearLayout.LayoutParams(0,-2,1));
         Button help=button("?",()->new AlertDialog.Builder(this).setTitle("手机采集").setMessage("分享或粘贴一个作品链接，服务器负责下载正文、图片或视频。也可直接接收其他 App 分享的图片、视频，不用先存到相册。\n\n局域网保存需要手机能连接服务器。外出时可将链接发给微信 ClawBot，并在微信收件设置开启链接采集。平台要求登录或验证时，任务会保留失败原因。") .setPositiveButton("知道了",null).show());help.setContentDescription("手机采集说明");heading.addView(help,new LinearLayout.LayoutParams(dp(52),dp(48)));root.addView(heading);
         text=new EditText(this);text.setTextColor(0xffe7ebf5);text.setHintTextColor(0xffa1abc0);text.setHint(files.isEmpty()?"粘贴 App 分享文字或网页链接":"备注（可选）");text.setMinLines(3);text.setMaxLines(7);text.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(16000)});text.setText(shared);root.addView(text);
+        if(floating()){text.setMinLines(2);text.setMaxLines(3);root.addView(button("读取剪贴板 / 粘贴链接",()->{getIntent().removeExtra("copied_after");getIntent().removeExtra("source_package");clipboardAttempts=0;clipboardPending=true;readClipboard();}));}
         root.addView(label("目标知识库",15));collection=new Spinner(this);root.addView(collection,new LinearLayout.LayoutParams(-1,dp(52)));
         if(files.isEmpty()){
             root.addView(label("图集保存方式",15));imageMode=new Spinner(this);
@@ -56,8 +69,25 @@ public class ShareActivity extends Activity {
         }
         save=button("保存到知识库",this::submit);save.setEnabled(false);root.addView(save);
         status=label("正在连接知识库…",14);status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);root.addView(status);
-        root.addView(button("悬浮采集设置",()->startActivity(new Intent(this,CaptureAssistActivity.class))));
-        root.addView(button("打开知识库 / 登录",()->startActivity(new Intent(this,MainActivity.class))));root.addView(button("返回原 App",this::finish));
+        if(!floating())root.addView(button("悬浮采集设置",()->startActivity(new Intent(this,CaptureAssistActivity.class))));
+        root.addView(button("打开知识库 / 登录",()->startActivity(new Intent(this,MainActivity.class))));root.addView(button(floating()?"收起采集面板":"返回原 App",this::finish));
+    }
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&clipboardPending)handler.post(this::readClipboard);}
+    private void readClipboard(){
+        if(!hasWindowFocus()||!clipboardPending||isFinishing())return;
+        try{
+            ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+            ClipDescription description=clipboard.getPrimaryClipDescription();
+            long after=getIntent().getLongExtra("copied_after",0);
+            ClipData clip=description!=null&&description.getTimestamp()>=after?clipboard.getPrimaryClip():null;
+            String value=clip!=null&&clip.getItemCount()>0?String.valueOf(clip.getItemAt(0).getText()):"";
+            String url=CaptureAssistService.link(value),owner=getIntent().getStringExtra("source_package");
+            if(!url.isEmpty()&&CaptureAssistService.acceptsLink(owner,url)){
+                clipboardPending=false;text.setText(value);status.setText("已读取分享链接，确认知识库后保存");return;
+            }
+        }catch(SecurityException ignored){}
+        if(++clipboardAttempts<8){handler.postDelayed(this::readClipboard,180);return;}
+        clipboardPending=false;status.setText("未读到本次分享链接，可直接在上方输入框长按粘贴");text.requestFocus();
     }
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}
     @Override protected void onResume(){super.onResume();visible=true;if(!busy)loadCollections();else if(!jobId.isEmpty())poll();}
