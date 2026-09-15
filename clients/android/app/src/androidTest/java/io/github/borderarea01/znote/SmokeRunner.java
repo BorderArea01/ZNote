@@ -19,6 +19,16 @@ public class SmokeRunner extends Instrumentation {
     private String js(String source)throws Exception{CompletableFuture<String> result=new CompletableFuture<>();runOnMainSync(()->{WebView web=(WebView)find(activity.getWindow().getDecorView(),WebView.class);if(web==null)result.complete("null");else web.evaluateJavascript(source,result::complete);});return result.get(8,TimeUnit.SECONDS);}
     private void until(String source)throws Exception{long deadline=System.currentTimeMillis()+30000;while(System.currentTimeMillis()<deadline){if("true".equals(js(source)))return;Thread.sleep(250);}throw new Exception("WebView condition timed out: "+source+" body="+js("document.body.innerText.slice(0,400)+String(window.__result)"));}
     private void nativeUntil(Activity target,String expected)throws Exception{long deadline=System.currentTimeMillis()+30000;while(System.currentTimeMillis()<deadline){String[] value={""};runOnMainSync(()->value[0]=nativeText(target.getWindow().getDecorView()));if(value[0].contains(expected))return;Thread.sleep(250);}throw new Exception("Native share did not reach: "+expected);}
+    private void touchText(String text)throws Exception{
+        waitForIdleSync();long deadline=System.currentTimeMillis()+5000;
+        while(System.currentTimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();
+            if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(node.getText()==null?"":node.getText())){
+                android.graphics.Rect bounds=new android.graphics.Rect();node.getBoundsInScreen(bounds);long time=SystemClock.uptimeMillis();
+                MotionEvent down=MotionEvent.obtain(time,time,MotionEvent.ACTION_DOWN,bounds.centerX(),bounds.centerY(),0),up=MotionEvent.obtain(time,time+80,MotionEvent.ACTION_UP,bounds.centerX(),bounds.centerY(),0);
+                getUiAutomation().injectInputEvent(down,true);getUiAutomation().injectInputEvent(up,true);down.recycle();up.recycle();Thread.sleep(300);return;
+            }Thread.sleep(100);
+        }throw new Exception("Touchable control not found: "+text);
+    }
     @Override public void onStart(){Bundle report=new Bundle();try{
         try{MainActivity.normalize("http://10.attacker.com");throw new Exception("public HTTP was accepted");}catch(Exception e){if(e.getMessage().equals("public HTTP was accepted"))throw e;}
         activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -61,14 +71,14 @@ public class SmokeRunner extends Instrumentation {
         }
         ShareActivity share=(ShareActivity)startActivitySync(new Intent(getTargetContext(),ShareActivity.class).setAction(Intent.ACTION_SEND_MULTIPLE).setType("image/png").putParcelableArrayListExtra(Intent.EXTRA_STREAM,shares).putExtra(Intent.EXTRA_TEXT,"分享备注\n保留换行\nhttps://example.com/source").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION));
         nativeUntil(share,"已连接");
-        runOnMainSync(()->button(share.getWindow().getDecorView(),"?").performClick());getUiAutomation().executeShellCommand("input keyevent 4").close();
-        runOnMainSync(()->button(share.getWindow().getDecorView(),"保存到知识库").performClick());nativeUntil(share,"已保存 2 个媒体文件");
+        touchText("?");touchText("知道了");
+        touchText("保存到知识库");nativeUntil(share,"已保存 2 个媒体文件");Thread.sleep(500);
         screenshot();checkpoint("Android system share streamed two images to the LAN server without local downloads");
         runOnMainSync(share::finish);Thread.sleep(500);
         js("window.__shareCheck='pending';fetch('/api/items?kind=image&grouped=false&limit=100').then(r=>r.json()).then(r=>{const items=r.items.filter(i=>i.source_url==='https://example.com/source');window.__shareCheck=items.length===2&&items.every(i=>i.group_key===items[0].group_key)?'ok':JSON.stringify(items)});true");
         until("window.__shareCheck==='ok'");checkpoint("Shared images retain a common group and clickable provenance");
         ShareActivity linkShare=(ShareActivity)startActivitySync(new Intent(getTargetContext(),ShareActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"测试失败恢复 http://127.0.0.1/private").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        nativeUntil(linkShare,"已连接");runOnMainSync(()->button(linkShare.getWindow().getDecorView(),"保存到知识库").performClick());
+        nativeUntil(linkShare,"已连接");touchText("保存到知识库");
         nativeUntil(linkShare,"不能采集本机或内网地址");nativeUntil(linkShare,"重试采集");checkpoint("Shared links reach the server queue; failures remain visible with retry");
         runOnMainSync(linkShare::finish);
         for(android.net.Uri uri:shares)getTargetContext().getContentResolver().delete(uri,null,null);
