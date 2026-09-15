@@ -86,6 +86,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
   }
   const schedule=()=>{pending=pending.then(pump).catch(()=>{});};
   const manager={
+    recover(){const jobs=read();for(const j of jobs)if(['queued','running'].includes(j.status)){j.status='failed';j.message='恢复备份后任务已保留，请重试';}write(jobs);},
     list:()=>read().reverse().map(exposed),
     get(id){const job=read().find(j=>j.id===id);if(!job)throw fail(404,'采集记录不存在');return exposed(job);},
     add(raw){

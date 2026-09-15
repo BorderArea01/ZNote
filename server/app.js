@@ -1219,7 +1219,7 @@ export function createApp({
   const webhooks = createWebhookManager({ db, maintenance, ...webhookOptions });
   registerWebhookRoutes(app, webhooks, admin);
   registerClipper(app);
-  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { exportJobs.clear(); trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await captures.cancelAll(); await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
+  const backups = createBackupManager({ db, dataDir, maintenance, afterRestore: () => { captures.recover(); exportJobs.clear(); trash.repairReferences(); noteHistory?.seed(); }, beforeRestore: async () => { await captures.cancelAll(); await imports.cancelAll(); await webhooks.idle(); }, clearCache: () => { previewCache.clear(); previewBytes = 0; }, ...backupOptions });
   registerBackupRoutes(app, backups, admin, dataDir);
   const trash=createTrashManager({app,db,dataDir,transaction,event,maintenance,clearCache:()=>{previewCache.clear();previewBytes=0;},...trashOptions});
   const undo=createUndoManager({app,db,transaction,event,mediaCollision,clearCache:()=>{previewCache.clear();previewBytes=0;}});
