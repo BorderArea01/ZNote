@@ -7,6 +7,6 @@ import android.os.*;
 final class CaptureControl {
     static final String ACTION="io.github.borderarea01.znote.CAPTURE_CONTROL";
     static void send(Context context,String command,ResultReceiver reply){
-        context.sendBroadcast(new Intent(ACTION).setPackage(context.getPackageName()).putExtra("command",command).putExtra("reply",reply));
+        context.sendBroadcast(new Intent(ACTION).setPackage(context.getPackageName()).addFlags(Intent.FLAG_RECEIVER_FOREGROUND).putExtra("command",command).putExtra("reply",reply));
     }
 }

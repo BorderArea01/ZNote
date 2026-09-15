@@ -30,11 +30,12 @@ public class CaptureAssistService extends AccessibilityService {
     private String lastMessage="";
     private final BroadcastReceiver controls=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent intent){
         String command=intent.getStringExtra("command");
+        record("control",String.valueOf(command));
         try{if("show".equals(command)){prefs().edit().putBoolean("capture_bubble",true).apply();showBubble();}
         else if("hide".equals(command)){prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();}
         else if("cancel".equals(command)){cancel();message("已取消，可重新采集");}}
         catch(RuntimeException e){record("window",e.getClass().getSimpleName());}
-        ResultReceiver reply=intent.getParcelableExtra("reply");if(reply!=null){Bundle state=new Bundle();state.putBoolean("visible",bubble!=null&&bubble.isAttachedToWindow());state.putBoolean("busy",busy);state.putInt("pid",android.os.Process.myPid());state.putString("message",lastMessage);reply.send(0,state);}
+        ResultReceiver reply=intent.getParcelableExtra("reply");if(reply!=null){Bundle state=new Bundle();state.putBoolean("visible",bubble!=null&&bubble.isAttachedToWindow());state.putBoolean("busy",busy);state.putInt("pid",android.os.Process.myPid());state.putString("message",lastMessage);reply.send(0,state);record("control_replied",String.valueOf(command));}
     }};
     private SharedPreferences prefs(){return getSharedPreferences("MainActivity",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}

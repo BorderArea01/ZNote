@@ -47,7 +47,7 @@ public class SmokeRunner extends Instrumentation {
     }
     private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
     private Bundle captureCommand(String command)throws Exception{
-        CompletableFuture<Bundle> result=new CompletableFuture<>();CaptureControl.send(getTargetContext(),command,new ResultReceiver(new Handler(Looper.getMainLooper())){@Override protected void onReceiveResult(int code,Bundle data){result.complete(data);}});return result.get(5,TimeUnit.SECONDS);
+        CompletableFuture<Bundle> result=new CompletableFuture<>();CaptureControl.send(getTargetContext(),command,new ResultReceiver(null){@Override protected void onReceiveResult(int code,Bundle data){result.complete(data);}});try{return result.get(5,TimeUnit.SECONDS);}catch(TimeoutException e){throw new Exception("Capture command timed out: "+command+" target="+getTargetContext().getPackageName(),e);}
     }
     private void overlayTests()throws Exception{
         android.accessibilityservice.AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
