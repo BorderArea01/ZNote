@@ -29,6 +29,7 @@ public class CaptureAssistService extends AccessibilityService {
     private Future<?> operation;
     private final java.util.concurrent.atomic.AtomicBoolean reading=new java.util.concurrent.atomic.AtomicBoolean();
     private String lastMessage="";
+    private long tapAt;
     private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     @Override public void onCreate(){
@@ -74,7 +75,7 @@ public class CaptureAssistService extends AccessibilityService {
     private void render(){
         if(bubble==null)return;bubble.removeAllViews();bubble.setPadding(expanded?dp(8):0,expanded?dp(4):0,expanded?dp(8):0,expanded?dp(8):0);
         GradientDrawable bg=shape(0xff191c27,expanded?18:16);bg.setStroke(dp(1),0xff3c4258);bubble.setBackground(bg);layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-        TextView handle=control(expanded?"⠿  ZNote":"Z","ZNote 悬浮采集，拖动换位置",()->{expanded=!expanded;render();});handle.setTextSize(expanded?14:19);handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);
+        TextView handle=control(expanded?"⠿  ZNote":"Z","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;render();if(expanded)measureFrame(started);});handle.setTextSize(expanded?14:19);handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);
         if(expanded){
             TextView capture=control(busy?"正在识别…":"获取当前页面","获取当前页面",this::capture);capture.setBackground(shape(0xff5968cf,11));capture.setEnabled(!busy);bubble.addView(capture);if(busy)bubble.addView(control("取消识别","取消识别",()->{cancel();message("已取消，可重新采集");}));
             LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴","粘贴链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("关闭","关闭悬浮采集",()->{prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();}),new LinearLayout.LayoutParams(0,-2,1));bubble.addView(actions);
@@ -84,8 +85,12 @@ public class CaptureAssistService extends AccessibilityService {
     private void drag(View handle){handle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;boolean moved;final int slop=ViewConfiguration.get(CaptureAssistService.this).getScaledTouchSlop();public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
         case MotionEvent.ACTION_DOWN:x=e.getRawX();y=e.getRawY();ox=layout.x;oy=layout.y;moved=false;v.setPressed(true);return true;
         case MotionEvent.ACTION_MOVE:float dx=e.getRawX()-x,dy=e.getRawY()-y;if(Math.hypot(dx,dy)>slop)moved=true;if(moved){v.setPressed(false);layout.x=Math.max(0,Math.min(width()-layout.width,ox+(int)dx));layout.y=Math.max(dp(24),Math.min(height()-bubble.getHeight()-dp(32),oy+(int)dy));updateWindow();}return true;
-        case MotionEvent.ACTION_UP:v.setPressed(false);if(!moved)v.performClick();else{prefs().edit().putBoolean("capture_right",layout.x+layout.width/2>width()/2).putFloat("capture_y",Math.max(0,Math.min(1,layout.y/(float)Math.max(1,height()-dp(96))))).apply();expanded=false;render();}return true;
+        case MotionEvent.ACTION_UP:v.setPressed(false);if(!moved){tapAt=e.getEventTime();v.performClick();}else{prefs().edit().putBoolean("capture_right",layout.x+layout.width/2>width()/2).putFloat("capture_y",Math.max(0,Math.min(1,layout.y/(float)Math.max(1,height()-dp(96))))).apply();expanded=false;render();}return true;
         case MotionEvent.ACTION_CANCEL:v.setPressed(false);dock();return true;default:return false;}}});}
+    private void measureFrame(long started){
+        final View view=bubble;if(view==null)return;
+        view.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener(){boolean done;public void onDraw(){if(done)return;done=true;record("panel_frame","ms="+Math.max(0,SystemClock.uptimeMillis()-started));view.post(()->{if(view.getViewTreeObserver().isAlive())view.getViewTreeObserver().removeOnDrawListener(this);});}});view.invalidate();
+    }
     private void message(String text){lastMessage=text;busy=false;expanded=true;render();if(status!=null){status.setText(text);status.setVisibility(View.VISIBLE);}}
     private static boolean social(String pkg){return pkg.equals("com.xingin.xhs")||pkg.equals("com.ss.android.ugc.aweme")||pkg.equals("com.ss.android.ugc.aweme.lite")||bilibili(pkg);}
     private static boolean bilibili(String pkg){return Arrays.asList("tv.danmaku.bili","com.bilibili.app.in","com.bilibili.app.blue").contains(pkg);}
