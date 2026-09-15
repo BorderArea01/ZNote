@@ -1,0 +1,8 @@
+// Isolated emulator upgrade target; never used for release builds.
+gradle.beforeProject { p ->
+    if (p.path == ':app') p.afterEvaluate {
+        def config = p.android.defaultConfig
+        config.versionCode = config.versionCode + 1
+        config.versionName = config.versionName.replaceFirst(/beta\.(\d+)$/) { match, number -> "beta.${number.toInteger() + 1}" }
+    }
+}

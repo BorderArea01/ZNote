@@ -25,3 +25,28 @@ adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/capture-overlay
 adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/capture-panel.png artifacts/android-emulator/ || true
 adb logcat -d -v threadtime -s ZNoteCapture:I AndroidRuntime:E > artifacts/android-emulator/capture-log.txt
 grep -q ZNOTE_ANDROID_SMOKE_PASS artifacts/android-emulator/result.txt
+
+# Exercise a real in-app self update after the normal client smoke test. The
+# debug-signed next-version fixture remains local to this disposable emulator.
+(cd clients/android && bash gradlew --no-daemon -I ../../tests/android-update-fixture.gradle :app:assembleDebug)
+cp clients/android/app/build/outputs/apk/debug/app-debug.apk artifacts/update-fixture.apk
+AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+"$AAPT" dump badging artifacts/update-fixture.apk > artifacts/update-fixture-badging.txt
+EXPECTED_UPDATE_CODE=$(sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" artifacts/update-fixture-badging.txt | head -n 1)
+node tests/android-update-fixture.mjs > artifacts/android-emulator/update-server.log 2>&1 &
+UPDATE_PID=$!
+trap 'kill "$EMULATOR_PID" "$SERVER_PID" "$UPDATE_PID" 2>/dev/null || true' EXIT
+# A successful self-update terminates instrumentation as Android replaces the app.
+timeout 100 adb shell am instrument -w -e update_upgrade true io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner > artifacts/android-emulator/update-result.txt 2>&1 || true
+adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/update-screen.png artifacts/android-emulator/ || true
+grep -q ZNOTE_UPDATE_INSTALL_CONFIRM artifacts/android-emulator/update-result.txt
+for attempt in $(seq 1 20); do
+  adb shell dumpsys package io.github.borderarea01.znote > artifacts/android-emulator/updated-package.txt
+  grep -q "versionCode=$EXPECTED_UPDATE_CODE" artifacts/android-emulator/updated-package.txt && break
+  sleep 1
+done
+grep -q "versionCode=$EXPECTED_UPDATE_CODE" artifacts/android-emulator/updated-package.txt
+adb shell run-as io.github.borderarea01.znote cat shared_prefs/MainActivity.xml > artifacts/android-emulator/updated-preferences.xml
+grep -q 'preserved' artifacts/android-emulator/updated-preferences.xml
+grep -q '10.0.2.2:3742' artifacts/android-emulator/updated-preferences.xml
+echo ZNOTE_ANDROID_UPDATE_PASS >> artifacts/android-emulator/update-result.txt
