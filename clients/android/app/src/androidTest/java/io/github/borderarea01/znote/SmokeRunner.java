@@ -102,11 +102,10 @@ public class SmokeRunner extends Instrumentation {
         runOnMainSync(()->((android.content.ClipboardManager)getTargetContext().getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("fixture","http://127.0.0.1/manual-fallback")));
         touchText("读取剪贴板链接");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
         android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-panel.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
-        touchText("保存到知识库");nativeUntil(fallback,"不能采集本机或内网地址");
-        checkpoint("Stale clipboard is rejected, explicit paste works in the small panel, server failures remain retryable");
-        closeCapture();
+        int manualQueued=diagnosticCount("capture_queued");touchText("保存到知识库");long manualDeadline=SystemClock.uptimeMillis()+5000;while(diagnosticCount("capture_queued")<=manualQueued&&SystemClock.uptimeMillis()<manualDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=manualQueued)throw new Exception("Manual paste was not queued before the panel closed");
+        checkpoint("Stale clipboard is rejected; explicit paste queues in the background and closes the small panel");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("⋮");overlayTouch("采集当前作品");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("⋮");overlayControl("采集当前作品");
+        overlayTouch("⋮");overlayTouch("采集当前作品");overlayTouch("…");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("⋮");overlayControl("采集当前作品");
         Thread.sleep(1500);if("io.github.borderarea01.znote".contentEquals(automation().getRootInActiveWindow().getPackageName()))throw new Exception("Cancelled capture opened a stale share page");overlayTouch("收起");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
         overlayTouch("⋮");overlayTouch("采集当前作品");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");

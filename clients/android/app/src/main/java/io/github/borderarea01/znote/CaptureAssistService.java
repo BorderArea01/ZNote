@@ -92,7 +92,7 @@ public class CaptureAssistService extends AccessibilityService {
         if(handle==null||handle.getParent()!=bubble){
             bubble.removeAllViews();handle=control("","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;record("toggle",expanded?"open":"collapse");render();if(expanded)measureFrame(started);});handle.setPadding(0,dp(8),0,dp(8));handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);panel=null;
         }
-        handle.setText(expanded?"⠿  ZNote":"⋮");handle.setTextSize(expanded?14:19);
+        handle.setText(expanded?"⠿  ZNote":busy?"…":"⋮");handle.setTextSize(expanded?14:19);
         // Prepare once when the service connects; simple open/close reuses the
         // existing views instead of inflating and measuring a fresh control tree.
         if(panel==null||panelBusy!=busy||!java.util.Objects.equals(panelMessage,lastMessage)){
@@ -136,7 +136,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private AccessibilityNodeInfo button(String owner,boolean copy,int token)throws Exception{
 
-        for(AccessibilityWindowInfo w:getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_APPLICATION){AccessibilityNodeInfo root=(Build.VERSION.SDK_INT>=33?w.getRoot(0):w.getRoot());if(root==null)continue;if(!owner.equals(pkg(root))){root.recycle();continue;}
+        for(AccessibilityWindowInfo w:getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_APPLICATION){AccessibilityNodeInfo root=(Build.VERSION.SDK_INT>=33?w.getRoot(0):w.getRoot());if(root==null)continue;if(owner!=null&&!owner.equals(pkg(root))){root.recycle();continue;}
             // Provider-side text search reaches native dialogs and large lists without walking each row.
             for(String query:copy?new String[]{"复制链接","复制分享链接","Copy link"}:new String[]{"分享","转发","Share"}){check(token);java.util.List<AccessibilityNodeInfo> matches=root.findAccessibilityNodeInfosByText(query);AccessibilityNodeInfo hit=null;Rect first=new Rect();boolean ambiguous=false;for(AccessibilityNodeInfo n:matches){if(n.isVisibleToUser()&&!n.isPassword()&&semantic(n,copy)){Rect bounds=new Rect();n.getBoundsInScreen(bounds);if(hit==null){hit=n;first.set(bounds);continue;}if(!Rect.intersects(first,bounds))ambiguous=true;}n.recycle();}if(hit!=null){root.recycle();if(ambiguous){hit.recycle();throw new Exception("页面有多个分享入口，请先打开要采集的具体作品");}return hit;}}
             AccessibilityNodeInfo found=find(root,n->semantic(n,copy),token);if(found!=null)return found;
@@ -151,7 +151,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     static String link(String text){Matcher m=Pattern.compile("https?://[^\\s<>\"\\u200b，。；！、）】》]+").matcher(text);if(!m.find())return "";String value=m.group().replaceAll("[,;!]+$","");try{Uri u=Uri.parse(value);return u.getHost()!=null&&u.getUserInfo()==null&&value.length()<=8192?value:"";}catch(Exception e){return "";}}
     private void capture(){
-        if(busy)return;if(reading.get()){message("上一页面尚未响应，请稍后重试");return;}cancel();busy=true;lastMessage="";final int token=generation;final long started=SystemClock.uptimeMillis();render();
+        if(busy)return;if(reading.get()){message("上一页面尚未响应，请稍后重试");return;}cancel();busy=true;lastMessage="";expanded=false;final int token=generation;final long started=SystemClock.uptimeMillis();render();
         handler.postDelayed(()->{if(token==generation&&busy){cancel();record("timeout","page");message("页面读取超时，可收起或重试采集");}},12000);
         operation=reader.submit(()->{reading.set(true);try{check(token);
             AccessibilityNodeInfo root=page(null);if(root==null)throw new Exception("当前页面不可读取，请重新打开作品再试");String owner=pkg(root);root.recycle();
@@ -159,7 +159,7 @@ public class CaptureAssistService extends AccessibilityService {
             String value;
             if(browser(owner))value=browserLink(owner,token);else{
                 AccessibilityNodeInfo copy=button(owner,true,token);
-                if(copy==null){AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");long until=SystemClock.uptimeMillis()+5000;while(copy==null&&SystemClock.uptimeMillis()<until){Thread.sleep(180);check(token);copy=button(owner,true,token);}}
+                if(copy==null){AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");long until=SystemClock.uptimeMillis()+5000;while(copy==null&&SystemClock.uptimeMillis()<until){Thread.sleep(180);check(token);copy=button(null,true,token);}}
                 if(copy==null)throw new Exception("分享菜单中未识别到复制链接，请保持菜单打开后重试");
                 long copiedAfter=System.currentTimeMillis();if(!click(copy,token))throw new Exception("复制链接按钮未响应，请重试");
                 check(token);handler.post(()->{if(token==generation)openClipboard(owner,copiedAfter);});return;

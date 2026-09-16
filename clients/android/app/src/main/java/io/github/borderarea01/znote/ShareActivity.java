@@ -131,7 +131,7 @@ public class ShareActivity extends Activity {
         worker.execute(()->{try{
             if(files.isEmpty()){
                 JSONObject input=new JSONObject().put("text",value).put("image_mode",asNote?"note":"group").put("collection_id",target.isEmpty()?JSONObject.NULL:target).put("request_id","android:"+requestId);
-                JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(()->{if(floating()&&quickSave){if(CaptureAssistService.current!=null)CaptureAssistService.current.backgroundQueued(jobId);Toast.makeText(this,"已加入后台保存，可继续浏览",Toast.LENGTH_SHORT).show();finish();}else poll();});
+                JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(()->{if(floating()){if(CaptureAssistService.current!=null)CaptureAssistService.current.backgroundQueued(jobId);Toast.makeText(this,"已加入后台保存，可继续浏览",Toast.LENGTH_SHORT).show();finish();}else poll();});
             }else{
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}
                 ui(()->{saved("已保存 "+files.size()+" 个媒体文件，可返回原 App");});

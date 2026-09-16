@@ -75,9 +75,9 @@ test('capture archives image groups locally, retries without duplication, persis
   assert.equal((await request('/api/captures','POST',{...input,collection_id:other.id})).status,409);
   assert.equal((await fetch(base+'/api/captures')).status,401);
   const live=await json('/api/captures','POST',{text:'https://www.douyin.com/note/7685',collection_id:library.id,image_mode:'group',request_id:'douyin-live'});
-  const liveDone=await runtime.captures.wait(live.id,AbortSignal.timeout(10000));assert.match(liveDone.message,/1 段动态内容/);
+  const liveDone=await runtime.captures.wait(live.id,AbortSignal.timeout(10000));assert.match(liveDone.message,/1 段实况视频/);
   const liveItems=runtime.db.prepare("SELECT kind,group_key,group_index,tags,source_url FROM items WHERE source_url=? ORDER BY group_index").all('https://www.iesdouyin.com/share/slides/7685/');
-  assert.deepEqual(liveItems.map(v=>v.kind),['image','image','video']);assert.equal(new Set(liveItems.map(v=>v.group_key)).size,1);assert.deepEqual(liveItems.map(v=>v.group_index),[0,1,2]);assert.ok(JSON.parse(liveItems[2].tags).includes('实况作者'));
+  assert.deepEqual(liveItems.map(v=>v.kind),['video','image']);assert.equal(new Set(liveItems.map(v=>v.group_key)).size,1);assert.deepEqual(liveItems.map(v=>v.group_index),[0,1]);assert.ok(JSON.parse(liveItems[0].tags).includes('实况作者'));
   // No auto-capture for old messages/settings. New opt-in messages get a durable target.
   runtime.db.prepare("INSERT INTO settings VALUES('weixin_inbox_v1',?)").run(JSON.stringify({enabled:true,capture_links:true,collection_id:library.id,tags:['微信'],merge_mode:'daily',account:{token:'test',bot:'bot',user:'owner'},cursor:'',jobs:[]}));
   incoming.push({message_type:1,message_state:2,message_id:'1',from_user_id:'owner',create_time_ms:Date.now(),item_list:[{type:1,text_item:{text:'灵感\n第二行\nhttps://xhslink.com/a/abcd'}}]});
