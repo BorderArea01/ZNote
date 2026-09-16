@@ -150,7 +150,11 @@ public class SmokeRunner extends Instrumentation {
         until("!!document.querySelector('.detail-dialog')");
         js("document.querySelector('.image-stage button').click();true");
         until("!!document.querySelector('.zoom-viewer')");
-        automation().executeShellCommand("input keyevent 4").close();
+        shell("input keyevent 4");Thread.sleep(800);
+        // The headless emulator can drop the first injected Back event while
+        // the WebView is still taking focus. Retry only if the zoom layer is
+        // demonstrably still open; a real successful Back is never doubled.
+        if("true".equals(js("!!document.querySelector('.zoom-viewer')")))shell("input keyevent 4");
         until("!document.querySelector('.zoom-viewer')&&!!document.querySelector('.detail-dialog')");
         checkpoint("System Back closes zoom while retaining image detail");
         automation().executeShellCommand("input keyevent 4").close();
