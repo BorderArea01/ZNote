@@ -268,6 +268,17 @@ try {
     .locator(".item")
     .filter({ hasText: "m3u8 分段视频" })
     .first();
+  const pagesBeforeBackgroundSave=context.pages().length;
+  await hlsRow.getByRole('button',{name:'保存知识库',exact:true}).click();
+  await hlsRow.getByText('已保存到知识库',{exact:true}).waitFor({timeout:30000});
+  assert.equal(context.pages().length,pagesBeforeBackgroundSave,'Background save must not open a tab');
+  const videos = await (
+    await context.request.get(base + "/api/items?kind=video")
+  ).json();
+  assert.equal(videos.total, 1);
+  assert.equal(videos.items[0].width, 320);
+  assert.equal(videos.items[0].title,"雨后城市纪录");assert.ok(videos.items[0].tags.includes("影像作者"));assert.ok(videos.items[0].content.includes("作者：影像作者"));
+  assert.equal(videos.items[0].source_url, sourceUrl + "/");
   const opened = context.waitForEvent("page");
   await hlsRow.getByRole("button", { name: "预览", exact: true }).click();
   const media = await opened;
@@ -288,16 +299,9 @@ try {
   await media
     .getByRole("button", { name: "保存到知识库", exact: true })
     .click();
-  await media.getByText("已保存到知识库", { exact: true }).waitFor();
-  const videos = await (
-    await context.request.get(base + "/api/items?kind=video")
-  ).json();
-  assert.equal(videos.total, 1);
-  assert.equal(videos.items[0].width, 320);
-  assert.equal(videos.items[0].title,"雨后城市纪录");assert.ok(videos.items[0].tags.includes("影像作者"));assert.ok(videos.items[0].content.includes("作者：影像作者"));
+  await media.getByText("知识库已收录，已补充来源", { exact: true }).waitFor();
   const cover=await context.request.get(base+videos.items[0].thumbnail_url);assert.ok(cover.ok());assert.match(cover.headers()["content-type"],/image\/webp/);
   assert.ok(videos.items[0].duration >= 3.9);
-  assert.equal(videos.items[0].source_url, sourceUrl + "/");
   await context.request.patch(base+'/api/preferences',{data:{default_collection_id:collection.id}});
   const library=await context.newPage();await library.goto(base+'/#item/'+videos.items[0].id);await library.locator('video').waitFor();await library.waitForFunction(()=>document.querySelector('video')?.readyState>=2);await library.locator('video').evaluate(async v=>{v.muted=true;await v.play();});await library.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.ok(await library.locator('video').evaluate(v=>v.webkitAudioDecodedByteCount)>0);await library.keyboard.press('Escape');await library.locator('.video-cover').first().evaluate(img=>img.decode());await library.screenshot({path:resolve('artifacts/v097-video-library.png')});await library.close();
   await media.getByRole("button", { name: "下载", exact: true }).click();
@@ -309,13 +313,30 @@ try {
   }
   assert.ok(downloads.filter((d) => d.state === "complete").length >= 2);
   await page.bringToFront();
+  const pagesBeforeBackgroundDownload=context.pages().length;
+  await hlsRow.getByRole('button',{name:'下载',exact:true}).click();
+  await hlsRow.getByText('下载完成',{exact:true}).waitFor({timeout:30000});
+  assert.equal(context.pages().length,pagesBeforeBackgroundDownload,'Background download must not open a tab');
+  for (let i = 0; i < 100; i++) {
+    downloads = await worker.evaluate(() => chrome.downloads.search({}));
+    if (downloads.filter((d) => d.state === "complete").length >= 3) break;
+    await page.waitForTimeout(50);
+  }
+  assert.ok(downloads.filter((d) => d.state === "complete").length >= 3);
+
+  const directRow=panel.locator('.item').filter({hasText:'视频文件'}).first();
+  const pagesBeforeDirectSave=context.pages().length;
+  await directRow.getByRole('button',{name:'保存知识库',exact:true}).click();
+  await directRow.getByText(/已保存到知识库|知识库已收录/).waitFor({timeout:30000});
+  assert.equal(context.pages().length,pagesBeforeDirectSave,'Direct video save must not open a tab');
+  assert.ok((await (await context.request.get(base+'/api/items?kind=video')).json()).total>=1);
 
   await panel.getByRole('button',{name:'暂停嗅探',exact:true}).click();
   await page.evaluate(()=>fetch('/movie?id=paused').then(r=>r.arrayBuffer()));await page.waitForTimeout(200);
   let sniffer=await worker.evaluate(()=>chrome.storage.session.get('sniffTabs'));assert.ok(Object.values(sniffer.sniffTabs).every(s=>s.resources.every(r=>!r.url.includes('id=paused'))));
   await panel.getByRole('button',{name:'继续嗅探',exact:true}).click();
   await page.evaluate(()=>history.pushState({},'','/?next=1'));await page.waitForTimeout(200);
-  sniffer=await worker.evaluate(()=>chrome.storage.session.get('sniffTabs'));assert.ok(Object.values(sniffer.sniffTabs).every(s=>s.resources.every(r=>r.source_url.endsWith('/?next=1'))));
+  sniffer=await worker.evaluate(()=>chrome.storage.session.get('sniffTabs'));const nextStates=Object.values(sniffer.sniffTabs).filter(s=>s.source_url.endsWith('/?next=1'));assert.ok(nextStates.length);assert.ok(nextStates.every(s=>s.resources.every(r=>r.source_url.endsWith('/?next=1'))));
   await page.reload();
   await page
     .locator("[data-znote-overlay]")
@@ -332,7 +353,7 @@ try {
   assert.ok(requests.every((r) => !r.auth));
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: fast dismissal within 300 ms; mouse crosses preview gap and lingers over buttons; real save/download button clicks; default Z and custom D/Q; settings help; masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; S real download; input guard; video-only MIME sniffing behind blob player; HLS playback, remux save/download; source; navigation isolation; no source token leakage",
+    "PASS: fast dismissal within 300 ms; mouse crosses preview gap and lingers over buttons; real save/download button clicks; default Z and custom D/Q; settings help; masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; S real download; input guard; video-only MIME sniffing behind blob player; HLS playback; no-tab background remux save/download; source; navigation isolation; no source token leakage",
   );
 } catch (e) {
   await page.screenshot({ path: resolve("artifacts/v07-tools-failure.png") });

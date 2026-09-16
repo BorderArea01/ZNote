@@ -59,7 +59,7 @@ export async function limitedImage(url, signal) {
   } finally { await reader.cancel(); }
   return new Blob(chunks, { type: response.headers.get('content-type') || 'application/octet-stream' });
 }
-export async function saveDirectVideo(url, sourceUrl, title, signal, metadata = {}) {
+export async function saveDirectVideo(url, sourceUrl, title, signal, metadata = {}, providedConfig = null) {
   if (!/^https?:\/\//i.test(url || '')) throw new Error('播放器使用分段或 blob 地址，请改用“采集此页面的视频”');
   const response = await fetch(url, { credentials: 'include', signal: signal || AbortSignal.timeout(300000) });
   if (!response.ok) throw new Error('视频文件访问失败，可改用页面视频采集或下载后上传');
@@ -69,7 +69,7 @@ export async function saveDirectVideo(url, sourceUrl, title, signal, metadata = 
   if (mime && !/^(video\/|application\/octet-stream)/i.test(mime)) { await response.body?.cancel(); throw new Error('此地址不是直接视频文件，请使用页面视频采集'); }
   const reader = response.body.getReader(), chunks = []; let size = 0;
   try { while (true) { const {done,value} = await reader.read(); if (done) break; size += value.length; if (size > max) throw new Error('视频超过 500 MB'); chunks.push(value); } } finally { await reader.cancel(); }
-  const config = await settings(), form = new FormData();
+  const config = providedConfig || await settings(), form = new FormData();
   form.set('file', new Blob(chunks, { type: mime || 'video/mp4' }), '网页视频.mp4');
   const details=videoDetails({...metadata,title:title||metadata.title},config.tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean));
   form.set('title',details.title);
@@ -77,5 +77,5 @@ export async function saveDirectVideo(url, sourceUrl, title, signal, metadata = 
   if (/^https?:\/\//i.test(sourceUrl || '')) form.set('source_url', sourceUrl);
   form.set('tags',JSON.stringify(details.tags));
   if (config.collection_id) form.set('collection_id', config.collection_id);
-  return api('/api/videos', { method: 'POST', body: form, signal: signal || AbortSignal.timeout(300000) });
+  return api('/api/videos', { method: 'POST', body: form, signal: signal || AbortSignal.timeout(300000) }, config);
 }

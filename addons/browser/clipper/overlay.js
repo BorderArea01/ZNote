@@ -43,6 +43,7 @@
     dockAllowed = false,
     siteBlocked = true,
     renderedCards = new Map(),
+    mediaTasks = new Map(), taskSummary,
     scanTimer, scanInFlight, scanQueued=false, lastScan=0;
   const own = (event) => event.composedPath().includes(host);
   const shortcutHelp = () => `${downloadKey.toUpperCase()} 下载 · ${saveKey.toUpperCase()} 入库`;
@@ -83,11 +84,24 @@
     return el;
   };
   const css = `:host{all:initial;font:13px/1.55 system-ui,'Microsoft YaHei',sans-serif;color:#ecedf6}*{box-sizing:border-box}button,select,input{font:inherit}button{cursor:pointer;color:inherit;background:#2a3040;border:1px solid #404b65;border-radius:9px;padding:7px 11px}button:hover{background:#404b65}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #a8b5d3}button.primary{background:#5865ce;border-color:#808def}.dock{backdrop-filter:blur(18px);position:fixed;right:18px;bottom:24px;border:1px solid #a8b5d3;border-radius:24px;background:#1c202b;color:#ecedf6;box-shadow:0 5px 28px #0005;z-index:2147483647;padding:11px 16px;touch-action:none}.panel{position:fixed;right:18px;bottom:80px;width:min(414px,calc(100vw - 24px));max-height:min(710px,calc(100vh - 108px));display:flex;flex-direction:column;background:#14171f;color:#ecedf6;border:1px solid #404b65;border-radius:16px;box-shadow:0 12px 44px #0007;z-index:2147483647;overflow:hidden}.head,.controls,.destination{padding:12px 14px;border-bottom:1px solid #2a3040}.head{display:flex;align-items:center;justify-content:space-between;font-weight:650}.head small{font-size:11px;color:#a8b5d3;font-weight:400}.controls{display:flex;gap:6px;flex-wrap:wrap}.controls button[aria-pressed=true]{background:#404b65}.destination{display:grid;grid-template-columns:1fr 1fr;gap:8px}.destination input,.destination select{width:100%;min-width:0;border:1px solid #404b65;border-radius:7px;background:#1c202b;color:inherit;padding:6px}.destination label{font-size:11px}.list{overflow:auto;min-height:70px;padding:9px 12px;overscroll-behavior:contain}.item{padding:11px 0;border-bottom:1px solid #2a3040}.row{display:flex;gap:10px;align-items:center}.thumb{width:66px;height:48px;object-fit:cover;border-radius:6px;background:#2a3040}.info{min-width:0;flex:1}.title{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px}.meta{display:block;color:#a8b5d3;font-size:11px;word-break:break-all}.actions{display:flex;gap:7px;margin-top:9px}.footer{padding:10px 14px;color:#a8b5d3;font-size:11px;border-top:1px solid #2a3040}.status{padding:0 14px 10px;color:#cbd3e8;overflow-wrap:anywhere;font-size:12px}.preview{backdrop-filter:blur(18px);position:fixed;z-index:2147483646;padding:8px;border:1px solid #a8b5d3;border-radius:12px;background:#14171ff5;color:#ecedf6;box-shadow:0 8px 32px #0007;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);display:flex;flex-direction:column;gap:7px;pointer-events:auto}.preview img{display:block;max-width:min(720px,calc(100vw - 42px));max-height:calc(100vh - 116px);object-fit:contain}.preview .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.preview small{font-size:11px;color:#cbd3e8}.empty{color:#a8b5d3;padding:15px 2px}.hidden{display:none!important}`;
-  const videoCss = '.panel{width:min(440px,calc(100vw - 24px))}.item{padding:14px 2px}.row{align-items:flex-start;gap:12px}.thumb-button{padding:0;width:104px;height:78px;flex:none;overflow:hidden;border:1px solid #384157;border-radius:10px;background:#222735}.thumb{width:100%;height:100%;object-fit:cover;display:block}.thumb-fallback{display:grid;place-items:center;height:100%;color:#b9c5e9;font-size:25px}.title{font-size:13px;line-height:1.5;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}.author{display:block;margin-top:5px;font-size:12px;color:#c2caf0}.unresolved{margin-top:5px;color:#aaaec0}.variants{width:100%;margin-top:10px;background:#202533;color:#cbd3e8;border:1px solid #384157;border-radius:7px;padding:6px;font:inherit;font-size:11px}.actions{display:grid;grid-template-columns:1fr 1fr 1.5fr;margin-top:11px}.actions button{padding:8px 5px}';
+  const videoCss = '.panel{width:min(440px,calc(100vw - 24px))}.item{padding:14px 2px}.row{align-items:flex-start;gap:12px}.thumb-button{padding:0;width:104px;height:78px;flex:none;overflow:hidden;border:1px solid #384157;border-radius:10px;background:#222735}.thumb{width:100%;height:100%;object-fit:cover;display:block}.thumb-fallback{display:grid;place-items:center;height:100%;color:#b9c5e9;font-size:25px}.title{font-size:13px;line-height:1.5;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}.author{display:block;margin-top:5px;font-size:12px;color:#c2caf0}.unresolved{margin-top:5px;color:#aaaec0}.variants{width:100%;margin-top:10px;background:#202533;color:#cbd3e8;border:1px solid #384157;border-radius:7px;padding:6px;font:inherit;font-size:11px}.actions{display:grid;grid-template-columns:1fr 1fr 1.5fr;margin-top:11px}.actions button{padding:8px 5px}.task-state{display:block;margin-top:9px;padding:7px 9px;border-radius:8px;background:#202533;color:#cbd3e8;font-size:11px}.task-state.failed{color:#ffb8b8;background:#39252c}.task-state.complete{color:#bce9c9;background:#20342b}.head-title{display:flex;min-width:0;flex-direction:column}.head-title small{max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   function notify(text) {
     if (status) status.textContent = text;
   }
+  const latestTaskFor = resourceId => [...mediaTasks.values()]
+    .filter(task => task.resourceId === resourceId)
+    .sort((a,b) => b.updated-a.updated)[0];
+  function updateTaskSummary(task) {
+    if (!taskSummary) return;
+    const active=[...mediaTasks.values()].filter(value=>['queued','running'].includes(value.status));
+    taskSummary.textContent=active.length
+      ? `${active.length} 个后台任务 · ${active[0].message}`
+      : task ? `${task.title || '视频'} · ${task.message}` : '';
+    draw();
+  }
   async function act(resource, action, btn) {
+    const duplicate=[...mediaTasks.values()].find(task=>task.resourceId===resource.id&&task.action===action&&['queued','running'].includes(task.status));
+    if(duplicate){notify(duplicate.message);return;}
     if (btn) btn.disabled = true;
     notify("正在处理…");
     try {
@@ -97,6 +111,7 @@
         id: resource.id,
         action,
       });
+      if(result.task){const current=mediaTasks.get(result.task.id);if(!current||current.updated<=result.task.updated)mediaTasks.set(result.task.id,result.task);updateTaskSummary(mediaTasks.get(result.task.id));}
       notify(result.message);
     } catch (e) {
       notify(e.message);
@@ -109,12 +124,14 @@
     if (!list) return;
 
     const groups=globalThis.ZNoteVideoGroups(resources);
-    dock.textContent = '▶ 视频 '+(groups.length||'');
+    const activeTasks=[...mediaTasks.values()].filter(task=>['queued','running'].includes(task.status)).length;
+    dock.textContent = '▶ 视频 '+(groups.length||'')+(activeTasks?' · '+activeTasks+'处理中':'');
     const retained=new Set();let position=0;
     if(!groups.length){if(!list.querySelector('.empty'))list.replaceChildren(element('p','暂未发现视频。播放视频后自动发现 MP4、WebM 或 m3u8。',{class:'empty'}))}else list.querySelector('.empty')?.remove();
     for(const group of [...groups].reverse()){
       let r=group.items.find(x=>x.id===selectedVariants.get(group.key))||group.primary;
-      retained.add(group.key);const signature=JSON.stringify([r.id,group.items]),cached=renderedCards.get(group.key);
+      const task=latestTaskFor(r.id);
+      retained.add(group.key);const signature=JSON.stringify([r.id,group.items,task]),cached=renderedCards.get(group.key);
       if(cached?.signature===signature){if(list.children[position]!==cached.node)list.insertBefore(cached.node,list.children[position]||null);position++;continue}
       cached?.node.remove();
       const item=element('article',null,{class:'item','data-resource-id':r.id,'data-work-id':r.work_id||''});
@@ -137,13 +154,15 @@
       }
       const actions=element('div',null,{class:'actions'});
       for(const [label,action]of [['预览','preview'],['下载','download'],['保存知识库','save']]){const btn=button(label,()=>act(r,action,btn));if(action==='save')btn.classList.add('primary');actions.append(btn)}
-      item.append(actions);list.insertBefore(item,list.children[position]||null);position++;renderedCards.set(group.key,{signature,node:item});
+      item.append(actions);
+      if(task){const taskState=element('span',task.message,{class:'task-state '+task.status,role:'status'});item.append(taskState);}
+      list.insertBefore(item,list.children[position]||null);position++;renderedCards.set(group.key,{signature,node:item});
     }
     for(const [key,entry]of renderedCards)if(!retained.has(key)){entry.node.remove();renderedCards.delete(key);selectedVariants.delete(key)}
   }
   const recentMedia=new Map();
   const rememberMedia=entry=>{if(!entry?.name)return;const interesting=/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(entry.name)||/^https?:\/\/[^/]*\.(douyinvod|douyinstatic)\.com\//i.test(entry.name);if(!interesting)return;recentMedia.delete(entry.name);recentMedia.set(entry.name,entry);while(recentMedia.size>200)recentMedia.delete(recentMedia.keys().next().value);return true};
-  function scheduleScan(){if(!enabled||siteBlocked||document.hidden||scanTimer)return;scanTimer=setTimeout(()=>{scanTimer=null;runScan()},Math.max(250,750-(performance.now()-lastScan)))}
+  function scheduleScan(){if(!enabled||siteBlocked||document.hidden||panel?.classList.contains('hidden')||scanTimer)return;scanTimer=setTimeout(()=>{scanTimer=null;runScan()},Math.max(250,750-(performance.now()-lastScan)))}
   function scan(){globalThis.ZNoteDouyinRefresh?.();return runScan()}
   function runScan(){
     if(!enabled||siteBlocked||document.hidden)return;
@@ -195,6 +214,9 @@
     clearTimeout(pollTimer);
     poll();
     try {
+      const taskState=await send({type:'media-task-list'});
+      mediaTasks=new Map((taskState.tasks||[]).map(task=>[task.id,task]));
+      updateTaskSummary(taskState.tasks?.[0]);
       const config = await send({ type: "media-connect" });
       selector.replaceChildren(
         new Option("未分类", ""),
@@ -222,7 +244,7 @@
     }
     pollTimer = setTimeout(poll, 1500);
   }
-  function closePanel(){panel.classList.add("hidden");clearTimeout(pollTimer);globalThis.ZNoteVideoThumbnailCancel?.()}
+  function closePanel(){panel.classList.add("hidden");clearTimeout(pollTimer);clearTimeout(scanTimer);scanTimer=null;scanQueued=false;globalThis.ZNoteVideoThumbnailCancel?.()}
   function hide() {
     clearTimeout(hoverTimer); clearTimeout(hideTimer); hideTimer = null; pendingTarget = null;
     preview.classList.add("hidden");
@@ -429,7 +451,10 @@
       "aria-label": "ZNote 视频嗅探",
     });
     const head = element("div", null, { class: "head" });
-    head.append(element("span", "ZNote · 视频嗅探"));
+    const headTitle=element('div',null,{class:'head-title'});
+    taskSummary=element('small','');
+    headTitle.append(element("span", "ZNote · 视频嗅探"),taskSummary);
+    head.append(headTitle);
     head.append(button("收起", closePanel));
     panel.append(head);
     const controls = element("div", null, { class: "controls" });
@@ -566,7 +591,7 @@
     window.addEventListener('resize', placePreview);
     window.addEventListener('znote-hide-preview',hide);
     let pageURL=location.href;
-    const pageChanged=()=>{if(pageURL===location.href)return;pageURL=location.href;hide();pawControls?.checkRoute();};
+    const pageChanged=()=>{if(pageURL===location.href)return;pageURL=location.href;hide();resources=[];recentMedia.clear();selectedVariants.clear();for(const entry of renderedCards.values())entry.node.remove();renderedCards.clear();draw();pawControls?.checkRoute();};
     for(const event of ['popstate','hashchange','pageshow','znote-page-changed'])window.addEventListener(event,pageChanged);
     window.addEventListener('znote-work-updated',()=>{
       pageChanged();
@@ -668,6 +693,7 @@
     chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (sender.id !== chrome.runtime.id) return;
       if(message.type==='media-page-changed'){pageChanged();reply({ok:true});}
+      if(message.type==='media-task-update'&&message.task){mediaTasks.set(message.task.id,message.task);updateTaskSummary(message.task);notify(`${message.task.title || '视频'}：${message.task.message}`);reply({ok:true});}
       if (message.type === 'media-settings-changed') { refreshSettings(); reply({ok: true}); }
       if (message.type === "open-media-panel") {
         open().then(()=>reply(siteBlocked?{ok:false,error:'此网站已停用媒体采集，可在扩展设置中管理黑名单'}:{ok:true}),()=>reply({ok:false,error:'无法打开媒体浮窗，请刷新页面重试'}));

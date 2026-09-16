@@ -2,6 +2,7 @@ import { mediaKind, addResource } from "./resource-store.js";
 import { api, settings, serverUrl, saveImage, limitedImage } from "./client.js";
 import { openGallery,pendingInlineGalleries } from './gallery-ticket.js';
 import { blockedSite } from './site-policy.js';
+import { startMediaTask, mediaTasksForTab } from './media-tasks.js';
 const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
@@ -70,8 +71,7 @@ chrome.webNavigation.onCommitted.addListener((details) => {
   }).catch(() => {});
 });
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
-  chrome.tabs.sendMessage(details.tabId,{type:'media-page-changed',url:details.url},{frameId:details.frameId}).catch(()=>{});
-  if (details.frameId !== 0) return;
+  if (details.frameId !== 0) {chrome.tabs.sendMessage(details.tabId,{type:'media-page-changed',url:details.url},{frameId:details.frameId}).catch(()=>{});return;}
   serial(async () => {
     const old = states[details.tabId];
     if (old && old.source_url !== details.url) {
@@ -82,10 +82,11 @@ chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
         updated: Date.now(),
       };
       await persist();
+      await chrome.tabs.sendMessage(details.tabId,{type:'media-page-changed',url:details.url},{frameId:0}).catch(()=>{});
       if(old.enabled)await chrome.tabs
         .sendMessage(details.tabId, { type: "scan-media-frame" })
         .catch(() => {});
-    }
+    } else await chrome.tabs.sendMessage(details.tabId,{type:'media-page-changed',url:details.url},{frameId:0}).catch(()=>{});
   }).catch(() => {});
 });
 chrome.tabs.onRemoved.addListener((tabId) =>
@@ -122,7 +123,7 @@ function cleanFilename(resource) {
     name += "." + extension;
   return "ZNote/" + name;
 }
-export async function resourceAction(resource, action) {
+export async function resourceAction(resource, action, tabId) {
   if (action === "download" && resource.kind !== "hls") {
     await chrome.downloads.download({
       url: resource.url,
@@ -150,6 +151,13 @@ export async function resourceAction(resource, action) {
   }
   if (!["preview", "save", "download"].includes(action))
     throw new Error("操作无效");
+  if (action !== "preview") {
+    const task = await startMediaTask(resource, action, tabId);
+    return {
+      message: task.status === "running" ? task.message : "已加入后台处理，不会打开新页面",
+      task,
+    };
+  }
   const saved = await chrome.storage.session.get(null),
     tickets = Object.entries(saved)
       .filter(([k]) => k.startsWith("media-"))
@@ -201,8 +209,9 @@ export async function discover(message, sender) {
         if(details?.author)await serial(async()=>{const state=await stateFor(tabId);addResource(state,{...details,url:resource.url,kind:resource.kind,mime:resource.mime});await persist()});
       }catch{}
     }
-    return resourceAction(resource, message.action);
+    return resourceAction(resource, message.action, tabId);
   }
+  if (message.type === 'media-task-list') return { tasks: await mediaTasksForTab(tabId) };
   if (message.type === "hover-resource")
     return serial(async () => {
       const state = await stateFor(tabId);

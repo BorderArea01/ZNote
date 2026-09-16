@@ -12,7 +12,7 @@
 
 当前公开组件：
 
-- [浏览器采集扩展](browser/clipper/README.md)
+- [ZNote · 网页采集](browser/clipper/README.md)
 - [微信收件连接器](connectors/weixin/README.md)
 - [AI 对话学习笔记](ai/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md)
 
