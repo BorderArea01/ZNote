@@ -284,6 +284,17 @@ curl http://localhost:3741/api/items \
 
 [API 指南](docs/API.md) · [外部采集示例](examples/clip.mjs) · [事件轮询](examples/events.mjs) · [Webhook 接收器](examples/webhook-receiver.mjs)
 
+### 可选 AI 工作流插件
+
+仓库内的 [ZNote 对话学习笔记](plugins/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md) 可以把 ChatGPT、Claude、Gemini 等 AI 对话提炼为可复习的 Markdown 图文笔记，再通过写入令牌保存到指定知识库。插件会保留关键推理、出处、图片、可复用步骤和复习问题；API 令牌只保存在用户目录或环境变量中，不进入仓库。
+
+```bash
+codex plugin marketplace add BorderArea01/ZNote
+codex plugin add znote-conversation-notes@znote
+```
+
+这是可选插件，不影响 ZNote 服务、网页和客户端的正常使用。
+
 ## 文档与开发
 
 | 文档 | 你会找到什么 |
@@ -293,6 +304,7 @@ curl http://localhost:3741/api/items \
 | [存储与迁移](docs/STORAGE.md) | 去重、无损保存、六种导出与备份恢复 |
 | [微信接入](integrations/weixin/README.md) | 扫码、归档、联网条件与迁移 |
 | [普通扩展](extensions/clipper/README.md) | 安装、连接、批量入库与格式支持 |
+| [AI 对话学习笔记插件](plugins/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md) | 把 AI 对话归纳成图文学习笔记并安全写入 ZNote |
 | [API 接入](docs/API.md) / [开发指南](docs/DEVELOPMENT.md) | 鉴权、示例、结构、测试与贡献 |
 | [更新记录](CHANGELOG.md) / [体验优化路线](docs/EXPERIENCE-ROADMAP.md) | 已完成改进与后续方向 |
 | [扩展设计与参考](docs/EXTENSION-DESIGN.md) / [第三方组件](THIRD_PARTY_NOTICES.md) | 开源参考、组件来源与许可证 |

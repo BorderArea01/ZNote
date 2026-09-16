@@ -1,0 +1,22 @@
+{
+  "name": "znote-conversation-notes",
+  "version": "0.1.0+codex.20260916120906",
+  "description": "Turn AI conversations into illustrated learning notes and save them to ZNote.",
+  "author": {
+    "name": "BorderArea01"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ZNote \u5bf9\u8bdd\u5b66\u4e60\u7b14\u8bb0",
+    "shortDescription": "\u628a AI \u5bf9\u8bdd\u63d0\u70bc\u6210\u53ef\u590d\u4e60\u7684 ZNote \u56fe\u6587\u7b14\u8bb0\u3002",
+    "longDescription": "\u6574\u7406 ChatGPT\u3001Claude\u3001Gemini \u7b49 AI \u5bf9\u8bdd\uff0c\u4fdd\u7559\u5173\u952e\u63a8\u7406\u3001\u51fa\u5904\u3001\u56fe\u7247\u3001\u53ef\u590d\u7528\u65b9\u6cd5\u548c\u590d\u4e60\u95ee\u9898\uff0c\u5e76\u6309\u9700\u5b89\u5168\u5199\u5165 ZNote\u3002",
+    "developerName": "BorderArea01",
+    "category": "Productivity",
+    "capabilities": [
+      "conversation summarization",
+      "illustrated Markdown",
+      "ZNote publishing"
+    ],
+    "defaultPrompt": "Use $znote-conversation-notes to turn this conversation into an illustrated learning note and save it to ZNote."
+  }
+}

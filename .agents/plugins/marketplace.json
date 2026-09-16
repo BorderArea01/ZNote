@@ -1,0 +1,20 @@
+{
+  "name": "znote",
+  "interface": {
+    "displayName": "Znote"
+  },
+  "plugins": [
+    {
+      "name": "znote-conversation-notes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/znote-conversation-notes"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ZNote 对话学习笔记"
+  short_description: "把 AI 对话整理成可复习的 ZNote 图文笔记"
+  default_prompt: "Use $znote-conversation-notes to turn this conversation into an illustrated learning note and save it to ZNote."
