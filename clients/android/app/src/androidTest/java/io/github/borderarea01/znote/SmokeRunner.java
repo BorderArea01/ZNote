@@ -24,6 +24,7 @@ public class SmokeRunner extends Instrumentation {
     private void nativeUntil(Activity target,String expected)throws Exception{long deadline=System.currentTimeMillis()+30000;while(System.currentTimeMillis()<deadline){String[] value={""};if(target==null){android.view.accessibility.AccessibilityNodeInfo r=automation().getRootInActiveWindow();value[0]=r!=null&&getTargetContext().getPackageName().contentEquals(r.getPackageName())&&!r.findAccessibilityNodeInfosByText(expected).isEmpty()?expected:"";}else runOnMainSync(()->value[0]=nativeText(target.getWindow().getDecorView()));if(value[0].contains(expected))return;Thread.sleep(250);}throw new Exception("Native share did not reach: "+expected);}
     private Activity openCapture(Intent intent)throws Exception{getTargetContext().startActivity(intent);Thread.sleep(500);return null;}
     private void closeCapture()throws Exception{shell("input keyevent 4");Thread.sleep(400);}
+    private int diagnosticCount(String token)throws Exception{java.io.File file=new java.io.File(getTargetContext().getFilesDir(),"capture-diagnostics.log");if(!file.isFile())return 0;String value=new String(java.nio.file.Files.readAllBytes(file.toPath()),java.nio.charset.StandardCharsets.UTF_8);int count=0,at=0;while((at=value.indexOf(token,at))>=0){count++;at+=token.length();}return count;}
     private void touchText(String text)throws Exception{
         waitForIdleSync();long deadline=System.currentTimeMillis()+5000;
         while(System.currentTimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
@@ -88,10 +89,10 @@ public class SmokeRunner extends Instrumentation {
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
             overlayTouch("⋮");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
-            overlayTouch("采集当前作品");
+            int queuedBefore=diagnosticCount("capture_queued");overlayTouch("采集当前作品");
             String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
             long queued=SystemClock.uptimeMillis()+8000;boolean resumed=false;
-            while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
+            while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(diagnosticCount("capture_queued")>queuedBefore&&root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
             if(!resumed)throw new Exception("Quick capture blocked browsing for "+pkg+" ("+expected+")");
             overlayTouch("⋮");overlayControl("已加入后台保存，可继续浏览");overlayTouch("收起");
             checkpoint("On-demand current-link flow queued in background and returned to simulated "+pkg);
