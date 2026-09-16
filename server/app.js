@@ -1300,7 +1300,7 @@ export function createApp({
       return res.status(400).json({
         error:
           err.code === "LIMIT_FILE_SIZE"
-            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '备份不能超过 5 GiB' : '单张图片不能超过 100 MB')
+            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单张图片不能超过 100 MB')
             : "上传格式或数量超出限制",
       });
     if (String(err.message).includes("UNIQUE constraint"))
