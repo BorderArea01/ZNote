@@ -95,7 +95,7 @@ public class SmokeRunner extends Instrumentation {
             while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(diagnosticCount("capture_queued")>queuedBefore&&root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
             if(!resumed)throw new Exception("Quick capture blocked browsing for "+pkg+" ("+expected+")");
             if(!pkg.equals("com.chrome.beta")&&diagnosticCount("direct_share_received")<=directBefore)throw new Exception("Android direct-share target was not used for "+pkg);
-            overlayTouch("⋮");overlayControl("已加入后台保存，可继续浏览");overlayTouch("收起");
+            overlayTouch("⋮");overlayControl("收起");overlayTouch("收起");
             checkpoint("Direct Android share-target flow queued in background and returned to simulated "+pkg);
         }
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.xingin.xhs","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
