@@ -14,6 +14,8 @@ import android.widget.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.*;
+import java.net.*;
+import org.json.JSONObject;
 
 /** One user-triggered operation at a time. No tree traversal on the UI thread. */
 public class CaptureAssistService extends AccessibilityService {
@@ -28,12 +30,16 @@ public class CaptureAssistService extends AccessibilityService {
     private String panelMessage;
     private boolean panelBusy;
     private final ExecutorService diagnostics=Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService tracker=Executors.newSingleThreadScheduledExecutor();
+    private boolean trackerScheduled;
     private boolean expanded=false,busy=false;
     private volatile int generation=0;
     private Future<?> operation;
     private final java.util.concurrent.atomic.AtomicBoolean reading=new java.util.concurrent.atomic.AtomicBoolean();
     private String lastMessage="";
     private long tapAt;
+    private String directShareOwner="";
+    private long directShareUntil;
     private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     @Override public void onCreate(){
@@ -43,10 +49,10 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();}
+    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
-    @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
+    @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;render();}
     void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);if(!diagnostics.isShutdown())diagnostics.execute(()->writeDiagnostic(event,detail));}
     private void recordEnvironment(){if(diagnostics.isShutdown())return;diagnostics.execute(()->{try{
@@ -134,6 +140,18 @@ public class CaptureAssistService extends AccessibilityService {
         for(String raw:new String[]{clean(n.getText()),clean(n.getContentDescription())}){String value=raw.replaceAll("[,，。]*(双击即可激活|双击激活|doubletaptoactivate)[。.!！]*$","");if(copy?value.matches("(?i)^(复制(分享)?链接|copylink)[,，·]*(按钮)?$"):value.matches("(?i)^(更多分享|分享|转发|share)((此|该)?(笔记|作品|视频)|按钮|给朋友|给好友)?[,，·]*([0-9.]+[万wWkK]?)?(按钮)?$"))return true;}
         String id=n.getViewIdResourceName();return !copy&&id!=null&&id.toLowerCase(Locale.ROOT).matches(".*:id/(.*_)?(share|share_button|share_icon|btn_share|iv_share)");
     }
+    private static boolean znoteTarget(AccessibilityNodeInfo n){
+        for(String raw:new String[]{clean(n.getText()),clean(n.getContentDescription())})if(raw.matches("(?i)^(保存到)?ZNote(快速入库)?(按钮)?$"))return true;
+        return false;
+    }
+    private static boolean moreShareTarget(AccessibilityNodeInfo n){for(String raw:new String[]{clean(n.getText()),clean(n.getContentDescription())})if(raw.matches("(?i)^(更多|更多分享|其他|系统分享|More)(按钮)?$"))return true;return false;}
+    private AccessibilityNodeInfo optionTarget(int token,Match match)throws Exception{for(AccessibilityWindowInfo w:getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_APPLICATION&&(w.isActive()||w.isFocused())){AccessibilityNodeInfo root=(Build.VERSION.SDK_INT>=33?w.getRoot(0):w.getRoot());if(root==null)continue;AccessibilityNodeInfo found=find(root,match,token);if(found!=null)return found;}return null;}
+    private AccessibilityNodeInfo shareTarget(int token)throws Exception{
+        for(AccessibilityWindowInfo w:getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_APPLICATION&&(w.isActive()||w.isFocused())){AccessibilityNodeInfo root=(Build.VERSION.SDK_INT>=33?w.getRoot(0):w.getRoot());if(root==null)continue;
+            for(String query:new String[]{"ZNote","保存到 ZNote"}){check(token);java.util.List<AccessibilityNodeInfo> matches=root.findAccessibilityNodeInfosByText(query);for(AccessibilityNodeInfo n:matches){if(n.isVisibleToUser()&&!n.isPassword()&&znoteTarget(n)){root.recycle();return n;}n.recycle();}}
+            AccessibilityNodeInfo found=find(root,CaptureAssistService::znoteTarget,token);if(found!=null)return found;
+        }return null;
+    }
     private AccessibilityNodeInfo button(String owner,boolean copy,int token)throws Exception{
 
         for(AccessibilityWindowInfo w:getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_APPLICATION){AccessibilityNodeInfo root=(Build.VERSION.SDK_INT>=33?w.getRoot(0):w.getRoot());if(root==null)continue;if(owner!=null&&!owner.equals(pkg(root))){root.recycle();continue;}
@@ -159,7 +177,18 @@ public class CaptureAssistService extends AccessibilityService {
             String value;
             if(browser(owner))value=browserLink(owner,token);else{
                 AccessibilityNodeInfo copy=button(owner,true,token);
-                if(copy==null){AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");long until=SystemClock.uptimeMillis()+5000;while(copy==null&&SystemClock.uptimeMillis()<until){Thread.sleep(180);check(token);copy=button(null,true,token);}}
+                if(copy==null){
+                    AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+                    long opened=SystemClock.uptimeMillis(),until=opened+5500;boolean openedSystemShare=false;
+                    while(copy==null&&SystemClock.uptimeMillis()<until){
+                        Thread.sleep(160);check(token);
+                        AccessibilityNodeInfo target=shareTarget(token);
+                        if(target!=null){armDirectShare(owner);if(click(target,token)){record("capture_transport","android_share");return;}clearDirectShare();}
+                        if(!openedSystemShare&&SystemClock.uptimeMillis()-opened>650){AccessibilityNodeInfo more=optionTarget(token,CaptureAssistService::moreShareTarget);if(more!=null){openedSystemShare=click(more,token);if(openedSystemShare){record("capture_transport","open_system_share");Thread.sleep(300);continue;}}}
+                        copy=button(null,true,token);
+                        if(copy!=null&&SystemClock.uptimeMillis()-opened<1800){copy.recycle();copy=null;}
+                    }
+                }
                 if(copy==null)throw new Exception("分享菜单中未识别到复制链接，请保持菜单打开后重试");
                 long copiedAfter=System.currentTimeMillis();if(!click(copy,token))throw new Exception("复制链接按钮未响应，请重试");
                 check(token);handler.post(()->{if(token==generation)openClipboard(owner,copiedAfter);});return;
@@ -182,6 +211,13 @@ public class CaptureAssistService extends AccessibilityService {
         String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:new String[]{"douyin.com","iesdouyin.com"};
         for(String domain:domains)if(host.equals(domain)||host.endsWith("."+domain))return true;return false;
     }
+    private synchronized void armDirectShare(String owner){directShareOwner=owner;directShareUntil=SystemClock.elapsedRealtime()+12000;}
+    private synchronized void clearDirectShare(){directShareOwner="";directShareUntil=0;}
+    synchronized boolean consumeDirectShare(Intent intent,String text,boolean hasMedia){
+        if(directShareOwner.isEmpty()||SystemClock.elapsedRealtime()>directShareUntil){clearDirectShare();return false;}
+        String owner=directShareOwner,url=link(text==null?"":text);if(!hasMedia&&(url.isEmpty()||!acceptsLink(owner,url)))return false;
+        clearDirectShare();record("capture_transport","direct_share_received");return true;
+    }
     private void openClipboard(String owner,long after){openPanel("",owner,after,true,true);}
     private void open(String value){openPanel(value,"",0,value.isEmpty(),!value.isEmpty());}
     private void openPanel(String value,String owner,long after,boolean clipboard,boolean quick){
@@ -189,7 +225,31 @@ public class CaptureAssistService extends AccessibilityService {
         record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick));}
         catch(Exception e){message("无法打开采集面板，请重试");}
     }
-    void backgroundQueued(String id){lastMessage="已加入后台保存，可继续浏览";busy=false;expanded=false;record("capture_queued",id);render();notifyReady();}
+    void backgroundQueued(String id){lastMessage="已加入后台保存，可继续浏览";busy=false;expanded=false;record("capture_queued",id);rememberJob(id);render();notifyReady();scheduleTracking(0);}
+    private synchronized Set<String> trackedJobs(){return new HashSet<>(prefs().getStringSet("capture_jobs",Collections.emptySet()));}
+    private synchronized void rememberJob(String id){Set<String> jobs=trackedJobs();jobs.add(id);prefs().edit().putStringSet("capture_jobs",jobs).putLong("capture_job_"+id,System.currentTimeMillis()).apply();}
+    private synchronized void forgetJob(String id){Set<String> jobs=trackedJobs();jobs.remove(id);prefs().edit().putStringSet("capture_jobs",jobs).remove("capture_job_"+id).apply();}
+    private synchronized void scheduleTracking(long delay){if(tracker.isShutdown()||trackerScheduled||trackedJobs().isEmpty())return;trackerScheduled=true;tracker.schedule(()->{synchronized(CaptureAssistService.this){trackerScheduled=false;}trackJobs();},delay,TimeUnit.MILLISECONDS);}
+    private void trackJobs(){
+        Set<String> jobs=trackedJobs();if(jobs.isEmpty())return;boolean pending=false;
+        try{
+            Bundle session=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"session",null,null);String origin=session==null?"":MainActivity.normalize(session.getString("origin","")),cookie=session==null?"":session.getString("cookie","");if(origin.isEmpty())throw new Exception("missing session");
+            for(String id:jobs){
+                if(System.currentTimeMillis()-prefs().getLong("capture_job_"+id,System.currentTimeMillis())>24L*60*60*1000){forgetJob(id);notifyResult(id,false,"采集任务等待超过一天，请在任务中心查看或重试");continue;}
+                try{HttpURLConnection c=(HttpURLConnection)new URL(origin+"/api/captures/"+Uri.encode(id)).openConnection();c.setConnectTimeout(8000);c.setReadTimeout(15000);if(cookie!=null&&!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);int code=c.getResponseCode();if(code==404){forgetJob(id);notifyResult(id,false,"采集任务记录已不存在");c.disconnect();continue;}java.io.InputStream stream=code>=400?c.getErrorStream():c.getInputStream();byte[] bytes=readSmall(stream);if(stream!=null)stream.close();c.disconnect();if(code<200||code>=300)throw new java.io.IOException("HTTP "+code);JSONObject job=new JSONObject(new String(bytes,java.nio.charset.StandardCharsets.UTF_8));String state=job.optString("status"),message=job.optString("message","采集任务已结束");if("completed".equals(state)){forgetJob(id);notifyResult(id,true,message);}else if("failed".equals(state)){forgetJob(id);notifyResult(id,false,message);}else pending=true;
+                }catch(Exception e){pending=true;record("capture_poll_failed",e.getClass().getSimpleName());}
+            }
+        }catch(Exception e){pending=true;record("capture_tracker_wait",e.getClass().getSimpleName());}
+        if(pending||!trackedJobs().isEmpty())scheduleTracking(5000);
+    }
+    private byte[] readSmall(java.io.InputStream stream)throws java.io.IOException{if(stream==null)return new byte[0];java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] block=new byte[4096];int n;while((n=stream.read(block))!=-1){if(out.size()+n>1024*1024)throw new java.io.IOException("response too large");out.write(block,0,n);}return out.toByteArray();}
+    private void notifyResult(String id,boolean success,String message){
+        lastMessage=success?"最近一次采集已保存":"最近一次采集失败，点通知查看";record("capture_result",(success?"completed ":"failed ")+id);handler.post(()->{if(bubble!=null){render();notifyReady();}});
+        android.app.NotificationManager manager=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);android.app.NotificationChannel channel=new android.app.NotificationChannel("capture_results","采集结果",android.app.NotificationManager.IMPORTANCE_DEFAULT);channel.setDescription("后台采集成功或失败通知");manager.createNotificationChannel(channel);
+        android.app.PendingIntent open=android.app.PendingIntent.getActivity(this,300,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+        android.app.Notification n=new android.app.Notification.Builder(this,"capture_results").setSmallIcon(R.drawable.ic_capture_notification).setContentTitle(success?"已保存到 ZNote":"ZNote 采集失败").setContentText(message).setStyle(new android.app.Notification.BigTextStyle().bigText(message)).setAutoCancel(true).setContentIntent(open).build();manager.notify(5000+Math.floorMod(id.hashCode(),10000),n);
+    }
+    void directResult(boolean success,String message){notifyResult("direct-"+UUID.randomUUID(),success,message);}
     void notifyReady(){
         android.app.NotificationManager notifications=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         notifications.createNotificationChannel(new android.app.NotificationChannel("capture_ready","悬浮采集管理",android.app.NotificationManager.IMPORTANCE_LOW));

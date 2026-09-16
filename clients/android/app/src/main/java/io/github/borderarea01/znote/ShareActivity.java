@@ -29,7 +29,7 @@ public class ShareActivity extends Activity {
     private TextView status;
     private Button save;
     private Button login;
-    private boolean busy=false,visible=false,ready=false,completed=false,quickSave=false;
+    private boolean busy=false,visible=false,ready=false,completed=false,quickSave=false,autoShare=false;
     private boolean clipboardPending;
     private int clipboardAttempts;
     private final ClipboardManager.OnPrimaryClipChangedListener clipboardListener=()->{if(clipboardPending&&hasWindowFocus())handler.post(this::readClipboard);};
@@ -44,14 +44,14 @@ public class ShareActivity extends Activity {
     private Button button(String value,Runnable click){return NativeUi.button(this,value,click);}
     @Override public void onCreate(Bundle state){
         if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);timing("panel_create");
-        quickSave=floating()&&getIntent().getBooleanExtra("quick_save",false);clipboardPending=floating()&&getIntent().getBooleanExtra("read_clipboard",false)&&state==null;
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");uploaded=state.getInt("uploaded",0);}
-        Intent intent=getIntent();CharSequence extra=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);String shared=extra==null?null:extra.toString();
-        if(shared==null)shared="";
+        Intent intent=getIntent();String shared=sharedText(intent);
         try{
             if(Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())){ArrayList<Uri> values=intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);if(values!=null)for(Uri value:values)addFile(value);}
             else if(Intent.ACTION_SEND.equals(intent.getAction()))addFile(intent.getParcelableExtra(Intent.EXTRA_STREAM));
         }catch(Exception ignored){files.clear();}
+        autoShare=state==null&&CaptureAssistService.current!=null&&CaptureAssistService.current.consumeDirectShare(intent,shared,!files.isEmpty());
+        quickSave=(floating()&&intent.getBooleanExtra("quick_save",false))||autoShare;clipboardPending=floating()&&intent.getBooleanExtra("read_clipboard",false)&&state==null;
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff161b28);root.setPadding(dp(24),dp(24),dp(24),dp(20));
         root.setOnApplyWindowInsetsListener((v,i)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets s=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(24)+s.left,dp(24)+s.top,dp(24)+s.right,dp(20)+s.bottom);}return i;});
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
@@ -100,7 +100,12 @@ public class ShareActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);intent.putExtra("fresh_capture",true);setIntent(intent);handler.removeCallbacksAndMessages(null);jobId="";requestId=UUID.randomUUID().toString();uploaded=0;busy=false;completed=false;recreate();}
     private void nextCapture(){if(!files.isEmpty()){onNewIntent(new Intent(this,getClass()));return;}handler.removeCallbacksAndMessages(null);jobId="";requestId=UUID.randomUUID().toString();uploaded=0;files.clear();busy=false;completed=false;collection.setEnabled(true);text.setEnabled(true);text.setText("");if(imageMode!=null)imageMode.setEnabled(true);save.setText("保存到知识库");save.setEnabled(ready);save.setOnClickListener(v->submit());status.setText("可粘贴下一条分享链接");}
-    private void maybeQuickSave(){if(quickSave&&ready&&!busy&&!completed&&!text.getText().toString().trim().isEmpty())submit();}
+    private String sharedText(Intent intent){
+        LinkedHashSet<String> parts=new LinkedHashSet<>();for(String key:new String[]{Intent.EXTRA_TEXT,Intent.EXTRA_SUBJECT,Intent.EXTRA_TITLE}){CharSequence value=intent.getCharSequenceExtra(key);if(value!=null&&!value.toString().trim().isEmpty())parts.add(value.toString().trim());}
+        ClipData clip=intent.getClipData();if(clip!=null)for(int i=0;i<clip.getItemCount();i++){CharSequence value=clip.getItemAt(i).getText();if(value!=null&&!value.toString().trim().isEmpty())parts.add(value.toString().trim());Uri uri=clip.getItemAt(i).getUri();if(uri!=null)addFile(uri);}
+        return String.join("\n",parts);
+    }
+    private void maybeQuickSave(){if(quickSave&&ready&&!busy&&!completed&&(!files.isEmpty()||!text.getText().toString().trim().isEmpty()))submit();}
     private void saved(String message){busy=false;completed=true;status.setText(message);save.setText("继续采集");save.setEnabled(true);save.setOnClickListener(v->nextCapture());}
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}
     @Override protected void onResume(){super.onResume();visible=true;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).addPrimaryClipChangedListener(clipboardListener);if(!completed&&(!busy||!jobId.isEmpty()))loadCollections();}
@@ -131,12 +136,12 @@ public class ShareActivity extends Activity {
         worker.execute(()->{try{
             if(files.isEmpty()){
                 JSONObject input=new JSONObject().put("text",value).put("image_mode",asNote?"note":"group").put("collection_id",target.isEmpty()?JSONObject.NULL:target).put("request_id","android:"+requestId);
-                JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(()->{if(floating()){if(CaptureAssistService.current!=null)CaptureAssistService.current.backgroundQueued(jobId);Toast.makeText(this,"已加入后台保存，可继续浏览",Toast.LENGTH_SHORT).show();finish();}else poll();});
+                JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(()->{if(floating()||autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.backgroundQueued(jobId);Toast.makeText(this,"已加入后台保存，可继续浏览",Toast.LENGTH_SHORT).show();finish();}else poll();});
             }else{
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}
-                ui(()->{saved("已保存 "+files.size()+" 个媒体文件，可返回原 App");});
+                ui(()->{String message="已保存 "+files.size()+" 个媒体文件";if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(true,message);Toast.makeText(this,message,Toast.LENGTH_SHORT).show();finish();}else saved(message+"，可返回原 App");});
             }
-        }catch(Exception e){ui(()->{busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);status.setText((uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage());});}});
+        }catch(Exception e){ui(()->{String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);status.setText(message);});}});
     }
     private void poll(){
         if(!visible||jobId.isEmpty()||isDestroyed())return;

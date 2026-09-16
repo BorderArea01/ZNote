@@ -89,14 +89,19 @@ public class SmokeRunner extends Instrumentation {
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
             overlayTouch("⋮");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
-            int queuedBefore=diagnosticCount("capture_queued");overlayTouch("采集当前作品");
+            int queuedBefore=diagnosticCount("capture_queued"),directBefore=diagnosticCount("direct_share_received");overlayTouch("采集当前作品");
             String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
             long queued=SystemClock.uptimeMillis()+8000;boolean resumed=false;
             while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(diagnosticCount("capture_queued")>queuedBefore&&root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
             if(!resumed)throw new Exception("Quick capture blocked browsing for "+pkg+" ("+expected+")");
+            if(!pkg.equals("com.chrome.beta")&&diagnosticCount("direct_share_received")<=directBefore)throw new Exception("Android direct-share target was not used for "+pkg);
             overlayTouch("⋮");overlayControl("已加入后台保存，可继续浏览");overlayTouch("收起");
-            checkpoint("On-demand current-link flow queued in background and returned to simulated "+pkg);
+            checkpoint("Direct Android share-target flow queued in background and returned to simulated "+pkg);
         }
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.xingin.xhs","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
+        overlayTouch("⋮");int clipboardQueued=diagnosticCount("capture_queued");overlayTouch("采集当前作品");long clipboardDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=clipboardQueued&&SystemClock.uptimeMillis()<clipboardDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=clipboardQueued)throw new Exception("Clipboard transport fallback did not queue");checkpoint("Copy-link fallback remains available when the source share sheet does not expose ZNote");
+        long resultDeadline=SystemClock.uptimeMillis()+30000;while(diagnosticCount("capture_result")==0&&SystemClock.uptimeMillis()<resultDeadline)Thread.sleep(250);if(diagnosticCount("capture_result")==0)throw new Exception("Background capture result was not observed");
+        if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->"capture_results".equals(n.getNotification().getChannelId())))throw new Exception("Background capture result notification missing");checkpoint("Background capture completion or failure remains visible after the floating panel closes");
         FloatingShareActivity fallback=(FloatingShareActivity)openCapture(new Intent(getTargetContext(),FloatingShareActivity.class).putExtra("read_clipboard",true).putExtra("copied_after",System.currentTimeMillis()+60000).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         nativeUntil(fallback,"未读到本次分享链接");
         runOnMainSync(()->((android.content.ClipboardManager)getTargetContext().getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("fixture","http://127.0.0.1/manual-fallback")));
