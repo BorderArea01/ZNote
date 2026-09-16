@@ -17,3 +17,5 @@
 - [AI 对话学习笔记](ai/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md)
 
 专用或私人插件在独立私有项目维护，不把源码、构建缓存或下载地址放进本仓库。新增公开扩展时，应放入对应分类，并同时更新本页、[文档索引](../docs/README.md)和根 README。
+
+本机需要集中维护私人浏览器扩展时，统一放在 `addons/browser/private/`。公开仓库会忽略这个目录的全部内容，包括嵌套仓库、源码、构建产物和安装包。

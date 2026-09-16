@@ -15,6 +15,10 @@ artifacts/
 tools/media/
 tools/windows-server/
 
+# Private browser extensions are maintained locally in a nested private repo.
+# Keep source code, build output, packages and connection state out of ZNote.
+/addons/browser/private/
+
 # Local deployment evidence is not project source.
 /VERIFICATION*.md
 /DEVELOPMENT-v*.md
