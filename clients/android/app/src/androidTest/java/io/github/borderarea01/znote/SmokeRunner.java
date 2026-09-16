@@ -73,8 +73,8 @@ public class SmokeRunner extends Instrumentation {
         android.graphics.Rect first=overlayControl("⋮");Thread.sleep(400);first=overlayControl("⋮");long started=SystemClock.uptimeMillis();
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstDown,true);firstDown.recycle();
         MotionEvent firstUp=MotionEvent.obtain(started,SystemClock.uptimeMillis(),1,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstUp,true);firstUp.recycle();
-        overlayControl("获取当前页面");checkpoint("First floating touch-to-frame (includes cold text rendering): "+panelLatency(1500)+"ms");
-        overlayTouch("获取当前页面");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
+        overlayControl("采集当前作品");checkpoint("First floating touch-to-frame (includes cold text rendering): "+panelLatency(1500)+"ms");
+        overlayTouch("采集当前作品");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
         android.graphics.Rect before=overlayControl("⋮");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
         Thread.sleep(300);android.graphics.Rect after=overlayControl("⋮");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
@@ -88,36 +88,35 @@ public class SmokeRunner extends Instrumentation {
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
             overlayTouch("⋮");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
-            overlayTouch("获取当前页面");Activity captured=null;
+            overlayTouch("采集当前作品");
             String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
-            nativeUntil(captured,expected);
-            if(pkg.equals("com.xingin.xhs")){
-                nativeUntil(null,"已连接");Thread.sleep(300);android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-panel.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
-                android.graphics.Rect bounds=new android.graphics.Rect();automation().getRootInActiveWindow().getBoundsInScreen(bounds);if(bounds.height()>=getTargetContext().getResources().getDisplayMetrics().heightPixels)throw new Exception("Capture panel replaced the full screen");
-            }
-            closeCapture();Thread.sleep(350);
-            checkpoint("On-demand current-link flow passed for simulated "+pkg);
+            long queued=SystemClock.uptimeMillis()+8000;boolean resumed=false;
+            while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
+            if(!resumed)throw new Exception("Quick capture blocked browsing for "+pkg+" ("+expected+")");
+            overlayTouch("⋮");overlayControl("已加入后台保存，可继续浏览");overlayTouch("收起");
+            checkpoint("On-demand current-link flow queued in background and returned to simulated "+pkg);
         }
         FloatingShareActivity fallback=(FloatingShareActivity)openCapture(new Intent(getTargetContext(),FloatingShareActivity.class).putExtra("read_clipboard",true).putExtra("copied_after",System.currentTimeMillis()+60000).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         nativeUntil(fallback,"未读到本次分享链接");
         runOnMainSync(()->((android.content.ClipboardManager)getTargetContext().getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("fixture","http://127.0.0.1/manual-fallback")));
-        touchText("读取剪贴板 / 粘贴链接");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
+        touchText("读取剪贴板链接");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
+        android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-panel.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
         touchText("保存到知识库");nativeUntil(fallback,"不能采集本机或内网地址");
         checkpoint("Stale clipboard is rejected, explicit paste works in the small panel, server failures remain retryable");
         closeCapture();
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("⋮");overlayTouch("获取当前页面");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("⋮");overlayControl("获取当前页面");
+        overlayTouch("⋮");overlayTouch("采集当前作品");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("⋮");overlayControl("采集当前作品");
         Thread.sleep(1500);if("io.github.borderarea01.znote".contentEquals(automation().getRootInActiveWindow().getPackageName()))throw new Exception("Cancelled capture opened a stale share page");overlayTouch("收起");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("⋮");overlayTouch("获取当前页面");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+        overlayTouch("⋮");overlayTouch("采集当前作品");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
         overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("⋮");
         checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.chrome.beta","io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
         android.graphics.Rect point=overlayControl("⋮");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
         new Handler(Looper.getMainLooper()).post(()->{entered.countDown();try{Thread.sleep(6000);}catch(InterruptedException ignored){}finally{released.countDown();}});entered.await();
         long begin=SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(begin,begin,0,point.centerX(),point.centerY(),0);automation().injectInputEvent(down,true);down.recycle();MotionEvent up=MotionEvent.obtain(begin,SystemClock.uptimeMillis(),1,point.centerX(),point.centerY(),0);automation().injectInputEvent(up,true);up.recycle();
-        overlayControl("获取当前页面");overlayTouch("粘贴");nativeUntil(null,"保存到 ZNote");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating handle and native capture Activity respond above another app while library thread is blocked: "+panelLatency(600)+"ms");
-        closeCapture();overlayTouch("⋮");overlayTouch("关闭");
+        overlayControl("采集当前作品");overlayTouch("粘贴链接");nativeUntil(null,"保存这条作品");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating handle and native capture Activity respond above another app while library thread is blocked: "+panelLatency(600)+"ms");
+        closeCapture();captureCommand("hide");
         if(captureCommand("status").getInt("pid")!=state.getInt("pid"))throw new Exception("Capture process restarted during window interactions");
         String diagnostics=new String(java.nio.file.Files.readAllBytes(new java.io.File(getTargetContext().getFilesDir(),"capture-diagnostics.log").toPath()),java.nio.charset.StandardCharsets.UTF_8);
         if(!diagnostics.contains("process_start")||!diagnostics.contains("panel_frame")||!diagnostics.contains("toggle open"))throw new Exception("Persistent capture diagnostics missing");

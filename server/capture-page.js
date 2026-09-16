@@ -8,6 +8,7 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { publicAddress } from './remote-images.js';
 import { captureImageCandidates } from './capture-images.js';
+import { MAX_IMAGE_BYTES } from './image-limits.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 export async function fetchCapturePage(value, signal, redirects = 0) {
@@ -29,7 +30,7 @@ export async function fetchCapturePage(value, signal, redirects = 0) {
         fetchCapturePage(new URL(res.headers.location, url).href, signal, redirects + 1).then(resolve, reject); return;
       }
       if (res.statusCode !== 200) { res.resume(); reject(fail(`页面无法读取（HTTP ${res.statusCode}），可能需要登录或验证`)); return; }
-      const type = res.headers['content-type'] || '', limit = type.startsWith('image/') ? 25 * 1024 * 1024 : 8 * 1024 * 1024;
+      const type = res.headers['content-type'] || '', limit = type.startsWith('image/') ? MAX_IMAGE_BYTES : 8 * 1024 * 1024;
       if (type && !/^(text\/html|application\/xhtml\+xml|image\/)/i.test(type)) { res.destroy(); reject(fail('链接没有返回网页或图片')); return; }
       if (Number(res.headers['content-length']) > limit) { res.destroy(); reject(fail('页面或图片超过采集大小上限')); return; }
       const chunks = []; let size = 0;
@@ -65,32 +66,48 @@ function findRecord(data, id, platform) {
   while (stack.length && count++ < 30000) {
     const v = stack.pop(); if (!v || typeof v !== 'object') continue;
     if (platform === 'xhs' && String(v.noteId || v.note_id || '') === id && (Array.isArray(v.imageList) || v.type === 'video')) return v;
-    if (platform === 'douyin' && String(v.aweme_id || v.awemeId || '') === id && (v.desc !== undefined || v.author)) return v;
+    if (platform === 'douyin' && String(v.aweme_id || v.awemeId || '') === id && (v.desc !== undefined || v.author || v.images || v.image_list || v.image_post_info)) return v;
     for (const child of Object.values(v)) if (child && typeof child === 'object') stack.push(child);
   }
   return null;
+}
+const values = value => typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter(v => typeof v === 'string') : [];
+function liveVideoCandidates(image, base) {
+  const video=image?.video||image?.live_photo?.video||image?.motion_video;
+  if(!video)return [];
+  const addresses=[video.play_addr,video.play_addr_h264,video.download_addr,video];
+  const found=[];
+  for(const address of addresses){
+    if(!address)continue;
+    for(const raw of [...values(address.url_list),...values(address.url),...values(address.play_url),...values(address.download_url)]){
+      const url=absolute(raw,base);if(url)found.push(url);
+    }
+  }
+  return [...new Set(found)].slice(0,8);
 }
 export function extractCapturePage(html, url) {
   const { document } = parseHTML(html), u = new URL(url), host = u.hostname;
   const meta = name => document.querySelector(`meta[property="${name}"],meta[name="${name}"]`)?.getAttribute('content') || '';
   const xhs = /(^|\.)xiaohongshu\.com$/.test(host), dy = /(^|\.)(douyin|iesdouyin)\.com$/.test(host);
-  const id = xhs ? u.pathname.match(/\/(?:explore|discovery\/item)\/([a-f\d]+)/i)?.[1] : u.pathname.match(/\/(?:video|note)\/(\d+)/)?.[1] || u.searchParams.get('modal_id');
+  const id = xhs ? u.pathname.match(/\/(?:explore|discovery\/item)\/([a-f\d]+)/i)?.[1] : u.pathname.match(/\/(?:video|note|slides)\/(\d+)/)?.[1] || u.searchParams.get('modal_id');
   if (xhs || dy) {
     for (const script of [...document.querySelectorAll('script:not([src])')].slice(0,150).sort((a,b)=>Number(b.textContent.includes('window.__SETUP_SERVER_STATE__='))-Number(a.textContent.includes('window.__SETUP_SERVER_STATE__=')))) {
       let raw = script.textContent;
       if (script.id === 'RENDER_DATA') { try { raw = decodeURIComponent(raw); } catch { continue; } }
       const record = id && findRecord(scriptData(raw), id, xhs ? 'xhs' : 'douyin');
       if (!record) continue;
-      if (xhs && record.type === 'video' || dy && !record.images?.length && !record.image_post_info?.images?.length) {
+      const galleryImages=xhs ? record.imageList || [] : record.images || record.image_list || record.image_post_info?.images || record.image_post_info?.image_list || [];
+      if (xhs && record.type === 'video' || dy && !galleryImages.length) {
         const streams=xhs?record.video?.media?.stream?.h264||[]:[];
         const candidates=xhs?[...streams].sort((a,b)=>(b.width*b.height-a.width*a.height)||(b.videoBitrate-a.videoBitrate)).flatMap(s=>[s.masterUrl,...(s.backupUrls||[])]):record.video?.play_addr?.url_list||[];
         return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8) };
       }
-      const images = (xhs ? record.imageList || [] : record.images || record.image_post_info?.images || []).map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
+      const images = galleryImages.map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
       if (!images.length || images.length > 100) throw fail('未取得完整图集或图集超过 100 张');
       const urls = images.map(v => v[0]);
       if (urls.some(v => !v)) throw fail('图集中有无法解析的图片地址');
-      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || '' };
+      const live_videos=xhs?[]:galleryImages.map((image,index)=>({index,urls:liveVideoCandidates(image,url)})).filter(v=>v.urls.length);
+      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || '' };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.
     if (dy && !/\/note\//.test(u.pathname) || /video/i.test(meta('og:type'))) return { kind: 'video', url };

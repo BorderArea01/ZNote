@@ -7,6 +7,8 @@ test('on-demand renderer only accepts platform requests and exact work links',()
   assert.equal(douyinWork('https://www.douyin.com/user/self?modal_id=123'),'123');
   assert.equal(douyinWork('https://douyin.com.evil.test/video/123'),'');
   assert.ok(allowedCaptureRequest('https://www.douyin.com/aweme/v1/web/aweme/detail/','fetch'));
+  assert.ok(allowedCaptureRequest('https://www.iesdouyin.com/web/api/v2/aweme/slidesinfo/','xhr'));
+  assert.ok(allowedCaptureRequest('https://www.iesdouyin.com/web/api/v2/aweme/slidesinfo','xhr'));
   for(const url of ['http://localhost/api','http://192.168.1.1/','https://douyin.com.evil.test/','file:///a','https://user:pass@www.douyin.com/','https://www.douyin.com:3000/'])assert.equal(allowedCaptureRequest(url,'fetch'),false);
   for(const type of ['image','media','font'])assert.equal(allowedCaptureRequest('https://www.douyin.com/file',type),false);
 });

@@ -6,8 +6,8 @@ android {
         applicationId 'io.github.borderarea01.znote'
         minSdk 29
         targetSdk 35
-        versionCode 10011
-        versionName '0.10.0-beta.11'
+        versionCode 10012
+        versionName '0.10.0-beta.12'
         testInstrumentationRunner 'io.github.borderarea01.znote.SmokeRunner'
     }
     signingConfigs {

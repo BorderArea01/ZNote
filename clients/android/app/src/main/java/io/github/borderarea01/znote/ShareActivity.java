@@ -29,13 +29,13 @@ public class ShareActivity extends Activity {
     private TextView status;
     private Button save;
     private Button login;
-    private boolean busy=false,visible=false,ready=false,completed=false;
+    private boolean busy=false,visible=false,ready=false,completed=false,quickSave=false;
     private boolean clipboardPending;
     private int clipboardAttempts;
     private final ClipboardManager.OnPrimaryClipChangedListener clipboardListener=()->{if(clipboardPending&&hasWindowFocus())handler.post(this::readClipboard);};
     private void timing(String event){String detail="launch_ms="+Math.max(0,SystemClock.elapsedRealtime()-getIntent().getLongExtra("panel_requested_at",SystemClock.elapsedRealtime()));if(CaptureAssistService.current!=null)CaptureAssistService.current.record(event,detail);else android.util.Log.i("ZNoteCapture",event+" "+detail);}
     private boolean floating(){return this instanceof FloatingShareActivity;}
-    private void resizePanel(){if(floating()){WindowManager.LayoutParams p=getWindow().getAttributes();p.width=Math.min(dp(360),getResources().getDisplayMetrics().widthPixels-dp(24));p.height=Math.min(dp(560),getResources().getDisplayMetrics().heightPixels-dp(100));p.x=0;p.y=0;getWindow().setAttributes(p);}}
+    private void resizePanel(){if(floating()){WindowManager.LayoutParams p=getWindow().getAttributes();p.width=Math.min(dp(350),getResources().getDisplayMetrics().widthPixels-dp(24));p.height=Math.min(dp(quickSave?210:460),getResources().getDisplayMetrics().heightPixels-dp(100));p.x=0;p.y=0;getWindow().setAttributes(p);}}
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);resizePanel();}
     private int uploaded=0;
     private SharedPreferences preferences(){return getSharedPreferences("CaptureSharing",MODE_PRIVATE);}
@@ -44,7 +44,7 @@ public class ShareActivity extends Activity {
     private Button button(String value,Runnable click){return NativeUi.button(this,value,click);}
     @Override public void onCreate(Bundle state){
         if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);timing("panel_create");
-        clipboardPending=floating()&&getIntent().getBooleanExtra("read_clipboard",false)&&state==null;
+        quickSave=floating()&&getIntent().getBooleanExtra("quick_save",false);clipboardPending=floating()&&getIntent().getBooleanExtra("read_clipboard",false)&&state==null;
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");uploaded=state.getInt("uploaded",0);}
         Intent intent=getIntent();CharSequence extra=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);String shared=extra==null?null:extra.toString();
         if(shared==null)shared="";
@@ -61,15 +61,15 @@ public class ShareActivity extends Activity {
             resizePanel();
             getWindow().setGravity(Gravity.CENTER);setFinishOnTouchOutside(false);
         }
-        TextView panelTitle=label(floating()?"⠿  保存到 ZNote":"保存到 ZNote",floating()?20:26);
+        TextView panelTitle=label(floating()?"⠿  保存这条作品":"保存到 ZNote",floating()?19:26);
         LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);titleRow.addView(panelTitle,new LinearLayout.LayoutParams(0,-2,1));{Button close=button("×",this::finish);NativeUi.quiet(close);close.setContentDescription("收起采集面板");titleRow.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));}root.addView(titleRow);
         if(floating())panelTitle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;public boolean onTouch(View v,android.view.MotionEvent e){WindowManager.LayoutParams p=getWindow().getAttributes();if(e.getActionMasked()==MotionEvent.ACTION_DOWN){x=e.getRawX();y=e.getRawY();ox=p.x;oy=p.y;return true;}if(e.getActionMasked()==MotionEvent.ACTION_MOVE){int maxX=Math.max(0,(getResources().getDisplayMetrics().widthPixels-p.width)/2),maxY=Math.max(0,(getResources().getDisplayMetrics().heightPixels-p.height)/2);p.x=Math.max(-maxX,Math.min(maxX,ox+(int)(e.getRawX()-x)));p.y=Math.max(-maxY,Math.min(maxY,oy+(int)(e.getRawY()-y)));getWindow().setAttributes(p);return true;}return true;}});
         LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
-        if(floating())heading.addView(button("读取剪贴板 / 粘贴链接",()->{if(completed)nextCapture();getIntent().removeExtra("copied_after");getIntent().removeExtra("source_package");clipboardAttempts=0;clipboardPending=true;readClipboard();}),new LinearLayout.LayoutParams(0,dp(48),1));
+        if(floating())heading.addView(button(quickSave?"正在读取当前作品…":"读取剪贴板链接",()->{if(completed)nextCapture();getIntent().removeExtra("copied_after");getIntent().removeExtra("source_package");clipboardAttempts=0;clipboardPending=true;readClipboard();}),new LinearLayout.LayoutParams(0,dp(48),1));
         else heading.addView(label(files.isEmpty()?"分享链接":"已接收 "+files.size()+" 个媒体文件",15),new LinearLayout.LayoutParams(0,-2,1));
         Button help=button("?",()->new AlertDialog.Builder(this).setTitle("手机采集").setMessage("分享或粘贴一个作品链接，服务器负责下载正文、图片或视频。也可直接接收其他 App 分享的图片、视频，不用先存到相册。\n\n局域网保存需要手机能连接服务器。外出时可将链接发给微信 ClawBot，并在微信收件设置开启链接采集。平台要求登录或验证时，任务会保留失败原因。") .setPositiveButton("知道了",null).show());help.setContentDescription("手机采集说明");heading.addView(help,new LinearLayout.LayoutParams(dp(52),dp(48)));root.addView(heading);
         text=new EditText(this);text.setTextColor(0xffe7ebf5);text.setHintTextColor(0xffa1abc0);text.setHint(files.isEmpty()?"粘贴 App 分享文字或网页链接":"备注（可选）");text.setMinLines(3);text.setMaxLines(7);text.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(16000)});text.setText(shared);root.addView(text);
-        if(floating()){text.setMinLines(2);text.setMaxLines(3);}
+        if(floating()){text.setMinLines(1);text.setMaxLines(2);}
         root.addView(label("目标知识库",15));collection=new Spinner(this);root.addView(collection,new LinearLayout.LayoutParams(-1,dp(52)));
         if(files.isEmpty()){
             root.addView(label("图集保存方式",15));imageMode=new Spinner(this);
@@ -92,7 +92,7 @@ public class ShareActivity extends Activity {
             String value=clipText!=null?clipText.toString():clip!=null&&clip.getItemCount()>0&&clip.getItemAt(0).getUri()!=null?clip.getItemAt(0).getUri().toString():"";
             String url=CaptureAssistService.link(value),owner=getIntent().getStringExtra("source_package");
             if(!url.isEmpty()&&CaptureAssistService.acceptsLink(owner,url)){
-                clipboardPending=false;text.setText(value);status.setText("已读取分享链接，确认知识库后保存");return;
+                clipboardPending=false;text.setText(value);status.setText(quickSave?"已读取，正在加入后台保存…":"已读取分享链接，确认知识库后保存");maybeQuickSave();return;
             }
         }catch(SecurityException ignored){}
         if(++clipboardAttempts<20){handler.postDelayed(this::readClipboard,200);return;}
@@ -100,6 +100,7 @@ public class ShareActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);intent.putExtra("fresh_capture",true);setIntent(intent);handler.removeCallbacksAndMessages(null);jobId="";requestId=UUID.randomUUID().toString();uploaded=0;busy=false;completed=false;recreate();}
     private void nextCapture(){if(!files.isEmpty()){onNewIntent(new Intent(this,getClass()));return;}handler.removeCallbacksAndMessages(null);jobId="";requestId=UUID.randomUUID().toString();uploaded=0;files.clear();busy=false;completed=false;collection.setEnabled(true);text.setEnabled(true);text.setText("");if(imageMode!=null)imageMode.setEnabled(true);save.setText("保存到知识库");save.setEnabled(ready);save.setOnClickListener(v->submit());status.setText("可粘贴下一条分享链接");}
+    private void maybeQuickSave(){if(quickSave&&ready&&!busy&&!completed&&!text.getText().toString().trim().isEmpty())submit();}
     private void saved(String message){busy=false;completed=true;status.setText(message);save.setText("继续采集");save.setEnabled(true);save.setOnClickListener(v->nextCapture());}
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}
     @Override protected void onResume(){super.onResume();visible=true;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).addPrimaryClipChangedListener(clipboardListener);if(!completed&&(!busy||!jobId.isEmpty()))loadCollections();}
@@ -116,7 +117,7 @@ public class ShareActivity extends Activity {
             JSONObject result=request("GET","/api/collections",null);JSONArray rows=result.optJSONArray("collections");
             if(rows==null)throw new IOException("知识库列表格式不正确，请更新服务器");
             ArrayList<String> names=new ArrayList<>(),ids=new ArrayList<>();names.add("未分类");ids.add("");for(int i=0;i<rows.length();i++){JSONObject c=rows.getJSONObject(i);names.add(c.getString("name"));ids.add(c.getString("id"));}
-            ui(()->{login.setVisibility(View.GONE);collectionIds.clear();collectionIds.addAll(ids);ArrayAdapter<String> adapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,names){@Override public View getView(int p,View view,android.view.ViewGroup parent){TextView v=(TextView)super.getView(p,view,parent);v.setTextColor(0xffe7ebf5);return v;}};adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);collection.setAdapter(adapter);int at=ids.indexOf(preferences().getString("share_collection",""));collection.setSelection(Math.max(0,at));if(imageMode!=null)imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);ready=true;if(!jobId.isEmpty()){busy=true;save.setEnabled(false);poll();}else{save.setEnabled(true);status.setText(at<0?"上次的知识库已不存在，请重新选择":"已连接，保存后由服务器处理");}});
+            ui(()->{login.setVisibility(View.GONE);collectionIds.clear();collectionIds.addAll(ids);ArrayAdapter<String> adapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,names){@Override public View getView(int p,View view,android.view.ViewGroup parent){TextView v=(TextView)super.getView(p,view,parent);v.setTextColor(0xffe7ebf5);return v;}};adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);collection.setAdapter(adapter);int at=ids.indexOf(preferences().getString("share_collection",""));collection.setSelection(Math.max(0,at));if(at<0)quickSave=false;if(imageMode!=null)imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);ready=true;if(!jobId.isEmpty()){busy=true;save.setEnabled(false);poll();}else{save.setEnabled(true);status.setText(at<0?"上次的知识库已不存在，请重新选择":quickSave?"已连接，正在准备后台保存…":"已连接，保存后由服务器处理");maybeQuickSave();}});
         }catch(Exception e){ui(()->{login.setVisibility(View.VISIBLE);status.setText(e.getMessage());});}});
     }
     private void submit(){
@@ -130,7 +131,7 @@ public class ShareActivity extends Activity {
         worker.execute(()->{try{
             if(files.isEmpty()){
                 JSONObject input=new JSONObject().put("text",value).put("image_mode",asNote?"note":"group").put("collection_id",target.isEmpty()?JSONObject.NULL:target).put("request_id","android:"+requestId);
-                JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(this::poll);
+                JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(()->{if(floating()&&quickSave){if(CaptureAssistService.current!=null)CaptureAssistService.current.backgroundQueued(jobId);Toast.makeText(this,"已加入后台保存，可继续浏览",Toast.LENGTH_SHORT).show();finish();}else poll();});
             }else{
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}
                 ui(()->{saved("已保存 "+files.size()+" 个媒体文件，可返回原 App");});
@@ -162,9 +163,10 @@ public class ShareActivity extends Activity {
         HttpURLConnection c=connection(method,path);try{if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream out=c.getOutputStream()){out.write(body.getBytes(StandardCharsets.UTF_8));}}return response(c);}finally{c.disconnect();}
     }
     private String fileName(Uri uri)throws Exception {try(android.database.Cursor cursor=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){if(cursor!=null&&cursor.moveToFirst()&&cursor.getString(0)!=null)return cursor.getString(0);}return "手机分享";}
+    private long fileSize(Uri uri){try(android.database.Cursor cursor=getContentResolver().query(uri,new String[]{OpenableColumns.SIZE},null,null,null)){if(cursor!=null&&cursor.moveToFirst()&&!cursor.isNull(0))return cursor.getLong(0);}catch(Exception ignored){}return -1;}
     private void upload(Uri uri,String target,String note,int index)throws Exception{
         String mime=getContentResolver().getType(uri);if(mime==null||!(mime.startsWith("image/")||mime.startsWith("video/")))throw new IOException("分享内容不是可接收的图片或视频");
-        boolean video=mime.startsWith("video/");String name="分享媒体 "+(index+1);
+        boolean video=mime.startsWith("video/");long limit=(video?500L:100L)*1024*1024,known=fileSize(uri);if(known>limit)throw new IOException(video?"视频超过 500 MB":"图片超过 100 MB");String name="分享媒体 "+(index+1);
         try(android.database.Cursor cursor=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){if(cursor!=null&&cursor.moveToFirst())name=cursor.getString(0);}
         if(name==null||name.isEmpty())name="分享媒体";name=name.replaceAll("[\\r\\n\"\\\\]","_");if(name.length()>180)name=name.substring(0,180);
         String boundary="znote"+UUID.randomUUID().toString();HttpURLConnection c=connection("POST",video?"/api/videos":"/api/assets");
@@ -175,7 +177,7 @@ public class ShareActivity extends Activity {
                 long imageCount=files.stream().filter(v->{String type=getContentResolver().getType(v);return type!=null&&type.startsWith("image/");}).count();
                 if(!video&&imageCount>1){field(out,boundary,"group_key","upload:"+requestId);String cover=fileName(files.stream().filter(v->{String type=getContentResolver().getType(v);return type!=null&&type.startsWith("image/");}).findFirst().get());field(out,boundary,"group_title",cover.substring(0,Math.min(180,cover.length())));field(out,boundary,"group_index",String.valueOf(index));}
                 out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+name+"\"\r\nContent-Type: "+mime+"\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-                try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("无法读取分享文件，请从原 App 重新分享");byte[] block=new byte[65536];long total=0,limit=(video?500L:25L)*1024*1024;int n;while((n=in.read(block))!=-1){total+=n;if(total>limit)throw new IOException("媒体超过当前上传大小上限");out.write(block,0,n);}}
+                try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("无法读取分享文件，请从原 App 重新分享");byte[] block=new byte[65536];long total=0;int n;while((n=in.read(block))!=-1){total+=n;if(total>limit)throw new IOException(video?"视频超过 500 MB":"图片超过 100 MB");out.write(block,0,n);}}
                 out.write(("\r\n--"+boundary+"--\r\n").getBytes(StandardCharsets.UTF_8));
             }response(c);
         }finally{c.disconnect();}

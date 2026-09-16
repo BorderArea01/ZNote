@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp} from 'node:fs/promises';
-import {resolve} from 'node:path';
+import {copyFile,mkdtemp} from 'node:fs/promises';
+import {join,resolve} from 'node:path';
 import sharp from 'sharp';
 import {createApp} from '../server/app.js';
 import {extractCapturePage,fetchCapturePage} from '../server/capture-page.js';
@@ -11,6 +11,11 @@ import {captureImageCandidates} from '../server/capture-images.js';
 import {platformUrl} from '../server/imports.js';
 import {downloadCaptureVideo} from '../server/capture-video.js';
 const xhs=(images=['https://cdn.example/one.jpg','https://cdn.example/two.jpg'])=>`<html><head><title>小红书</title></head><body><script>window.__INITIAL_STATE__=${JSON.stringify({note:{noteDetailMap:{abcd:{note:{noteId:'abcd',title:'旅行手账',desc:'第一行\n第二行',user:{nickname:'旅行作者'},imageList:images.map(urlDefault=>({urlDefault}))}}}}})};</script></body></html>`;
+const douyinLive=()=>{
+  const picture=name=>({origin_url:`https://p3.douyinpic.com/${name}.jpg`,url_list:[`https://p9.douyinpic.com/${name}.jpg`]});
+  const images=[{...picture('live'),live_photo_type:1,video:{play_addr:{url_list:['https://v26.douyinvod.com/live.mp4']}}},picture('still')];
+  return '<script>window._ROUTER_DATA = '+JSON.stringify({aweme_details:[{aweme_id:'7685',aweme_type:68,desc:'实况作品',author:{nickname:'实况作者'},image_list:images}]})+'</script>';
+};
 test('mobile platform variants retain work identity, author and native playback data',async()=>{
   assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).host,'www.bilibili.com');
   assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).searchParams.get('p'),'2');
@@ -37,13 +42,24 @@ test('share parsing and article extraction preserve links, line breaks and exact
   assert.match(article.content,/https:\/\/example.com\/reference/);assert.equal(markdownImages(article.content)[0].url,'https://example.com/one.png');assert.match(article.content,/第一行[\s\S]*\n第二行/);
   const video=extractCapturePage('<script id="RENDER_DATA">'+encodeURIComponent(JSON.stringify({aweme:{aweme_id:'123',author:{nickname:'作者'},desc:'视频',video:{}}}))+'</script>','https://www.douyin.com/video/123');assert.equal(video.kind,'video');
 });
+test('Douyin slides preserve static covers and live-photo playback candidates',()=>{
+  const image=(name,live=false)=>({origin_url:`https://p3.douyinpic.com/${name}.jpg`,url_list:[`https://p9.douyinpic.com/${name}.jpg`],...(live?{live_photo_type:1,video:{play_addr:{url_list:[`https://v26.douyinvod.com/${name}.mp4`]},download_addr:{url_list:[`https://watermark.example/${name}.mp4`]}}}:{})});
+  const record={aweme_id:'7685',aweme_type:68,desc:'第一行\n第二行',author:{nickname:'实况作者'},image_list:[image('one',true),image('two')]};
+  const plan=extractCapturePage('<script>window._ROUTER_DATA = '+JSON.stringify({aweme_details:[record]})+'</script>','https://www.iesdouyin.com/share/slides/7685/');
+  assert.equal(plan.kind,'note');assert.equal(plan.images.length,2);assert.equal(plan.author,'实况作者');
+  assert.deepEqual(plan.live_videos,[{index:0,urls:['https://v26.douyinvod.com/one.mp4','https://watermark.example/one.mp4']}]);
+});
 test('remote capture rejects local addresses and unsafe schemes before fetching',async()=>{
   for(const url of ['http://127.0.0.1/x','http://192.168.1.1','http://[::1]/','file:///etc/passwd','http://user:pass@example.com/'])await assert.rejects(fetchCapturePage(url,new AbortController().signal));
 });
 test('capture archives image groups locally, retries without duplication, persists jobs and enriches WeChat',async t=>{
   const dir=await mkdtemp(resolve('artifacts/captures-'));let calls=0,failImage=true,incoming=[];
   const png=await sharp({create:{width:24,height:24,channels:3,background:'#6789ab'}}).png().toBuffer();
-  const runtime=createApp({dataDir:dir,captureOptions:{page:async()=>({url:'https://www.xiaohongshu.com/explore/abcd',type:'text/html',buffer:Buffer.from(xhs())}),image:async()=>{calls++;if(failImage&&calls===2)throw Error('network');return png;}},weixinClient:{updates:async()=>({msgs:incoming.splice(0),get_updates_buf:'next'})}});
+  const runtime=createApp({dataDir:dir,captureOptions:{
+    page:async url=>url.includes('douyin.com')?{url:'https://www.iesdouyin.com/share/slides/7685/',type:'text/html',buffer:Buffer.from(douyinLive())}:{url:'https://www.xiaohongshu.com/explore/abcd',type:'text/html',buffer:Buffer.from(xhs())},
+    image:async()=>{calls++;if(failImage&&calls===2)throw Error('network');return png;},
+    captureVideo:async({plan,dir:target})=>{const path=join(target,'live.mp4');await copyFile(resolve('tests/fixtures/sample.mp4'),path);return {path,originalname:'live.mp4',title:plan.title,author:plan.author,description:plan.description||''};}
+  },weixinClient:{updates:async()=>({msgs:incoming.splice(0),get_updates_buf:'next'})}});
   const server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   t.after(async()=>{await runtime.weixin.stop();await runtime.captures.stop();await runtime.imports.stop();await runtime.trash.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close();});
   const base='http://127.0.0.1:'+server.address().port,setup=await fetch(base+'/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'1234'})}),cookie=setup.headers.get('set-cookie').split(';')[0];
@@ -58,10 +74,14 @@ test('capture archives image groups locally, retries without duplication, persis
   assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE group_key=?").get('note:'+note.id).n,2);assert.equal(calls,3);
   assert.equal((await request('/api/captures','POST',{...input,collection_id:other.id})).status,409);
   assert.equal((await fetch(base+'/api/captures')).status,401);
+  const live=await json('/api/captures','POST',{text:'https://www.douyin.com/note/7685',collection_id:library.id,image_mode:'group',request_id:'douyin-live'});
+  const liveDone=await runtime.captures.wait(live.id,AbortSignal.timeout(10000));assert.match(liveDone.message,/1 段动态内容/);
+  const liveItems=runtime.db.prepare("SELECT kind,group_key,group_index,tags,source_url FROM items WHERE source_url=? ORDER BY group_index").all('https://www.iesdouyin.com/share/slides/7685/');
+  assert.deepEqual(liveItems.map(v=>v.kind),['image','image','video']);assert.equal(new Set(liveItems.map(v=>v.group_key)).size,1);assert.deepEqual(liveItems.map(v=>v.group_index),[0,1,2]);assert.ok(JSON.parse(liveItems[2].tags).includes('实况作者'));
   // No auto-capture for old messages/settings. New opt-in messages get a durable target.
   runtime.db.prepare("INSERT INTO settings VALUES('weixin_inbox_v1',?)").run(JSON.stringify({enabled:true,capture_links:true,collection_id:library.id,tags:['微信'],merge_mode:'daily',account:{token:'test',bot:'bot',user:'owner'},cursor:'',jobs:[]}));
   incoming.push({message_type:1,message_state:2,message_id:'1',from_user_id:'owner',create_time_ms:Date.now(),item_list:[{type:1,text_item:{text:'灵感\n第二行\nhttps://xhslink.com/a/abcd'}}]});
   await runtime.weixin.tick(new AbortController().signal);await runtime.weixin.tick(new AbortController().signal);
   const state=runtime.weixin.status();assert.equal(state.jobs[0].state,'done');const daily=await json('/api/items/'+state.jobs[0].items[0]);assert.match(daily.content,/灵感\n第二行/);assert.match(daily.content,/已归档/);
-  assert.equal(JSON.parse(runtime.db.prepare("SELECT value FROM settings WHERE key='mobile_captures_v1'").get().value).length,2);
+  assert.equal(JSON.parse(runtime.db.prepare("SELECT value FROM settings WHERE key='mobile_captures_v1'").get().value).length,3);
 });

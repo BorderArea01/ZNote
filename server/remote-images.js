@@ -2,7 +2,8 @@ import { lookup } from 'node:dns/promises';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
-const MAX = 25*1024*1024;
+import { MAX_IMAGE_BYTES } from './image-limits.js';
+const MAX = MAX_IMAGE_BYTES;
 export function publicAddress(address) {
   if(isIP(address)===4) {
     const [a,b]=address.split('.').map(Number);
@@ -15,7 +16,7 @@ export async function fetchRemoteImage(value, redirects=0) {
   if(value.startsWith('data:image/')) {
     const m=/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(value);
     if(!m) throw Error('仅支持 Base64 图片');
-    const buffer=Buffer.from(m[2],'base64'); if(buffer.length>MAX) throw Error('图片超过 25 MB'); return buffer;
+    const buffer=Buffer.from(m[2],'base64'); if(buffer.length>MAX) throw Error('图片超过 100 MB'); return buffer;
   }
   const url=new URL(value);
   if(!['http:','https:'].includes(url.protocol)||url.username||url.password) throw Error('图片地址无效');
@@ -32,11 +33,11 @@ export async function fetchRemoteImage(value, redirects=0) {
         fetchRemoteImage(new URL(res.headers.location,url).href,redirects+1).then(resolve,reject);return;
       }
       if(res.statusCode!==200) {res.resume();reject(Error(`图片读取失败 HTTP ${res.statusCode}`));return;}
-      if(Number(res.headers['content-length'])>MAX){res.destroy();reject(Error('图片超过 25 MB'));return;}
+      if(Number(res.headers['content-length'])>MAX){res.destroy();reject(Error('图片超过 100 MB'));return;}
       const type=res.headers['content-type']||'';
       if(type && !/^(image\/|application\/octet-stream)/i.test(type)){res.destroy();reject(Error('地址未返回图片'));return;}
       const chunks=[];let size=0;
-      res.on('data',chunk=>{size+=chunk.length;if(size>MAX){res.destroy();reject(Error('图片超过 25 MB'));}else chunks.push(chunk);});
+      res.on('data',chunk=>{size+=chunk.length;if(size>MAX){res.destroy();reject(Error('图片超过 100 MB'));}else chunks.push(chunk);});
       res.on('end',()=>resolve(Buffer.concat(chunks)));res.on('error',reject);
     });
     const timer=setTimeout(()=>req.destroy(Error('图片下载超时')),15000);

@@ -97,9 +97,9 @@ public class CaptureAssistService extends AccessibilityService {
         // existing views instead of inflating and measuring a fresh control tree.
         if(panel==null||panelBusy!=busy||!java.util.Objects.equals(panelMessage,lastMessage)){
             if(panel!=null)bubble.removeView(panel);panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panelBusy=busy;panelMessage=lastMessage;
-            TextView capture=control(busy?"正在识别…":"获取当前页面","获取当前页面",this::capture);capture.setBackground(shape(0xff5968cf,11));capture.setEnabled(!busy);panel.addView(capture);
+            TextView capture=control(busy?"正在识别…":"采集当前作品","获取当前页面",this::capture);capture.setBackground(shape(0xff5968cf,11));capture.setEnabled(!busy);panel.addView(capture);
             if(busy)panel.addView(control("取消识别","取消识别",()->{cancel();message("已取消，可重新采集");}));
-            LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴","粘贴链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("关闭","关闭悬浮采集",()->{prefs().edit().putBoolean("capture_bubble",false).apply();hideBubble();notifyReady();}),new LinearLayout.LayoutParams(0,-2,1));panel.addView(actions);
+            LinearLayout actions=new LinearLayout(this);actions.addView(control("粘贴链接","读取剪贴板中的链接",()->open("")),new LinearLayout.LayoutParams(0,-2,1));actions.addView(control("收起","收起悬浮采集",()->{expanded=false;render();}),new LinearLayout.LayoutParams(0,-2,1));panel.addView(actions);
             status=new TextView(this);status.setTextColor(0xffbcc3db);status.setTextSize(12);status.setPadding(dp(6),dp(8),dp(6),dp(2));status.setText(lastMessage);status.setVisibility(lastMessage.isEmpty()?View.GONE:View.VISIBLE);status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);panel.addView(status);bubble.addView(panel);
         }
         panel.setVisibility(expanded?View.VISIBLE:View.GONE);dock();
@@ -182,19 +182,21 @@ public class CaptureAssistService extends AccessibilityService {
         String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:new String[]{"douyin.com","iesdouyin.com"};
         for(String domain:domains)if(host.equals(domain)||host.endsWith("."+domain))return true;return false;
     }
-    private void openClipboard(String owner,long after){openPanel("",owner,after,true);}
-    private void open(String value){openPanel(value,"",0,value.isEmpty());}
-    private void openPanel(String value,String owner,long after,boolean clipboard){
+    private void openClipboard(String owner,long after){openPanel("",owner,after,true,true);}
+    private void open(String value){openPanel(value,"",0,value.isEmpty(),!value.isEmpty());}
+    private void openPanel(String value,String owner,long after,boolean clipboard,boolean quick){
         lastMessage="";cancel();expanded=false;render();
-        record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after));}
+        record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick));}
         catch(Exception e){message("无法打开采集面板，请重试");}
     }
+    void backgroundQueued(String id){lastMessage="已加入后台保存，可继续浏览";busy=false;expanded=false;record("capture_queued",id);render();notifyReady();}
     void notifyReady(){
         android.app.NotificationManager notifications=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         notifications.createNotificationChannel(new android.app.NotificationChannel("capture_ready","悬浮采集管理",android.app.NotificationManager.IMPORTANCE_LOW));
         android.app.PendingIntent settings=android.app.PendingIntent.getActivity(this,1,new Intent(this,CaptureAssistActivity.class),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
         android.app.PendingIntent show=android.app.PendingIntent.getActivity(this,2,new Intent(this,CaptureAssistActivity.class).putExtra("capture_action","show"),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
-        android.app.Notification notification=new android.app.Notification.Builder(this,"capture_ready").setSmallIcon(R.drawable.ic_capture_notification).setContentTitle("ZNote · 采集辅助已连接").setContentText(visible()?"悬浮入口已就绪 · 点击管理":"悬浮窗已关闭 · 点击重新显示").setOngoing(true).setOnlyAlertOnce(true).setContentIntent(settings).addAction(new android.app.Notification.Action.Builder(null,"显示悬浮窗",show).build()).addAction(new android.app.Notification.Action.Builder(null,"采集设置",settings).build()).build();
+        String summary=!lastMessage.isEmpty()?lastMessage:visible()?"悬浮入口已就绪 · 点击管理":"悬浮窗已关闭 · 点击重新显示";
+        android.app.Notification notification=new android.app.Notification.Builder(this,"capture_ready").setSmallIcon(R.drawable.ic_capture_notification).setContentTitle("ZNote · 采集辅助已连接").setContentText(summary).setOngoing(true).setOnlyAlertOnce(true).setContentIntent(settings).addAction(new android.app.Notification.Action.Builder(null,"显示悬浮窗",show).build()).addAction(new android.app.Notification.Action.Builder(null,"采集设置",settings).build()).build();
         if(visible())try{if(Build.VERSION.SDK_INT>=34)startForeground(3741,notification,android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(3741,notification);record("foreground","active");}catch(RuntimeException e){record("foreground_unavailable",e.getClass().getSimpleName());notifications.notify(3741,notification);}
         else{stopForeground(STOP_FOREGROUND_DETACH);notifications.notify(3741,notification);}
     }

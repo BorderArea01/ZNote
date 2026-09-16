@@ -15,7 +15,7 @@ const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
 export const captureInput = z.object({ text: z.string().trim().min(1).max(16000), image_mode:z.enum(["group","note"]).default("note"), collection_id: z.string().nullable().default(null), tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]), request_id: z.string().regex(/^[a-zA-Z0-9:_-]{1,160}$/).optional() });
-export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, exists, page = fetchCapturePage, image = fetchRemoteImage, video = downloadVideo }) {
+export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, exists, page = fetchCapturePage, image = fetchRemoteImage, video = downloadVideo, captureVideo = downloadCaptureVideo }) {
   const read = () => JSON.parse(db.prepare('SELECT value FROM settings WHERE key=?').get(KEY)?.value || '[]');
   const write = jobs => {const text=JSON.stringify(jobs);if(text.length>16*1024*1024)throw fail(429,'采集记录已满，请清理完成或失败的任务');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,text);};
   const patch = (id, changes) => { const jobs=read(), job=jobs.find(j=>j.id===id); if(job){Object.assign(job,changes);if(job.status==='completed')delete job.plan;write(jobs);} return job; };
@@ -51,15 +51,16 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const dir=await mkdtemp(join(root,'job-'));
       try{
         const options={url:plan.url,plan,dir,signal,progress:message=>patch(job.id,{message})};
-        const file=await (plan.video_urls?.length?downloadCaptureVideo(options):video(options));signal.throwIfAborted();
+        const file=await (plan.video_urls?.length?captureVideo(options):video(options));signal.throwIfAborted();
         const details=videoDetails({...file,title:file.title||plan.title,author:plan.author||file.author},job.input.tags);
         const item=await saveVideo(file,{...details,content:[details.content,file.description||''].filter(Boolean).join('\n\n'),source_url:plan.url,collection_id:job.input.collection_id});
         patch(job.id,{status:'completed',message:'视频已入库',item_id:item.id,title:item.title});
       }finally{await rm(dir,{recursive:true,force:true});}
       return;
     }
+    const liveVideos=Array.isArray(plan.live_videos)?plan.live_videos.filter(v=>Array.isArray(v.urls)&&v.urls.length):[];
     const album=job.input.image_mode==='group'&&plan.images?.length>0;
-    const groupKey=album?(plan.images.length>1?'capture:'+id:null):'note:'+id;
+    const groupKey=album?(plan.images.length>1||liveVideos.length?'capture:'+id:null):'note:'+id;
     const tags=[...new Set([...job.input.tags, ...(plan.author?[String(plan.author).slice(0,40)]:[])])];
     let content=plan.content||'';
     if(plan.images)content += '\n\n'+plan.images.map((url,index)=>`![配图 ${index+1}](<${url}>)`).join('\n\n');
@@ -83,9 +84,18 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       }
       mapping.set(url,`/media/${item.id}/original`);
     }
+    for(const [liveIndex,live] of liveVideos.entries()){
+      signal.throwIfAborted();patch(job.id,{message:`正在保存实况片段 ${liveIndex+1}/${liveVideos.length}`});
+      const root=join(dataDir,'capture-downloads');await mkdir(root,{recursive:true});const dir=await mkdtemp(join(root,'live-'));
+      try{
+        const file=await captureVideo({plan:{url:plan.url,title:`${plan.title||'实况图'} · 动态 ${liveIndex+1}`,author:plan.author,description:plan.content||'',video_urls:live.urls},dir,signal,progress:message=>patch(job.id,{message})});
+        const details=videoDetails({...file,title:file.title,author:plan.author},tags);
+        await saveVideo(file,{...details,content:[details.content,'对应图集第 '+(Number(live.index)+1)+' 张实况内容'].filter(Boolean).join('\n\n'),source_url:plan.url,collection_id:job.input.collection_id,group_key:groupKey||undefined,group_index:(plan.images?.length||0)+liveIndex,group_title:(plan.title||'实况图').slice(0,200)});
+      }finally{await rm(dir,{recursive:true,force:true});}
+    }
     signal.throwIfAborted();validateCollection(job.input.collection_id);
     for(let index=0;index<urls.length;index++)if(!existing(stableId(job.id+':image:'+index),job.input.collection_id))throw fail(409,'配图已移除，请检查后重试');
-    if(album){const first=existing(stableId(job.id+':image:0'),job.input.collection_id);patch(job.id,{status:'completed',message:usedFallback?'图片组已入库，使用了备用图片版本':'图片组已入库，正文已保存在备注',item_id:first.id,title:plan.title});return;}
+    if(album){const first=existing(stableId(job.id+':image:0'),job.input.collection_id);patch(job.id,{status:'completed',message:liveVideos.length?`实况图片组已入库，含 ${liveVideos.length} 段动态内容`:usedFallback?'图片组已入库，使用了备用图片版本':'图片组已入库，正文已保存在备注',item_id:first.id,title:plan.title});return;}
     content=replaceMarkdownImages(content,markdownImages(content),mapping);
     const item=saveNote({id,title:(plan.title||'网页采集').slice(0,200),content,source_url:plan.url,collection_id:job.input.collection_id,tags});
     patch(job.id,{status:'completed',message:usedFallback?'图文已入库；部分首选图片不可用，已使用备用版本，可能含平台水印':'图文已入库，配图已保存到本地',item_id:item.id,title:item.title});
