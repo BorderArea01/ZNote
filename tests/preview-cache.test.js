@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import '../extensions/clipper/preview-cache.js';
+import test from 'node:test';import assert from 'node:assert/strict';import '../addons/browser/clipper/preview-cache.js';
 test('preview cache coalesces requests and releases pages outside the retained window',async()=>{
  let calls=0,aborted=0;const disposed=[];
  const cache=new globalThis.ZNotePreviewCache((url,signal)=>{calls++;signal.addEventListener('abort',()=>aborted++);return Promise.resolve(url);},value=>disposed.push(value));

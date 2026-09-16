@@ -1,7 +1,7 @@
 import {chromium} from 'playwright';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const browser=await chromium.launch({channel:'msedge',headless:true}),page=await browser.newPage(),script=(await readFile('extensions/clipper/douyin-records.js','utf8'))+'\n'+(await readFile('extensions/clipper/douyin-metadata.js','utf8'))+'\n'+(await readFile('extensions/clipper/video-metadata.js','utf8'));
+const browser=await chromium.launch({channel:'msedge',headless:true}),page=await browser.newPage(),script=(await readFile('addons/browser/clipper/douyin-records.js','utf8'))+'\n'+(await readFile('addons/browser/clipper/douyin-metadata.js','utf8'))+'\n'+(await readFile('addons/browser/clipper/video-metadata.js','utf8'));
 try{
  const cases=[
   ['https://www.bilibili.com/video/BV1234','<h1 class="video-title">城市纪录</h1><a class="up-name" href="https://space.bilibili.com/123">摄影作者</a><video></video>','城市纪录','摄影作者','https://space.bilibili.com/123'],

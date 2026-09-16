@@ -3,7 +3,7 @@ import {mkdtemp} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
 const dir=await mkdtemp(resolve('artifacts/extension-design-'));
-const extension=resolve('extensions/clipper');
+const extension=resolve('addons/browser/clipper');
 const context=await chromium.launchPersistentContext(dir,{channel:'msedge',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`],viewport:{width:1100,height:1100},colorScheme:'light'});
 try{
  const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');

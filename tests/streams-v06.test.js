@@ -5,13 +5,13 @@ import { resolve, join } from "node:path";
 import { createServer, request as httpRequest } from "node:http";
 import { createCipheriv } from 'node:crypto';
 import { createApp } from "../server/app.js";
-import { packageHls } from "../extensions/clipper/hls-package.js";
+import { packageHls } from "../addons/browser/clipper/hls-package.js";
 import { validatePlaylist } from "../server/streams.js";
 import { mediaTools } from '../server/imports.js';
 import {
   mediaKind,
   addResource,
-} from "../extensions/clipper/resource-store.js";
+} from "../addons/browser/clipper/resource-store.js";
 test("sniffer identifies media MIME and excludes fragments, deduplicates and bounds page resources", () => {
   assert.equal(
     mediaKind("https://site.test/stream", "application/vnd.apple.mpegurl"),

@@ -8,7 +8,7 @@ import { createApp } from "../server/app.js";
 test("preview placement avoids video cards and respects preferred size at viewport edges", async () => {
   const context = vm.createContext({});
   vm.runInContext(
-    await readFile("extensions/clipper/preview-layout.js", "utf8"),
+    await readFile("addons/browser/clipper/preview-layout.js", "utf8"),
     context,
   );
   for (const rect of [

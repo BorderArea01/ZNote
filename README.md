@@ -32,7 +32,7 @@ ZNote 面向以图片为主的个人资料整理。**一张图片可以是素材
 | :--- | :--- | :--- |
 | 拖拽、粘贴、批量上传 | 知识库与标签分别管理 | 原文件按字节保留、相同内容去重 |
 | 浏览器悬停入库、正文提取 | 图片成组、拖动排序、首图封面 | Markdown、离线网页等六种导出 |
-| 微信随手发送文字与图片 | 多标签筛选、批量操作、常用筛选 | 自动备份、完整恢复、API 接入 |
+| 微信随手发送文字与图片 | 多标签筛选、批量操作、常用筛选 | 轻量恢复快照、迁移导出、API 接入 |
 
 ### 适合放进哪些内容
 
@@ -97,7 +97,7 @@ ZNote 面向以图片为主的个人资料整理。**一张图片可以是素材
 
 </details>
 
-[微信接入与迁移说明 →](integrations/weixin/README.md)
+[微信接入与迁移说明 →](addons/connectors/weixin/README.md)
 
 ## 图文笔记，让图片有上下文
 
@@ -174,7 +174,7 @@ ZNote 面向以图片为主的个人资料整理。**一张图片可以是素材
 
 **其他插件**可通过 API 接入 ZNote，保存图片、笔记与成组内容，并保留作者标签和来源。专用插件独立维护，不随知识库分发。
 
-普通扩展的系列图片入库在当前页面浮窗中处理。安装和更新见 [普通扩展](extensions/clipper/README.md)，其他插件的接入规范见 [API 文档](docs/API.md)。
+普通扩展的系列图片入库在当前页面浮窗中处理。安装和更新见 [普通扩展](addons/browser/clipper/README.md)，其他插件的接入规范见 [API 文档](docs/API.md)。
 
 > 采集效果受登录状态、防盗链、页面加载情况与站点变化影响。平台名称表示已有适配路径，不保证每个链接都可采集。m3u8 合并及平台视频链接解析需要媒体组件，可运行 `npm run media:setup` 安装。
 
@@ -259,9 +259,9 @@ docker compose up -d --build
 | Markdown | 在其他笔记工具中阅读，附件改为相对路径 |
 | JSON | 脚本处理、数据分析与二次开发 |
 | 离线网页 | 解压后浏览图文与可播放视频 |
-| 完整备份 | 恢复整个实例，包含所有知识库、回收站及连接配置 |
+| 恢复快照 / 迁移备份 | 同盘快照复用媒体；迁移 ZIP 按需生成并直接下载 |
 
-自动备份与网页恢复让迁移更方便。右上角「任务」可查看上传、采集、导出与备份的状态；备份包含数据库和入库原文件，本地浏览器草稿不在其中。
+自动恢复快照不会为每个版本重复保存全部媒体；需要换机器时再按需导出迁移 ZIP。右上角「任务」可查看上传、采集、导出与快照状态；两种方式都覆盖数据库和入库原文件，本地浏览器草稿不在其中。
 
 数据库、索引和备份存在额外占用，因此**不承诺素材库总大小一定比直接存文件更小**。[存储结构、容量与恢复步骤 →](docs/STORAGE.md)
 
@@ -286,7 +286,7 @@ curl http://localhost:3741/api/items \
 
 ### 可选 AI 工作流插件
 
-仓库内的 [ZNote 对话学习笔记](plugins/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md) 可以把 ChatGPT、Claude、Gemini 等 AI 对话提炼为可复习的 Markdown 图文笔记，再通过写入令牌保存到指定知识库。插件会保留关键推理、出处、图片、可复用步骤和复习问题；API 令牌只保存在用户目录或环境变量中，不进入仓库。
+仓库内的 [ZNote 对话学习笔记](addons/ai/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md) 可以把 ChatGPT、Claude、Gemini 等 AI 对话提炼为可复习的 Markdown 图文笔记，再通过写入令牌保存到指定知识库。插件会保留关键推理、出处、图片、可复用步骤和复习问题；API 令牌只保存在用户目录或环境变量中，不进入仓库。
 
 ```bash
 codex plugin marketplace add BorderArea01/ZNote
@@ -297,14 +297,16 @@ codex plugin add znote-conversation-notes@znote
 
 ## 文档与开发
 
+[文档总索引](docs/README.md) · [扩展总索引](addons/README.md)
+
 | 文档 | 你会找到什么 |
 | :--- | :--- |
 | [完整使用指南](docs/USAGE.md) | 多选、分组、视频续播、任务、草稿、版本与采集细节 |
 | [部署指南](docs/DEPLOYMENT.md) | 本机、局域网、Docker、配置与更新 |
 | [存储与迁移](docs/STORAGE.md) | 去重、无损保存、六种导出与备份恢复 |
-| [微信接入](integrations/weixin/README.md) | 扫码、归档、联网条件与迁移 |
-| [普通扩展](extensions/clipper/README.md) | 安装、连接、批量入库与格式支持 |
-| [AI 对话学习笔记插件](plugins/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md) | 把 AI 对话归纳成图文学习笔记并安全写入 ZNote |
+| [微信接入](addons/connectors/weixin/README.md) | 扫码、归档、联网条件与迁移 |
+| [普通扩展](addons/browser/clipper/README.md) | 安装、连接、批量入库与格式支持 |
+| [AI 对话学习笔记插件](addons/ai/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md) | 把 AI 对话归纳成图文学习笔记并安全写入 ZNote |
 | [API 接入](docs/API.md) / [开发指南](docs/DEVELOPMENT.md) | 鉴权、示例、结构、测试与贡献 |
 | [更新记录](CHANGELOG.md) / [体验优化路线](docs/EXPERIENCE-ROADMAP.md) | 已完成改进与后续方向 |
 | [扩展设计与参考](docs/EXTENSION-DESIGN.md) / [第三方组件](THIRD_PARTY_NOTICES.md) | 开源参考、组件来源与许可证 |

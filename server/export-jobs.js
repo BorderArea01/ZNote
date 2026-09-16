@@ -5,7 +5,7 @@ import {WorkQueue} from './work-queue.js';
 
 const fail = (status,message) => Object.assign(Error(message),{status});
 const live = status => ['ready','queued','running'].includes(status);
-const names = {portable:'资料包 ZIP',images:'图片包 ZIP',markdown:'Markdown ZIP',json:'JSON 元数据',html:'离线网页 ZIP',backup:'完整备份 ZIP'};
+const names = {portable:'资料包 ZIP',images:'图片包 ZIP',markdown:'Markdown ZIP',json:'JSON 元数据',html:'离线网页 ZIP',backup:'迁移备份 ZIP'};
 // Receipts contain parameters and stream status, never file contents or tokens.
 // Downloads are native HTTP streams; no additional archive is stored on disk.
 export function registerExportJobs({app,db,admin,streamExport,clock=Date.now}) {

@@ -22,7 +22,7 @@ const source = createServer((req, res) => {
   else if (req.url === '/hd') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end('<html><body><img width="300" sizes="300px" src="/picture.png" srcset="/picture.png 600w, /large.png 2400w" data-original="/unavailable.png"></body></html>'); }
   else { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end('<!doctype html><html><meta charset="utf-8"><title>采集测试页面</title><body style="font:24px sans-serif;background:#f2efe2;padding:30px"><h1>网页图片采集</h1><p>这是截图中的文字内容</p><img src="/picture.png"></body></html>'); }
 }); source.listen(0, '127.0.0.1'); await new Promise(r => source.once('listening', r)); const sourceUrl = `http://127.0.0.1:${source.address().port}`;
-const extension = resolve('extensions/clipper');
+const extension = resolve('addons/browser/clipper');
 const context = await chromium.launchPersistentContext(join(dir, 'profile'), { channel: process.env.EXTENSION_BROWSER || 'msedge', headless: true, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`], viewport: { width: 1200, height: 850 } });
 let worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker'); const id = new URL(worker.url()).host;
 const page = await context.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));

@@ -41,14 +41,14 @@ export const safeName = (value) => String(value).normalize('NFC').replace(/[<>:"
 const urlPath = path => path.split('/').map(part => part === '..' ? part : encodeURIComponent(part).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16))).join('/');
 export function validateExportQuery(db, input) {
   const query = exportQuery.parse(input);
-  if (query.mode === 'backup' && query.collection) throw Object.assign(Error('完整备份不支持按知识库筛选'), {status:400});
+  if (query.mode === 'backup' && query.collection) throw Object.assign(Error('迁移备份不支持按知识库筛选'), {status:400});
   if (query.collection && query.collection !== 'unfiled' && !db.prepare('SELECT id FROM collections WHERE id=?').get(query.collection)) throw Object.assign(Error('知识库不存在'), {status:404});
   return query;
 }
 export async function exportContent({ db, dir, req, res, serialize, progress = () => {}, readOriginal = originalStream }) {
   const query = exportQuery.parse(req.query);
   if (query.mode === "backup" && query.collection)
-    throw Object.assign(new Error("完整备份不支持按知识库筛选"), {
+    throw Object.assign(new Error("迁移备份不支持按知识库筛选"), {
       status: 400,
     });
   const all = query.mode === 'backup' ? [] : db.prepare("SELECT * FROM items").all();

@@ -1,7 +1,7 @@
 import {chromium} from 'playwright';
 import {build} from 'esbuild';
 import assert from 'node:assert/strict';
-const bundle=await build({entryPoints:['extensions/clipper/site-articles.js'],bundle:true,format:'iife',globalName:'Adapters',write:false});
+const bundle=await build({entryPoints:['addons/browser/clipper/site-articles.js'],bundle:true,format:'iife',globalName:'Adapters',write:false});
 const browser=await chromium.launch({channel:'msedge',headless:true});
 try{
  const page=await browser.newPage();await page.setContent('<main><h1>Fixture</h1><img src="data:,avatar"></main>');await page.addScriptTag({content:bundle.outputFiles[0].text});

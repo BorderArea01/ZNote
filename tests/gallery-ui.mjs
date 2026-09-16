@@ -4,7 +4,7 @@ import {mkdtemp,readFile,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-const dir=await mkdtemp(resolve('artifacts/gallery-ui-')),extension=resolve('extensions/clipper');
+const dir=await mkdtemp(resolve('artifacts/gallery-ui-')),extension=resolve('addons/browser/clipper');
 const images=await Promise.all(['#638f80','#a88060','#746890'].map(background=>sharp({create:{width:1200,height:800,channels:3,background}}).png().toBuffer()));
 let fail=true, slow=false;
 const source=createServer((req,res)=>{

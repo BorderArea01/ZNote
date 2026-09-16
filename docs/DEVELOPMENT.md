@@ -8,12 +8,18 @@
 src/                    React 页面、主题和交互
 server/                 Express API、SQLite、媒体、备份和 Webhook
 shared/                 前后端共用的来源处理
-extensions/clipper/     Chrome / Edge Manifest V3 扩展
+addons/                 所有公开可选扩展的统一入口
+  browser/              Chrome / Edge 扩展
+  connectors/           微信等外部服务连接器
+  ai/                   Codex Skill 等 AI 工作流插件
+clients/                Android、桌面端等原生客户端
 examples/               外部采集、事件轮询和 Webhook 接收器
 scripts/                构建、媒体组件安装与维护脚本
 tests/                  API 和浏览器测试，使用独立临时数据
 docs/                   部署、存储、API 和示例截图
 ```
+
+目录职责和公开组件清单见 [`addons/README.md`](../addons/README.md)，文档集中入口见 [`docs/README.md`](README.md)。组件专属说明与代码放在一起，跨组件说明放入 `docs/`。专用或私人插件使用独立私有项目，不在公开工作区保留构建镜像。
 
 `node tests/note-order-ui.mjs` 使用独立数据在 Edge 中验证笔记编辑 / 预览的六种视口、鼠标和触摸拖拽、封面持久化、正文配图同步、版本冲突保留草稿及关闭保护；支持 `UI_DIST` 指定构建目录。`group-order.test.js` 覆盖 Pixiv 原始页码与展示顺序分离、相同字节多页重采集、新页追加、Markdown 链接、跨库与过期快照拒绝、schema 5 升级及完整备份恢复。
 
@@ -31,7 +37,7 @@ npm start
 
 ## 扩展开发
 
-直接在 Chrome / Edge 开发者模式加载 `extensions/clipper/`。保持 manifest 中的固定 `key` 不变，避免改变 ID 和丢失连接设置。
+直接在 Chrome / Edge 开发者模式加载 `addons/browser/clipper/`。保持 manifest 中的固定 `key` 不变，避免改变 ID 和丢失连接设置。
 
 修改 `article-source.js`、`work-images.js` 或站点适配器后运行：
 

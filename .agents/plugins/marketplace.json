@@ -8,7 +8,7 @@
       "name": "znote-conversation-notes",
       "source": {
         "source": "local",
-        "path": "./plugins/znote-conversation-notes"
+        "path": "./addons/ai/znote-conversation-notes"
       },
       "policy": {
         "installation": "AVAILABLE",

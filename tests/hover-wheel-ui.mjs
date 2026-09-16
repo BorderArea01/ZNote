@@ -4,7 +4,7 @@ import {mkdtemp,writeFile,mkdir,readFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-const dir=await mkdtemp(resolve('artifacts/hover-wheel-')),extension=resolve('extensions/clipper');
+const dir=await mkdtemp(resolve('artifacts/hover-wheel-')),extension=resolve('addons/browser/clipper');
 const images=await Promise.all(['#508d77','#a67b63','#827ab0'].map(background=>sharp({create:{width:1200,height:800,channels:3,background}}).png().toBuffer()));
 let delayed=false;
 const server=createServer((req,res)=>{

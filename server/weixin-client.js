@@ -1,6 +1,6 @@
 import {createDecipheriv,randomBytes} from 'node:crypto';
 // Wire format and CDN key encodings follow Tencent/openclaw-weixin (MIT).
-// See integrations/weixin/README.md for the pinned reference and attribution.
+// See addons/connectors/weixin/README.md for the pinned reference and attribution.
 export const API_BASE='https://ilinkai.weixin.qq.com';
 const CDN_BASE='https://novac2c.cdn.weixin.qq.com/c2c';
 const VERSION='2.4.9';

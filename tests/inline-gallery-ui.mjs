@@ -13,7 +13,7 @@ await new Promise(r => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const images = await Promise.all(['#518878', '#a57960', '#7273a5'].map(background => sharp({ create: { width: 1600, height: 1000, channels: 3, background } }).png().toBuffer()));
 const small = await sharp(images[0]).resize(48, 48).jpeg().toBuffer();
-const extension = resolve('extensions/clipper');
+const extension = resolve('addons/browser/clipper');
 const context = await chromium.launchPersistentContext(join(dir, 'profile'), { channel: 'msedge', headless: true, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`], viewport: { width: 1440, height: 1050 } });
 const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
 const errors = [], sourceHeaders = [];

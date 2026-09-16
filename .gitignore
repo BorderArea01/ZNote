@@ -14,7 +14,6 @@ artifacts/
 *.log
 tools/media/
 tools/windows-server/
-integrations/pixiv/build/
 
 # Local deployment evidence is not project source.
 /VERIFICATION*.md

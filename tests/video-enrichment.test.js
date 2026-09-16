@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import {mediaTools,runMediaCommand,importAuthor,platformUrl} from '../server/imports.js';
 import {videoThumbnail} from '../server/video-thumbnail.js';
 import {videoDetails} from '../shared/video-details.js';
-import {addResource} from '../extensions/clipper/resource-store.js';
+import {addResource} from '../addons/browser/clipper/resource-store.js';
 
 test('poster is the first decoded frame, bounded and does not modify source; decoder failure is explicit',async()=>{
  const dir=await mkdtemp(resolve('artifacts/video-poster-'));await mkdir(join(dir,'media'));const file=join(dir,'media','two-colors.mp4');

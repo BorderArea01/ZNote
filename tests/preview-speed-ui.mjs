@@ -1,5 +1,5 @@
 import {chromium} from 'playwright';import {createServer} from 'node:http';import {mkdtemp,mkdir,writeFile,readFile} from 'node:fs/promises';import {resolve,join} from 'node:path';import sharp from 'sharp';import assert from 'node:assert/strict';
-const dir=await mkdtemp(resolve('artifacts/preview-speed-')),extension=resolve('extensions/clipper');
+const dir=await mkdtemp(resolve('artifacts/preview-speed-')),extension=resolve('addons/browser/clipper');
 const tiny=await sharp({create:{width:48,height:48,channels:3,background:'#467766'}}).png().toBuffer();
 const medium=await sharp({create:{width:1000,height:700,channels:3,background:'#6e9b85'}}).jpeg().toBuffer();
 const original=await sharp({create:{width:2400,height:1600,channels:3,background:'#6e9b85'}}).png().toBuffer();

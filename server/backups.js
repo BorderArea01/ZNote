@@ -1,10 +1,10 @@
 import { MAX_IMAGE_BYTES } from './image-limits.js';
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, unlink, rename, rm, copyFile, open } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, unlink, rename, rm, copyFile, link, open } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { pipeline, finished } from 'node:stream/promises';
+import { pipeline } from 'node:stream/promises';
 import yauzl from 'yauzl';
 import multer from 'multer';
 import { z } from 'zod';
@@ -21,11 +21,22 @@ const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-
 const uuid = z.uuid();
 const requiredTables = ['settings', 'tokens', 'collections', 'items', 'events'];
 const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views', 'reading_progress', 'video_progress'];
+const legacyPattern = /^\d{13}-[\da-f-]{36}\.zip$/;
+const snapshotPattern = /^\d{13}-[\da-f-]{36}\.snapshot$/;
+const restoreText = 'ZNote recovery snapshot exported as a portable migration ZIP. Upload it in Settings > Recovery snapshots to preview and restore it. Includes password/API token hashes and Webhook signing secrets. Keep this file private.\n';
 
 async function removeStage(root, path) {
   const rel = relative(resolve(root), resolve(path));
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) throw new Error('Unsafe staging cleanup');
   await rm(path, { recursive: true, force: true });
+}
+
+async function linkOrCopy(source, target) {
+  try { await link(source, target); return 'linked'; }
+  catch (error) {
+    if (!['EXDEV', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP'].includes(error.code)) throw error;
+    await copyFile(source, target); return 'copied';
+  }
 }
 
 async function extract(file, directory, maxBytes) {
@@ -153,6 +164,13 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
   const defaults = { enabled: true, interval_hours: 24, keep: 7, last_attempt: null, last_success: null, last_error: null };
   const ready = (async () => {
     await mkdir(directory, { recursive: true }); await mkdir(staging, { recursive: true });
+    // A .tmp entry is never a usable backup. It can only remain after a
+    // terminated process, so reclaim it before scheduling the next snapshot.
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (/^\d{13}-[\da-f-]{36}\.zip\.tmp$/.test(entry.name) && entry.isFile()) await unlink(path).catch(() => {});
+      if (/^\d{13}-[\da-f-]{36}\.snapshot\.tmp$/.test(entry.name) && entry.isDirectory()) await removeStage(directory, path).catch(() => {});
+    }
     // Preview IDs are process-local. After a restart their owned staging
     // directories cannot be used again, so reclaim only our exact prefix.
     for (const entry of await readdir(staging, { withFileTypes: true }))
@@ -162,23 +180,49 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
   const saveConfig = async value => { await ready; const temp = join(directory, `${randomUUID()}.json.tmp`); await writeFile(temp, JSON.stringify(value, null, 2)); await rename(temp, configPath); };
   const list = async () => {
     await ready;
-    const names = (await readdir(directory)).filter(name => /^\d{13}-[\da-f-]{36}\.zip$/.test(name));
-    return Promise.all(names.sort().reverse().map(async id => ({ id, created_at: new Date(Number(id.slice(0, 13))).toISOString(), bytes: (await stat(join(directory, id))).size })));
+    const entries = await readdir(directory, { withFileTypes: true }), rows = [];
+    for (const entry of entries) {
+      const id = entry.name, path = join(directory, id);
+      if (legacyPattern.test(id) && entry.isFile()) {
+        const bytes = (await stat(path)).size, created_at = new Date(Number(id.slice(0, 13))).toISOString();
+        rows.push({ id, created_at, bytes, logical_bytes: bytes, stored_bytes: bytes, format: 'zip', kind: 'legacy' });
+      } else if (snapshotPattern.test(id) && entry.isDirectory()) {
+        const manifest = JSON.parse(await readFile(join(path, 'snapshot.json'), 'utf8')), created_at = new Date(Number(id.slice(0, 13))).toISOString();
+        rows.push({ id, created_at, bytes: manifest.logical_bytes, logical_bytes: manifest.logical_bytes, stored_bytes: manifest.stored_bytes, files: manifest.files, linked_files: manifest.linked_files, copied_files: manifest.copied_files, format: 'snapshot', kind: 'recovery' });
+      }
+    }
+    return rows.sort((a, b) => b.id.localeCompare(a.id));
   };
   const archive = async () => {
     await ready;
-    const id = `${now()}-${randomUUID()}.zip`, temp = join(directory, id + '.tmp');
-    const output = createWriteStream(temp, { flags: 'wx' });
-    output.attachment = () => output;
-    const completed = finished(output); completed.catch(() => {});
+    const id = `${now()}-${randomUUID()}.snapshot`, temp = join(directory, id + '.tmp'), target = join(directory, id);
     try {
-      await exportContent({ db, dir: dataDir, req: { query: { mode: 'backup' } }, res: output, serialize: row => row });
-      await completed;
-      const handle = await open(temp, 'r+'); try { await handle.sync(); } finally { await handle.close(); }
-      await rename(temp, join(directory, id));
+      await mkdir(join(temp, 'data', 'media'), { recursive: true });
+      const databasePath = join(temp, 'data', 'znote.sqlite');
+      await backup(db, databasePath);
+      const snapshot = new DatabaseSync(databasePath, { readOnly: true });
+      let items;
+      try { items = snapshot.prepare("SELECT DISTINCT file_key FROM items WHERE kind IN ('image','video') ORDER BY file_key").all(); }
+      finally { snapshot.close(); }
+      let logicalBytes = (await stat(databasePath)).size, storedBytes = logicalBytes, linkedFiles = 0, copiedFiles = 0;
+      for (const { file_key } of items) {
+        if (!safeKey(file_key)) throw new Error('Invalid media key in recovery snapshot');
+        const source = join(dataDir, 'media', file_key), size = (await stat(source)).size;
+        const mode = await linkOrCopy(source, join(temp, 'data', 'media', file_key));
+        logicalBytes += size;
+        if (mode === 'linked') linkedFiles++; else { copiedFiles++; storedBytes += size; }
+      }
+      const handle = await open(databasePath, 'r+'); try { await handle.sync(); } finally { await handle.close(); }
+      const manifest = { version: 1, id, created_at: new Date(Number(id.slice(0, 13))).toISOString(), logical_bytes: logicalBytes, stored_bytes: storedBytes, files: items.length, linked_files: linkedFiles, copied_files: copiedFiles };
+      const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+      manifest.stored_bytes += Buffer.byteLength(manifestText);
+      await writeFile(join(temp, 'snapshot.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+      await writeFile(join(temp, 'RESTORE.txt'), restoreText);
+      await rename(temp, target);
       return id;
-    } catch (e) { output.destroy(); await completed.catch(() => {}); await unlink(temp).catch(() => {}); throw e; }
+    } catch (e) { await removeStage(directory, temp).catch(() => {}); throw e; }
   };
+  const removeBackup = async entry => entry.format === 'snapshot' ? removeStage(directory, join(directory, entry.id)) : unlink(join(directory, entry.id));
   const run = async () => {
     if (busy || maintenance.locked) throw fail(409, '备份或恢复任务正在进行');
     busy = true;
@@ -186,7 +230,8 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       const id = await maintenance.work(archive);
       const current = await config();
       await saveConfig({ ...current, last_attempt: now(), last_success: now(), last_error: null });
-      for (const entry of (await list()).slice(current.keep)) await unlink(join(directory, entry.id));
+      const active = new Set([...previews.values()].filter(value => !value.owned).map(value => resolve(value.stage)));
+      for (const entry of (await list()).slice(current.keep)) if (!active.has(resolve(directory, entry.id))) await removeBackup(entry);
       return { id };
     } catch (e) {
       const current = await config();
@@ -195,22 +240,24 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
     } finally { busy = false; }
   };
   const cleanupPreviews = async () => {
-    for (const [id, preview] of previews) if (preview.expires < now()) { previews.delete(id); await removeStage(staging, preview.stage); }
+    for (const [id, preview] of previews) if (preview.expires < now()) { previews.delete(id); if (preview.owned) await removeStage(staging, preview.stage); }
   };
   const preview = async file => {
     if (busy || maintenance.locked) throw fail(409, '备份或恢复任务正在进行');
     busy = true;
-    let stage;
+    let stage, owned = false;
     try {
       await ready;
       await mkdir(staging, { recursive: true }); await cleanupPreviews();
       if (previews.size >= 3) throw fail(409, '已有三个待恢复备份，请取消不再需要的预览');
-      stage = await mkdtemp(join(staging, 'preview-'));
-      await extract(file, stage, maxRestoreBytes);
+      const source = await stat(file);
+      owned = !source.isDirectory();
+      stage = owned ? await mkdtemp(join(staging, 'preview-')) : file;
+      if (owned) await extract(file, stage, maxRestoreBytes);
       const summary = await inspectBackup(stage), id = randomUUID();
-      previews.set(id, { stage, summary, expires: now() + 3600000 });
+      previews.set(id, { stage, summary, owned, expires: now() + 3600000 });
       return { id, ...summary, expires_at: new Date(now() + 3600000).toISOString() };
-    } catch (e) { if (stage) await removeStage(staging, stage); if (e.status) throw e; throw fail(400, '备份压缩包损坏或不是 ZNote 完整备份'); }
+    } catch (e) { if (stage && owned) await removeStage(staging, stage); if (e.status) throw e; throw fail(400, '备份损坏或不是兼容的 ZNote 恢复数据'); }
     finally { busy = false; }
   };
   const restore = async (id, res) => {
@@ -222,7 +269,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       return await maintenance.exclusive(res, async () => {
         await beforeRestore();
         await inspectBackup(candidate.stage);
-        // Keep a complete pre-restore archive regardless of the retention limit.
+        // Keep a recovery snapshot of the current state before replacing it.
         const safety = await archive();
         const source = new DatabaseSync(join(candidate.stage, 'data', 'znote.sqlite'), { readOnly: true });
         source.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
@@ -232,7 +279,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
           const sourceImages = source.prepare("SELECT * FROM items WHERE kind IN ('image','video')").iterate();
           for (const item of sourceImages) if (!newKeys.has(item.file_key)) {
             const key = randomUUID() + (item.storage_codec === 'gzip' ? '.gz' : '.bin');
-            await copyFile(join(candidate.stage, 'data', 'media', item.file_key), join(dataDir, 'media', key));
+            await linkOrCopy(join(candidate.stage, 'data', 'media', item.file_key), join(dataDir, 'media', key));
             newKeys.set(item.file_key, key);
             const hash = item.kind === 'video' ? (await fileDigest(join(dataDir, 'media', key))).hash : digest(await originalBuffer(dataDir, { ...item, file_key: key }));
             if (hash !== item.hash) throw new Error('Restored original verification failed');
@@ -267,7 +314,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
           clearCache();
           source.close();
           for (const key of oldKeys) if (safeKey(key)) await unlink(join(dataDir, 'media', key)).catch(() => {});
-          previews.delete(id); await removeStage(staging, candidate.stage).catch(() => {});
+          previews.delete(id); if (candidate.owned) await removeStage(staging, candidate.stage).catch(() => {});
           return { restored: true, safety_backup: safety, requires_login: true };
         } finally {
           if (source.isOpen) source.close();
@@ -285,23 +332,34 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
   };
   return {
     list, run, preview, restore, tick,
-    async status() { return { ...await config(), busy, backups: await list() }; },
+    async status() { const backups = await list(); return { ...await config(), busy, backups, stored_bytes: backups.reduce((sum, item) => sum + item.stored_bytes, 0), logical_bytes: backups.reduce((sum, item) => sum + item.logical_bytes, 0) }; },
     async configure(value) { if (busy) throw fail(409, '任务进行中，请稍后修改设置'); const policy = policySchema.parse(value); await saveConfig({ ...await config(), ...policy }); return this.status(); },
-    async cancel(id) { const value = previews.get(id); if (!value) return; if (busy) throw fail(409, '任务正在进行'); previews.delete(id); await removeStage(staging, value.stage); },
-    file(id) { if (!/^\d{13}-[\da-f-]{36}\.zip$/.test(id)) throw fail(404, '备份不存在'); return resolve(directory, id); },
+    async cancel(id) { const value = previews.get(id); if (!value) return; if (busy) throw fail(409, '任务正在进行'); previews.delete(id); if (value.owned) await removeStage(staging, value.stage); },
+    file(id) { if (!legacyPattern.test(id) && !snapshotPattern.test(id)) throw fail(404, '备份不存在'); return resolve(directory, id); },
+    async previewSaved(id) { return preview(this.file(id)); },
+    async remove(id) { if (busy) throw fail(409, '任务正在进行'); const entry = (await list()).find(value => value.id === id); if (!entry) throw fail(404, '备份不存在'); if ([...previews.values()].some(value => resolve(value.stage) === resolve(this.file(id)))) throw fail(409, '这个快照正在预览，请先关闭恢复窗口'); await removeBackup(entry); },
+    async download(id, res) {
+      const path = this.file(id);
+      if (legacyPattern.test(id)) return new Promise((resolveDownload, rejectDownload) => res.download(path, `znote-migration-${id.slice(0, 13)}.zip`, error => error ? rejectDownload(error) : resolveDownload()));
+      const snapshot = new DatabaseSync(join(path, 'data', 'znote.sqlite'), { readOnly: true });
+      try { await exportContent({ db: snapshot, dir: join(path, 'data'), req: { query: { mode: 'backup' } }, res, serialize: row => row }); }
+      finally { snapshot.close(); }
+    },
     start() { stopped = false; timer = setInterval(() => { tick().catch(() => {}); }, 60000); timer.unref(); tick().catch(() => {}); },
-    async stop() { stopped = true; clearInterval(timer); while (busy) await new Promise(r => setTimeout(r, 25)); for (const value of previews.values()) await removeStage(staging, value.stage); previews.clear(); },
+    async stop() { stopped = true; clearInterval(timer); while (busy) await new Promise(r => setTimeout(r, 25)); for (const value of previews.values()) if (value.owned) await removeStage(staging, value.stage); previews.clear(); },
   };
 }
 
 export function registerBackupRoutes(app, manager, admin, dataDir) {
-  const upload = multer({ dest: join(dataDir, 'uploads'), limits: { files: 1, fileSize: 5 * 1024 ** 3, fields: 0 } });
+  const upload = multer({ dest: join(dataDir, 'uploads'), limits: { files: 1, fileSize: 25 * 1024 ** 3, fields: 0 } });
   app.get('/api/backups', admin, async (req, res) => res.json(await manager.status()));
   app.patch('/api/backups/policy', admin, async (req, res) => res.json(await manager.configure(req.body)));
   app.post('/api/backups', admin, async (req, res) => res.status(201).json(await manager.run()));
-  app.get('/api/backups/:id/download', admin, (req, res) => res.download(manager.file(req.params.id)));
+  app.get('/api/backups/:id/download', admin, async (req, res) => manager.download(req.params.id, res));
+  app.post('/api/backups/:id/preview', admin, async (req, res) => res.json(await manager.previewSaved(req.params.id)));
+  app.delete('/api/backups/:id', admin, async (req, res) => { await manager.remove(req.params.id); res.status(204).end(); });
   app.post('/api/backups/preview', admin, upload.single('file'), async (req, res) => {
-    if (!req.file) throw fail(400, '请选择完整备份 ZIP');
+    if (!req.file) throw fail(400, '请选择迁移备份 ZIP');
     try { res.json(await manager.preview(req.file.path)); } finally { await unlink(req.file.path).catch(() => {}); }
   });
   app.delete('/api/backups/preview/:id', admin, async (req, res) => { await manager.cancel(req.params.id); res.status(204).end(); });

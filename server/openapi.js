@@ -599,8 +599,8 @@ spec.paths['/api/items/batch-organize'] = {
   }),
 };
 spec.paths['/api/backups'] = {
-  get: operation('备份策略、最近执行状态和完整备份列表（管理员）', { type: 'object' }),
-  post: operation('立即生成完整备份并按策略保留多个版本（管理员）', { type: 'object' }, { responses: { 201: response({ type: 'object', properties: { id: str } }), ...errorResponses } }),
+  get: operation('恢复快照策略、空间占用、最近执行状态和快照列表（管理员）', { type: 'object' }),
+  post: operation('立即生成共享媒体文件的恢复快照并按策略保留多个版本（管理员）', { type: 'object' }, { responses: { 201: response({ type: 'object', properties: { id: str } }), ...errorResponses } }),
 };
 spec.paths['/api/clipper/download'] = { get: { summary: '下载浏览器采集扩展 ZIP（需要登录或 API 令牌）', responses: { 200: { description: '可在 Chrome/Edge 加载的 MV3 扩展', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
 spec.paths['/api/items'].get.parameters.push({ name: 'gallery', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'false' }, description: 'true 返回当前过滤范围内按排序冻结的图片 ID 列表 {ids:[]}，忽略 limit/offset；不读取图片二进制，用于连续整理时保持顺序' });
@@ -616,12 +616,14 @@ spec.paths['/api/items'].get.parameters.push(
 spec.paths['/api/events'].get.parameters.push({name:'latest',in:'query',schema:{type:'string',enum:['true','false']},description:'true 只返回最新 cursor 和空 events，用于轻量检查更新；默认沿用 after 增量读取。'});
 Object.assign(spec.components.schemas.Item.allOf[1].properties, {group_key:{...str,nullable:true},group_index:{type:'integer'},group_title:{...str,nullable:true},group_count:{type:'integer',description:'仅折叠查询返回当前过滤范围内的组页数'}});
 spec.paths['/api/item-groups/favorite']={post:operation('收藏或取消收藏当前知识库的整组图片',{type:'object',properties:{count:{type:'integer'}}},{requestBody:body({type:'object',required:['group_key','collection_id','favorite'],properties:{group_key:str,collection_id:{...str,nullable:true},favorite:{type:'boolean'}}})})};
-spec.paths['/api/backups/policy'] = { patch: operation('更新自动备份策略（管理员）；默认每天一次保留 7 份', { type: 'object' }, { requestBody: body({ type: 'object', required: ['enabled', 'interval_hours', 'keep'], properties: {
+spec.paths['/api/backups/policy'] = { patch: operation('更新自动恢复快照策略（管理员）；默认每天一次保留 7 份', { type: 'object' }, { requestBody: body({ type: 'object', required: ['enabled', 'interval_hours', 'keep'], properties: {
   enabled: { type: 'boolean' }, interval_hours: { type: 'integer', minimum: 1, maximum: 720 }, keep: { type: 'integer', minimum: 1, maximum: 100 },
 } }) }) };
-spec.paths['/api/backups/{id}/download'] = { get: { summary: '下载完整备份（管理员；包含访问设置和 Webhook 密钥）', parameters: [id], responses: { 200: { description: 'ZIP', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
-spec.paths['/api/backups/preview'] = { post: operation('上传完整 ZIP 并校验数据库和原图；预览有效 1 小时（管理员）', { type: 'object' }, {
-  requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: '最大 5 GiB；解压后最大 20 GiB' } } } } } },
+spec.paths['/api/backups/{id}/download'] = { get: { summary: '把恢复快照按需流式导出为迁移 ZIP（管理员；服务器不保留生成的整包）', parameters: [id], responses: { 200: { description: 'ZIP', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
+spec.paths['/api/backups/{id}/preview'] = { post: operation('校验服务器恢复快照并创建一小时恢复预览（管理员）', { type: 'object' }, { parameters: [id] }) };
+spec.paths['/api/backups/{id}'] = { delete: { summary: '删除一份恢复快照或旧版备份（管理员）', parameters: [id], responses: { 204: { description: '已删除' }, ...errorResponses } } };
+spec.paths['/api/backups/preview'] = { post: operation('上传迁移 ZIP 并校验数据库和原图；预览有效 1 小时（管理员）', { type: 'object' }, {
+  requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: '最大 25 GiB；解压后最大 20 GiB' } } } } } },
 }) };
 spec.paths['/api/backups/preview/{id}'] = { delete: { summary: '取消待恢复备份并清理暂存文件（管理员）', parameters: [id], responses: { 204: { description: '已取消' }, ...errorResponses } } };
 spec.paths['/api/backups/restore/{id}'] = { post: operation('恢复已校验备份（管理员）；先保存当前状态，完成后需重新登录', { type: 'object' }, { parameters: [id], requestBody: body({ type: 'object', required: ['confirm'], properties: { confirm: { type: 'string', enum: ['RESTORE'] } } }) }) };

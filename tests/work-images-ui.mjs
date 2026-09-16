@@ -1,11 +1,11 @@
 import {chromium} from 'playwright';
 import {build} from 'esbuild';
 import assert from 'node:assert/strict';
-const bundle=await build({entryPoints:['extensions/clipper/work-images.js'],bundle:true,format:'iife',globalName:'Groups',write:false});
+const bundle=await build({entryPoints:['addons/browser/clipper/work-images.js'],bundle:true,format:'iife',globalName:'Groups',write:false});
 const browser=await chromium.launch({channel:'msedge',headless:true});
 try {
  const page=await browser.newPage();await page.setContent('<main><img id="work" src="https://i.pximg.net/c/600x1200/img-master/12345_p1_master1200.jpg"><img id="recommendation" src="https://i.pximg.net/img-master/98765_p0.jpg"></main>');
- await page.addScriptTag({path:'extensions/clipper/candidates.js'});await page.addScriptTag({content:bundle.outputFiles[0].text});
+ await page.addScriptTag({path:'addons/browser/clipper/candidates.js'});await page.addScriptTag({content:bundle.outputFiles[0].text});
  const result=await page.evaluate(async()=>{
   let calls=0;globalThis.fetch=async url=>{calls++;const id=String(url).match(/illust\/(\d+)/)[1];return{ok:true,text:async()=>JSON.stringify({body:String(url).endsWith('/pages')?[0,1,2].map(n=>({urls:{original:`https://i.pximg.net/img-original/${id}_p${n}.png`,regular:`https://i.pximg.net/img-master/${id}_p${n}.jpg`}})):{title:'多页漫画',pageCount:3,description:'<img src="https://example.com/decoration.png">'}})};};
   const source=new URL('https://www.pixiv.net/artworks/12345');const group=await Groups.workImages(document.querySelector('#work'),document,source);

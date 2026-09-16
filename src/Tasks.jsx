@@ -44,7 +44,7 @@ export function TaskCenter({collection,collections,onClose,onOpen,onImports,onBa
   useEffect(()=>{store.watchers++;store.refreshRemote();return()=>{store.watchers--}},[store]);
   const libraryName=id=>id?collections.find(c=>c.id===id)?.name||'已删除的知识库':'未分类';
   const local=jobs.map(job=>({...job,origin:'local'})),imports=remote.imports.map(job=>({...job,id:'import:'+job.id,remote_id:job.id,status:job.retried_as?'resubmitted':job.status,title:job.title||job.source_url,type:'import',origin:'server'}));
-  const backups=(remote.backup?.backups||[]).filter(b=>!jobs.some(j=>j.file_id===b.id)).map(b=>({...b,id:'backup:'+b.id,file_id:b.id,type:'backup',status:'completed',title:'完整备份',message:bytes(b.bytes),origin:'server',global:true}));
+  const backups=(remote.backup?.backups||[]).filter(b=>!jobs.some(j=>j.file_id===b.id)).map(b=>({...b,id:'backup:'+b.id,file_id:b.id,type:'backup',status:'completed',title:b.format==='snapshot'?'恢复快照':'旧版完整备份',message:b.format==='snapshot'?`新增占用 ${bytes(b.stored_bytes)} · 可恢复 ${bytes(b.logical_bytes)}`:bytes(b.stored_bytes),origin:'server',global:true}));
   const exports=remote.exports.map(job=>({...job,id:'export:'+job.id,remote_id:job.id,status:job.retried_as?'resubmitted':job.status,message:job.retried_as?'已重新提交，请查看后续导出任务':job.message,origin:'server'}));
   const all=[...local,...imports,...exports,...backups].filter(j=>(scope==='all'||j.global||(j.collection_id||'unfiled')===scope)&&(filter==='all'||filter==='active'&&live(j.status)||filter==='failed'&&j.status==='failed')).sort((a,b)=>Number(live(b.status))-Number(live(a.status))||new Date(b.created_at)-new Date(a.created_at));
   const visible=all.slice(page*40,page*40+40);
@@ -62,7 +62,7 @@ export function TaskCenter({collection,collections,onClose,onOpen,onImports,onBa
       {job.type==='export'&&job.status==='ready'&&<a className="button" href={job.download_url} download>开始下载</a>}
       {job.type==='export'&&live(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/export-jobs/'+job.remote_id,{},'DELETE'))}>取消</button>}
       {job.type==='export'&&['failed','cancelled','completed'].includes(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>startExport(store,null,job.remote_id))}>{job.status==='completed'?'重新导出':'重试'}</button>}
-      {job.file_id&&job.status==='completed'&&<a className="button" href={'/api/backups/'+job.file_id+'/download'}>下载备份</a>}
+      {job.file_id&&job.status==='completed'&&<a className="button" href={'/api/backups/'+job.file_id+'/download'}>下载迁移 ZIP</a>}
     </div></article>)}</div>
     <div className="task-footer"><button onClick={()=>{store.clear({failed:true,scope});setPage(0)}}>清除本地已结束记录</button><span>{all.length} 条</span>{all.length>40&&<><button disabled={!page} onClick={()=>setPage(n=>n-1)}>上一页</button><button disabled={(page+1)*40>=all.length} onClick={()=>setPage(n=>n+1)}>下一页</button></>}<button onClick={onImports}>网络采集</button><button onClick={onBackup}>备份设置</button></div>
   </Dialog>;

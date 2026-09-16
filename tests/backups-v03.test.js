@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, readdir, stat, unlink } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, readdir, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createWriteStream } from 'node:fs';
@@ -31,6 +31,7 @@ test('backup schedule, retention, validated preview, complete restore, rollback 
     await json('/api/backups/policy', 'PATCH', { enabled: true, interval_hours: 1, keep: 2 });
     await runtime.backups.tick();
     let status = await json('/api/backups'); assert.equal(status.backups.length, 1); assert.equal(status.last_success, clock);
+    assert.equal(status.backups[0].format,'snapshot'); assert.equal(status.backups[0].linked_files,1); assert.ok(status.backups[0].stored_bytes<status.backups[0].logical_bytes);
     await runtime.backups.tick(); assert.equal((await json('/api/backups')).backups.length, 1);
     snapshot = Buffer.from(await (await request(`/api/backups/${status.backups[0].id}/download`)).arrayBuffer());
     clock += 3600001; await runtime.backups.tick(); clock += 3600001; await runtime.backups.tick();
@@ -46,19 +47,26 @@ test('backup schedule, retention, validated preview, complete restore, rollback 
     await request('/api/backups/preview/' + preview.id, 'DELETE');
     assert.equal((await request('/api/backups/restore/' + preview.id, 'POST', { confirm: 'RESTORE' })).status, 404);
   });
+  await t.test('saved recovery snapshot can be previewed directly and cannot be deleted while open', async () => {
+    const saved = (await json('/api/backups')).backups.find(entry => entry.format === 'snapshot');
+    const preview = await json(`/api/backups/${saved.id}/preview`, 'POST', {});
+    assert.equal(preview.counts.items, 2);
+    assert.equal((await request(`/api/backups/${saved.id}`, 'DELETE')).status, 409);
+    assert.equal((await request(`/api/backups/preview/${preview.id}`, 'DELETE')).status, 204);
+  });
   await t.test('restore rejects invalid confirmation; success resets data, preserves originals and saves previous state', async () => {
     const preview = await (await uploadPreview(snapshot)).json();
     await json('/api/items/' + note.id, 'PATCH', { version: note.version, title: '恢复前的新标题' });
     await json('/api/items', 'POST', { title: '恢复前才新增的笔记' });
     assert.equal((await request('/api/backups/restore/' + preview.id, 'POST', {})).status, 400);
     const restored = await json('/api/backups/restore/' + preview.id, 'POST', { confirm: 'RESTORE' });
-    assert.equal(restored.restored, true); assert.ok((await stat(runtime.backups.file(restored.safety_backup))).size > 0);
+    assert.equal(restored.restored, true); assert.ok((await runtime.backups.list()).some(entry => entry.id === restored.safety_backup && entry.stored_bytes > 0));
     assert.equal((await request('/api/items')).status, 401);
     await login();
     assert.equal((await json('/api/items')).total, 2);
     assert.equal((await json('/api/items/' + note.id)).title, note.title);
     assert.deepEqual(Buffer.from(await (await request(image.url)).arrayBuffer()), original);
-    const before = await (await uploadPreview(await readFile(runtime.backups.file(restored.safety_backup)))).json();
+    const before = await runtime.backups.previewSaved(restored.safety_backup);
     assert.equal(before.counts.items, 3);
     await request('/api/backups/preview/' + before.id, 'DELETE');
     assert.equal((await readdir(join(dir, 'media'))).length, 1);
@@ -87,16 +95,18 @@ test('backup schedule, retention, validated preview, complete restore, rollback 
     await request('/api/backups/preview/' + preview.id, 'DELETE');
   });
   await t.test('backups and schedule persist across restart, no immediate duplicate scheduled snapshot', async () => {
+    const abandoned=`${clock-1}-00000000-0000-4000-8000-000000000000.zip.tmp`;await writeFile(join(dir,'backups',abandoned),'incomplete');
     await runtime.backups.stop(); await new Promise(r => server.close(r)); runtime.db.close();
     runtime = createApp({ dataDir: dir, backupOptions: { now: () => clock } });
     server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = `http://127.0.0.1:${server.address().port}`;
     const before = await json('/api/backups'); await runtime.backups.tick();
     const after = await json('/api/backups'); assert.equal(after.backups.length, before.backups.length); assert.equal(after.keep, 2); assert.equal(after.interval_hours, 1);
+    assert.ok(!(await readdir(join(dir,'backups'))).includes(abandoned));
     assert.equal((await json('/api/items/' + note.id)).title, '必须保留的当前内容');
   });
   await t.test('read and write API tokens cannot read backups, preview or restore', async () => {
     const token = await json('/api/tokens', 'POST', { name: 'ordinary-plugin', scope: 'write' });
-    for (const [path, method] of [['/api/backups', 'GET'], ['/api/backups', 'POST'], ['/api/backups/preview', 'POST'], ['/api/backups/restore/anything', 'POST']]) {
+    for (const [path, method] of [['/api/backups', 'GET'], ['/api/backups', 'POST'], ['/api/backups/preview', 'POST'], ['/api/backups/anything/preview', 'POST'], ['/api/backups/anything', 'DELETE'], ['/api/backups/restore/anything', 'POST']]) {
       const r = await fetch(base + path, { method, headers: { Authorization: 'Bearer ' + token.token } }); assert.equal(r.status, 403);
     }
   });
@@ -126,5 +136,11 @@ test('backup schedule, retention, validated preview, complete restore, rollback 
     const status = await json('/api/backups'); assert.ok(status.last_error); assert.deepEqual(status.backups.map(b => b.id), before);
     assert.ok(!(await readdir(join(dir, 'backups'))).some(name => name.endsWith('.tmp')));
     clock += 600001; await runtime.backups.tick(); assert.equal((await json('/api/backups')).last_error, null);
+  });
+  await t.test('saved recovery snapshots can be deleted explicitly', async () => {
+    const before = (await json('/api/backups')).backups;
+    const target = before.at(-1);
+    assert.equal((await request(`/api/backups/${target.id}`, 'DELETE')).status, 204);
+    assert.ok(!(await json('/api/backups')).backups.some(entry => entry.id === target.id));
   });
 });

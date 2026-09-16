@@ -1,6 +1,6 @@
 # 第三方组件
 
-正文配图解析使用 unified / remark-parse 及其 Markdown 解析依赖（MIT）；扩展随附汇总许可文件 `extensions/clipper/vendor/markdown-LICENSES.txt`。源码：[unified](https://github.com/unifiedjs/unified)、[remark](https://github.com/remarkjs/remark)。Pawchive 选择器依据用户提供的 PawPreviewer 项目结构适配，未包含其中的个人作者列表、配置或数据。
+正文配图解析使用 unified / remark-parse 及其 Markdown 解析依赖（MIT）；扩展随附汇总许可文件 `addons/browser/clipper/vendor/markdown-LICENSES.txt`。源码：[unified](https://github.com/unifiedjs/unified)、[remark](https://github.com/remarkjs/remark)。Pawchive 选择器依据用户提供的 PawPreviewer 项目结构适配，未包含其中的个人作者列表、配置或数据。
 
 下表列出主要组件。第三方组件分别遵循其许可证；本文件不替代依赖包或可执行文件随附的完整许可文本。ZNote 自有代码采用 [GPL-3.0-or-later](LICENSING.md)。
 
@@ -16,10 +16,10 @@
 | Express | HTTP API | [MIT](https://github.com/expressjs/express) |
 | Sharp | 图像读取与缩略图 | [Apache-2.0](https://github.com/lovell/sharp)；其原生依赖另有许可 |
 | LinkeDOM 0.18.12 | 服务端 HTML 解析（不运行网页脚本） | [ISC](https://github.com/WebReflection/linkedom/blob/main/LICENSE) |
-| Mozilla Readability 0.6.0 | 正文提取 | [Apache-2.0](extensions/clipper/vendor/readability-LICENSE.md) |
-| Turndown 7.2.4 | HTML 转 Markdown | [MIT](extensions/clipper/vendor/turndown-LICENSE) |
-| turndown-plugin-gfm 1.0.2 | Markdown 表格等扩展 | [MIT](extensions/clipper/vendor/turndown-gfm-LICENSE) |
-| HLS.js 1.6.15 | 扩展 HLS 预览 | [BSD-2-Clause](extensions/clipper/vendor/hls.LICENSE) |
+| Mozilla Readability 0.6.0 | 正文提取 | [Apache-2.0](addons/browser/clipper/vendor/readability-LICENSE.md) |
+| Turndown 7.2.4 | HTML 转 Markdown | [MIT](addons/browser/clipper/vendor/turndown-LICENSE) |
+| turndown-plugin-gfm 1.0.2 | Markdown 表格等扩展 | [MIT](addons/browser/clipper/vendor/turndown-gfm-LICENSE) |
+| HLS.js 1.6.15 | 扩展 HLS 预览 | [BSD-2-Clause](addons/browser/clipper/vendor/hls.LICENSE) |
 | MediaInfo / mediainfo.js | 视频元数据检查 | [项目与许可](https://github.com/buzz/mediainfo.js) |
 | yt-dlp | 可选平台视频解析 | [项目与发行许可](https://github.com/yt-dlp/yt-dlp) |
 | FFmpeg / ffmpeg-static | 可选音视频无损合并 | [FFmpeg 许可](https://ffmpeg.org/legal.html) / [预编译组件说明](https://github.com/eugeneware/ffmpeg-static) |

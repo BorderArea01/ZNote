@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {openGallery,pendingInlineGalleries,inlineGalleryTicket} from '../extensions/clipper/gallery-ticket.js';
+import {openGallery,pendingInlineGalleries,inlineGalleryTicket} from '../addons/browser/clipper/gallery-ticket.js';
 
 test('inline gallery tickets preserve active jobs and scope recovery to the originating tab and frame',async t=>{
   const previous=globalThis.chrome,store={},tabs=[];

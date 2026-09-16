@@ -861,7 +861,9 @@
 .backup-policy label { display:flex; align-items:center; gap:8px; font-size:12px; }
 .backup-policy input[type="number"] { width:70px; padding:8px; }
 .backup-list { max-height:230px; overflow:auto; }
-.backup-entry { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.backup-entry { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.backup-entry > span { flex:1 1 230px; min-width:0; }
+.backup-entry > button,.backup-entry > a { min-height:34px; padding:7px 10px; white-space:nowrap; }
 .backup-entry small { display:block; margin-top:4px; color:var(--muted); }
 .small-dialog .restore-confirm { display:flex; align-items:center; gap:8px; }
 .small-dialog .restore-confirm input { width:auto; flex:none; }

@@ -40,7 +40,7 @@ const source = createServer(async (req, res) => {
       res.end(mp4);
     } else if (path === "/hls.js") {
       res.setHeader("Content-Type", "text/javascript");
-      res.end(await readFile("extensions/clipper/vendor/hls.min.js"));
+      res.end(await readFile("addons/browser/clipper/vendor/hls.min.js"));
     } else if (
       path === "/stream" ||
       /^\/(?:video\.m3u8|video\d+\.ts)$/.test(path)
@@ -69,7 +69,7 @@ const source = createServer(async (req, res) => {
 source.listen(0, "127.0.0.1");
 await new Promise((r) => source.once("listening", r));
 const sourceUrl = `http://127.0.0.1:${source.address().port}`;
-const extension = resolve("extensions/clipper");
+const extension = resolve("addons/browser/clipper");
 const context = await chromium.launchPersistentContext(join(dir, "profile"), {
   channel: "msedge",
   headless: true,

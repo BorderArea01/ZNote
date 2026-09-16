@@ -1,7 +1,7 @@
 import {chromium} from 'playwright';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const browser=await chromium.launch({channel:'msedge',headless:true}),page=await browser.newPage(),script=(await readFile('extensions/clipper/douyin-records.js','utf8'))+'\n'+(await readFile('extensions/clipper/douyin-metadata.js','utf8'))+'\n'+(await readFile('extensions/clipper/video-metadata.js','utf8'));
+const browser=await chromium.launch({channel:'msedge',headless:true}),page=await browser.newPage(),script=(await readFile('addons/browser/clipper/douyin-records.js','utf8'))+'\n'+(await readFile('addons/browser/clipper/douyin-metadata.js','utf8'))+'\n'+(await readFile('addons/browser/clipper/video-metadata.js','utf8'));
 async function load(url,body){await page.unrouteAll();await page.route('**/*',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><title>抖音首页</title>'+body}));await page.goto(url);await page.evaluate(()=>globalThis.chrome={runtime:{onMessage:{addListener(){}}}});await page.addScriptTag({content:script})}
 const metadata=()=>page.evaluate(()=>ZNoteVideoMetadata(document.querySelector('video')));
 const work=(id,name,url)=>({aweme_id:id,desc:'作品 '+id,author:{nickname:name,sec_uid:'MS4w_'+id},video:{play_addr:{url_list:[url]}}});

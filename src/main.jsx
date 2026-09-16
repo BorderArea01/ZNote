@@ -1057,7 +1057,7 @@ function SettingsPanel({
         <section>
           <div className="settings-title">
             <Download size={20} />
-            <h3>数据导出</h3><HelpHint label="导出格式">支持图片、Markdown、JSON、离线网页、资料包，以及可完整恢复的备份 ZIP。</HelpHint>
+            <h3>数据导出</h3><HelpHint label="导出格式">支持图片、Markdown、JSON、离线网页、资料包，以及按需生成、可在其他设备恢复的迁移 ZIP。</HelpHint>
           </div>
 
           <button onClick={onExport}>

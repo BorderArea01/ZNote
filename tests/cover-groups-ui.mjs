@@ -1,5 +1,5 @@
 import {chromium} from 'playwright';import {mkdtemp} from 'node:fs/promises';import {resolve,join} from 'node:path';import sharp from 'sharp';import assert from 'node:assert/strict';
-const dir=await mkdtemp(resolve('artifacts/cover-groups-')),extension=resolve('extensions/clipper');
+const dir=await mkdtemp(resolve('artifacts/cover-groups-')),extension=resolve('addons/browser/clipper');
 const tiny=await sharp({create:{width:48,height:48,channels:3,background:'#607c65'}}).jpeg().toBuffer(),medium=await sharp({create:{width:1000,height:700,channels:3,background:'#789c86'}}).jpeg().toBuffer();
 const context=await chromium.launchPersistentContext(join(dir,'profile'),{channel:'msedge',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`],viewport:{width:1440,height:1000}});
 let originals=0,pawRequests=0;const baseCSS='<style>body{margin:40px;min-height:1500px}img{width:48px;height:48px}.post-card{position:relative;width:48px;height:48px}.mask{position:absolute;inset:0}</style>';

@@ -2,7 +2,7 @@ import {chromium} from 'playwright';
 import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import assert from 'node:assert/strict';
-const extension=resolve(process.env.PERF_EXTENSION||'extensions/clipper'),dir=await mkdtemp(resolve('artifacts/sniffer-perf-'));
+const extension=resolve(process.env.PERF_EXTENSION||'addons/browser/clipper'),dir=await mkdtemp(resolve('artifacts/sniffer-perf-'));
 const context=await chromium.launchPersistentContext(join(dir,'profile'),{channel:'msedge',headless:true,args:['--mute-audio','--disable-extensions-except='+extension,'--load-extension='+extension]}),worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker'),page=await context.newPage();
 const bytes=await readFile('tests/fixtures/sample.mp4');let mediaRequests=0;
 try{

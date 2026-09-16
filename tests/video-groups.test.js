@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import '../extensions/clipper/video-groups.js';
-import {addResource} from '../extensions/clipper/resource-store.js';
+import '../addons/browser/clipper/video-groups.js';
+import {addResource} from '../addons/browser/clipper/resource-store.js';
 test('video cards group only confirmed work identities and keep alternate media available',()=>{
  const state={source_url:'https://www.douyin.com/user/self',resources:[]};
  const first=addResource(state,{url:'https://www.douyin.com/aweme/v1/play/?video_id=one',kind:'video',work_id:'123',author:'作者甲',poster:'https://img.test/cover.jpg',source_url:'https://www.douyin.com/video/123',metadata_rank:3});

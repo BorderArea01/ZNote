@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { settings } from '../extensions/clipper/client.js';
+import { settings } from '../addons/browser/clipper/client.js';
 
 test('default and legacy S/K shortcuts become S/Z while custom bindings and connection survive', async () => {
   let stored = {};

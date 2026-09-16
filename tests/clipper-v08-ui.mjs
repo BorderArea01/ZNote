@@ -44,7 +44,7 @@ const source = createServer((req, res) => {
 source.listen(0, "127.0.0.1");
 await new Promise((r) => source.once("listening", r));
 const sourceUrl = `http://127.0.0.1:${source.address().port}`;
-const extension = resolve("extensions/clipper"),
+const extension = resolve("addons/browser/clipper"),
   profile = join(dir, "profile");
 const launch = (ext) =>
   chromium.launchPersistentContext(profile, {

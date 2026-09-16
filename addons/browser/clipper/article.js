@@ -1,4 +1,4 @@
-import { markdownImages, replaceMarkdownImages } from '../../shared/markdown-images.js';
+import { markdownImages, replaceMarkdownImages } from '../../../shared/markdown-images.js';
 import { api, settings, serverUrl, limitedImage } from "./client.js";
 const $ = (id) => document.getElementById(id);
 let article, saved;

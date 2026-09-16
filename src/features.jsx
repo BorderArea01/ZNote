@@ -344,8 +344,8 @@ const exportModes = {
   json: ["JSON 元数据", "标题、正文、标签及分类；不包含媒体文件。"],
   html: ["离线网页 ZIP", "解压后阅读图文、浏览图片及播放浏览器支持的视频。"],
   backup: [
-    "完整备份 ZIP",
-    "所有知识库、数据库、图片与视频。包含登录数据，可恢复到其他设备。",
+    "迁移备份 ZIP",
+    "立即打包全部知识库、数据库和媒体并下载；服务器不长期保留整包。",
   ],
 };
 export function ExportDialog({ collections, currentCollection, onClose }) {
@@ -419,7 +419,7 @@ export function ExportDialog({ collections, currentCollection, onClose }) {
         </label>
         <div className="inline-heading"><span>导出内容</span><HelpHint label="导出范围">
           {mode === "backup"
-            ? "可在备份设置中上传并预览恢复；完整备份包含全部知识库和访问设置。"
+            ? "用于迁移到其他设备，也可在恢复快照设置中导入；包含全部知识库和访问设置。"
             : "图文包会附带笔记引用的图片，即使图片位于其他知识库，以保持阅读完整。"}
         </HelpHint></div>
         {error && <div className="error">{error}</div>}

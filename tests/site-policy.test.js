@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {blockedSite,parseBlockedSites} from '../extensions/clipper/site-policy.js';
+import {blockedSite,parseBlockedSites} from '../addons/browser/clipper/site-policy.js';
 import {mediaDescription} from '../shared/media-description.js';
 test('blacklist uses host boundaries and exact origins without blocking other LAN services',()=>{
  const config={server:'http://localhost:3741',blockedSites:parseBlockedSites('example.com\nhttps://127.0.0.1:8000\n*.blocked.test')};
