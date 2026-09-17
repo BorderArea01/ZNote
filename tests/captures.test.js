@@ -32,6 +32,7 @@ test('platform images prefer original variants without altering unrelated signat
   const signed='https://cdn.example/image.jpg?sign=keep&watermark=author';
   assert.deepEqual(captureImageCandidates({urlDefault:signed},'xhs','https://example.com'),[signed]);
   assert.deepEqual(captureImageCandidates({url_list:['https://cdn.example/display'],origin_url:'https://cdn.example/original',download_url_list:['https://cdn.example/watermark']},'douyin','https://www.douyin.com'),['https://cdn.example/original','https://cdn.example/display','https://cdn.example/watermark']);
+  assert.deepEqual(captureImageCandidates({urlList:['https://cdn.example/camel-display'],downloadUrlList:['https://cdn.example/camel-watermark']},'douyin','https://www.douyin.com'),['https://cdn.example/camel-display','https://cdn.example/camel-watermark']);
   const plan=extractCapturePage(xhs([display]),'https://www.xiaohongshu.com/explore/abcd');assert.equal(plan.images[0],plan.image_candidates[0][0]);assert.equal(plan.image_candidates[0].length,2);
 });
 test('share parsing and article extraction preserve links, line breaks and exact platform work',()=>{
@@ -48,6 +49,14 @@ test('Douyin slides preserve static covers and live-photo playback candidates',(
   const plan=extractCapturePage('<script>window._ROUTER_DATA = '+JSON.stringify({aweme_details:[record]})+'</script>','https://www.iesdouyin.com/share/slides/7685/');
   assert.equal(plan.kind,'note');assert.equal(plan.images.length,2);assert.equal(plan.author,'实况作者');
   assert.deepEqual(plan.live_videos,[{index:0,urls:['https://v26.douyinvod.com/one.mp4','https://watermark.example/one.mp4']}]);
+});
+test('Douyin React Flight detail extracts the complete image post',()=>{
+  const record={awemeId:'7685',desc:'图文正文',authorInfo:{nickname:'新结构作者'},images:[{urlList:['https://p3.douyinpic.com/one.webp'],downloadUrlList:['https://p3.douyinpic.com/one-watermarked.webp'],video:{playAddr:{urlList:['https://v26.douyinvod.com/one.mp4']}}},{urlList:['https://p3.douyinpic.com/two.webp']}]};
+  const payload='7:'+JSON.stringify(['$',null,null,{awemeId:'7685',aweme:{detail:record}}]);
+  const html='<script>self.__pace_f.push('+JSON.stringify([1,payload])+')</script>';
+  const plan=extractCapturePage(html,'https://www.douyin.com/note/7685');
+  assert.equal(plan.title,'图文正文');assert.equal(plan.author,'新结构作者');assert.equal(plan.images.length,2);
+  assert.deepEqual(plan.live_videos,[{index:0,urls:['https://v26.douyinvod.com/one.mp4']}]);
 });
 test('remote capture rejects local addresses and unsafe schemes before fetching',async()=>{
   for(const url of ['http://127.0.0.1/x','http://192.168.1.1','http://[::1]/','file:///etc/passwd','http://user:pass@example.com/'])await assert.rejects(fetchCapturePage(url,new AbortController().signal));

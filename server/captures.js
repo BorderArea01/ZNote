@@ -116,7 +116,13 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const job=read().find(j=>j.status==='queued');if(!job)return;
       const controller=new AbortController();active={id:job.id,controller};patch(job.id,{status:'running',message:'正在读取分享内容'});
       try{await work(()=>process(job,controller.signal));}
-      catch(e){patch(job.id,{status:'failed',message:controller.signal.aborted?'采集已停止，可重试':e.status?e.message:'网络或存储处理失败，请检查连接后重试'});}
+      catch(e){
+        const message=controller.signal.aborted?'采集已停止，可重试':e.status?e.message:'网络或存储处理失败，请检查连接后重试';
+        // Runtime diagnostics already persist stderr with rotation. Keep the
+        // task id and failure stack, but omit source/share URLs and user text.
+        console.error('[capture_failed]',JSON.stringify({id:job.id,message:e?.message||String(e),code:e?.code||null,status:e?.status||null}),e?.stack||'');
+        patch(job.id,{status:'failed',message});
+      }
       finally{active=null;}
     }
   }

@@ -10,7 +10,7 @@ test('on-demand renderer only accepts platform requests and exact work links',()
   assert.ok(allowedCaptureRequest('https://www.iesdouyin.com/web/api/v2/aweme/slidesinfo/','xhr'));
   assert.ok(allowedCaptureRequest('https://www.iesdouyin.com/web/api/v2/aweme/slidesinfo','xhr'));
   for(const url of ['http://localhost/api','http://192.168.1.1/','https://douyin.com.evil.test/','file:///a','https://user:pass@www.douyin.com/','https://www.douyin.com:3000/'])assert.equal(allowedCaptureRequest(url,'fetch'),false);
-  for(const type of ['image','media','font'])assert.equal(allowedCaptureRequest('https://www.douyin.com/file',type),false);
+  for(const type of ['image','media','font','stylesheet'])assert.equal(allowedCaptureRequest('https://www.douyin.com/file',type),false);
 });
 test('cancelled capture does not start a browser',async()=>{
   const controller=new AbortController();controller.abort();await assert.rejects(renderDouyinCapture('https://www.douyin.com/video/123',controller.signal),{name:'AbortError'});

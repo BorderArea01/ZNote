@@ -25,7 +25,14 @@ export function captureImageCandidates(image, platform, base) {
     candidates = [...original, ...derived, ...display];
   } else {
     // Playback/display URLs precede the download variants, which can carry platform marks.
-    candidates = [...urls(image.origin_url), ...urls(image.original_url), ...urls(image.url_list), ...urls(image.display_image?.url_list), ...urls(image.url), ...urls(image.download_url_list)];
+    candidates = [
+      ...urls(image.origin_url), ...urls(image.originUrl),
+      ...urls(image.original_url), ...urls(image.originalUrl),
+      ...urls(image.url_list), ...urls(image.urlList),
+      ...urls(image.display_image?.url_list), ...urls(image.displayImage?.urlList),
+      ...urls(image.url),
+      ...urls(image.download_url_list), ...urls(image.downloadUrlList),
+    ];
   }
   return [...new Set(candidates.map(v => valid(v, base)).filter(Boolean))].slice(0, 5);
 }

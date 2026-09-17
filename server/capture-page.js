@@ -61,6 +61,24 @@ function scriptData(raw) {
   }
   try { return JSON.parse(value); } catch { return null; }
 }
+function scriptValues(raw) {
+  const direct = scriptData(raw);
+  if (direct) return [direct];
+  // Douyin's current desktop detail page serializes the work in a React
+  // Flight stream instead of RENDER_DATA or an aweme/detail XHR response.
+  // Decode the JSON argument only; never execute the script.
+  const match = raw.trim().match(/^self\.__pace_f\.push\((\[[\s\S]*\])\)\s*;?$/);
+  if (!match || match[1].length > 8 * 1024 * 1024) return [];
+  try {
+    const outer = JSON.parse(match[1]), payload = outer[1];
+    if (typeof payload !== 'string' || payload.length > 8 * 1024 * 1024) return [];
+    const separator = payload.indexOf(':');
+    if (separator < 0) return [];
+    const value = payload.slice(separator + 1);
+    if (!/^[\[{]/.test(value)) return [];
+    return [JSON.parse(value)];
+  } catch { return []; }
+}
 function findRecord(data, id, platform) {
   const stack = [data]; let count = 0;
   while (stack.length && count++ < 30000) {
@@ -73,13 +91,13 @@ function findRecord(data, id, platform) {
 }
 const values = value => typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter(v => typeof v === 'string') : [];
 function liveVideoCandidates(image, base) {
-  const video=image?.video||image?.live_photo?.video||image?.motion_video;
+  const video=image?.video||image?.live_photo?.video||image?.livePhoto?.video||image?.motion_video||image?.motionVideo;
   if(!video)return [];
-  const addresses=[video.play_addr,video.play_addr_h264,video.download_addr,video];
+  const addresses=[video.play_addr,video.playAddr,video.play_addr_h264,video.playAddrH264,video.download_addr,video.downloadAddr,video];
   const found=[];
   for(const address of addresses){
     if(!address)continue;
-    for(const raw of [...values(address.url_list),...values(address.url),...values(address.play_url),...values(address.download_url)]){
+    for(const raw of [...values(address.url_list),...values(address.urlList),...values(address.url),...values(address.play_url),...values(address.playUrl),...values(address.download_url),...values(address.downloadUrl)]){
       const url=absolute(raw,base);if(url)found.push(url);
     }
   }
@@ -94,7 +112,7 @@ export function extractCapturePage(html, url) {
     for (const script of [...document.querySelectorAll('script:not([src])')].slice(0,150).sort((a,b)=>Number(b.textContent.includes('window.__SETUP_SERVER_STATE__='))-Number(a.textContent.includes('window.__SETUP_SERVER_STATE__=')))) {
       let raw = script.textContent;
       if (script.id === 'RENDER_DATA') { try { raw = decodeURIComponent(raw); } catch { continue; } }
-      const record = id && findRecord(scriptData(raw), id, xhs ? 'xhs' : 'douyin');
+      const record = id && scriptValues(raw).map(data=>findRecord(data, id, xhs ? 'xhs' : 'douyin')).find(Boolean);
       if (!record) continue;
       const galleryImages=xhs ? record.imageList || [] : record.images || record.image_list || record.image_post_info?.images || record.image_post_info?.image_list || [];
       if (xhs && record.type === 'video' || dy && !galleryImages.length) {
@@ -107,7 +125,7 @@ export function extractCapturePage(html, url) {
       const urls = images.map(v => v[0]);
       if (urls.some(v => !v)) throw fail('图集中有无法解析的图片地址');
       const live_videos=xhs?[]:galleryImages.map((image,index)=>({index,urls:liveVideoCandidates(image,url)})).filter(v=>v.urls.length);
-      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || '' };
+      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || record.authorInfo?.nickname || '' };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.
     if (dy && !/\/note\//.test(u.pathname) || /video/i.test(meta('og:type'))) return { kind: 'video', url };

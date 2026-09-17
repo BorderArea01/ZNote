@@ -2,7 +2,7 @@ import {extractCapturePage} from './capture-page.js';
 const fail=message=>Object.assign(Error(message),{status:422});
 const domains=['douyin.com','iesdouyin.com','douyinstatic.com','douyincdn.com','douyinpic.com','douyinvod.com','byteimg.com','bytedance.com','bytednsdoc.com','bytescm.com','bytegoofy.com','ibytedtos.com','pstatp.com','snssdk.com','bytecdn.cn','bytetos.com'];
 export function allowedCaptureRequest(value,type){
-  try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&!u.port&&!['image','media','font'].includes(type)&&domains.some(d=>u.hostname===d||u.hostname.endsWith('.'+d));}catch{return false;}
+  try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&!u.port&&!['image','media','font','stylesheet'].includes(type)&&domains.some(d=>u.hostname===d||u.hostname.endsWith('.'+d));}catch{return false;}
 }
 export function douyinWork(value){
   try{const u=new URL(value);if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(u.hostname))return '';return u.pathname.match(/\/(?:video|note|slides)\/(\d+)/)?.[1]||(/^\d+$/.test(u.searchParams.get('modal_id')||'')?u.searchParams.get('modal_id'):'');}catch{return '';}
@@ -40,8 +40,24 @@ export async function renderDouyinCapture(source,signal){
     const requested=new URL(source),gallery=/\/(?:note|slides)\//.test(requested.pathname);
     const targets=gallery?[`https://www.iesdouyin.com/share/slides/${id}/`,source]:[source,`https://www.douyin.com/video/${id}`];
     for(const target of [...new Set(targets)]){
+      // Bound each navigation separately. A heavy first page must not prevent
+      // the canonical fallback page from loading.
+      count=0;
       try{await page.goto(target,{waitUntil:'domcontentloaded',timeout:18000});}catch(e){if(closed)throw e;}
-      for(let waited=0;!closed&&!plan&&waited<67;waited++)await page.waitForTimeout(150);
+      // Current Douyin note pages put the complete work in the server-rendered
+      // React Flight payload and may never request the older detail endpoint.
+      if(!plan){
+        try{plan=extractCapturePage(await page.content(),page.url());}
+        catch(e){if(!/完整数据|完整图集/.test(e.message))throw e;}
+      }
+      for(let waited=0;!closed&&!plan&&waited<67;waited++){
+        await page.waitForTimeout(150);
+        // React Flight chunks can finish shortly after DOMContentLoaded.
+        if(waited%5===4){
+          try{plan=extractCapturePage(await page.content(),page.url());}
+          catch(e){if(!/完整数据|完整图集/.test(e.message))throw e;}
+        }
+      }
       if(plan)break;
     }
     signal.throwIfAborted();
