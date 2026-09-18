@@ -1,9 +1,54 @@
 import { settings, serverUrl, api } from './client.js';
+import { siteControlState, toggleSiteBlock } from './site-policy.js';
 const status = document.getElementById('status'), capture = document.getElementById('capture');
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 document.getElementById('article').addEventListener('click',async()=>{await chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});window.close();});
-const behavior = await settings();
+let behavior = await settings();
 document.getElementById('shortcut-help').textContent = `悬停大图 · ${behavior.downloadKey.toUpperCase()} 下载 · ${behavior.saveKey.toUpperCase()} 入库`;
+const siteName = document.getElementById('site-name'), siteStatus = document.getElementById('site-status'), siteToggle = document.getElementById('site-toggle');
+const discoverButton = document.getElementById('discover'), platformVideoButton = document.getElementById('video');
+let siteState;
+function renderSiteState(message = '') {
+  siteState = siteControlState(tab?.url, behavior);
+  siteName.textContent = (() => { try { return new URL(tab?.url).host; } catch { return '当前页面不支持'; } })();
+  discoverButton.disabled = !siteState.supported || siteState.blocked;
+  platformVideoButton.disabled = !siteState.supported || siteState.blocked;
+  siteToggle.disabled = !siteState.supported || siteState.automatic;
+  siteToggle.setAttribute('aria-pressed', String(siteState.blocked));
+  if (!siteState.supported) {
+    siteToggle.textContent = '不适用于此页面';
+    siteStatus.textContent = '仅支持普通 HTTP(S) 网站';
+  } else if (siteState.automatic) {
+    siteToggle.textContent = '自动停用';
+    siteStatus.textContent = 'ZNote 页面不会显示图片预览或视频嗅探';
+  } else if (siteState.blocked && siteState.direct.length) {
+    siteToggle.textContent = '恢复此网址';
+    siteStatus.textContent = siteState.other.length
+      ? `本站规则已启用；移除后仍会匹配：${siteState.other.join(', ')}`
+      : '图片预览、视频浮窗和资源嗅探已关闭';
+  } else if (siteState.blocked) {
+    siteToggle.textContent = '管理黑名单';
+    siteStatus.textContent = `此网址已被规则覆盖：${siteState.matching.join(', ')}`;
+  } else {
+    siteToggle.textContent = '禁用此网址';
+    siteStatus.textContent = message || '关闭此网站的悬停预览、视频浮窗和资源嗅探';
+  }
+}
+renderSiteState();
+siteToggle.addEventListener('click', async () => {
+  if (!siteState?.supported || siteState.automatic) return;
+  if (siteState.blocked && !siteState.direct.length) { await chrome.runtime.openOptionsPage(); return; }
+  siteToggle.disabled = true;
+  try {
+    const next = toggleSiteBlock(tab.url, behavior);
+    if (!next.changed) throw new Error('请在连接设置中调整覆盖此网址的黑名单规则');
+    await chrome.storage.local.set({ blockedSites: next.blockedSites });
+    behavior = await settings();
+    renderSiteState(next.blocked ? '此网址已禁用，当前页面立即生效' : '此网址已恢复');
+  } catch (error) {
+    siteStatus.textContent = error.message;
+  } finally { siteToggle.disabled = false; renderSiteState(siteStatus.textContent); }
+});
 document.getElementById('discover').addEventListener('click',async()=>{try{const result=await chrome.runtime.sendMessage({type:'open-panel',tabId:tab.id});if(!result?.ok)throw new Error(result?.error||'打开失败');window.close();}catch(e){status.textContent=e.message;}});
 async function show() {
   const { lastResult } = await chrome.storage.local.get('lastResult');

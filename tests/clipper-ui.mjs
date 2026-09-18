@@ -73,7 +73,7 @@ try {
   }, { currentSrc, sourceUrl });
   const original = await collect(); assert.equal(original.width, 2400); assert.equal(original.height, 1600);
   assert.deepEqual(await (await context.request.get(base + original.url)).body(), large);
-  assert.ok(original.content.includes('/large.png')); assert.equal(original.source_url, sourceUrl + '/hd');
+  assert.ok(original.content.includes('已从网页提供的高清候选地址采集')); assert.ok(!original.content.includes('/large.png')); assert.equal(original.source_url, sourceUrl + '/hd');
   await hd.locator('body > img').evaluate(img => { img.removeAttribute('srcset'); });
   await hd.locator('body > img').click({ button: 'right' });
   const fallback = await collect(); assert.equal(fallback.width, 600); assert.deepEqual(await (await context.request.get(base + fallback.url)).body(), png);
@@ -87,6 +87,24 @@ try {
   const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);await popup.locator('#video-open:not([hidden])').waitFor();await popup.screenshot({path:resolve('artifacts/v05-clipper-popup.png')});
   assert.equal(await popup.locator('#video-open').getAttribute('href'),base+'/#item/'+done.item_id);
   console.log('PASS: extension direct video bytes/source, platform job submission, popup completion and open link');
+  await tab.bringToFront();
+  const overlay=tab.locator('[data-znote-overlay]'),dock=overlay.getByRole('button',{name:'ZNote 视频嗅探'}),preview=overlay.locator('.preview');
+  await dock.waitFor({state:'visible'});await tab.locator('body > img').hover();await preview.waitFor({state:'visible'});
+  await dock.click();const mediaPanel=overlay.getByRole('dialog',{name:'ZNote 视频嗅探'});await mediaPanel.waitFor({state:'visible'});
+  await options.evaluate(async origin=>chrome.storage.local.set({blockedSites:[origin]}),sourceUrl);
+  await options.waitForFunction(origin=>document.querySelector('#blocked-sites')?.value===origin,sourceUrl);
+  await tab.waitForFunction(()=>{const root=document.querySelector('[data-znote-overlay]')?.shadowRoot;return root?.querySelector('.dock')?.classList.contains('hidden')&&root?.querySelector('.panel')?.classList.contains('hidden')&&root?.querySelector('.preview')?.classList.contains('hidden')});
+  await tab.locator('body > img').hover();await tab.waitForTimeout(450);assert.equal(await preview.isVisible(),false);
+  const blockedActions=await options.evaluate(async url=>{
+    const {collectImage,collectVideo}=await import('./actions.js');const {saveDirectVideo}=await import('./client.js');const capture={srcUrl:url+'/picture.png',pageUrl:url};const tab={url,title:'黑名单测试'};const messages=[];
+    for(const run of [()=>collectImage(capture,tab),()=>collectVideo(tab,url+'/video-page'),()=>saveDirectVideo(url+'/video.mp4',url+'/video-page','黑名单测试')])try{await run();messages.push('allowed')}catch(error){messages.push(error.message)}
+    return messages;
+  },sourceUrl);
+  assert.equal(blockedActions.length,3);assert.ok(blockedActions.every(message=>message.includes('此网站已停用')));
+  await options.evaluate(()=>chrome.storage.local.set({blockedSites:[]}));
+  await options.waitForFunction(()=>document.querySelector('#blocked-sites')?.value==='');
+  await dock.waitFor({state:'visible'});await tab.mouse.move(1150,820);await tab.locator('body > img').hover();await preview.waitFor({state:'visible'});
+  console.log('PASS: blacklisting an open site immediately closes image/video overlays, blocks context media actions, and restores on removal');
   assert.deepEqual(errors, []);
 } catch (e) { await page.screenshot({ path: resolve('artifacts/v03-clipper-ui-failure.png'), fullPage: true }); throw e; }
 finally { await context.close(); await runtime.imports.stop(); await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(r => server.close(r)); runtime.db.close(); await new Promise(r => source.close(r)); }

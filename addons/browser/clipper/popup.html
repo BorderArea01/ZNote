@@ -4,6 +4,11 @@
 <body class="popup"><main>
   <div class="brand">ZNote <small>浏览器采集</small></div>
   <div class="intro"><h1>留住眼前的灵感</h1><p id="shortcut-help">悬停图片预览大图</p></div>
+  <section class="site-control" aria-label="当前网站媒体采集设置">
+    <div class="site-control-title"><span>当前网站</span><strong id="site-name">读取中…</strong></div>
+    <button id="site-toggle" type="button" aria-pressed="false">禁用此网址</button>
+    <p id="site-status" role="status"></p>
+  </section>
   <div class="tools">
     <button id="discover" class="primary"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="2"/><path d="m3 18 6-5 4 3 4-6 4 5"/></svg><span>嗅探本页视频</span></button>
     <button id="article"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h6"/></svg><span>保存页面正文（Markdown）</span></button>

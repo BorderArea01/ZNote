@@ -124,6 +124,10 @@ function cleanFilename(resource) {
   return "ZNote/" + name;
 }
 export async function resourceAction(resource, action, tabId) {
+  const config=await settings();
+  let sourceUrl=resource.source_url;
+  if(!sourceUrl&&Number.isInteger(tabId))sourceUrl=(await chrome.tabs.get(tabId)).url;
+  if(sourceUrl&&blockedSite(sourceUrl,config))throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
   if (action === "download" && resource.kind !== "hls") {
     await chrome.downloads.download({
       url: resource.url,
@@ -191,7 +195,7 @@ export async function discover(message, sender) {
   if (topBlocked) await serial(async()=>{states[tabId]={resources:[],enabled:false,blocked:true,znotePage:!!marked||(message.type==='media-settings'&&message.znotePage===true),source_url:tab.url,updated:Date.now()};await persist()});
   else if(states[tabId]?.blocked)await serial(async()=>{delete states[tabId];await persist()});
   if(message.type==='media-settings')return {blocked,hover:!blocked&&config.hover!==false,dock:!blocked&&config.dock!==false,downloadKey:config.downloadKey,saveKey:config.saveKey,previewWidth:config.previewWidth};
-  if(blocked && !['media-options','media-stop','media-clear'].includes(message.type))throw Error('此网站已停用 ZNote 资源嗅探，可在扩展设置管理黑名单');
+  if(blocked && !['media-options','media-stop','media-clear'].includes(message.type))throw Error('此网站已停用 ZNote 资源嗅探，可在扩展弹窗或设置中恢复');
   if (message.type === 'media-gallery') return openGallery(message.group, sender, message.action, message.inline===true);
   if (message.type === 'media-gallery-resume') return pendingInlineGalleries(sender);
   if(message.type==='media-gallery-position'){

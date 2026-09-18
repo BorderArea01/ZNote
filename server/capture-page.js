@@ -93,15 +93,46 @@ const values = value => typeof value === 'string' ? [value] : Array.isArray(valu
 function liveVideoCandidates(image, base) {
   const video=image?.video||image?.live_photo?.video||image?.livePhoto?.video||image?.motion_video||image?.motionVideo;
   if(!video)return [];
-  const addresses=[video.play_addr,video.playAddr,video.play_addr_h264,video.playAddrH264,video.download_addr,video.downloadAddr,video];
+  const bitrateList=Array.isArray(video.bit_rate_list)?video.bit_rate_list:Array.isArray(video.bitRateList)?video.bitRateList:[];
+  const bitrateAddresses=bitrateList.flatMap(rate=>[rate?.play_addr,rate?.playAddr]);
+  const addresses=[video.play_addr,video.playAddr,video.play_addr_h264,video.playAddrH264,video.play_addr_h265,video.playAddrH265,video.download_addr,video.downloadAddr,...bitrateAddresses,video];
   const found=[];
   for(const address of addresses){
     if(!address)continue;
-    for(const raw of [...values(address.url_list),...values(address.urlList),...values(address.url),...values(address.play_url),...values(address.playUrl),...values(address.download_url),...values(address.downloadUrl)]){
-      const url=absolute(raw,base);if(url)found.push(url);
-    }
+    found.push(...liveAddressUrls(address,base));
   }
   return [...new Set(found)].slice(0,8);
+}
+function xhsLiveVideoCandidates(image, base) {
+  if (!(image?.livePhoto === true || image?.livePhoto === 1 || image?.live_photo === true || image?.live_photo === 1)) return [];
+  const streams=image?.stream;
+  if(!streams||typeof streams!=='object')return [];
+  // Xiaohongshu exposes live-photo playback under image.stream.h264 rather
+  // than a top-level video field. Prefer broadly playable H.264 variants,
+  // then try the other advertised codecs if the primary CDN URL has expired.
+  const rank=(a,b)=>{
+    const pixels=v=>Number(v?.width||0)*Number(v?.height||0);
+    return pixels(b)-pixels(a)||Number(b?.videoBitrate||0)-Number(a?.videoBitrate||0);
+  };
+  const variants=['h264','h265','h266','av1'].flatMap(codec=>{
+    const value=streams[codec],items=Array.isArray(value)?value:value&&typeof value==='object'?[value]:[];
+    return items.slice().sort(rank);
+  });
+  const found=variants.flatMap(stream=>[stream?.masterUrl, ...values(stream?.backupUrls)])
+    .map(value=>absolute(value,base)).filter(Boolean);
+  return [...new Set(found)].slice(0,8);
+}
+function liveAddressUrls(value,base,depth=0){
+  if(depth>5||value==null)return [];
+  if(typeof value==='string'){const url=absolute(value,base);return url?[url]:[];}
+  if(Array.isArray(value))return value.flatMap(item=>liveAddressUrls(item,base,depth+1));
+  if(typeof value!=='object')return [];
+  // New Douyin image posts put motion-video CDN URLs in video.playAddr as
+  // [{ src: "https://..." }], unlike the older url_list representation.
+  // Follow only known playback/address keys so cover and image URLs cannot be
+  // mistaken for the live-photo video.
+  return ['src','url','url_list','urlList','play_addr','playAddr','play_addr_h264','playAddrH264','play_addr_h265','playAddrH265','download_addr','downloadAddr','play_url','playUrl','download_url','downloadUrl']
+    .flatMap(key=>liveAddressUrls(value[key],base,depth+1));
 }
 export function extractCapturePage(html, url) {
   const { document } = parseHTML(html), u = new URL(url), host = u.hostname;
@@ -124,7 +155,7 @@ export function extractCapturePage(html, url) {
       if (!images.length || images.length > 100) throw fail('未取得完整图集或图集超过 100 张');
       const urls = images.map(v => v[0]);
       if (urls.some(v => !v)) throw fail('图集中有无法解析的图片地址');
-      const live_videos=xhs?[]:galleryImages.map((image,index)=>({index,urls:liveVideoCandidates(image,url)})).filter(v=>v.urls.length);
+      const live_videos=galleryImages.map((image,index)=>({index,urls:xhs?xhsLiveVideoCandidates(image,url):liveVideoCandidates(image,url)})).filter(v=>v.urls.length);
       return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || record.authorInfo?.nickname || '' };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.

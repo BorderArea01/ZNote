@@ -23,7 +23,7 @@ final class UpdateSmoke {
     }
     private void awaitText(String text)throws Exception{long end=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<end){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.equalsIgnoreCase(String.valueOf(n.getText()))&&n.isVisibleToUser()&&n.isEnabled())return;Thread.sleep(150);}throw new Exception("Missing stable update screen: "+text);}
     static void catalog()throws Exception{
-        if(AppUpdates.compare("0.10.0-beta.10","0.10.0-beta.9")<=0||AppUpdates.compare("0.10.0","0.10.0-beta.99")<=0)throw new Exception("Version order failed");
+        if(AppUpdates.compare("0.10.0-beta.10","0.10.0-beta.9")<=0||AppUpdates.compare("0.10.0-beta.17","0.10.0-beta.16")<=0||AppUpdates.compare("0.10.0","0.10.0-beta.99")<=0)throw new Exception("Version order failed");
         JSONObject asset=new JSONObject().put("name","ZNote-0.10.0-beta.11-android.apk").put("browser_download_url",AppUpdates.REPOSITORY+"releases/download/android-v0.10.0-beta.11/ZNote-0.10.0-beta.11-android.apk").put("digest","sha256:"+"a".repeat(64)).put("size",123);
         JSONObject r=new JSONObject().put("draft",false).put("prerelease",true).put("assets",new JSONArray().put(asset));
         if(AppUpdates.latest(new JSONArray().put(r),"0.10.0-beta.10")==null)throw new Exception("Beta release missing");

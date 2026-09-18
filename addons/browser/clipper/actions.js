@@ -1,4 +1,8 @@
 import { saveImage, limitedImage, api, settings } from './client.js';
+import { blockedSite } from './site-policy.js';
+const assertSiteAllowed = (url, config) => {
+  if (blockedSite(url, config)) throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
+};
 export async function record(operation) {
   await chrome.action.setBadgeText({ text: '…' });
   try {
@@ -13,6 +17,8 @@ export async function record(operation) {
   }
 }
 export async function collectImage(info, tab, preferOriginal = true) {
+  const config = await settings();
+  assertSiteAllowed(info.pageUrl || tab?.url, config);
   let candidates = [];
   if (preferOriginal) {
     try { candidates = await chrome.tabs.sendMessage(tab.id, { type: 'image-candidates', srcUrl: info.srcUrl }, { frameId: info.frameId || 0 }); } catch {}
@@ -24,8 +30,8 @@ export async function collectImage(info, tab, preferOriginal = true) {
     try { image = await limitedImage(url); } catch (e) { lastError = e; continue; }
     let filename; try { if (/^https?:/i.test(url)) filename = decodeURIComponent(new URL(url).pathname.split('/').pop()); } catch {}
     try {
-      return await saveImage(image, { filename: filename || '网页图片.png', title: info.selectionText || filename || tab.title || '网页图片', image_url: /^https?:/i.test(url) ? url : undefined, source_url: info.pageUrl || tab.url,
-        capture_note: preferOriginal ? (url !== info.srcUrl ? '已从网页提供的高清候选地址采集，未放大或重新编码。' : '未获得可用的更高清版本，已保存当前图片。') : '已保存当前图片。' });
+      return await saveImage(image, { filename: filename || '网页图片.png', title: info.selectionText || filename || tab?.title || '网页图片', image_url: /^https?:/i.test(url) ? url : undefined, source_url: info.pageUrl || tab?.url,
+        capture_note: preferOriginal ? (url !== info.srcUrl ? '已从网页提供的高清候选地址采集，未放大或重新编码。' : '未获得可用的更高清版本，已保存当前图片。') : '已保存当前图片。' }, undefined, config);
     } catch (e) { if (e.status !== 415) throw e; lastError = e; }
   }
   throw lastError || new Error('无法读取图片，可改用页面截图');
@@ -39,6 +45,7 @@ export async function capturePage(tab) {
 }
 export async function collectVideo(tab, url = tab.url) {
   const config = await settings();
+  assertSiteAllowed(tab?.url, config);
   try {
     const job = await api('/api/imports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, collection_id: config.collection_id || null, tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }) });
     // The server owns long downloads; closing the popup or suspending the worker is safe.

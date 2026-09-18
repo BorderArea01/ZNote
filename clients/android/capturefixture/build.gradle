@@ -7,6 +7,7 @@ android {
     flavorDimensions 'page'
     productFlavors {
         browser { dimension 'page'; applicationId 'com.chrome.beta' }
+        reader { dimension 'page'; applicationId 'org.example.reader' }
         xhs { dimension 'page'; applicationId 'com.xingin.xhs' }
         douyin { dimension 'page'; applicationId 'com.ss.android.ugc.aweme' }
         bilibili { dimension 'page'; applicationId 'tv.danmaku.bili' }

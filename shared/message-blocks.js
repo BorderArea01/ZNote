@@ -42,6 +42,24 @@ export function writeMessageBlocks(blocks) {
     return `<!-- znote-message:${id} -->\n\n${content}\n\n<!-- /znote-message:${id} -->`;
   }).join('\n\n');
 }
+export function mergeMessageBlocks(blocks, ids) {
+  const selected = new Set(ids);
+  if (selected.size < 2) throw Error('请选择至少两条消息');
+  const positions = blocks.reduce((found, block, index) => {
+    if (selected.has(block.id)) found.push(index);
+    return found;
+  }, []);
+  if (positions.length !== selected.size) throw Error('消息列表已变化，请重新选择');
+  if (positions.at(-1) - positions[0] + 1 !== positions.length) {
+    throw Error('请选择连续的消息合并，避免打乱中间消息顺序');
+  }
+  const first = positions[0], last = positions.at(-1);
+  const merged = {
+    ...blocks[first],
+    content: blocks.slice(first, last + 1).map(block => block.content).join('\n\n'),
+  };
+  return [...blocks.slice(0, first), merged, ...blocks.slice(last + 1)];
+}
 export function appendMessageBlocks(previous, incoming) {
   return writeMessageBlocks([...readMessageBlocks(previous, true).blocks, ...readMessageBlocks(incoming).blocks]);
 }

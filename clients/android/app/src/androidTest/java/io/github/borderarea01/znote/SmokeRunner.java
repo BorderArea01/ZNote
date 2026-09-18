@@ -83,22 +83,22 @@ public class SmokeRunner extends Instrumentation {
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstDown,true);firstDown.recycle();
         MotionEvent firstUp=MotionEvent.obtain(started,SystemClock.uptimeMillis(),1,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstUp,true);firstUp.recycle();
         overlayControl("采集当前作品");checkpoint("First floating touch-to-frame (includes cold text rendering): "+panelLatency(1500)+"ms");
-        overlayTouch("采集当前作品");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("未分类  ▾");overlayControl("未分类");overlayTouch("未分类");overlayTouch("⠿  ZNote  ⌄");
+        overlayTouch("采集当前作品");overlayControl("请回到要采集的作品页");overlayTouch("未分类  ▾");overlayControl("未分类");overlayTouch("未分类");overlayTouch("⠿  ZNote  ⌄");
         android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
         Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
         captureCommand("hide");captureCommand("show");android.graphics.Rect restored=overlayControl("Z");if(restored.left>20||Math.abs(restored.top-after.top)>15)throw new Exception("Dock position not retained: "+after+" -> "+restored);
-        if(restored.width()>getTargetContext().getResources().getDisplayMetrics().density*40||restored.height()<getTargetContext().getResources().getDisplayMetrics().density*68)throw new Exception("Collapsed handle is not a compact half-circle tab");
+        if(restored.width()>getTargetContext().getResources().getDisplayMetrics().density*40||restored.height()<getTargetContext().getResources().getDisplayMetrics().density*52||restored.height()>getTargetContext().getResources().getDisplayMetrics().density*62)throw new Exception("Collapsed handle is not a compact half-circle tab");
         android.app.NotificationManager nm=(android.app.NotificationManager)getTargetContext().getSystemService(Context.NOTIFICATION_SERVICE);
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->n.getId()==3741))throw new Exception("Capture management notification missing");
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->n.getId()==3741&&(n.getNotification().flags&Notification.FLAG_FOREGROUND_SERVICE)!=0))throw new Exception("Visible capture window must be managed by a foreground service");
         checkpoint("Floating capture drag, compact handle, notification, persisted placement and unsupported-page recovery passed");
-        for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
+        for(String pkg:new String[]{"com.chrome.beta","org.example.reader","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
             overlayTouch("Z");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
             int queuedBefore=diagnosticCount("capture_queued"),directBefore=diagnosticCount("direct_share_received");overlayTouch("采集当前作品");
-            String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
+            String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("org.example.reader")?"https://reader.example/fixture-work":pkg.equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
             long queued=SystemClock.uptimeMillis()+8000;boolean resumed=false;
             while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(diagnosticCount("capture_queued")>queuedBefore&&root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
             if(!resumed)throw new Exception("Quick capture blocked browsing for "+pkg+" ("+expected+")");
@@ -114,6 +114,7 @@ public class SmokeRunner extends Instrumentation {
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->"capture_results".equals(n.getNotification().getChannelId())))throw new Exception("Background capture result notification missing");checkpoint("Background capture completion or failure remains visible after the floating panel closes");
         FloatingShareActivity fallback=(FloatingShareActivity)openCapture(new Intent(getTargetContext(),FloatingShareActivity.class).putExtra("read_clipboard",true).putExtra("copied_after",System.currentTimeMillis()+60000).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         nativeUntil(fallback,"链接还没带进来");nativeUntil(fallback,"未读到本次分享链接");
+        touchText("去浏览");nativeUntil(activity,"我的知识库");shell("input keyevent 4");Thread.sleep(400);nativeUntil(fallback,"未读到本次分享链接");checkpoint("Floating save panel can open the library and return without discarding the pending share");
         runOnMainSync(()->((android.content.ClipboardManager)getTargetContext().getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("fixture","http://127.0.0.1/manual-fallback")));
         touchText("读取剪贴板");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
         android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-panel.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
@@ -123,7 +124,7 @@ public class SmokeRunner extends Instrumentation {
         overlayTouch("Z");overlayTouch("采集当前作品");overlayTouch("…");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("⠿  ZNote  ⌄");overlayTouch("Z");overlayControl("采集当前作品");
         Thread.sleep(1500);if("io.github.borderarea01.znote".contentEquals(automation().getRootInActiveWindow().getPackageName()))throw new Exception("Cancelled capture opened a stale share page");overlayTouch("⠿  ZNote  ⌄");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("Z");overlayTouch("采集当前作品");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+        overlayTouch("Z");overlayTouch("采集当前作品");overlayControl("当前页没有可识别的分享入口");
         overlayTouch("⠿  ZNote  ⌄");captureCommand("hide");captureCommand("show");overlayControl("Z");
         checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.chrome.beta","io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);

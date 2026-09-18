@@ -5,10 +5,14 @@ import { resolve, join } from "node:path";
 import assert from "node:assert/strict";
 import sharp from "sharp";
 import { createApp } from "../server/app.js";
+const captureEvidence = async (target, options) => {
+  if (process.env.ZNOTE_SKIP_TEST_SCREENSHOTS === "1") return;
+  await target.screenshot(options);
+};
 const dir = await mkdtemp(resolve("artifacts/media-tools-ui-"));
 const runtime = createApp({
   dataDir: join(dir, "data"),
-  staticDir: resolve(process.env.UI_DIST || "artifacts/build-v07"),
+  staticDir: resolve(process.env.UI_DIST || "dist"),
 });
 const server = runtime.app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
@@ -119,7 +123,10 @@ try {
   await overlay
     .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .waitFor();
-  await page.locator("#sample").hover();
+  const sample=page.locator("#sample");
+  await sample.evaluate(el=>el.decode());
+  await page.waitForTimeout(200);
+  await sample.hover({position:{x:100,y:100}});
   const preview = overlay.locator('[aria-label="ZNote 高清图片预览"]');
   await preview.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -128,7 +135,7 @@ try {
         .querySelector("[data-znote-overlay]")
         .shadowRoot.querySelector(".preview img").naturalWidth === 2400,
   );
-  await page.screenshot({ path: resolve("artifacts/v07-hover-preview.png") });
+  await captureEvidence(page, { path: resolve("artifacts/v07-hover-preview.png") });
   await page.evaluate(()=>{const p=document.querySelector('[data-znote-overlay]').shadowRoot.querySelector('.preview');document.body.style.minHeight='1600px';p.style.left='900px';p.style.top='300px';p.style.width='400px';p.style.height='400px';p.style.pointerEvents='none';});
   await page.mouse.move(920,320);await page.waitForTimeout(400);assert.ok(await preview.isVisible(),'Preview stays open while the pointer is inside its hit-test-transparent image area');
   await page.evaluate(()=>window.scrollTo(0,80));await page.waitForTimeout(200);assert.ok(await preview.isVisible(),'Page scroll under the preview does not close it while the pointer remains over it');console.log('PASS: preview stays open under the pointer, including hit-test-transparent images and page scroll');
@@ -176,7 +183,7 @@ try {
   await options.getByRole('tooltip').waitFor();
   assert.ok((await options.getByRole('tooltip').textContent()).includes('Z 入库'));
   await options.keyboard.press('Escape'); assert.equal(await options.getByRole('tooltip').count(),0);
-  await options.screenshot({path:resolve('artifacts/v082-extension-settings.png'),fullPage:true});
+  await captureEvidence(options,{path:resolve('artifacts/v082-extension-settings.png'),fullPage:true});
   await options.waitForFunction(()=>document.body.dataset.ready === 'true');
   await options.locator('#download-key').fill('D'); await options.locator('#save-key').fill('D');
   await options.getByRole('button',{name:'保存浏览器行为'}).click();
@@ -202,7 +209,7 @@ try {
   assert.ok(updated.content.includes(sourceUrl+'/explore/note1?from=profile'));
   // Moving across a badge on the same thumbnail must not close/restart preview.
   await page.locator('#badge').hover(); await page.waitForTimeout(300);assert.ok(await preview.isVisible());
-  await page.screenshot({path:resolve('artifacts/v07-covered-card.png')});
+  await captureEvidence(page,{path:resolve('artifacts/v07-covered-card.png')});
   const beforeDownloads=(await worker.evaluate(()=>chrome.downloads.search({}))).length;
   await page.keyboard.press('d'); await preview.getByText('已交给浏览器下载',{exact:true}).waitFor();
   assert.ok((await worker.evaluate(()=>chrome.downloads.search({}))).length>beforeDownloads);
@@ -267,7 +274,7 @@ try {
   assert.ok(
     (await page.locator("#player").getAttribute("src")).startsWith("blob:"),
   );
-  await page.screenshot({ path: resolve("artifacts/v07-media-discovery.png") });
+  await captureEvidence(page, { path: resolve("artifacts/v07-media-discovery.png") });
   const hlsRow = panel
     .locator(".item")
     .filter({ hasText: "m3u8 分段视频" })
@@ -299,7 +306,7 @@ try {
     () => document.querySelector("video").currentTime > 0.3,
   );
   await media.locator("#video").evaluate((v) => v.pause());
-  await media.screenshot({ path: resolve("artifacts/v07-hls-preview.png") });
+  await captureEvidence(media, { path: resolve("artifacts/v07-hls-preview.png") });
   await media
     .getByRole("button", { name: "保存到知识库", exact: true })
     .click();
@@ -307,7 +314,7 @@ try {
   const cover=await context.request.get(base+videos.items[0].thumbnail_url);assert.ok(cover.ok());assert.match(cover.headers()["content-type"],/image\/webp/);
   assert.ok(videos.items[0].duration >= 3.9);
   await context.request.patch(base+'/api/preferences',{data:{default_collection_id:collection.id}});
-  const library=await context.newPage();await library.goto(base+'/#item/'+videos.items[0].id);await library.locator('video').waitFor();await library.waitForFunction(()=>document.querySelector('video')?.readyState>=2);await library.locator('video').evaluate(async v=>{v.muted=true;await v.play();});await library.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.ok(await library.locator('video').evaluate(v=>v.webkitAudioDecodedByteCount)>0);await library.keyboard.press('Escape');await library.locator('.video-cover').first().evaluate(img=>img.decode());await library.screenshot({path:resolve('artifacts/v097-video-library.png')});await library.close();
+  const library=await context.newPage();await library.goto(base+'/#item/'+videos.items[0].id);await library.locator('video').waitFor();await library.waitForFunction(()=>document.querySelector('video')?.readyState>=2);await library.locator('video').evaluate(async v=>{v.muted=true;await v.play();});await library.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.ok(await library.locator('video').evaluate(v=>v.webkitAudioDecodedByteCount)>0);await library.keyboard.press('Escape');await library.locator('.video-cover').first().evaluate(img=>img.decode());await captureEvidence(library,{path:resolve('artifacts/v097-video-library.png')});await library.close();
   await media.getByRole("button", { name: "下载", exact: true }).click();
   await media.getByText("已交给浏览器下载", { exact: true }).waitFor();
   for (let i = 0; i < 100; i++) {
@@ -360,7 +367,11 @@ try {
     "PASS: fast dismissal within 300 ms; mouse crosses preview gap and lingers over buttons; real save/download button clicks; default Z and custom D/Q; settings help; masked card, background, XHS preset/fallback, same-token reconnection, rejected credentials preserve connection, multi-source links; hover original 2400px; S real download; input guard; video-only MIME sniffing behind blob player; HLS playback; no-tab background remux save/download; source; navigation isolation; no source token leakage",
   );
 } catch (e) {
-  await page.screenshot({ path: resolve("artifacts/v07-tools-failure.png") });
+  try {
+    await captureEvidence(page, { path: resolve("artifacts/v07-tools-failure.png"), timeout: 5000 });
+  } catch (screenshotError) {
+    console.error("Failure screenshot unavailable:", screenshotError.message);
+  }
   throw e;
 } finally {
   await context.close();

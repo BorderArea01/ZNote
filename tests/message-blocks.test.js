@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {unified} from 'unified';
 import remarkParse from 'remark-parse';
-import {readMessageBlocks,writeMessageBlocks,appendMessageBlocks,remarkMessageSpacing} from '../shared/message-blocks.js';
+import {readMessageBlocks,writeMessageBlocks,appendMessageBlocks,mergeMessageBlocks,remarkMessageSpacing} from '../shared/message-blocks.js';
 
 test('message boundaries round trip exact whitespace, internal rules and unfinished Markdown',()=>{
   const blocks=[{id:'a',content:'\n第一行\r\n第二行\n\n\n[链接](https://example.com/)\n\n---\n\n最后\n'},
@@ -16,6 +16,22 @@ test('legacy splits only root separators and retains loose text or incomplete ma
   const result=readMessageBlocks(legacy,true);assert.equal(result.blocks.length,2);assert.equal(result.legacy,true);assert.ok(result.blocks[1].content.includes('> ---'));
   const content=writeMessageBlocks([{id:'a',content:'消息'}])+'\n\n手写补充\n\n<!-- znote-message:bad -->';
   const blocks=readMessageBlocks(content).blocks;assert.equal(blocks.length,2);assert.ok(blocks[1].content.endsWith('<!-- znote-message:bad -->'));
+});
+test('merge combines adjacent messages without changing their order or Markdown media references',()=>{
+  const blocks=[
+    {id:'before',content:'前一条'},
+    {id:'text',content:'说明第一行\n第二行'},
+    {id:'photo',content:'![微信图片](/media/123/original)\n\n[来源](https://example.com)'},
+    {id:'after',content:'后一条'},
+  ];
+  assert.deepEqual(mergeMessageBlocks(blocks,['photo','text']),[
+    blocks[0],
+    {id:'text',content:'说明第一行\n第二行\n\n![微信图片](/media/123/original)\n\n[来源](https://example.com)'},
+    blocks[3],
+  ]);
+  assert.throws(()=>mergeMessageBlocks(blocks,['before','photo']),/连续的消息/);
+  assert.throws(()=>mergeMessageBlocks(blocks,['text']),/至少两条消息/);
+  assert.throws(()=>mergeMessageBlocks(blocks,['text','missing']),/列表已变化/);
 });
 test('blank line rendering preserves consecutive and leading lines without altering code',()=>{
   const processor=unified().use(remarkParse).use(remarkMessageSpacing);

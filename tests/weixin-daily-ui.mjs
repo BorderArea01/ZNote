@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import {createApp} from '../server/app.js';
 import {readMessageBlocks} from '../shared/message-blocks.js';
+const captureEvidence=async(target,options)=>{if(process.env.ZNOTE_SKIP_TEST_SCREENSHOTS==='1')return;await target.screenshot(options);};
 const dir=await mkdtemp(resolve('artifacts/weixin-daily-ui-'));let messages=[],wake=null,sequence=0,cursor=0;
 const image=await sharp({create:{width:640,height:400,channels:3,background:'#8f9bc4'}}).png().toBuffer();
 const client={image:async()=>image,updates:(_,__,signal)=>new Promise((resolve,reject)=>{
@@ -13,8 +14,8 @@ const client={image:async()=>image,updates:(_,__,signal)=>new Promise((resolve,r
  if(signal.aborted){abort();return;}signal.addEventListener('abort',abort,{once:true});if(messages.length)flush();else wake=flush;
 })};
 const enqueue=parts=>{messages.push({message_type:1,message_state:2,message_id:String(++sequence),from_user_id:'owner',create_time_ms:Date.now(),item_list:typeof parts==='string'?[{type:1,text_item:{text:parts}}]:parts});wake?.()};
-const runtime=createApp({dataDir:dir,staticDir:resolve(process.env.UI_DIST||'artifacts/build-v0931'),weixinClient:client}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({channel:'msedge',headless:true}),context=await browser.newContext({viewport:{width:1366,height:900}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+const runtime=createApp({dataDir:dir,staticDir:resolve(process.env.UI_DIST||'dist'),weixinClient:client}),server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+const browser=await chromium.launch({channel:'msedge',headless:true}),context=await browser.newContext({viewport:{width:1366,height:900},hasTouch:true}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
 await context.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{if(window.failCopy)throw Error('denied');window.copiedMessage=value;}}});});
 const post=async(path,data)=>{const r=await context.request.post(base+path,{data});assert.ok(r.ok(),await r.text());return r.json()};
 const completed=async n=>{const until=Date.now()+15000;while(Date.now()<until){const response=await context.request.get(base+'/api/weixin');const state=await response.json();if(state.jobs.filter(j=>j.state==='done').length>=n)return;await page.waitForTimeout(100)}throw Error('Receipts did not reach '+n)};
@@ -40,15 +41,26 @@ try{
  await page.evaluate(()=>window.failCopy=true);await block.nth(2).getByRole('button',{name:'剪切消息',exact:true}).click();await page.getByText('复制失败，正文已保留，请重试',{exact:true}).waitFor();assert.equal(await block.count(),3);
  await page.evaluate(()=>window.failCopy=false);await block.nth(2).getByRole('button',{name:'剪切消息',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.message-block').length===2);await note.getByRole('button',{name:'撤销操作',exact:true}).click();assert.equal(await block.count(),3);
  await block.nth(2).getByRole('button',{name:'删除消息',exact:true}).click();assert.equal(await block.count(),2);await note.getByRole('button',{name:'撤销操作',exact:true}).click();
+ await block.nth(1).getByRole('checkbox',{name:'选择第 2 条消息',exact:true}).check();await block.nth(2).getByRole('checkbox',{name:'选择第 3 条消息',exact:true}).check();
+ await note.getByRole('button',{name:'合并 2 条',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.message-block').length===2);
+ assert.equal(await block.nth(1).locator('.message-block-body img').count(),1);assert.ok((await block.nth(1).locator('.message-block-body').textContent()).includes('图的留白'));
+ await page.getByText('已合并 2 条消息，图片和 Markdown 链接已保留',{exact:true}).waitFor();await note.getByRole('button',{name:'保存',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.unsaved'));
+ const persistedMerge=readMessageBlocks(notes()[0].content).blocks;assert.equal(persistedMerge.length,2);assert.ok(persistedMerge[1].content.includes('/media/'));assert.ok(persistedMerge[1].content.includes('图的留白'));
+ await note.getByRole('button',{name:'撤销操作',exact:true}).click();assert.equal(await block.count(),3);
+ await block.nth(0).getByRole('checkbox',{name:'选择第 1 条消息',exact:true}).check();await block.nth(2).getByRole('checkbox',{name:'选择第 3 条消息',exact:true}).check();
+ assert.ok(await note.getByRole('button',{name:'合并 2 条',exact:true}).isDisabled());await note.getByText('请选择连续消息',{exact:true}).waitFor();await note.getByRole('button',{name:'取消选择',exact:true}).click();
  await block.nth(2).getByRole('button',{name:'拖动第 3 条消息',exact:true}).dragTo(block.nth(0));await page.waitForFunction(()=>document.querySelector('.message-block-body')?.textContent.includes('图的留白'));
  await note.getByRole('button',{name:'保存',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.unsaved'));assert.equal(readMessageBlocks(notes()[0].content).blocks[0].content,'图的留白\n第二行\n\n\n第四行');
  await page.evaluate(()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.palette='slate'});
  await page.waitForTimeout(350);await note.locator('.message-blocks').evaluate(el=>el.scrollTop=0);
- await page.screenshot({path:resolve('artifacts/message-blocks-desktop.png')});
+ await captureEvidence(page,{path:resolve('artifacts/message-blocks-desktop.png')});
  await page.setViewportSize({width:390,height:844});assert.ok(await note.locator('.note-editor-toolbar').evaluate(el=>el.scrollWidth<=el.clientWidth));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:resolve('artifacts/message-blocks-mobile.png')});
+ await block.nth(0).getByRole('checkbox',{name:'选择第 1 条消息',exact:true}).tap();await block.nth(1).getByRole('checkbox',{name:'选择第 2 条消息',exact:true}).tap();
+ await captureEvidence(note.locator('.message-list-heading'),{path:resolve('artifacts/message-blocks-mobile-merge.png')});await note.getByRole('button',{name:'合并 2 条',exact:true}).tap();await page.waitForFunction(()=>document.querySelectorAll('.message-block').length===2);
+ await note.getByRole('button',{name:'撤销操作',exact:true}).tap();await page.waitForFunction(()=>document.querySelectorAll('.message-block').length===3);
+ await captureEvidence(page,{path:resolve('artifacts/message-blocks-mobile.png')});
  await page.setViewportSize({width:1366,height:900});
- await page.screenshot({path:resolve('artifacts/v0931-weixin-note.png')});
+ await captureEvidence(page,{path:resolve('artifacts/v0931-weixin-note.png')});
  await note.getByRole('button',{name:'关闭窗口',exact:true}).click();await page.getByRole('button',{name:'设置与连接',exact:true}).click();await section.getByLabel('微信新篇标题').fill('周末旅行参考');await section.getByRole('button',{name:'开始新篇',exact:true}).click();await section.getByText('周末旅行参考 · 等待收件',{exact:true}).waitFor();
  enqueue('新话题的文字');enqueue([{type:2,image_item:{media:{}}}]);await completed(5);assert.equal(notes().length,2);assert.ok(notes().some(n=>n.title==='周末旅行参考'&&n.content.includes('新话题')&&n.content.includes('/media/')));
  enqueue('/新篇 插画收藏');enqueue([{type:2,image_item:{media:{}}}]);await completed(7);assert.equal(notes().length,3);assert.ok(notes().some(n=>n.title==='插画收藏'&&n.content.includes('/media/')));
@@ -58,4 +70,4 @@ try{
  await page.setViewportSize({width:390,height:844});await section.scrollIntoViewIfNeeded();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:resolve('artifacts/v0931-weixin-mobile.png')});
  await section.getByRole('button',{name:'暂停接收',exact:true}).click();await section.getByRole('button',{name:'恢复接收',exact:true}).waitFor();assert.deepEqual(errors,[]);
  console.log('PASS Edge: separate text/photo/caption form one Markdown note; local image preview; settings and WeChat command split topics; mode persistence; dark/mobile layout; pause reception');
-}catch(e){await page.screenshot({path:resolve('artifacts/v0931-weixin-ui-failure.png')}).catch(()=>{});throw e;}finally{await runtime.weixin.stop();await browser.close();await runtime.trash.stop();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close()}
+}catch(e){await captureEvidence(page,{path:resolve('artifacts/v0931-weixin-ui-failure.png')}).catch(()=>{});throw e;}finally{await runtime.weixin.stop();await browser.close();await runtime.trash.stop();await runtime.imports.stop();await runtime.backups.stop();await runtime.webhooks.stop();await new Promise(r=>server.close(r));runtime.db.close()}

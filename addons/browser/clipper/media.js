@@ -8,6 +8,7 @@ import {
   saveDirectVideo,
 } from "./client.js";
 import { packageHls, MAX_BYTES } from "./hls-package.js";
+import { blockedSite } from './site-policy.js';
 const $ = (id) => document.getElementById(id),
   ticket = new URL(location.href).searchParams.get("id");
 let resource, controller, hls, objectURL;
@@ -34,6 +35,7 @@ async function process(action) {
   setBusy(true);
   report("正在处理…");
   try {
+    if (blockedSite(resource?.source_url, await settings())) throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
     let item;
     if (resource.kind === "hls") {
       const config = await settings();
@@ -118,6 +120,7 @@ try {
   ];
   if (!resource || Date.now() - resource.created > 24 * 3600000)
     throw new Error("资源记录已过期，请回原页面重新选择");
+  if (blockedSite(resource.source_url, await settings())) throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
   document.title = "ZNote · " + resource.title;
   $("title").textContent = resource.title;
   if(resource.author){$('author').hidden=false;$('author').textContent='作者：'+resource.author;}
@@ -171,6 +174,17 @@ try {
   $("download").disabled = true;
   $("save").disabled = true;
 }
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !('blockedSites' in changes || 'server' in changes) || !resource) return;
+  settings().then(config => {
+    if (!blockedSite(resource.source_url, config)) return;
+    controller?.abort(); hls?.destroy(); hls = null;
+    const video = $('video'); video.pause(); video.removeAttribute('src'); video.load(); video.hidden = true;
+    $('image').removeAttribute('src'); $('image').hidden = true;
+    $('download').disabled = true; $('save').disabled = true;
+    report('此网站已禁用媒体采集，预览与后续操作已关闭');
+  }).catch(() => {});
+});
 $("download").onclick = () => process("download");
 $("save").onclick = () => process("save");
 $("cancel").onclick = () => controller?.abort();

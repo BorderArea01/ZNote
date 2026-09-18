@@ -112,11 +112,11 @@ public class CaptureAssistService extends AccessibilityService {
         if(handle==null||handle.getParent()!=bubble){
             bubble.removeAllViews();handle=control("","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;libraryMenuExpanded=false;record("toggle",expanded?"open":"collapse");render();if(expanded){loadLibraries(false);measureFrame(started);}});handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);panel=null;
         }
-        handle.setText(expanded?"⠿  ZNote  ⌄":busy?"…":resultPending?(resultFailed?"!":"✓"):"Z");handle.setTextSize(expanded?15:18);
+        handle.setText(expanded?"⠿  ZNote  ⌄":busy?"…":resultPending?(resultFailed?"!":"✓"):"Z");handle.setTextSize(expanded?15:16);
         handle.setTextColor(resultPending?(resultFailed?0xffff8c83:0xff8de0b1):0xffecedf5);
         handle.setContentDescription(expanded?"ZNote 采集面板；点击标题收起，拖动标题可移动":resultPending?"ZNote 采集结果："+lastMessage:"ZNote 收起的半圆采集把手，点击展开，拖动换位置");
         handle.setPadding(0,dp(8),0,dp(8));handle.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x336f82ff),shape(0x00202020,expanded?18:40),shape(0xffffffff,expanded?18:40)));
-        ViewGroup.LayoutParams handleParams=handle.getLayoutParams();if(handleParams!=null){handleParams.width=-1;handleParams.height=dp(expanded?48:76);handle.setLayoutParams(handleParams);}
+        ViewGroup.LayoutParams handleParams=handle.getLayoutParams();if(handleParams!=null){handleParams.width=-1;handleParams.height=dp(expanded?48:58);handle.setLayoutParams(handleParams);}
         // Prepare once when the service connects; simple open/close reuses the
         // existing views instead of inflating and measuring a fresh control tree.
         if(panel==null||panelBusy!=busy||!java.util.Objects.equals(panelMessage,lastMessage)){
@@ -270,12 +270,12 @@ public class CaptureAssistService extends AccessibilityService {
         handler.postDelayed(()->{if(token==generation&&busy){cancel();record("timeout","page");message("页面读取超时，可收起或重试采集");}},12000);
         operation=reader.submit(()->{reading.set(true);try{check(token);
             AccessibilityNodeInfo root=page(null);if(root==null)throw new Exception("当前页面不可读取，请重新打开作品再试");String owner=pkg(root);root.recycle();
-            record("capture_start",owner);if(!social(owner)&&!browser(owner))throw new Exception("请在浏览器、小红书、抖音或 B 站作品页使用");
+            record("capture_start",owner);if(getPackageName().equals(owner))throw new Exception("请回到要采集的作品页；也可从任意 App 的分享菜单把链接、图片或视频发送给 ZNote");
             String value;
             if(browser(owner))value=browserLink(owner,token);else{
                 AccessibilityNodeInfo copy=button(owner,true,token);if(copy==null){copy=activeShareCopyButton(owner,token);if(copy!=null)record("capture_transport","active_share_copy_button");}
                 if(copy==null){
-                    AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+                    AccessibilityNodeInfo share=button(owner,false,token);if(share==null||!click(share,token))throw new Exception("当前页没有可识别的分享入口；请打开具体作品，或从任意 App 的系统分享菜单发送给 ZNote");
                     long opened=SystemClock.uptimeMillis(),until=opened+5500;boolean openedSystemShare=false;
                     while(copy==null&&SystemClock.uptimeMillis()<until){
                         Thread.sleep(160);check(token);
@@ -302,8 +302,10 @@ public class CaptureAssistService extends AccessibilityService {
         }throw new Exception("请显示完整地址栏，或用浏览器分享给 ZNote");
     }
     static boolean acceptsLink(String owner,String value){
-        if(owner==null||owner.isEmpty())return true;
-        String host=Uri.parse(value).getHost();if(host==null)return false;
+        if(value==null||value.isEmpty())return false;
+        Uri uri=Uri.parse(value);String scheme=uri.getScheme();if(!"https".equalsIgnoreCase(scheme)&&!"http".equalsIgnoreCase(scheme))return false;
+        if(owner==null||owner.isEmpty()||!social(owner)&&!browser(owner))return true;
+        String host=uri.getHost();if(host==null)return false;
         host=host.toLowerCase(Locale.ROOT);
         String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:new String[]{"douyin.com","iesdouyin.com"};
         for(String domain:domains)if(host.equals(domain)||host.endsWith("."+domain))return true;return false;

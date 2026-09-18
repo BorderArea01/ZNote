@@ -8,6 +8,12 @@ $('download-key').value = current.downloadKey.toUpperCase();
 $('save-key').value = current.saveKey.toUpperCase();
 $('preview-width').value = current.previewWidth;
 $('blocked-sites').value = current.blockedSites.join('\n');
+let blockedSitesDirty = false;
+$('blocked-sites').addEventListener('input', () => { blockedSitesDirty = true; });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.blockedSites && !blockedSitesDirty)
+    $('blocked-sites').value = (changes.blockedSites.newValue || []).join('\n');
+});
 $('behavior').addEventListener('submit', async event => {
   event.preventDefault();
   try {
@@ -17,6 +23,7 @@ $('behavior').addEventListener('submit', async event => {
     const previewWidth = Number($('preview-width').value);
     if (!Number.isInteger(previewWidth) || previewWidth < 240 || previewWidth > 1200) throw new Error('预览宽度应为 240～1200');
     await chrome.storage.local.set({ hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, shortcutVersion: 1, previewWidth, blockedSites:parseBlockedSites($('blocked-sites').value) });
+    blockedSitesDirty = false;
     $('status').textContent = '浏览器行为已保存，已打开网页同步生效';
   } catch (e) { $('status').textContent = e.message; }
 });

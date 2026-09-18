@@ -7,13 +7,21 @@
 .note-detail .note-editor-toolbar button:hover { color:var(--ink); background:var(--surface-2); }
 .note-detail .note-editor-toolbar .note-editor-modes button.selected { background:var(--accent-soft); color:var(--green); box-shadow:0 1px 3px #0001; }
 .note-detail .message-blocks { background:var(--canvas); border-radius:10px; scrollbar-width:thin; }
-.message-list-heading { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; margin:0 0 10px; }
+.message-list-heading { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; margin:0 0 10px; flex-wrap:wrap; }
 .message-list-heading > button:last-child:not(.help-trigger) { margin-left:auto; display:inline-flex; align-items:center; gap:4px; padding:4px 7px; font-size:12px; }
+.message-list-heading > .message-clear-selection,.message-list-heading > .message-merge { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:30px; padding:5px 9px; font-size:12px; white-space:nowrap; }
+.message-list-heading > .message-merge { color:var(--ink); background:var(--accent-soft); border-color:var(--border); }
+.message-list-heading > .message-merge:disabled { opacity:.48; }
+.message-selection-status { color:var(--muted); font-size:11px; }
 .message-block { margin:0 0 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); overflow:hidden; transition:border-color .12s,box-shadow .12s; }
 .message-block:focus-within { border-color:var(--green); }
 .message-block.is-dragging { opacity:.55; }
 .message-block.is-drop-target { border-color:var(--green); box-shadow:inset 0 3px 0 var(--green); }
 .message-block-toolbar { display:flex; align-items:center; gap:4px; padding:6px 10px; background:var(--surface-2); border-bottom:1px solid var(--border); }
+.message-select { display:flex; flex:0 0 22px; width:22px; height:30px; align-items:center; justify-content:center; cursor:pointer; }
+.message-select input { width:16px; height:16px; margin:0; accent-color:var(--green); cursor:pointer; }
+.message-select input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.message-select input:disabled { cursor:not-allowed; }
 .message-number { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; min-width:20px; }
 .message-block-toolbar button { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; padding:0; color:var(--muted); background:transparent; border:1px solid transparent; border-radius:7px; }
 .message-block-toolbar button:hover:not(:disabled) { color:var(--ink); background:var(--surface); border-color:var(--border); }

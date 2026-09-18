@@ -57,7 +57,14 @@
         if(!siteBlocked&&!pawControls){inlineGallery ||= new globalThis.ZNoteInlineGallery(root,{persistent:true});pawControls=new globalThis.ZNotePawControls(root,inlineGallery,send);}
         pawControls?.setEnabled(!siteBlocked);
       }
-      if(siteBlocked){enabled=false;resources=[];panel.classList.add('hidden');clearInterval(pollTimer);globalThis.ZNoteDouyinObserve?.(false);}
+      if(siteBlocked){
+        enabled=false;resources=[];recentMedia.clear();
+        clearTimeout(scanTimer);scanTimer=null;scanQueued=false;
+        closePanel();hide();
+        inlineGallery?.panel&&(inlineGallery.panel.hidden=true);
+        inlineGallery?.badge&&(inlineGallery.badge.hidden=true);
+        globalThis.ZNoteDouyinObserve?.(false);globalThis.ZNoteVideoThumbnailCancel?.();
+      } else if(inlineGallery&&!pawControls) inlineGallery.badge.hidden=false;
       downloadKey = /^[a-z0-9]$/.test(config.downloadKey) ? config.downloadKey : 's';
       saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'z' ? 's' : 'z');
       downloadButton.textContent = `${downloadKey.toUpperCase()} 下载`;
@@ -66,8 +73,8 @@
       previewWidth = Math.max(240, Math.min(1200, Number(config.previewWidth) || 720));
       sizeInput.value = previewWidth;
       placePreview();
-      dock.classList.toggle('hidden', !dockAllowed || window !== top);
-      if (!hoverAllowed) hide();
+      dock.classList.toggle('hidden', !dockAllowed || window !== top || siteBlocked);
+      if (!hoverAllowed || siteBlocked) hide();
     } catch {}
   }
   const element = (tag, text, attrs = {}) => {
@@ -162,7 +169,7 @@
     for(const [key,entry]of renderedCards)if(!retained.has(key)){entry.node.remove();renderedCards.delete(key);selectedVariants.delete(key)}
   }
   const recentMedia=new Map();
-  const rememberMedia=entry=>{if(!entry?.name)return;const interesting=/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(entry.name)||/^https?:\/\/[^/]*\.(douyinvod|douyinstatic)\.com\//i.test(entry.name);if(!interesting)return;recentMedia.delete(entry.name);recentMedia.set(entry.name,entry);while(recentMedia.size>200)recentMedia.delete(recentMedia.keys().next().value);return true};
+  const rememberMedia=entry=>{if(siteBlocked||!entry?.name)return;const interesting=/\.(mp4|webm|mov|m3u8)(?:$|[?#])/i.test(entry.name)||/^https?:\/\/[^/]*\.(douyinvod|douyinstatic)\.com\//i.test(entry.name);if(!interesting)return;recentMedia.delete(entry.name);recentMedia.set(entry.name,entry);while(recentMedia.size>200)recentMedia.delete(recentMedia.keys().next().value);return true};
   function scheduleScan(){if(!enabled||siteBlocked||document.hidden||panel?.classList.contains('hidden')||scanTimer)return;scanTimer=setTimeout(()=>{scanTimer=null;runScan()},Math.max(250,750-(performance.now()-lastScan)))}
   function scan(){globalThis.ZNoteDouyinRefresh?.();return runScan()}
   function runScan(){
@@ -714,7 +721,7 @@
       if(message.type==='media-task-update'&&message.task){mediaTasks.set(message.task.id,message.task);updateTaskSummary(message.task);notify(`${message.task.title || '视频'}：${message.task.message}`);reply({ok:true});}
       if (message.type === 'media-settings-changed') { refreshSettings(); reply({ok: true}); }
       if (message.type === "open-media-panel") {
-        open().then(()=>reply(siteBlocked?{ok:false,error:'此网站已停用媒体采集，可在扩展设置中管理黑名单'}:{ok:true}),()=>reply({ok:false,error:'无法打开媒体浮窗，请刷新页面重试'}));
+        open().then(()=>reply(siteBlocked?{ok:false,error:'此网站已停用媒体采集，可在扩展弹窗或设置中恢复'}:{ok:true}),()=>reply({ok:false,error:'无法打开媒体浮窗，请刷新页面重试'}));
         return true;
       }
       if (message.type === "scan-media-frame") {
