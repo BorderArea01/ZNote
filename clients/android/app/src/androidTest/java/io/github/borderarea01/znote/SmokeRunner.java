@@ -51,6 +51,17 @@ public class SmokeRunner extends Instrumentation {
             String[] candidates="Z".equals(text)||"⋮".equals(text)?new String[]{"Z","⋮","✓","!"}:new String[]{text};for(String candidate:candidates)for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(candidate))if(candidate.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);if(("Z".equals(text)||"⋮".equals(text))&&r.left>20&&r.right<getTargetContext().getResources().getDisplayMetrics().widthPixels-20)continue;return r;}
         }Thread.sleep(100);}throw new Exception("Overlay control unavailable: "+text);
     }
+    private void overlayMessage(String text)throws Exception{
+        long deadline=System.currentTimeMillis()+5000;
+        while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
+            if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY)continue;
+            android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text)){
+                CharSequence value=n.getText();if(value!=null&&value.toString().contains(text))return;
+                CharSequence description=n.getContentDescription();if(description!=null&&description.toString().contains(text))return;
+            }
+        }Thread.sleep(100);}throw new Exception("Overlay message unavailable: "+text);
+    }
     private void overlayTouch(String text)throws Exception{
         android.graphics.Rect r=overlayControl(text);Thread.sleep(400);r=overlayControl(text);
         checkpoint("Overlay tap "+text+" at "+r);
@@ -83,7 +94,7 @@ public class SmokeRunner extends Instrumentation {
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstDown,true);firstDown.recycle();
         MotionEvent firstUp=MotionEvent.obtain(started,SystemClock.uptimeMillis(),1,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstUp,true);firstUp.recycle();
         overlayControl("采集当前作品");checkpoint("First floating touch-to-frame (includes cold text rendering): "+panelLatency(1500)+"ms");
-        overlayTouch("采集当前作品");overlayControl("请回到要采集的作品页");overlayTouch("未分类  ▾");overlayControl("未分类");overlayTouch("未分类");overlayTouch("⠿  ZNote  ⌄");
+        overlayTouch("采集当前作品");overlayMessage("请回到要采集的作品页");overlayTouch("未分类  ▾");overlayControl("未分类");overlayTouch("未分类");overlayTouch("⠿  ZNote  ⌄");
         android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
         Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
