@@ -35,6 +35,14 @@ public class SmokeRunner extends Instrumentation {
             }Thread.sleep(100);
         }throw new Exception("Touchable control not found: "+text);
     }
+    private void clickText(String text)throws Exception{
+        long deadline=System.currentTimeMillis()+5000;
+        while(System.currentTimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
+            boolean clicked=false;if(root!=null){for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text)){
+                if(text.contentEquals(node.getText()==null?"":node.getText())&&node.isClickable()){clicked=node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);node.recycle();break;}node.recycle();
+            }root.recycle();}if(clicked){Thread.sleep(300);return;}Thread.sleep(100);
+        }throw new Exception("Accessible control click failed: "+text);
+    }
     private android.graphics.Rect overlayControl(String text)throws Exception{
         long deadline=System.currentTimeMillis()+5000;
         while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
@@ -52,10 +60,10 @@ public class SmokeRunner extends Instrumentation {
     private void shell(String command)throws Exception{try(android.os.ParcelFileDescriptor fd=automation().executeShellCommand(command);java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){in.readAllBytes();}}
     private Bundle captureCommand(String command)throws Exception{
         getTargetContext().startActivity(new Intent(getTargetContext(),CaptureAssistActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));Thread.sleep(400);
-        if(!"status".equals(command))touchText("show".equals(command)?"显示悬浮窗":"关闭悬浮窗");
+        if(!"status".equals(command))clickText("show".equals(command)?"显示悬浮窗":"关闭悬浮窗");
         long deadline=SystemClock.uptimeMillis()+5000;Bundle state=null;
         while(SystemClock.uptimeMillis()<deadline){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
-            if(root!=null){for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("采集辅助已连接")){String text=String.valueOf(node.getText());state=new Bundle();state.putBoolean("visible",text.contains("已显示"));}root.recycle();}if(state!=null)break;Thread.sleep(100);
+            if(root!=null){for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("采集辅助已连接")){String text=String.valueOf(node.getText());boolean visible=text.contains("悬浮窗已显示");if("status".equals(command)||visible=="show".equals(command)){state=new Bundle();state.putBoolean("visible",visible);}node.recycle();}root.recycle();}if(state!=null)break;Thread.sleep(100);
         }
         if(state==null)throw new Exception("Capture settings could not control window: "+command);
         for(ActivityManager.RunningAppProcessInfo process:((ActivityManager)getTargetContext().getSystemService(Context.ACTIVITY_SERVICE)).getRunningAppProcesses())if(process.processName.equals(getTargetContext().getPackageName()+":capture"))state.putInt("pid",process.pid);
