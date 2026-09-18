@@ -69,13 +69,21 @@ final class AppUpdates {
         long id=manager.enqueue(request);prefs(c).edit().putLong("download_id",id).putString("release",release.json().toString()).apply();return id;
     }
     static void clear(Context c){long id=prefs(c).getLong("download_id",0);if(id!=0)((DownloadManager)c.getSystemService(Context.DOWNLOAD_SERVICE)).remove(id);prefs(c).edit().remove("download_id").remove("release").apply();}
+    static IOException archiveVersionError(String expectedPackage,String archivePackage,String expectedVersion,String archiveVersion,long archiveCode,String installedVersion,long installedCode){
+        if(!expectedPackage.equals(archivePackage))return new IOException("下载的安装包包名不匹配，已停止安装");
+        if(!expectedVersion.equals(archiveVersion))return new IOException("安装包版本与更新信息不匹配（更新信息 "+expectedVersion+"，安装包 "+archiveVersion+"）");
+        if(archiveCode<=installedCode)return new IOException("下载包序号不高：当前已安装 "+installedVersion+"（"+installedCode+"），下载包 "+archiveVersion+"（"+archiveCode+"）");
+        return null;
+    }
     static void verify(Context c,File file,Release release)throws Exception{
         if(!file.isFile()||file.length()!=release.size||file.length()>MAX_APK)throw new IOException("安装包不完整，请重新下载");
         MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream in=new FileInputStream(file)){byte[] b=new byte[65536];int n;while((n=in.read(b))!=-1)digest.update(b,0,n);}
         StringBuilder hash=new StringBuilder();for(byte b:digest.digest())hash.append(String.format(Locale.ROOT,"%02x",b&255));
         if(!release.hash.equals(hash.toString()))throw new IOException("安装包校验失败，请重新下载");
         PackageManager pm=c.getPackageManager();PackageInfo archive=pm.getPackageArchiveInfo(file.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES),installed=pm.getPackageInfo(c.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES);
-        if(archive==null||!c.getPackageName().equals(archive.packageName)||!release.version.equals(archive.versionName)||archive.getLongVersionCode()<=installed.getLongVersionCode())throw new IOException("安装包不是更高版本的 ZNote");
+        if(archive==null)throw new IOException("安装包签名或版本清单无法识别，已停止安装；请重新下载更新");
+        IOException versionError=archiveVersionError(c.getPackageName(),archive.packageName,release.version,archive.versionName,archive.getLongVersionCode(),installed.versionName,installed.getLongVersionCode());
+        if(versionError!=null)throw versionError;
         if(archive.signingInfo==null||installed.signingInfo==null||!new HashSet<>(Arrays.asList(archive.signingInfo.getApkContentsSigners())).equals(new HashSet<>(Arrays.asList(installed.signingInfo.getApkContentsSigners()))))throw new IOException("安装包签名不匹配，已停止安装");
     }
 }
