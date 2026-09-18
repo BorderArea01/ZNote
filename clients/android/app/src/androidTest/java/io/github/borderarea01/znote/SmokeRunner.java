@@ -62,6 +62,26 @@ public class SmokeRunner extends Instrumentation {
             }
         }Thread.sleep(100);}throw new Exception("Overlay message unavailable: "+text);
     }
+    private void overlayClick(String text)throws Exception{
+        long deadline=System.currentTimeMillis()+5000;
+        while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
+            if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY)continue;
+            android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text)){
+                if(text.contentEquals(n.getText()==null?"":n.getText())&&n.isClickable()&&n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){Thread.sleep(300);return;}
+            }
+        }Thread.sleep(100);}overlayTouch(text);
+    }
+    private void waitForAppText(String pkg,String text)throws Exception{
+        long deadline=System.currentTimeMillis()+10000;
+        while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
+            if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION)continue;
+            android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
+            if(pkg.contentEquals(root.getPackageName()))for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text)){
+                if(n.getText()!=null&&n.getText().toString().contains(text))return;
+            }
+        }Thread.sleep(100);}throw new Exception("Fixture did not show expected text: "+pkg+" / "+text);
+    }
     private void overlayTouch(String text)throws Exception{
         android.graphics.Rect r=overlayControl(text);Thread.sleep(400);r=overlayControl(text);
         checkpoint("Overlay tap "+text+" at "+r);
@@ -119,8 +139,8 @@ public class SmokeRunner extends Instrumentation {
         }
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.xingin.xhs","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
         overlayTouch("Z");int clipboardQueued=diagnosticCount("capture_queued");overlayTouch("采集当前作品");long clipboardDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=clipboardQueued&&SystemClock.uptimeMillis()<clipboardDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=clipboardQueued)throw new Exception("Clipboard transport fallback did not queue");checkpoint("Copy-link fallback remains available when the source share sheet does not expose ZNote");
-        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.ss.android.ugc.aweme","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).putExtra("menuOpen",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(800);
-        int manualDouyinQueued=diagnosticCount("capture_queued");overlayTouch("Z");overlayTouch("采集当前作品");long manualDouyinDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=manualDouyinQueued&&SystemClock.uptimeMillis()<manualDouyinDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=manualDouyinQueued)throw new Exception("Already-open Douyin share menu did not auto-copy and save its URL");checkpoint("Icon-only Douyin share action and an already-open copy menu auto-read the URL without manual paste");
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.ss.android.ugc.aweme","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).putExtra("menuOpen",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));waitForAppText("com.ss.android.ugc.aweme","复制链接到剪贴板");
+        int manualDouyinQueued=diagnosticCount("capture_queued");overlayTouch("Z");overlayClick("采集当前作品");long manualDouyinDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=manualDouyinQueued&&SystemClock.uptimeMillis()<manualDouyinDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=manualDouyinQueued)throw new Exception("Already-open Douyin share menu did not auto-copy and save its URL");checkpoint("Icon-only Douyin share action and an already-open copy menu auto-read the URL without manual paste");
         long resultDeadline=SystemClock.uptimeMillis()+30000;while(diagnosticCount("capture_result")==0&&SystemClock.uptimeMillis()<resultDeadline)Thread.sleep(250);if(diagnosticCount("capture_result")==0)throw new Exception("Background capture result was not observed");
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->"capture_results".equals(n.getNotification().getChannelId())))throw new Exception("Background capture result notification missing");checkpoint("Background capture completion or failure remains visible after the floating panel closes");
         FloatingShareActivity fallback=(FloatingShareActivity)openCapture(new Intent(getTargetContext(),FloatingShareActivity.class).putExtra("read_clipboard",true).putExtra("copied_after",System.currentTimeMillis()+60000).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
