@@ -37,6 +37,7 @@
     sizeInput,
     hideTimer,
     hideDelay,
+    pendingSaveIntent = false,
     pointer = { x: -1, y: -1 },
     pollTimer,
     hoverAllowed = false,
@@ -248,6 +249,7 @@
   function hide() {
     clearTimeout(hoverTimer); clearTimeout(hideTimer); hideTimer = null; pendingTarget = null;
     preview.classList.add("hidden");
+    pendingSaveIntent = false;
     hovered = null;
     hoverURL = "";
     hoverToken++;
@@ -269,6 +271,14 @@
     }
     return false;
   }
+  function pointerInsidePreview() {
+    if (!preview || preview.classList.contains('hidden')) return false;
+    const r=preview.getBoundingClientRect();
+    return r.width>0&&r.height>0&&pointer.x>=r.left&&pointer.x<=r.right&&pointer.y>=r.top&&pointer.y<=r.bottom;
+  }
+  function pointerWithinPreviewOrSource() {
+    return preview.matches(':hover')||pointerInsidePreview()||sourceUnderPointer();
+  }
   function scheduleHide() {
     const delay = inPreviewBridge() ? 650 : 150;
     if (hideTimer && hideDelay === delay) return;
@@ -276,7 +286,7 @@
     hideDelay = delay;
     hideTimer = setTimeout(() => {
       hideTimer = null;
-      if (!preview.matches(':hover') && !sourceUnderPointer()) hide();
+      if (!pointerWithinPreviewOrSource()) hide();
     }, delay);
   }
   function sourceUnderPointer() {
@@ -302,6 +312,7 @@
     const token = ++hoverToken,
       candidates = globalThis.ZNoteCandidates(target);
     if (!candidates.length) return;
+    pendingSaveIntent = false;
     hovered = target;
     imageGroup = null; pageToken++; previewCache?.clear(); pageBusy = false; groupLoading=false;failedIndex=null;lastWheel=0; drawGroup();
     hoverURL = '';
@@ -357,7 +368,14 @@
     previousButton.disabled = requestedIndex === 0;
     nextButton.disabled = requestedIndex === imageGroup.images.length - 1;
     batchButton.textContent = `批量下载 ${imageGroup.images.length} 张`;
+    batchButton.hidden = !!pawControls;
     batchSaveButton.textContent = `批量入库 ${imageGroup.images.length} 张`;
+  }
+  function continuePendingSave() {
+    if(!pendingSaveIntent||groupLoading||pageBusy||hoverBusy)return;
+    pendingSaveIntent=false;
+    if(!hoverURL||preview.classList.contains('hidden')){previewLabel.textContent='原图尚未准备好，未执行入库；请稍后再试。';return;}
+    queueMicrotask(()=>hoverAction('save'));
   }
   async function loadGroup(target, token, result) {
     try {
@@ -374,7 +392,7 @@
       hoverURL=group.images[index];
       turnPage(0);
     } catch(e) { if(token===hoverToken){previewLabel.textContent = e.message;if(groupLoading)hoverURL='';} }
-    finally {if(token===hoverToken){groupLoading=false;drawGroup();}}
+    finally {if(token===hoverToken){groupLoading=false;drawGroup();continuePendingSave();}}
   }
   async function turnPage(delta, original=false) {
     if(imageGroup && (imageGroup.page_url||imageGroup.source_url)!==location.href){hide();return;}
@@ -395,12 +413,15 @@
       previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · ${url===hoverURL?'原图':'快速预览'} · 滚轮翻页`;
       previewImage.onload=placePreview; requestAnimationFrame(placePreview);
       for(const next of nearby)previewCache.get(next).catch(()=>{});
-    } else {failedIndex=index;requestedIndex=groupIndex;previewLabel.textContent='预览暂时无法加载，可重试或点击“查看原图”';}
+      continuePendingSave();
+    } else {failedIndex=index;requestedIndex=groupIndex;previewLabel.textContent='预览暂时无法加载，可重试或点击“查看原图”';if(pendingSaveIntent){pendingSaveIntent=false;previewLabel.textContent='当前图片未加载，未执行入库；请重试或查看原图。';}}
     drawGroup();
   }
   async function hoverAction(action) {
     if(imageGroup && (imageGroup.page_url||imageGroup.source_url)!==location.href){hide();return;}
-    if (!hoverURL || !hovered || groupLoading || hoverBusy || pageBusy) return;
+    if (!hoverURL || !hovered) return;
+    if(groupLoading||pageBusy){if(action==='save'){pendingSaveIntent=true;previewLabel.textContent='正在准备当前图片，完成后会自动入库…';}else previewLabel.textContent='正在准备当前图片，请稍后再试。';return;}
+    if(hoverBusy){previewLabel.textContent='当前图片正在处理中…';return;}
     hoverBusy = true;
     clearTimeout(hideTimer); hideTimer = null;
     downloadButton.disabled = true; saveButton.disabled = true;
@@ -422,7 +443,7 @@
     } finally {
       hoverBusy = false;
       downloadButton.disabled = false; saveButton.disabled = false;
-      if (!preview.matches(':hover') && !sourceUnderPointer()) scheduleHide();
+      if (!pointerWithinPreviewOrSource()) scheduleHide();
     }
   }
   async function mount() {
@@ -598,7 +619,7 @@
       if(!hovered?.isConnected||preview.classList.contains('hidden')||hoverBusy||!hoverAllowed)return;
       const token=++hoverToken;groupLoading=true;drawGroup();loadGroup(hovered,token,globalThis.ZNoteWorkImages(hovered).catch(error=>({error})));
     });
-    window.addEventListener('scroll', () => { if (hovered) hide(); }, {passive:true});
+    window.addEventListener('scroll', () => { if (hovered) { if(pointerInsidePreview()){clearTimeout(hideTimer);hideTimer=null;return;} hide(); } }, {passive:true});
     root.append(preview);
     preview.addEventListener("mouseenter", () => {
       clearTimeout(hideTimer); hideTimer = null;
@@ -617,7 +638,8 @@
         // The companion retains Pixiv's own enhanced preview and wheel controls.
         // Avoid two hover viewers competing when both ZNote extensions are loaded.
         if (location.hostname === 'www.pixiv.net' && document.getElementById('znote-pixiv-entry')) { if (hovered || pendingTarget) hide(); return; }
-        if (own(e) || !hoverAllowed) return;
+        if (own(e)) { if(pointerInsidePreview()){clearTimeout(hideTimer);hideTimer=null;} return; }
+        if (!hoverAllowed) return;
         if (hoverBusy) { if (!sourceUnderPointer()) scheduleHide(); return; }
         const target = globalThis.ZNoteImageTarget(e);
         if (!target) { if (hovered || pendingTarget) scheduleHide(); return; }
@@ -644,6 +666,7 @@
     document.addEventListener(
       "keydown",
       (e) => {
+        const path=e.composedPath(),fromExtension=path.includes(host);
         if (
           !e.isTrusted ||
           e.repeat ||
@@ -652,13 +675,8 @@
           e.altKey ||
           e.metaKey ||
           e.shiftKey ||
-          e
-            .composedPath()
-            .some(
-              (n) =>
-                n?.isContentEditable ||
-                /^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY)$/.test(n?.tagName),
-            )
+          path.some(n=>n?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(n?.tagName))||
+          (!fromExtension&&path.some(n=>/^(BUTTON|SUMMARY)$/.test(n?.tagName)))
         )
           return;
         if (e.key === "Escape") {

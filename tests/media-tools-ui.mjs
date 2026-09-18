@@ -129,6 +129,9 @@ try {
         .shadowRoot.querySelector(".preview img").naturalWidth === 2400,
   );
   await page.screenshot({ path: resolve("artifacts/v07-hover-preview.png") });
+  await page.evaluate(()=>{const p=document.querySelector('[data-znote-overlay]').shadowRoot.querySelector('.preview');document.body.style.minHeight='1600px';p.style.left='900px';p.style.top='300px';p.style.width='400px';p.style.height='400px';p.style.pointerEvents='none';});
+  await page.mouse.move(920,320);await page.waitForTimeout(400);assert.ok(await preview.isVisible(),'Preview stays open while the pointer is inside its hit-test-transparent image area');
+  await page.evaluate(()=>window.scrollTo(0,80));await page.waitForTimeout(200);assert.ok(await preview.isVisible(),'Page scroll under the preview does not close it while the pointer remains over it');console.log('PASS: preview stays open under the pointer, including hit-test-transparent images and page scroll');
   await page.mouse.move(1420, 12);
   await page.waitForTimeout(300);
   assert.equal(await preview.isVisible(), false, 'Leaving the image dismisses within 300 ms');
@@ -149,8 +152,9 @@ try {
     await (await context.request.get(base + items.items[0].url)).body(),
     large,
   );
-  await page.keyboard.press('z');
+  await preview.getByRole('button',{name:'Z 保存知识库',exact:true}).focus();await page.keyboard.press('z');
   await preview.getByText('已收录，保留原备注并补充来源', {exact:true}).waitFor();
+  console.log('PASS: Z saves the current image while focus is on a ZNote preview button');
   await preview.getByRole('button',{name:'S 下载',exact:true}).click();
   await preview.getByText("已交给浏览器下载", { exact: true }).waitFor();
   let downloads;
