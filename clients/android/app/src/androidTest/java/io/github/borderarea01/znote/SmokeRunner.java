@@ -40,7 +40,7 @@ public class SmokeRunner extends Instrumentation {
         while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
             if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY)continue;
             android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
-            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);if("⋮".equals(text)&&r.left>20&&r.right<getTargetContext().getResources().getDisplayMetrics().widthPixels-20)continue;return r;}
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text)){String actual=n.getText()==null?"":n.getText().toString();boolean handle="⋮".equals(text)&&("✓".equals(actual)||"!".equals(actual));if(!text.equals(actual)&&!handle)continue;android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);if("⋮".equals(text)&&r.left>20&&r.right<getTargetContext().getResources().getDisplayMetrics().widthPixels-20)continue;return r;}
         }Thread.sleep(100);}throw new Exception("Overlay control unavailable: "+text);
     }
     private void overlayTouch(String text)throws Exception{
