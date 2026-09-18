@@ -158,7 +158,7 @@ public class SmokeRunner extends Instrumentation {
         overlayTouch("Z");overlayTouch("采集当前作品");overlayTouch("…");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("⠿  ZNote  ⌄");overlayTouch("Z");overlayControl("采集当前作品");
         Thread.sleep(1500);if("io.github.borderarea01.znote".contentEquals(automation().getRootInActiveWindow().getPackageName()))throw new Exception("Cancelled capture opened a stale share page");overlayTouch("⠿  ZNote  ⌄");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("Z");overlayTouch("采集当前作品");overlayControl("当前页没有可识别的分享入口");
+        overlayTouch("Z");overlayTouch("采集当前作品");overlayMessage("当前页没有可识别的分享入口");
         overlayTouch("⠿  ZNote  ⌄");captureCommand("hide");captureCommand("show");overlayControl("Z");
         checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.chrome.beta","io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
