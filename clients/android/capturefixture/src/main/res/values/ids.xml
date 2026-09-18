@@ -1,1 +1,1 @@
-<resources><item name="url_bar" type="id"/></resources>
+<resources><item name="url_bar" type="id"/><item name="share_action_button" type="id"/></resources>

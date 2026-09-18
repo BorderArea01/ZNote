@@ -48,7 +48,7 @@ public class SmokeRunner extends Instrumentation {
         while(System.currentTimeMillis()<deadline){for(android.view.accessibility.AccessibilityWindowInfo w:automation().getWindows()){
             if(w.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY)continue;
             android.view.accessibility.AccessibilityNodeInfo root=w.getRoot();if(root==null)continue;
-            String[] candidates="⋮".equals(text)?new String[]{"⋮","✓","!"}:new String[]{text};for(String candidate:candidates)for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(candidate))if(candidate.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);if("⋮".equals(text)&&r.left>20&&r.right<getTargetContext().getResources().getDisplayMetrics().widthPixels-20)continue;return r;}
+            String[] candidates="Z".equals(text)||"⋮".equals(text)?new String[]{"Z","⋮","✓","!"}:new String[]{text};for(String candidate:candidates)for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(candidate))if(candidate.contentEquals(n.getText()==null?"":n.getText())){android.graphics.Rect r=new android.graphics.Rect();n.getBoundsInScreen(r);if(("Z".equals(text)||"⋮".equals(text))&&r.left>20&&r.right<getTargetContext().getResources().getDisplayMetrics().widthPixels-20)continue;return r;}
         }Thread.sleep(100);}throw new Exception("Overlay control unavailable: "+text);
     }
     private void overlayTouch(String text)throws Exception{
@@ -79,23 +79,23 @@ public class SmokeRunner extends Instrumentation {
         shell("pm grant io.github.borderarea01.znote android.permission.POST_NOTIFICATIONS");shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");
         Thread.sleep(1000);Bundle state=captureCommand("show");if(state.getInt("pid")==0||state.getInt("pid")==android.os.Process.myPid())throw new Exception("Capture must not share the WebView process");
         // An unsupported app must not have its content or old clipboard imported.
-        android.graphics.Rect first=overlayControl("⋮");Thread.sleep(400);first=overlayControl("⋮");long started=SystemClock.uptimeMillis();
+        android.graphics.Rect first=overlayControl("Z");Thread.sleep(400);first=overlayControl("Z");long started=SystemClock.uptimeMillis();
         MotionEvent firstDown=MotionEvent.obtain(started,started,0,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstDown,true);firstDown.recycle();
         MotionEvent firstUp=MotionEvent.obtain(started,SystemClock.uptimeMillis(),1,first.centerX(),first.centerY(),0);automation().injectInputEvent(firstUp,true);firstUp.recycle();
         overlayControl("采集当前作品");checkpoint("First floating touch-to-frame (includes cold text rendering): "+panelLatency(1500)+"ms");
-        overlayTouch("采集当前作品");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("收起");
-        android.graphics.Rect before=overlayControl("⋮");long time=SystemClock.uptimeMillis();
+        overlayTouch("采集当前作品");overlayControl("请在浏览器、小红书、抖音或 B 站作品页使用");overlayTouch("未分类  ▾");overlayControl("未分类");overlayTouch("未分类");overlayTouch("⠿  ZNote  ⌄");
+        android.graphics.Rect before=overlayControl("Z");long time=SystemClock.uptimeMillis();
         for(int i=0;i<=8;i++){float x=before.centerX()+(40-before.centerX())*(i/8f),y=before.centerY()+120*(i/8f);MotionEvent event=MotionEvent.obtain(time,SystemClock.uptimeMillis(),i==0?MotionEvent.ACTION_DOWN:i==8?MotionEvent.ACTION_UP:MotionEvent.ACTION_MOVE,x,y,0);automation().injectInputEvent(event,true);event.recycle();Thread.sleep(40);}
-        Thread.sleep(300);android.graphics.Rect after=overlayControl("⋮");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
-        captureCommand("hide");captureCommand("show");android.graphics.Rect restored=overlayControl("⋮");if(restored.left>20||Math.abs(restored.top-after.top)>15)throw new Exception("Dock position not retained: "+after+" -> "+restored);
-        if(restored.width()>getTargetContext().getResources().getDisplayMetrics().density*30)throw new Exception("Collapsed handle did not shrink");
+        Thread.sleep(300);android.graphics.Rect after=overlayControl("Z");if(after.left>20||Math.abs(after.top-before.top)<50)throw new Exception("Bubble failed to drag and dock left: "+before+" -> "+after);
+        captureCommand("hide");captureCommand("show");android.graphics.Rect restored=overlayControl("Z");if(restored.left>20||Math.abs(restored.top-after.top)>15)throw new Exception("Dock position not retained: "+after+" -> "+restored);
+        if(restored.width()>getTargetContext().getResources().getDisplayMetrics().density*40||restored.height()<getTargetContext().getResources().getDisplayMetrics().density*68)throw new Exception("Collapsed handle is not a compact half-circle tab");
         android.app.NotificationManager nm=(android.app.NotificationManager)getTargetContext().getSystemService(Context.NOTIFICATION_SERVICE);
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->n.getId()==3741))throw new Exception("Capture management notification missing");
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->n.getId()==3741&&(n.getNotification().flags&Notification.FLAG_FOREGROUND_SERVICE)!=0))throw new Exception("Visible capture window must be managed by a foreground service");
         checkpoint("Floating capture drag, compact handle, notification, persisted placement and unsupported-page recovery passed");
         for(String pkg:new String[]{"com.chrome.beta","com.xingin.xhs","com.ss.android.ugc.aweme","tv.danmaku.bili"}){
             getTargetContext().startActivity(new Intent().setComponent(new ComponentName(pkg,"io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-            overlayTouch("⋮");
+            overlayTouch("Z");
             if(pkg.equals("com.chrome.beta")){android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-overlay.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
             int queuedBefore=diagnosticCount("capture_queued"),directBefore=diagnosticCount("direct_share_received");overlayTouch("采集当前作品");
             String expected=pkg.equals("com.chrome.beta")?"https://example.com/fixture-article":pkg.equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":pkg.equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
@@ -103,29 +103,31 @@ public class SmokeRunner extends Instrumentation {
             while(SystemClock.uptimeMillis()<queued){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(diagnosticCount("capture_queued")>queuedBefore&&root!=null&&!"io.github.borderarea01.znote".contentEquals(root.getPackageName())){resumed=true;break;}Thread.sleep(100);}
             if(!resumed)throw new Exception("Quick capture blocked browsing for "+pkg+" ("+expected+")");
             if(!pkg.equals("com.chrome.beta")&&diagnosticCount("direct_share_received")<=directBefore)throw new Exception("Android direct-share target was not used for "+pkg);
-            overlayTouch("⋮");overlayControl("收起");overlayTouch("收起");
+            overlayTouch("Z");overlayTouch("⠿  ZNote  ⌄");
             checkpoint("Direct Android share-target flow queued in background and returned to simulated "+pkg);
         }
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.xingin.xhs","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("⋮");int clipboardQueued=diagnosticCount("capture_queued");overlayTouch("采集当前作品");long clipboardDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=clipboardQueued&&SystemClock.uptimeMillis()<clipboardDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=clipboardQueued)throw new Exception("Clipboard transport fallback did not queue");checkpoint("Copy-link fallback remains available when the source share sheet does not expose ZNote");
+        overlayTouch("Z");int clipboardQueued=diagnosticCount("capture_queued");overlayTouch("采集当前作品");long clipboardDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=clipboardQueued&&SystemClock.uptimeMillis()<clipboardDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=clipboardQueued)throw new Exception("Clipboard transport fallback did not queue");checkpoint("Copy-link fallback remains available when the source share sheet does not expose ZNote");
+        getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.ss.android.ugc.aweme","io.github.borderarea01.capturefixture.PageActivity")).putExtra("copyOnly",true).putExtra("menuOpen",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(800);
+        int manualDouyinQueued=diagnosticCount("capture_queued");overlayTouch("Z");overlayTouch("采集当前作品");long manualDouyinDeadline=SystemClock.uptimeMillis()+8000;while(diagnosticCount("capture_queued")<=manualDouyinQueued&&SystemClock.uptimeMillis()<manualDouyinDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=manualDouyinQueued)throw new Exception("Already-open Douyin share menu did not auto-copy and save its URL");checkpoint("Icon-only Douyin share action and an already-open copy menu auto-read the URL without manual paste");
         long resultDeadline=SystemClock.uptimeMillis()+30000;while(diagnosticCount("capture_result")==0&&SystemClock.uptimeMillis()<resultDeadline)Thread.sleep(250);if(diagnosticCount("capture_result")==0)throw new Exception("Background capture result was not observed");
         if(java.util.Arrays.stream(nm.getActiveNotifications()).noneMatch(n->"capture_results".equals(n.getNotification().getChannelId())))throw new Exception("Background capture result notification missing");checkpoint("Background capture completion or failure remains visible after the floating panel closes");
         FloatingShareActivity fallback=(FloatingShareActivity)openCapture(new Intent(getTargetContext(),FloatingShareActivity.class).putExtra("read_clipboard",true).putExtra("copied_after",System.currentTimeMillis()+60000).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        nativeUntil(fallback,"未读到本次分享链接");
+        nativeUntil(fallback,"链接还没带进来");nativeUntil(fallback,"未读到本次分享链接");
         runOnMainSync(()->((android.content.ClipboardManager)getTargetContext().getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("fixture","http://127.0.0.1/manual-fallback")));
-        touchText("读取剪贴板链接");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
+        touchText("读取剪贴板");nativeUntil(fallback,"http://127.0.0.1/manual-fallback");
         android.graphics.Bitmap shot=automation().takeScreenshot();try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"capture-panel.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}shot.recycle();
         int manualQueued=diagnosticCount("capture_queued");touchText("保存到知识库");long manualDeadline=SystemClock.uptimeMillis()+5000;while(diagnosticCount("capture_queued")<=manualQueued&&SystemClock.uptimeMillis()<manualDeadline)Thread.sleep(100);if(diagnosticCount("capture_queued")<=manualQueued)throw new Exception("Manual paste was not queued before the panel closed");
         checkpoint("Stale clipboard is rejected; explicit paste queues in the background and closes the small panel");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("slow",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("⋮");overlayTouch("采集当前作品");overlayTouch("…");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("收起");overlayTouch("⋮");overlayControl("采集当前作品");
-        Thread.sleep(1500);if("io.github.borderarea01.znote".contentEquals(automation().getRootInActiveWindow().getPackageName()))throw new Exception("Cancelled capture opened a stale share page");overlayTouch("收起");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
+        overlayTouch("Z");overlayTouch("采集当前作品");overlayTouch("…");overlayTouch("取消识别");overlayControl("已取消，可重新采集");overlayTouch("⠿  ZNote  ⌄");overlayTouch("Z");overlayControl("采集当前作品");
+        Thread.sleep(1500);if("io.github.borderarea01.znote".contentEquals(automation().getRootInActiveWindow().getPackageName()))throw new Exception("Cancelled capture opened a stale share page");overlayTouch("⠿  ZNote  ⌄");checkpoint("Slow provider remains cancellable; window reopens and late results do not navigate");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("tv.danmaku.bili","io.github.borderarea01.capturefixture.PageActivity")).putExtra("list",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        overlayTouch("⋮");overlayTouch("采集当前作品");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
-        overlayTouch("收起");captureCommand("hide");captureCommand("show");overlayControl("⋮");
+        overlayTouch("Z");overlayTouch("采集当前作品");overlayControl("当前页没有可采集的作品分享按钮，请先打开具体作品；列表页不支持整页采集");
+        overlayTouch("⠿  ZNote  ⌄");captureCommand("hide");captureCommand("show");overlayControl("Z");
         checkpoint("Bilibili list failure remains visible and floating window reopens without service restart");
         getTargetContext().startActivity(new Intent().setComponent(new ComponentName("com.chrome.beta","io.github.borderarea01.capturefixture.PageActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Thread.sleep(600);
-        android.graphics.Rect point=overlayControl("⋮");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
+        android.graphics.Rect point=overlayControl("Z");CountDownLatch entered=new CountDownLatch(1),released=new CountDownLatch(1);
         new Handler(Looper.getMainLooper()).post(()->{entered.countDown();try{Thread.sleep(6000);}catch(InterruptedException ignored){}finally{released.countDown();}});entered.await();
         long begin=SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(begin,begin,0,point.centerX(),point.centerY(),0);automation().injectInputEvent(down,true);down.recycle();MotionEvent up=MotionEvent.obtain(begin,SystemClock.uptimeMillis(),1,point.centerX(),point.centerY(),0);automation().injectInputEvent(up,true);up.recycle();
         overlayControl("采集当前作品");overlayTouch("粘贴链接");nativeUntil(null,"保存这条作品");boolean independent=released.getCount()>0;released.await();if(!independent)throw new Exception("Floating panel waited for the blocked library process");checkpoint("Floating handle and native capture Activity respond above another app while library thread is blocked: "+panelLatency(600)+"ms");
@@ -143,7 +145,7 @@ public class SmokeRunner extends Instrumentation {
         while(SystemClock.uptimeMillis()<serverDeadline){java.net.HttpURLConnection probe=(java.net.HttpURLConnection)new java.net.URL("http://10.0.2.2:3742/api/health").openConnection();probe.setConnectTimeout(2000);probe.setReadTimeout(2000);try{if(probe.getResponseCode()==200){reachable=true;break;}}catch(java.io.IOException ignored){}finally{probe.disconnect();}Thread.sleep(300);}
         if(!reachable)throw new Exception("Disposable host server is not reachable from emulator");
         try{MainActivity.normalize("http://10.attacker.com");throw new Exception("public HTTP was accepted");}catch(Exception e){if(e.getMessage().equals("public HTTP was accepted"))throw e;}
-        activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));nativeUntil(activity,"连接到你的知识库");
         runOnMainSync(()->{EditText address=(EditText)find(activity.getWindow().getDecorView(),EditText.class);address.setText("http://10.0.2.2:3742");button(activity.getWindow().getDecorView(),"连接并打开").performClick();});
         until("!!document.querySelector('input[type=password]')");
         checkpoint("Android connected to disposable LAN server");
