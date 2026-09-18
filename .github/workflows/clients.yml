@@ -78,12 +78,12 @@ jobs:
         run: bash scripts/test-android-emulator.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: android-unsigned
+          name: android-unsigned-${{ github.run_attempt }}
           path: clients/android/app/build/outputs/apk/release/*unsigned.apk
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: android-emulator-evidence
+          name: android-emulator-evidence-${{ github.run_attempt }}
           path: artifacts/android-emulator/
