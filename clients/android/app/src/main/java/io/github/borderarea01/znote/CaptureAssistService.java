@@ -31,7 +31,7 @@ public class CaptureAssistService extends AccessibilityService {
     private boolean panelBusy;
     private final ExecutorService diagnostics=Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService tracker=Executors.newSingleThreadScheduledExecutor();
-    private boolean trackerScheduled;
+    private boolean trackerScheduled,resultPending,resultFailed;
     private boolean expanded=false,busy=false;
     private volatile int generation=0;
     private Future<?> operation;
@@ -98,7 +98,9 @@ public class CaptureAssistService extends AccessibilityService {
         if(handle==null||handle.getParent()!=bubble){
             bubble.removeAllViews();handle=control("","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;record("toggle",expanded?"open":"collapse");render();if(expanded)measureFrame(started);});handle.setPadding(0,dp(8),0,dp(8));handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);panel=null;
         }
-        handle.setText(expanded?"⠿  ZNote":busy?"…":"⋮");handle.setTextSize(expanded?14:19);
+        handle.setText(expanded?"⠿  ZNote":busy?"…":resultPending?(resultFailed?"!":"✓"):"⋮");handle.setTextSize(expanded?14:19);
+        handle.setTextColor(resultPending?(resultFailed?0xffff8c83:0xff8de0b1):0xffecedf5);
+        handle.setContentDescription(resultPending?"ZNote 采集结果："+lastMessage:"ZNote 悬浮采集，拖动换位置");
         // Prepare once when the service connects; simple open/close reuses the
         // existing views instead of inflating and measuring a fresh control tree.
         if(panel==null||panelBusy!=busy||!java.util.Objects.equals(panelMessage,lastMessage)){
@@ -225,7 +227,7 @@ public class CaptureAssistService extends AccessibilityService {
         record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick));}
         catch(Exception e){message("无法打开采集面板，请重试");}
     }
-    void backgroundQueued(String id){lastMessage="已加入后台保存，可继续浏览";busy=false;expanded=false;record("capture_queued",id);rememberJob(id);render();notifyReady();scheduleTracking(0);}
+    void backgroundQueued(String id){lastMessage="正在后台采集…";resultPending=false;busy=false;expanded=false;record("capture_queued",id);rememberJob(id);render();notifyReady();scheduleTracking(0);}
     private synchronized Set<String> trackedJobs(){return new HashSet<>(prefs().getStringSet("capture_jobs",Collections.emptySet()));}
     private synchronized void rememberJob(String id){Set<String> jobs=trackedJobs();jobs.add(id);prefs().edit().putStringSet("capture_jobs",jobs).putLong("capture_job_"+id,System.currentTimeMillis()).apply();}
     private synchronized void forgetJob(String id){Set<String> jobs=trackedJobs();jobs.remove(id);prefs().edit().putStringSet("capture_jobs",jobs).remove("capture_job_"+id).apply();}
@@ -244,7 +246,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private byte[] readSmall(java.io.InputStream stream)throws java.io.IOException{if(stream==null)return new byte[0];java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] block=new byte[4096];int n;while((n=stream.read(block))!=-1){if(out.size()+n>1024*1024)throw new java.io.IOException("response too large");out.write(block,0,n);}return out.toByteArray();}
     private void notifyResult(String id,boolean success,String message){
-        lastMessage=success?"最近一次采集已保存":"最近一次采集失败，点通知查看";record("capture_result",(success?"completed ":"failed ")+id);handler.post(()->{if(bubble!=null){render();notifyReady();}});
+        lastMessage=success?"已保存到 ZNote":"采集失败："+message;resultPending=true;resultFailed=!success;record("capture_result",(success?"completed ":"failed ")+id);handler.post(()->{if(bubble!=null){render();notifyReady();}Toast.makeText(getApplicationContext(),success?"已保存到 ZNote":"采集失败："+message,Toast.LENGTH_LONG).show();});
         android.app.NotificationManager manager=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);android.app.NotificationChannel channel=new android.app.NotificationChannel("capture_results","采集结果",android.app.NotificationManager.IMPORTANCE_DEFAULT);channel.setDescription("后台采集成功或失败通知");manager.createNotificationChannel(channel);
         android.app.PendingIntent open=android.app.PendingIntent.getActivity(this,300,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
         android.app.Notification n=new android.app.Notification.Builder(this,"capture_results").setSmallIcon(R.drawable.ic_capture_notification).setContentTitle(success?"已保存到 ZNote":"ZNote 采集失败").setContentText(message).setStyle(new android.app.Notification.BigTextStyle().bigText(message)).setAutoCancel(true).setContentIntent(open).build();manager.notify(5000+Math.floorMod(id.hashCode(),10000),n);

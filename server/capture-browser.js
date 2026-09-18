@@ -2,11 +2,21 @@ import {extractCapturePage} from './capture-page.js';
 const fail=message=>Object.assign(Error(message),{status:422});
 const domains=['douyin.com','iesdouyin.com','douyinstatic.com','douyincdn.com','douyinpic.com','douyinvod.com','byteimg.com','bytedance.com','bytednsdoc.com','bytescm.com','bytegoofy.com','ibytedtos.com','pstatp.com','snssdk.com','bytecdn.cn','bytetos.com'];
 export function allowedCaptureRequest(value,type){
-  try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&!u.port&&!['image','media','font','stylesheet'].includes(type)&&domains.some(d=>u.hostname===d||u.hostname.endsWith('.'+d));}catch{return false;}
+  try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&!u.port&&!['image','media','font'].includes(type)&&domains.some(d=>u.hostname===d||u.hostname.endsWith('.'+d));}catch{return false;}
 }
 export function douyinWork(value){
   try{const u=new URL(value);if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(u.hostname))return '';return u.pathname.match(/\/(?:video|note|slides)\/(\d+)/)?.[1]||(/^\d+$/.test(u.searchParams.get('modal_id')||'')?u.searchParams.get('modal_id'):'');}catch{return '';}
 }
+export function douyinAwemeEndpoint(value){
+  try{
+    const u=new URL(value);if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(u.hostname))return '';
+    const path=u.pathname;
+    if(/\/aweme\/(?:v\d+\/web\/)?aweme\/detail\/?$/.test(path)||/\/aweme\/detail\/?$/.test(path))return 'detail';
+    if(/\/aweme\/(?:v\d+\/web\/)?aweme\/slidesinfo\/?$/.test(path)||/\/web\/api\/v\d+\/aweme\/slidesinfo\/?$/.test(path))return 'slides';
+    return '';
+  }catch{return '';}
+}
+export function hasCaptureResources(plan){return Boolean(plan&&(plan.images?.length||plan.video_urls?.length));}
 // One short-lived anonymous browser, never a user's profile or a resident browser.
 // Only the requested work's detail response is used; recommendations are ignored.
 export async function renderDouyinCapture(source,signal){
@@ -28,13 +38,14 @@ export async function renderDouyinCapture(source,signal){
     let plan,filterReason;
     page.on('response',async response=>{
       try{
-        const u=new URL(response.url());if(!/(^|\.)(?:douyin|iesdouyin)\.com$/.test(u.hostname)||!(/\/aweme\/detail(?:\/|$)/.test(u.pathname)||/\/aweme\/slidesinfo(?:\/|$)/.test(u.pathname))||response.status()!==200||Number(response.headers()['content-length'])>2*1024*1024)return;
+        const endpoint=douyinAwemeEndpoint(response.url());if(!endpoint||response.status()!==200||Number(response.headers()['content-length'])>2*1024*1024)return;
         const body=await response.body();if(body.length>2*1024*1024)return;
         const data=JSON.parse(body.toString()),record=data.aweme_detail||data.aweme_details?.find(v=>String(v?.aweme_id)===id)||data.data?.ItemInfoList?.find(v=>String(v?.aweme_id)===id);
         const filtered=data.filter_list?.find(v=>String(v?.aweme_id)===id);if(filtered)filterReason=filtered.reason;
         if(String(record?.aweme_id)!==id)return;
         const json=JSON.stringify(record).replace(/</g,'\\u003c');
-        plan=extractCapturePage(`<script type="application/json">${json}</script>`,source);
+        const parsed=extractCapturePage(`<script type="application/json">${json}</script>`,source);
+        if(hasCaptureResources(parsed))plan=parsed;
       }catch{}
     });
     const requested=new URL(source),gallery=/\/(?:note|slides)\//.test(requested.pathname);
@@ -47,22 +58,22 @@ export async function renderDouyinCapture(source,signal){
       // Current Douyin note pages put the complete work in the server-rendered
       // React Flight payload and may never request the older detail endpoint.
       if(!plan){
-        try{plan=extractCapturePage(await page.content(),page.url());}
+        try{const parsed=extractCapturePage(await page.content(),page.url());if(hasCaptureResources(parsed))plan=parsed;}
         catch(e){if(!/完整数据|完整图集/.test(e.message))throw e;}
       }
-      for(let waited=0;!closed&&!plan&&waited<67;waited++){
+      for(let waited=0;!closed&&!hasCaptureResources(plan)&&waited<67;waited++){
         await page.waitForTimeout(150);
         // React Flight chunks can finish shortly after DOMContentLoaded.
         if(waited%5===4){
-          try{plan=extractCapturePage(await page.content(),page.url());}
+          try{const parsed=extractCapturePage(await page.content(),page.url());if(hasCaptureResources(parsed))plan=parsed;}
           catch(e){if(!/完整数据|完整图集/.test(e.message))throw e;}
         }
       }
-      if(plan)break;
+      if(hasCaptureResources(plan))break;
     }
     signal.throwIfAborted();
     if(!plan&&filterReason!==undefined)throw fail(`抖音未向公开分享页提供这条作品的原始资源（平台限制 ${filterReason}）；任务已保留，可稍后重试或把媒体文件直接分享给 ZNote`);
-    if(!plan||!(plan.images?.length||plan.video_urls?.length))throw fail('抖音未向匿名公开页面提供这条作品的完整资源，可能要求登录验证或作品已不可访问；任务已保留，可稍后重试或把媒体文件直接分享给 ZNote');
+    if(!hasCaptureResources(plan))throw fail('抖音未向匿名公开页面提供这条作品的完整资源，可能要求登录验证或作品已不可访问；任务已保留，可稍后重试或把媒体文件直接分享给 ZNote');
     return plan;
   }catch(e){signal.throwIfAborted();if(e.status)throw e;throw fail('抖音网页解析未完成，可能超时或需要平台验证；任务已保留，可重试');}
   finally{clearTimeout(timer);signal.removeEventListener('abort',close);await browser?.close().catch(()=>{});}
