@@ -2,6 +2,7 @@ package io.github.borderarea01.znote;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.PackageInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.*;
