@@ -95,6 +95,7 @@ Docker 配置已提供，尚未完成容器运行验收。
 | `COOKIE_SECURE` | `false` | HTTPS 部署时设置为 `true` |
 | `ZNOTE_YTDLP` | 自动查找 | yt-dlp 可执行文件路径 |
 | `ZNOTE_FFMPEG` | 自动查找 | FFmpeg 可执行文件路径 |
+| `ZNOTE_HTTP_PROXY` | 自动读取系统代理 | 手机链接采集、远程图片和视频的 HTTP(S) 代理；例如 Clash `http://127.0.0.1:7897` |
 
 直接运行 Node 时，在启动进程的环境中设置变量；服务不会自动读取 `.env`。Compose 的 `.env` 用于其配置替换，当前模板传入初始化和 Cookie 选项。修改 Compose 的端口还需同步调整端口映射。
 

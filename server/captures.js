@@ -36,14 +36,21 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     let plan=job.plan;
     if(!plan){
       const resource=await page(job.source_url,signal);signal.throwIfAborted();
-      if(resource.type.startsWith('image/')){
+      if(resource.plan) plan=resource.plan;
+      if(plan){
+        if(plan.content?.length>450000)throw fail(413,'正文过长，未入库');
+        patch(job.id,{plan,title:plan.title||job.title});
+      }
+      else if(resource.type.startsWith('image/')){
         const item=await saveImage(resource.buffer,{id,title:job.input.text===job.source_url?'分享图片':job.input.text.slice(0,200),source_url:resource.url,collection_id:job.input.collection_id,tags:job.input.tags});
         patch(job.id,{status:'completed',message:'图片已入库',item_id:item.id,title:item.title});return;
       }
-      try{plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);}catch(e){if(!douyinWork(resource.url))throw e;}
-      if(douyinWork(resource.url)&&!plan?.images?.length&&!plan?.video_urls?.length){patch(job.id,{message:'正在读取抖音作品页面'});plan=await renderDouyinCapture(resource.url,signal);}
-      if(plan.content?.length>450000)throw fail(413,'正文过长，未入库');
-      patch(job.id,{plan,title:plan.title||job.title});
+      else {
+        try{plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);}catch(e){if(!douyinWork(resource.url))throw e;}
+        if(douyinWork(resource.url)&&!plan?.images?.length&&!plan?.video_urls?.length){patch(job.id,{message:'正在读取抖音作品页面'});plan=await renderDouyinCapture(resource.url,signal);}
+        if(plan.content?.length>450000)throw fail(413,'正文过长，未入库');
+        patch(job.id,{plan,title:plan.title||job.title});
+      }
     }
     signal.throwIfAborted();
     if(plan.kind==='video'){
@@ -67,7 +74,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     const album=job.input.image_mode==='group'&&mediaCount>0;
     const liveOnly=liveVideos.length>0&&galleryEntries.length===0;
     const groupKey=liveOnly?(liveVideos.length>1?'capture:'+id:null):album?(mediaCount>1?'capture:'+id:null):'note:'+id;
-    const tags=[...new Set([...job.input.tags, ...(plan.author?[String(plan.author).slice(0,40)]:[])])];
+    const tags=[...new Set([...job.input.tags, ...(plan.tags||[]).map(String).map(value=>value.slice(0,40)), ...(plan.author?[String(plan.author).slice(0,40)]:[])])].slice(0,30);
     let content=plan.content||'';
     if(galleryEntries.length)content += '\n\n'+galleryEntries.map(({url,sourceIndex})=>`![配图 ${sourceIndex+1}](<${url}>)`).join('\n\n');
     const urls=[...new Set(markdownImages(content).map(v=>v.url))];

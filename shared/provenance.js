@@ -8,6 +8,7 @@ const sites = [
   ['YouTube', ['youtube.com', 'youtu.be']],
   ['Pinterest', ['pinterest.com', 'pin.it']],
   ['Pixiv', ['pixiv.net']],
+  ['E-Hentai', ['e-hentai.org', 'exhentai.org']],
   ['Pawchive', ['pawchive.pw', 'pawchive.st']],
 ];
 export function sourceSite(value) {

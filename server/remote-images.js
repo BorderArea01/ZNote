@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
 import { MAX_IMAGE_BYTES } from './image-limits.js';
+import { proxyAgent } from './network-proxy.js';
 const MAX = MAX_IMAGE_BYTES;
 export function publicAddress(address) {
   if(isIP(address)===4) {
@@ -26,8 +27,9 @@ export async function fetchRemoteImage(value, redirects=0) {
   return new Promise((resolve,reject)=>{
     const headers={Accept:'image/*', 'Accept-Encoding':'identity'};
     if(/(^|\.)pximg\.net$/.test(host)) headers.Referer='https://www.pixiv.net/';
-    const req=(url.protocol==='https:'?httpsRequest:httpRequest)(url,{headers,
-      lookup:(_host,options,callback)=>options.all?callback(null,[target]):callback(null,target.address,target.family)},res=>{
+    const agent = proxyAgent();
+    const options = {headers, ...(agent ? {agent} : {lookup:(_host,options,callback)=>options.all?callback(null,[target]):callback(null,target.address,target.family)})};
+    const req=(url.protocol==='https:'?httpsRequest:httpRequest)(url,options,res=>{
       if([301,302,303,307,308].includes(res.statusCode)) {
         res.resume(); if(redirects>=3 || !res.headers.location) return reject(Error('图片重定向过多'));
         fetchRemoteImage(new URL(res.headers.location,url).href,redirects+1).then(resolve,reject);return;

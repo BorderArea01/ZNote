@@ -307,7 +307,7 @@ public class CaptureAssistService extends AccessibilityService {
         if(owner==null||owner.isEmpty()||!social(owner)&&!browser(owner))return true;
         String host=uri.getHost();if(host==null)return false;
         host=host.toLowerCase(Locale.ROOT);
-        String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:new String[]{"douyin.com","iesdouyin.com"};
+        String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:social(owner)?new String[]{"douyin.com","iesdouyin.com"}:new String[]{"douyin.com","iesdouyin.com","bilibili.com","b23.tv","xiaohongshu.com","xhslink.com","xhslink.cn","pixiv.net","e-hentai.org","exhentai.org","pawchive.pw","pawchive.st"};
         for(String domain:domains)if(host.equals(domain)||host.endsWith("."+domain))return true;return false;
     }
     private synchronized void armDirectShare(String owner){directShareOwner=owner;directShareUntil=SystemClock.elapsedRealtime()+12000;}

@@ -52,6 +52,11 @@ test('share parsing and article extraction preserve links, line breaks and exact
   assert.match(article.content,/https:\/\/example.com\/reference/);assert.equal(markdownImages(article.content)[0].url,'https://example.com/one.png');assert.match(article.content,/第一行[\s\S]*\n第二行/);
   const video=extractCapturePage('<script id="RENDER_DATA">'+encodeURIComponent(JSON.stringify({aweme:{aweme_id:'123',author:{nickname:'作者'},desc:'视频',video:{}}}))+'</script>','https://www.douyin.com/video/123');assert.equal(video.kind,'video');
 });
+test('Paw mobile capture keeps the original work files and body',()=>{
+  const html='<main><h1>Paw 作品</h1><div class="post__content"><p>正文说明</p></div><figure><a href="https://file.pawchive.pw/data/a.png?f=a.png"><img src="https://img.pawchive.pw/thumb/a.png"></a></figure><a class="fileThumb" href="https://file.pawchive.st/data/b.jpg?f=b.jpg"><img src="https://img.pawchive.st/thumb/b.jpg"></a></main>';
+  const plan=extractCapturePage(html,'https://pawchive.pw/fanbox/user/demo/post/work');
+  assert.equal(plan.kind,'note');assert.equal(plan.title,'Paw 作品');assert.match(plan.content,/正文说明/);assert.deepEqual(plan.images,['https://file.pawchive.pw/data/a.png?f=a.png','https://file.pawchive.st/data/b.jpg?f=b.jpg']);
+});
 test('Douyin slides preserve static covers and live-photo playback candidates',()=>{
   const image=(name,live=false)=>({origin_url:`https://p3.douyinpic.com/${name}.jpg`,url_list:[`https://p9.douyinpic.com/${name}.jpg`],...(live?{live_photo_type:1,video:{play_addr:{url_list:[`https://v26.douyinvod.com/${name}.mp4`]},download_addr:{url_list:[`https://watermark.example/${name}.mp4`]}}}:{})});
   const record={aweme_id:'7685',aweme_type:68,desc:'第一行\n第二行',author:{nickname:'实况作者'},image_list:[image('one',true),image('two')]};

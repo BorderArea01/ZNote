@@ -9,6 +9,7 @@ import {Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {publicAddress} from './remote-images.js';
 import {MAX_VIDEO_BYTES} from './videos.js';
+import {proxyAgent} from './network-proxy.js';
 const fail=message=>Object.assign(Error(message),{status:422});
 
 // Stream the exact playback resource advertised by the matching work, with the
@@ -20,7 +21,9 @@ async function transfer(value,path,source,signal,redirects=0){
   if(!addresses.length||addresses.some(v=>!publicAddress(v.address)))throw fail('不能采集本机或内网视频');
   signal.throwIfAborted();const target=addresses[0];
   const response=await new Promise((resolve,reject)=>{
-    const req=(url.protocol==='https:'?httpsRequest:httpRequest)(url,{signal,headers:{'User-Agent':'Mozilla/5.0','Accept-Encoding':'identity',Referer:source},lookup:(_h,o,cb)=>o.all?cb(null,[target]):cb(null,target.address,target.family)},resolve);
+    const agent=proxyAgent();
+    const options={signal,headers:{'User-Agent':'Mozilla/5.0','Accept-Encoding':'identity',Referer:source},...(agent?{agent}:{lookup:(_h,o,cb)=>o.all?cb(null,[target]):cb(null,target.address,target.family)})};
+    const req=(url.protocol==='https:'?httpsRequest:httpRequest)(url,options,resolve);
     req.setTimeout(20000,()=>req.destroy(fail('视频读取超时')));req.on('error',reject);req.end();
   });
   if([301,302,303,307,308].includes(response.statusCode)){
