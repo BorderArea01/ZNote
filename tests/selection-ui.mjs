@@ -23,10 +23,20 @@ try {
  await page.getByLabel('滚动自动加载',{exact:true}).uncheck();
  await page.locator('.card-main').nth(1).click({modifiers:['Control']});await count(1);await ready();
  await page.locator('.card-main').nth(4).click({modifiers:['Shift']});await count(4);
- await page.getByRole('button',{name:'反选已加载',exact:true}).click();await count(56);
- await page.keyboard.press('Escape');await count(0);
- await page.locator('.card-main').nth(0).click();await count(1);
- // Failed second page must keep the original single selection.
+  await page.getByRole('button',{name:'反选已加载',exact:true}).click();await count(56);
+  await page.keyboard.press('Escape');await count(0);
+  await page.locator('.card-main').nth(0).click();await count(1);
+  // A touch long-press on the card body enters multi-select without requiring
+  // the small checkbox. The card remains a folded group owner when applicable.
+  await page.keyboard.press('Escape');await count(0);await page.keyboard.press('Escape');await page.locator('.batch-toolbar').waitFor({state:'hidden'});
+  const longCard=page.locator('.item-card').first();
+  const longContent=longCard.locator('.card-main');
+  await longContent.dispatchEvent('pointerdown',{pointerId:41,pointerType:'touch',isPrimary:true,button:0,clientX:120,clientY:120});
+  await page.waitForTimeout(560);
+  await longContent.dispatchEvent('pointerup',{pointerId:41,pointerType:'touch',isPrimary:true,button:0,clientX:120,clientY:120});
+  await count(1);assert.ok(await longCard.evaluate(el=>el.classList.contains('is-selected')));
+  await page.keyboard.press('Escape');await count(0);await page.locator('.card-main').nth(0).click();await count(1);
+  // Failed second page must keep the original single selection.
  let failNext=true;
  await page.route('**/api/items?**',async route=>{const p=new URL(route.request().url()).searchParams;if(failNext&&p.get('limit')==='100'&&p.get('offset')==='100'){failNext=false;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'测试网络中断'})});}else await route.continue()});
  await page.getByRole('button',{name:'全选筛选结果',exact:true}).click();await page.getByText('测试网络中断',{exact:true}).waitFor();await count(1);

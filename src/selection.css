@@ -32,6 +32,8 @@
 .items.is-selecting .card-select { min-width:30px; min-height:30px; display:grid; place-items:center; cursor:pointer; }
 .items.is-selecting .card-actions { cursor:default; }
 .items.is-selecting .item-card.is-partial{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
+.item-card.is-long-pressing{outline:2px solid var(--green);outline-offset:2px;box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 18%,transparent)}
+@media(pointer:coarse){.items .item-card{touch-action:pan-y}.items .card-main{-webkit-user-select:none;user-select:none}}
 .items.is-selecting .group-members-button{font-size:11px;padding:5px 7px;background:var(--surface);border:1px solid var(--border);border-radius:7px}
 .items.is-selecting .card-actions{flex-wrap:wrap;gap:6px}
 .group-selection-dialog{width:min(850px,calc(100vw - 32px));display:flex;flex-direction:column;max-height:calc(100dvh - 32px)}

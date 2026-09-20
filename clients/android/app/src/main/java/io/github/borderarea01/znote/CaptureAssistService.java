@@ -96,7 +96,7 @@ public class CaptureAssistService extends AccessibilityService {
     private void updateWindow(){if(bubble!=null)try{manager.updateViewLayout(bubble,layout);}catch(RuntimeException e){bubble=null;record("detached",e.getClass().getSimpleName());}}
     private void cancel(){generation++;if(operation!=null)operation.cancel(true);operation=null;busy=false;handler.removeCallbacksAndMessages(null);if(bubble!=null){layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;updateWindow();}}
     private void dock(){
-        if(bubble==null)return;int w=expanded?Math.min(dp(300),width()-dp(24)):dp(36);layout.width=w;
+        if(bubble==null)return;int w=expanded?Math.min(dp(340),Math.max(dp(220),width()-dp(24))):dp(36);layout.width=w;
         layout.x=prefs().getBoolean("capture_right",true)?Math.max(0,width()-w):0;
         int anchor=Math.round(prefs().getFloat("capture_y",.32f)*Math.max(dp(32),height()-dp(96)));
         bubble.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(Math.max(dp(48),height()-dp(64)),View.MeasureSpec.AT_MOST));
@@ -120,13 +120,13 @@ public class CaptureAssistService extends AccessibilityService {
         // Prepare once when the service connects; simple open/close reuses the
         // existing views instead of inflating and measuring a fresh control tree.
         if(panel==null||panelBusy!=busy||!java.util.Objects.equals(panelMessage,lastMessage)){
-            if(panel!=null)bubble.removeView(panel);panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(0,dp(4),0,0);panelBusy=busy;panelMessage=lastMessage;libraryPicker=null;libraryList=null;libraryScroll=null;
-            LinearLayout captureRow=new LinearLayout(this);captureRow.setGravity(Gravity.CENTER_VERTICAL);
-            TextView capture=control(busy?"正在识别…":"采集当前作品","获取当前页面作品并保存到所选知识库",this::capture);capture.setTextSize(13);capture.setPadding(dp(6),dp(8),dp(6),dp(8));capture.setBackground(shape(0xff586bd3,13));capture.setEnabled(!busy);captureRow.addView(capture,new LinearLayout.LayoutParams(0,dp(46),1));
-            libraryPicker=control("","选择采集目标知识库",this::toggleLibraryMenu);libraryPicker.setTextSize(12);libraryPicker.setPadding(dp(4),dp(6),dp(4),dp(6));libraryPicker.setBackground(shape(0xff28324a,13));LinearLayout.LayoutParams pickerParams=new LinearLayout.LayoutParams(dp(102),dp(46));pickerParams.setMargins(dp(7),0,0,0);captureRow.addView(libraryPicker,pickerParams);panel.addView(captureRow);
+            if(panel!=null)bubble.removeView(panel);panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(0,dp(6),0,0);panelBusy=busy;panelMessage=lastMessage;libraryPicker=null;libraryList=null;libraryScroll=null;
+            TextView capture=control(busy?"正在识别…":"采集当前作品","获取当前页面作品并保存到所选知识库",this::capture);capture.setTextSize(14);capture.setPadding(dp(12),dp(8),dp(12),dp(8));capture.setBackground(shape(0xff586bd3,14));capture.setEnabled(!busy);LinearLayout.LayoutParams captureParams=new LinearLayout.LayoutParams(-1,dp(50));captureParams.setMargins(0,dp(2),0,0);panel.addView(capture,captureParams);
+            TextView targetLabel=new TextView(this);targetLabel.setText("目标知识库");targetLabel.setTextSize(11);targetLabel.setTextColor(0xff9faac4);targetLabel.setPadding(dp(3),dp(10),dp(3),dp(4));panel.addView(targetLabel,new LinearLayout.LayoutParams(-1,dp(28)));
+            libraryPicker=control("","选择采集目标知识库",this::toggleLibraryMenu);libraryPicker.setTextSize(13);libraryPicker.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);libraryPicker.setPadding(dp(12),dp(6),dp(10),dp(6));libraryPicker.setBackground(shape(0xff28324a,14));panel.addView(libraryPicker,new LinearLayout.LayoutParams(-1,dp(46)));
             libraryList=new LinearLayout(this);libraryList.setOrientation(LinearLayout.VERTICAL);libraryList.setPadding(dp(4),dp(4),dp(4),dp(4));libraryList.setBackground(shape(0xff202638,14));libraryScroll=new ScrollView(this);libraryScroll.setFillViewport(false);libraryScroll.addView(libraryList);libraryScroll.setVisibility(libraryMenuExpanded?View.VISIBLE:View.GONE);LinearLayout.LayoutParams libraryParams=new LinearLayout.LayoutParams(-1,dp(176));libraryParams.setMargins(0,dp(6),0,dp(2));panel.addView(libraryScroll,libraryParams);buildLibraryList();updateLibraryPicker();
             if(busy)panel.addView(control("取消识别","取消识别",()->{cancel();message("已取消，可重新采集");}));
-            LinearLayout actions=new LinearLayout(this);TextView paste=control("粘贴链接","读取剪贴板中的链接",()->open(""));paste.setBackground(shape(0xff242a39,13));actions.addView(paste,new LinearLayout.LayoutParams(-1,dp(44)));panel.addView(actions);
+            LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER_VERTICAL);TextView paste=control("粘贴链接","读取剪贴板中的链接",()->open(""));paste.setTextSize(13);paste.setBackground(shape(0xff242a39,13));LinearLayout.LayoutParams pasteParams=new LinearLayout.LayoutParams(0,dp(46),1);pasteParams.setMargins(0,dp(8),dp(4),0);actions.addView(paste,pasteParams);TextView browse=control("前往知识库浏览","打开 ZNote 知识库浏览页面",this::openLibrary);browse.setTextSize(13);browse.setBackground(shape(0xff242a39,13));LinearLayout.LayoutParams browseParams=new LinearLayout.LayoutParams(0,dp(46),1);browseParams.setMargins(dp(4),dp(8),0,0);actions.addView(browse,browseParams);panel.addView(actions,new LinearLayout.LayoutParams(-1,dp(54)));
             status=new TextView(this);status.setTextColor(0xffbcc3db);status.setTextSize(12);status.setPadding(dp(6),dp(8),dp(6),dp(2));status.setText(lastMessage);status.setVisibility(lastMessage.isEmpty()?View.GONE:View.VISIBLE);status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);panel.addView(status);bubble.addView(panel);
         }
         panel.setVisibility(expanded?View.VISIBLE:View.GONE);updateLibraryPicker();dock();
@@ -319,6 +319,11 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private void openClipboard(String owner,long after){openPanel("",owner,after,true,true);}
     private void open(String value){openPanel(value,"",0,value.isEmpty(),!value.isEmpty());}
+    private void openLibrary(){
+        expanded=false;libraryMenuExpanded=false;record("open_library","floating_panel");render();
+        try{startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));}
+        catch(RuntimeException e){record("open_library_failed",e.getClass().getSimpleName());Toast.makeText(this,"无法打开知识库，请先检查连接",Toast.LENGTH_LONG).show();}
+    }
     private void openPanel(String value,String owner,long after,boolean clipboard,boolean quick){
         lastMessage="";cancel();expanded=false;render();
         record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick).putExtra("selected_collection",sharingPrefs().getString("share_collection","")));}

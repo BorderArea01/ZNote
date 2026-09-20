@@ -129,6 +129,7 @@ export default function Workspace({
   const fileInput = useRef(),
     markdownInput = useRef(),
     searchInput = useRef(),
+    cardPress = useRef({ token: 0, timer: null, id: null, triggered: false, suppressUntil: 0, x: 0, y: 0, target: null }),
     generation = useRef(0),
     detailGeneration = useRef(0),
     listRequest = useRef(null);
@@ -338,6 +339,60 @@ export default function Workspace({
     void selectCards(range,range.length===1?'toggle':cardSelected(item)?'remove':'add');
     if(!event?.shiftKey||from<0)selectionAnchor.current=id;
   };
+  // Touch users should be able to start multi-select from the card itself.
+  // Keep the gesture on the card instead of the checkbox so a folded image
+  // group remains one selectable card and is never split implicitly.
+  function clearCardPress() {
+    const state = cardPress.current;
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = null;
+    state.token += 1;
+    if (state.target) state.target.classList.remove('is-long-pressing');
+    state.target = null;
+    state.id = null;
+    state.triggered = false;
+  }
+  function cardPointerDown(item, event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const state = cardPress.current;
+    // A new pointer sequence is a new gesture. Clear the click suppression left
+    // by the previous long-press even when it starts on the card button itself.
+    state.suppressUntil = 0;
+    const control = event.target.closest?.('button,input,label,a,select,textarea');
+    if (control && !control.classList.contains('card-main')) return;
+    clearCardPress();
+    const token = state.token, target = event.currentTarget;
+    state.id = item.id; state.x = event.clientX; state.y = event.clientY; state.target = target;
+    state.timer = setTimeout(() => {
+      if (cardPress.current.token !== token || cardPress.current.id !== item.id) return;
+      state.timer = null; state.triggered = true; state.suppressUntil = performance.now() + 800;
+      target.classList.add('is-long-pressing');
+      if (selecting) toggleSelection(item.id);
+      else toggleSelectionMode(item);
+    }, 480);
+  }
+  function cardPointerMove(event) {
+    const state = cardPress.current;
+    if (!state.id || state.triggered) return;
+    if (Math.hypot(event.clientX - state.x, event.clientY - state.y) > 12) clearCardPress();
+  }
+  function cardPointerUp() {
+    const state = cardPress.current;
+    if (!state.id) return;
+    if (state.triggered) {
+      if (state.timer) clearTimeout(state.timer);
+      state.timer = null; state.suppressUntil = performance.now() + 800;
+      if (state.target) state.target.classList.remove('is-long-pressing');
+      state.id = null; state.target = null; state.triggered = false;
+    } else clearCardPress();
+  }
+  function suppressCardClick(event) {
+    const state = cardPress.current;
+    if (state.suppressUntil > performance.now()) {
+      event.preventDefault(); event.stopPropagation(); state.suppressUntil = 0; return true;
+    }
+    return false;
+  }
   function cancelSelectionRequest() {
     selectionRequest.current?.abort(); selectionRequest.current=null; setSelectionProgress(null);
   }
@@ -1269,7 +1324,18 @@ export default function Workspace({
                 {(awayFromStart||pageOffset>0) && !selecting && !selected && <div className="floating-action-dock browse-window-actions"><button disabled={paging} onClick={jumpToStart}><ArrowUpToLine size={15}/>{sort==='title'?'回到列表开头':'回到最新内容'}</button>{pageOffset>0&&<button disabled={paging} onClick={() => loadPage(true)}><ChevronUp size={15}/>{paging ? '正在加载…' : sort==='title'?'加载靠前内容':'加载较新内容'}</button>}<span className="dock-divider" aria-hidden="true"/><button onClick={()=>toggleSelectionMode()}><CheckCheck size={15}/>多选</button><HelpHint label="分页导航">向下浏览约一屏后即可直接回到列表开头。长列表只在内存中保留当前位置附近 300 项摘要和少量可见卡片；当前筛选和已选内容保留。</HelpHint></div>}
                 <TypedItems grouped={typeGrouping} order={typeOrder} selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
-                    <article onClick={e=>{if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}} data-item-id={item.id} className={`item-card ${item.kind}${selecting&&cardSelected(item)?' is-selected':selecting&&cardPartial(item)?' is-partial':''}`} key={item.id}>
+                    <article
+                      onPointerDown={e=>cardPointerDown(item,e)}
+                      onPointerMove={cardPointerMove}
+                      onPointerUp={cardPointerUp}
+                      onPointerCancel={clearCardPress}
+                      onPointerLeave={e=>{if(e.pointerType==='mouse')cardPointerUp();}}
+                      onContextMenu={e=>{if(cardPress.current.triggered||cardPress.current.suppressUntil>performance.now()){e.preventDefault();e.stopPropagation();}}}
+                      onClick={e=>{if(suppressCardClick(e))return;if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}}
+                      data-item-id={item.id}
+                      className={`item-card ${item.kind}${selecting&&cardSelected(item)?' is-selected':selecting&&cardPartial(item)?' is-partial':''}`}
+                      key={item.id}
+                    >
                       {selecting && (
                         <label className="card-select">
                           <input
@@ -1286,7 +1352,7 @@ export default function Workspace({
                         className="card-main"
                         onKeyDown={e=>{if(!selecting&&(e.ctrlKey||e.metaKey)&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleSelectionMode(item);}}}
                         aria-busy={openingItem === item.id || undefined}
-                        onClick={(e) => selecting ? toggleSelection(item.id, e) : (e.ctrlKey||e.metaKey) ? toggleSelectionMode(item) : openItem(item)}
+                        onClick={(e) => {if(suppressCardClick(e))return;selecting ? toggleSelection(item.id, e) : (e.ctrlKey||e.metaKey) ? toggleSelectionMode(item) : openItem(item)}}
                         aria-pressed={selecting ? cardPartial(item)?'mixed':cardSelected(item) : undefined}
                         disabled={selecting && (batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item)))}
                         aria-label={`${selecting ? cardSelected(item)?'取消选择':'选择' : '打开'} ${isImageGroup(item) ? item.group_title || item.title : item.title}`}
