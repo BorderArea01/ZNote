@@ -221,13 +221,48 @@ function findRecord(data, id, platform) {
   const stack = [data]; let count = 0;
   while (stack.length && count++ < 30000) {
     const v = stack.pop(); if (!v || typeof v !== 'object') continue;
-    if (platform === 'xhs' && String(v.noteId || v.note_id || '') === id && (Array.isArray(v.imageList) || v.type === 'video')) return v;
-    if (platform === 'douyin' && String(v.aweme_id || v.awemeId || '') === id && (v.desc !== undefined || v.author || v.images || v.image_list || v.image_post_info)) return v;
+    if (platform === 'xhs' && String(v.noteId || v.note_id || '') === id && (Array.isArray(v.imageList) || Array.isArray(v.image_list) || Array.isArray(v.noteCard?.imageList) || v.type === 'video')) return v;
+    if (platform === 'douyin' && String(v.aweme_id || v.awemeId || '') === id && (v.desc !== undefined || v.author || v.images || v.image_list || v.image_post_info || v.imagePostInfo)) return v;
     for (const child of Object.values(v)) if (child && typeof child === 'object') stack.push(child);
   }
   return null;
 }
 const values = value => typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter(v => typeof v === 'string') : [];
+function mergeMediaEntries(...entries) {
+  const result = {};
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    for (const [key, value] of Object.entries(entry)) {
+      if (value === undefined || value === null || value === '') continue;
+      const previous = result[key];
+      if (previous && typeof previous === 'object' && !Array.isArray(previous) && typeof value === 'object' && !Array.isArray(value)) {
+        result[key] = mergeMediaEntries(previous, value);
+      } else if (Array.isArray(previous) && Array.isArray(value)) {
+        // Keep the richer representation when one endpoint only contains a
+        // cover URL while another contains the complete playback metadata.
+        result[key] = value.length > previous.length ? value : previous;
+      } else if (previous === undefined || previous === null || previous === '') {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+function galleryEntries(record, platform) {
+  const sources = platform === 'xhs'
+    ? [record.imageList, record.image_list, record.noteCard?.imageList, record.note_card?.image_list]
+    : [record.images, record.image_list, record.image_post_info?.images, record.image_post_info?.image_list, record.imagePostInfo?.images, record.imagePostInfo?.imageList];
+  const arrays = sources.filter(Array.isArray).filter(value => value.length);
+  if (!arrays.length) return [];
+  const length = Math.max(...arrays.map(value => value.length));
+  const merged = Array.from({ length }, (_, index) => mergeMediaEntries(...arrays.map(value => value[index])));
+  const seen = new Set();
+  return merged.filter(entry => {
+    const identity = [...values(entry?.urlDefault), ...values(entry?.url_default), ...values(entry?.urlList), ...values(entry?.url_list), ...values(entry?.origin_url)].find(Boolean) || JSON.stringify(entry);
+    if (seen.has(identity)) return false;
+    seen.add(identity); return true;
+  });
+}
 function liveVideoCandidates(image, base) {
   const video=image?.video||image?.live_photo?.video||image?.livePhoto?.video||image?.motion_video||image?.motionVideo;
   if(!video)return [];
@@ -284,11 +319,11 @@ export function extractCapturePage(html, url) {
       if (script.id === 'RENDER_DATA') { try { raw = decodeURIComponent(raw); } catch { continue; } }
       const record = id && scriptValues(raw).map(data=>findRecord(data, id, xhs ? 'xhs' : 'douyin')).find(Boolean);
       if (!record) continue;
-      const galleryImages=xhs ? record.imageList || [] : record.images || record.image_list || record.image_post_info?.images || record.image_post_info?.image_list || [];
+      const galleryImages=galleryEntries(record, xhs ? 'xhs' : 'douyin');
       if (xhs && record.type === 'video' || dy && !galleryImages.length) {
         const streams=xhs?record.video?.media?.stream?.h264||[]:[];
         const candidates=xhs?[...streams].sort((a,b)=>(b.width*b.height-a.width*a.height)||(b.videoBitrate-a.videoBitrate)).flatMap(s=>[s.masterUrl,...(s.backupUrls||[])]):record.video?.play_addr?.url_list||[];
-        return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8) };
+        return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||record.authorInfo?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8) };
       }
       const images = galleryImages.map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
       if (!images.length || images.length > 100) throw fail('未取得完整图集或图集超过 100 张');

@@ -30,6 +30,8 @@ public class MainActivity extends Activity {
     private int attempt=0;
     private boolean backBusy=false;
     private android.window.OnBackInvokedCallback backCallback;
+    private float pullStartY;
+    private boolean pullArmed;
     private static final int PICK=20,SAVE=21;
     @Override public void onCreate(Bundle state){super.onCreate(state);if(Build.VERSION.SDK_INT>=33){backCallback=this::handleBack;getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}showConnect("");AppUpdates.backgroundCheck(this);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
@@ -60,11 +62,46 @@ public class MainActivity extends Activity {
     }
     private boolean same(String value){try{Uri u=Uri.parse(value),base=Uri.parse(origin);return java.util.Objects.equals(u.getScheme(),base.getScheme())&&java.util.Objects.equals(u.getHost(),base.getHost())&&u.getPort()==base.getPort();}catch(Exception e){return false;}}
     private void external(String value){try{Uri u=Uri.parse(value);if(!java.util.Arrays.asList("http","https","mailto").contains(u.getScheme()))return;startActivity(new Intent(Intent.ACTION_VIEW,u));}catch(Exception e){Toast.makeText(this,"没有可打开此链接的应用",Toast.LENGTH_SHORT).show();}}
+    private boolean publicLink(String value){try{Uri u=Uri.parse(value);return ("http".equalsIgnoreCase(u.getScheme())||"https".equalsIgnoreCase(u.getScheme()))&&u.getHost()!=null;}catch(Exception e){return false;}}
+    private void captureLink(String value){
+        if(!publicLink(value)){Toast.makeText(this,"这个链接不能交给采集器",Toast.LENGTH_SHORT).show();return;}
+        startActivity(new Intent(this,ShareActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,value));
+    }
+    private void longPressActions(String value,boolean image){
+        if(!publicLink(value))return;
+        String[] actions=image?new String[]{"复制图片链接","采集这张图片","在浏览器打开"}:new String[]{"复制链接","采集此链接","在浏览器打开"};
+        new AlertDialog.Builder(this).setTitle(image?"图片操作":"链接操作").setItems(actions,(dialog,which)->{
+            if(which==0){((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("ZNote 链接",value));Toast.makeText(this,"已复制到剪贴板",Toast.LENGTH_SHORT).show();}
+            else if(which==1)captureLink(value);
+            else external(value);
+        }).show();
+    }
+    private void enableNativeWebActions(WebView view){
+        view.setLongClickable(true);view.setHapticFeedbackEnabled(true);
+        view.setOnLongClickListener(v->{
+            WebView.HitTestResult hit=view.getHitTestResult();if(hit==null)return false;
+            int type=hit.getType();String value=hit.getExtra();
+            boolean image=type==WebView.HitTestResult.IMAGE_TYPE||type==WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE;
+            boolean link=image||type==WebView.HitTestResult.ANCHOR_TYPE||type==WebView.HitTestResult.SRC_ANCHOR_TYPE;
+            if(!link||!publicLink(value))return false;
+            longPressActions(value,image);return true;
+        });
+        // A small, native pull gesture keeps refresh discoverable on phones
+        // while leaving normal WebView scrolling and text selection intact.
+        view.setOnTouchListener((v,event)->{
+            switch(event.getActionMasked()){
+                case MotionEvent.ACTION_DOWN: pullStartY=event.getY();pullArmed=view.getScrollY()<=0;break;
+                case MotionEvent.ACTION_MOVE: if(pullArmed&&event.getY()-pullStartY>dp(72)&&view.getScrollY()<=0){pullArmed=false;view.reload();Toast.makeText(this,"正在刷新知识库",Toast.LENGTH_SHORT).show();}break;
+                case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: pullArmed=false;break;
+            }
+            return false;
+        });
+    }
     private void open(String target){
         origin=target;root.removeAllViews();root.setBackgroundColor(Color.WHITE);
         LinearLayout toolbar=new LinearLayout(this);toolbar.setBackgroundColor(NativeUi.BG);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setPadding(dp(8),0,dp(8),0);root.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(48)));
         Button back=button("‹",this::handleBack);back.setContentDescription("返回上一层");back.setMinWidth(dp(40));back.setMinimumWidth(dp(40));NativeUi.quiet(back);toolbar.addView(back,new LinearLayout.LayoutParams(dp(44),-1));TextView title=text("ZNote",17,NativeUi.TEXT);toolbar.addView(title,new LinearLayout.LayoutParams(0,-2,1));toolbar.addView(button("采集",()->startActivity(new Intent(this,ShareActivity.class))));Button more=button("⋯",()->{});NativeUi.quiet(more);more.setContentDescription("更多选项");toolbar.addView(more,new LinearLayout.LayoutParams(dp(44),-1));more.setOnClickListener(v->{PopupMenu menu=new PopupMenu(this,more);menu.getMenu().add("刷新知识库").setOnMenuItemClickListener(item->{if(web!=null)web.evaluateJavascript("window.ZNoteNavigation?window.dispatchEvent(new Event('znote:refresh')):location.reload()",null);return true;});menu.getMenu().add("检查应用更新").setOnMenuItemClickListener(item->{startActivity(new Intent(this,UpdateActivity.class));return true;});menu.getMenu().add("采集设置").setOnMenuItemClickListener(item->{startActivity(new Intent(this,CaptureAssistActivity.class));return true;});menu.getMenu().add("切换连接").setOnMenuItemClickListener(item->{new AlertDialog.Builder(this).setMessage("切换前请保存当前编辑。").setNegativeButton("取消",null).setPositiveButton("切换",(d,w)->showConnect("")).show();return true;});menu.show();});
-        web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(true);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setMediaPlaybackRequiresUserGesture(true);s.setSupportMultipleWindows(false);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);web.addJavascriptInterface(new DraftDownload(),"ZNoteDownloads");
+        web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(true);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setMediaPlaybackRequiresUserGesture(true);s.setSupportMultipleWindows(false);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);web.addJavascriptInterface(new DraftDownload(),"ZNoteDownloads");enableNativeWebActions(web);
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){if(same(request.getUrl().toString()))return false;if(request.isForMainFrame())external(request.getUrl().toString());return true;}
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){if(request.isForMainFrame())Toast.makeText(MainActivity.this,"知识库连接中断，请检查网络或重新连接",Toast.LENGTH_LONG).show();}

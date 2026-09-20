@@ -25,6 +25,17 @@ const douyinCurrentLive=()=>{
   const payload='7:'+JSON.stringify(['$',null,null,{awemeId:'7686',aweme:{detail:record}}]);
   return '<script>self.__pace_f.push('+JSON.stringify([1,payload])+')</script>';
 };
+const douyinMultiLive=()=>{
+  const live=(name)=>({urlList:[`https://p3.douyinpic.com/${name}.webp`],livePhotoType:1,video:{playAddr:[{src:`https://v26-web.douyinvod.com/${name}.mp4`}]}});
+  const record={awemeId:'7687',awemeType:68,desc:'多段实况',authorInfo:{nickname:'多段作者'},images:[live('one'),live('two')]};
+  const payload='7:'+JSON.stringify(['$',null,null,{awemeId:'7687',aweme:{detail:record}}]);
+  return '<script>self.__pace_f.push('+JSON.stringify([1,payload])+')</script>';
+};
+const xhsMultiLive=()=>{
+  const image=(name)=>({urlDefault:`https://sns-webpic-qc.xhscdn.com/${name}-cover.jpg`,livePhoto:true,stream:{h264:[{width:1080,height:1440,videoBitrate:2444058,masterUrl:`https://sns-video-v6.xhscdn.com/${name}.mp4`}]}});
+  const record={noteId:'6a9fb5d900000000270087d7',title:'多段实况',desc:'两张动态图片',user:{nickname:'小红书作者'},imageList:[image('one'),image('two')]};
+  return '<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{[record.noteId]:{note:record}}}})+'</script>';
+};
 test('mobile platform variants retain work identity, author and native playback data',async()=>{
   assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).host,'www.bilibili.com');
   assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).searchParams.get('p'),'2');
@@ -80,12 +91,40 @@ test('Douyin live photos in current image posts extract playAddr src mirrors ins
   assert.equal(plan.kind,'note');assert.equal(plan.images.length,1);assert.equal(plan.author,'冷色调');
   assert.deepEqual(plan.live_videos,[{index:0,urls:['https://v11-weba.douyinvod.com/live.mp4?token=one','https://v26-web.douyinvod.com/live.mp4?token=two']}]);
 });
+test('Douyin and Xiaohongshu keep every live-photo segment in work order',()=>{
+  const douyin=extractCapturePage(douyinMultiLive(),'https://www.douyin.com/note/7687');
+  assert.deepEqual(douyin.live_videos.map(({index,urls})=>({index,urls})),[
+    {index:0,urls:['https://v26-web.douyinvod.com/one.mp4']},
+    {index:1,urls:['https://v26-web.douyinvod.com/two.mp4']},
+  ]);
+  assert.equal(douyin.images.length,2);
+  const xhs=extractCapturePage(xhsMultiLive(),'https://www.xiaohongshu.com/explore/6a9fb5d900000000270087d7');
+  assert.deepEqual(xhs.live_videos.map(({index,urls})=>({index,urls})),[
+    {index:0,urls:['https://sns-video-v6.xhscdn.com/one.mp4']},
+    {index:1,urls:['https://sns-video-v6.xhscdn.com/two.mp4']},
+  ]);
+  assert.equal(xhs.images.length,2);
+});
 test('Xiaohongshu live-photo image streams are captured as playable videos, not still covers',()=>{
   const url='https://www.xiaohongshu.com/explore/6a9fb5d900000000270087c6';
   const plan=extractCapturePage(xhsLive(),url);
   assert.equal(plan.kind,'note');assert.equal(plan.title,'光速开箱');assert.equal(plan.author,'实况作者');
   assert.equal(plan.images.length,1);
   assert.deepEqual(plan.live_videos,[{index:0,urls:['https://sns-video-v6.xhscdn.com/live.mp4?sign=primary&t=1','https://sns-bak-v1.xhscdn.com/live.mp4?sign=backup&t=1','https://sns-video-v6.xhscdn.com/live-low.mp4?sign=low']}]);
+});
+test('capture queue saves every live segment instead of stopping after the first one',async t=>{
+  const dir=await mkdtemp(resolve('artifacts/capture-multi-live-')),saved=[];
+  const runtime=createApp({dataDir:dir,captureOptions:{
+    page:async()=>({url:'https://www.douyin.com/note/7687',type:'text/html',buffer:Buffer.from(douyinMultiLive())}),
+    captureVideo:async({plan,dir:target})=>({path:join(target,'live.mp4'),originalname:'live.mp4',title:plan.title,author:plan.author}),
+    saveVideo:async(file,fields)=>{saved.push({...fields});return {id:'live-'+saved.length,kind:'video',title:fields.title};},
+  }});
+  t.after(async()=>{await runtime.captures.stop();await runtime.imports.stop();await runtime.trash.stop();await runtime.backups.stop();await runtime.webhooks.stop();runtime.db.close();});
+  const job=runtime.captures.add({text:'https://www.douyin.com/note/7687',image_mode:'group',collection_id:null,request_id:'multi-live'});
+  const done=await runtime.captures.wait(job.id,AbortSignal.timeout(5000));
+  assert.match(done.message,/2 段实况视频/);
+  assert.deepEqual(saved.map(value=>value.group_index),[0,1]);
+  assert.equal(new Set(saved.map(value=>value.group_key)).size,1);
 });
 test('remote capture rejects local addresses and unsafe schemes before fetching',async()=>{
   for(const url of ['http://127.0.0.1/x','http://192.168.1.1','http://[::1]/','file:///etc/passwd','http://user:pass@example.com/'])await assert.rejects(fetchCapturePage(url,new AbortController().signal));
