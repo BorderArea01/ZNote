@@ -149,6 +149,7 @@ export default function Workspace({
     const cached=selectionRows[id],visible=itemById.get(id);
     return !cached || (visible && visible.version >= cached.version) ? visible : cached;
   }).filter(Boolean);
+  const groupKind=chosenItems.length===selection.length&&chosenItems.length>0&&new Set(chosenItems.map(row=>row.kind)).size===1&&['image','video'].includes(chosenItems[0].kind)?chosenItems[0].kind:null;
   const selectedGroupCounts = new Map();
   chosenItems.forEach(row=>{if(row.group_key)selectedGroupCounts.set(row.group_key,(selectedGroupCounts.get(row.group_key)||0)+1);});
   const cardSelected = item => isMediaGroup(item) ? selectedGroups.has(item.group_key) : selectedIds.has(item.id);
@@ -325,7 +326,7 @@ export default function Workspace({
       }else ids=changeSelection(enter?[]:selection,memberIds,mode);
       if(enter){pendingBrowse.current=null;restoreAnchor.current=anchor;closeDetail();setSelecting(true);}
       setSelectionRows(previous=>({...previous,...Object.fromEntries(members.map(row=>[row.id,row]))}));setSelection(ids);
-      if(announce){const next=new Set(ids);notify((memberIds.every(id=>next.has(id))?'已选中整组 ':'已取消整组 ')+members.length+' 张图片');}
+      if(announce){const next=new Set(ids),label=members[0]?.kind==='video'?'个视频':'张图片';notify((memberIds.every(id=>next.has(id))?'已选中整组 ':'已取消整组 ')+members.length+' '+label);}
     }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message);}
     finally{if(request===groupRequest.current)setGroupSelecting(false);}
   }
@@ -1271,7 +1272,7 @@ export default function Workspace({
                 allLoaded={!!items.length&&items.every(cardSelected)} someLoaded={items.some(i=>cardSelected(i)||cardPartial(i))}
                 locked={batchBusy||groupSelecting||!!selectionProgress||loading||query!==search||!!loadError}
                 progress={selectionProgress} working={batchBusy||groupSelecting} trash={view==='trash'}
-                imagesOnly={chosenItems.length===selection.length&&chosenItems.every(i=>i.kind==='image')}
+                groupKind={groupKind}
                 allFavorite={chosenItems.length===selection.length&&chosenItems.every(i=>i.favorite)}
                 showStart={awayFromStart||pageOffset>0} showPrevious={pageOffset>0}
                 startLabel={sort==='title'?'回到列表开头':'回到最新'} previousLabel={sort==='title'?'加载靠前':'加载较新'}
@@ -1583,7 +1584,7 @@ export default function Workspace({
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}
       {groupPicker&&<GroupSelectionDialog group={groupPicker} selected={selectedIds} onClose={()=>setGroupPicker(null)} onApply={ids=>{const next=changeSelection(changeSelection(selection,groupPicker.rows.map(row=>row.id),'remove'),ids,'add');setSelectionRows(previous=>({...previous,...Object.fromEntries(groupPicker.rows.map(row=>[row.id,row]))}));setSelection(next);setGroupPicker(null);}} onDetach={detachFromGroup} onDetached={()=>setGroupPicker(null)}/>}
       {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={result => { saved(result); notify('已完成批量整理',result?.undo); }} />}
-      {groupOrganizing && <React.Suspense fallback={null}><GroupOrganizeDialog items={chosenItems} library={actualCollection} onClose={() => setGroupOrganizing(false)} onDone={result => { setSelecting(false); setSelection([]); setSelectionRows({}); saved(result); notify(`已整理 ${result.changed_count} 张图片${result.copied_count ? `，其中 ${result.copied_count} 张共享笔记原图` : ''}`,result.undo); }}/></React.Suspense>}
+      {groupOrganizing && <React.Suspense fallback={null}><GroupOrganizeDialog items={chosenItems} kind={groupKind||'image'} library={actualCollection} onClose={() => setGroupOrganizing(false)} onDone={result => { const label=groupKind==='video'?'个视频':'张图片'; setSelecting(false); setSelection([]); setSelectionRows({}); saved(result); notify(`已整理 ${result.changed_count} ${label}${result.copied_count ? `，其中 ${result.copied_count} 张共享笔记原图` : ''}`,result.undo); }}/></React.Suspense>}
       {settings && (
         <SettingsPanel
           onClose={() => setSettings(false)}

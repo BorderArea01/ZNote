@@ -10,7 +10,9 @@
 .batch-toolbar .selection-count { padding:5px 10px; border-radius:8px; background:var(--accent-soft); color:var(--green); font-variant-numeric:tabular-nums; }
 .batch-toolbar .selection-working { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
 .batch-toolbar .selection-controls { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:9px 12px; }
-.batch-toolbar .selection-picking,.batch-toolbar .selection-operations { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.batch-toolbar .selection-picking,.batch-toolbar .selection-operations,.batch-toolbar .selection-content-actions,.batch-toolbar .selection-destructive-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.batch-toolbar .selection-operations { gap:10px; }
+.batch-toolbar .selection-destructive-actions:not(.is-leading) { padding-left:10px; border-left:1px solid var(--border); }
 .selection-bar.batch-toolbar button { margin:0; padding:8px 10px; font-size:12px; display:inline-flex; align-items:center; justify-content:center; gap:5px; white-space:nowrap; min-height:34px; }
 .selection-bar.batch-toolbar button svg { flex-shrink:0; }
 .selection-bar.batch-toolbar .selection-exit { margin-left:auto; }
@@ -20,7 +22,7 @@
   .selection-bar.batch-toolbar { flex-direction:row; align-items:center; gap:0; padding:5px; overflow-x:auto; scrollbar-width:thin; }
   .batch-toolbar .selection-summary { flex:none; flex-wrap:nowrap; gap:7px; padding:4px 9px; border-bottom:0; border-right:1px solid var(--border); }
   .batch-toolbar .selection-controls { flex:1 0 auto; flex-wrap:nowrap; justify-content:flex-start; padding:0 5px; }
-  .batch-toolbar .selection-picking,.batch-toolbar .selection-operations { flex-wrap:nowrap; }
+  .batch-toolbar .selection-picking,.batch-toolbar .selection-operations,.batch-toolbar .selection-content-actions,.batch-toolbar .selection-destructive-actions { flex-wrap:nowrap; }
   .batch-toolbar .selection-progress { flex:none; border-top:0; border-left:1px solid var(--border); }
 }
 .items.is-selecting .item-card { user-select:none; }
@@ -56,7 +58,7 @@
   .selection-bar.batch-toolbar { top:4px; border-radius:12px; }
   .batch-toolbar .selection-summary { gap:6px; padding:8px 10px; }
   .batch-toolbar .selection-controls { flex-wrap:nowrap; justify-content:flex-start; gap:5px; padding:6px; overflow-x:auto; scrollbar-width:thin; }
-  .batch-toolbar .selection-picking,.batch-toolbar .selection-operations { width:auto; flex:none; flex-wrap:nowrap; }
+  .batch-toolbar .selection-picking,.batch-toolbar .selection-operations,.batch-toolbar .selection-content-actions,.batch-toolbar .selection-destructive-actions { width:auto; flex:none; flex-wrap:nowrap; }
   .selection-bar.batch-toolbar button { padding:8px 7px; }
 }
 @media(prefers-reduced-motion:reduce) { .items.is-selecting .item-card { transition:none; } }

@@ -57,6 +57,18 @@ test('video uploads accept MKV and fold explicitly grouped videos into one card'
     const reordered = await request('/api/item-groups/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: first.id, revision: order.revision, ids: [second.id, first.id] }) });
     assert.equal(reordered.status, 200);
     assert.deepEqual((await reordered.json()).items.map(item => item.id), [second.id, first.id]);
+    const current = await Promise.all([first.id, second.id].map(id => request('/api/items/' + id).then(response => response.json())));
+    const organizeInput = { items: current.map(item => ({ id: item.id, version: item.version })), collection_id: collection.id, kind: 'video', mode: 'create', title: '重新整理的视频组', whole_groups: false, target_id: null, note_mode: 'copy' };
+    const previewResponse = await request('/api/item-groups/organize/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(organizeInput) });
+    assert.equal(previewResponse.status, 200);
+    const preview = await previewResponse.json();
+    assert.equal(preview.input.kind, 'video');
+    assert.equal(preview.result_count, 2);
+    const organizedResponse = await request('/api/item-groups/organize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...preview.input, revision: preview.revision, operation_id: preview.operation_id, prepared_at: preview.prepared_at, undo: true }) });
+    assert.equal(organizedResponse.status, 200);
+    const organized = await organizedResponse.json();
+    assert.equal(organized.changed_count, 2);
+    assert.equal((await (await request(`/api/item-groups?collection=${collection.id}&kind=video`)).json()).groups[0].kind, 'video');
     const stats = await (await request(`/api/stats?collection=${collection.id}`)).json();
     assert.equal(stats.videos, 2);
     assert.equal(stats.video_cards, 1);
