@@ -539,7 +539,7 @@ function Detail({
       if (lightbox || copying || sorting || busy || galleryBusy || e.repeat || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
       const delta=['ArrowLeft','a','A'].includes(e.key)?-1:['ArrowRight','d','D'].includes(e.key)?1:0;
       if(noteIndex!==null){if(e.key==='Escape')setNoteIndex(null);if(delta){e.preventDefault();setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)))}return;}
-      if(item.kind!=='image')return;
+      if(!['image','video'].includes(item.kind))return;
       if (delta && (delta<0?previousAvailable:nextAvailable)) { e.preventDefault(); step(delta); }
       if (e.key.toLowerCase() === 'f') { e.preventDefault(); toggleFavorite(); }
     };
@@ -605,7 +605,7 @@ function Detail({
           </div>
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
             {isMediaGroup(item)&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
-            {isImageGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
+            {isMediaGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             {isImageGroup(item)&&!item.group_key?.startsWith('note:')&&onDetachGroup&&<button onClick={detachCurrent} disabled={busy}><Unlink size={14}/>移出图片组</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
             <button onClick={async () => { if (!dirty || await save()) setCopying(true); }} disabled={busy}>复用到其他知识库</button>
@@ -856,7 +856,7 @@ function Detail({
         onStep={delta=>{if(noteIndex!==null){const index=noteIndex+delta;if(noteImages[index]){setNoteIndex(index);setLightbox(noteImages[index].url);}}else return step(delta);}}/>}
       {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} {...noteSwipe} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
       {versionsOpen && <React.Suspense fallback={null}><NoteVersions item={{...item,title,content}} onClose={() => setVersionsOpen(false)} onUse={async value => { if (!(await draft.keepCurrent())) return false; applyDraft({...value,collection_id:collection||null}); return true; }}/></React.Suspense>}
-      {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify('顺序已保存，第一张为封面',result.undo);}}/>}
+      {sorting && <GroupOrderDialog id={item.id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify(`顺序已保存，首个${item.kind==='video'?'视频':'图片'}为封面`,result.undo);}}/>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
     </Dialog>
   );

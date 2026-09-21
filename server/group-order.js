@@ -6,7 +6,7 @@ export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,gr
   app.get('/api/item-groups/selection',(req,res)=>{
     const anchor=getItem(z.string().min(1).parse(req.query.id));
     const key=anchor.kind==='note'?'note:'+anchor.id:anchor.group_key;
-    if(!key)throw fail(400,'这张图片不属于图片组');
+    if(!key)throw fail(400,'这项内容不属于媒体组');
     const rows=db.prepare("SELECT id,version,favorite,kind FROM items WHERE kind IN ('image','video') AND group_key=? AND collection_id IS ? AND (deleted_at IS NOT NULL)=? ORDER BY COALESCE(group_order,group_index),group_index,id LIMIT 10001").all(key,anchor.collection_id,+Boolean(anchor.deleted_at));
     if(rows.length>10000)throw fail(400,'单次最多选择 10000 张图片，请分组整理');
     if(!rows.length)throw fail(404,'图片组已没有可选成员');
@@ -15,14 +15,16 @@ export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,gr
   function snapshot(id) {
     const anchor=getItem(id);if(anchor.deleted_at)throw fail(409,'请先恢复内容');
     const key=anchor.kind==='note'?'note:'+anchor.id:anchor.group_key;
-    if(!key)throw fail(400,'这张图片不属于图片组');
-    const rows=db.prepare("SELECT * FROM items WHERE kind='image' AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(key,anchor.collection_id);
-    if(!rows.length)throw fail(404,'图片组不存在');
+    if(!key)throw fail(400,'这项内容不属于媒体组');
+    const kind=anchor.kind==='note'?'image':anchor.kind;
+    if(!['image','video'].includes(kind))throw fail(400,'这项内容不支持组内排序');
+    const rows=db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,anchor.collection_id);
+    if(!rows.length)throw fail(404,'媒体组不存在');
     const note=key.startsWith('note:')?db.prepare("SELECT * FROM items WHERE id=? AND kind='note' AND deleted_at IS NULL AND collection_id IS ?").get(key.slice(5),anchor.collection_id):null;
     const revision=createHash('sha256').update(JSON.stringify([key,anchor.collection_id,note?.version,rows.map(r=>[r.id,r.version,r.group_order,r.group_index])])).digest('hex');
-    return {anchor,rows,note,revision};
+    return {anchor,rows,note,kind,revision};
   }
-  const publicState=state=>({revision:state.revision,note_id:state.note?.id||null,items:state.rows.map(r=>({id:r.id,title:r.title,thumbnail_url:`/media/${r.id}/thumbnail`,version:r.version})),cover_id:state.rows[0].id});
+  const publicState=state=>({revision:state.revision,kind:state.kind,note_id:state.note?.id||null,items:state.rows.map(r=>({id:r.id,title:r.title,thumbnail_url:`/media/${r.id}/thumbnail`,version:r.version})),cover_id:state.rows[0].id});
   app.get('/api/item-groups/order',(req,res)=>res.json(publicState(snapshot(z.string().min(1).parse(req.query.id)))));
   app.post('/api/item-groups/order',(req,res)=>{
     const input=z.object({id:z.string(),revision:z.string().length(64),ids:z.array(z.string()).min(1).max(10000),sync_note:z.boolean().default(true)}).parse(req.body);

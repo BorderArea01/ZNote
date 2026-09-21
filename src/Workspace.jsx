@@ -1552,7 +1552,7 @@ export default function Workspace({
           onSelectGroup={selectGroup}
           onDetachGroup={detachFromGroup}
           groupSelecting={groupSelecting}
-          onGroupOrdered={result=>{if(result.item.kind==='image')setGallery(result.items);}}
+          onGroupOrdered={result=>{if(['image','video'].includes(result.item.kind))setGallery(result.items);}}
           onDelete={remove}
           onRestore={restore}
           onPurge={item=>openPurge([item.id])}
