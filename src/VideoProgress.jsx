@@ -24,8 +24,10 @@ export function VideoPlayer({item,title,progress,onError}) {
   const captureRef=useRef(capture);captureRef.current=capture;
   useEffect(()=>{const element=video.current,hide=()=>captureRef.current(true,element),visibility=()=>{if(document.hidden)hide();};window.addEventListener('pagehide',hide);window.addEventListener('znote:leaving-preview',hide);document.addEventListener('visibilitychange',visibility);return()=>{hide();window.removeEventListener('pagehide',hide);window.removeEventListener('znote:leaving-preview',hide);document.removeEventListener('visibilitychange',visibility);};},[]);
   const seek=position=>{if(!video.current||!ready)return;touched.current=true;video.current.currentTime=Math.min(position,video.current.duration);setResume(null);};
-  return <><video ref={video} src={item.url} poster={item.thumbnail_url} controls preload="metadata" playsInline aria-label={`播放 ${title}`} onError={onError}
-    onLoadedMetadata={()=>{setReady(true);if(item.resume_position!==undefined){touched.current=true;setResume(null);video.current.currentTime=Math.min(item.resume_position,video.current.duration);}}}
+  const poster=item.thumbnail_url||(item.id?`/media/${item.id}/thumbnail`:undefined);
+  const aspectRatio=Number.isFinite(Number(item.width))&&Number(item.width)>0&&Number(item.height)>0?`${item.width} / ${item.height}`:'16 / 9';
+  return <><video ref={video} src={item.url} poster={poster} style={{aspectRatio}} controls preload="metadata" playsInline aria-label={`播放 ${title}`} onError={onError}
+    onLoadedMetadata={()=>{setReady(true);if(item.resume_position!==undefined){touched.current=true;setResume(null);video.current.currentTime=Math.min(item.resume_position,video.current.duration);}}} onLoadedData={()=>setReady(true)}
     onPlay={()=>{touched.current=true;setResume(null);}} onSeeking={()=>{touched.current=true;setResume(null);}} onSeeked={()=>capture(true)} onTimeUpdate={()=>capture()} onPause={()=>capture(true)} onEnded={()=>capture(true)}/>
     {resume&&<div className="video-resume-actions"><span>{resume.completed?'上次已看完':`上次看到 ${videoTime(resume.position)}`}</span><button disabled={!ready} onClick={()=>seek(resume.completed?0:resume.position)}>{resume.completed?'从头查看':`继续到 ${videoTime(resume.position)}`}</button>{!resume.completed&&<button disabled={!ready} onClick={()=>seek(0)}>从头查看</button>}<HelpHint label="播放位置同步">每 10 秒同步，暂停、拖动、隐藏或关闭预览时保存。继续查看只定位，不自动播放声音。记录按知识库隔离，最多 20 条，完整备份可恢复。</HelpHint></div>}
     <VideoSyncFeedback progress={progress}/>
