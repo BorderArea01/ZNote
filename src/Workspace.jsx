@@ -291,7 +291,7 @@ export default function Workspace({
       if (current !== detailGeneration.current) return;
       if (item.deleted_at || item.collection_id !== actualCollection || item.group_key !== row.group_key) throw Error('这张图片已移动、删除或重新分组，请刷新浏览记录');
       if (item.group_key) await openItem({...item,group_count:row.total});
-      else { setGallery([{id:item.id,thumbnail_url:item.thumbnail_url}]); setSelected(item); }
+      else { setGallery([{id:item.id,kind:'image',thumbnail_url:item.thumbnail_url}]); setSelected(item); }
     } catch (e) { if (current === detailGeneration.current) { notify(e.message); reading.reload(); } }
   }
   const savedViews = useSavedViews(actualCollection, ready && view !== 'home');
@@ -580,7 +580,7 @@ export default function Workspace({
         : `${params(0)}&gallery=true&gallery_scope=singles`;
       const result = await api(`/api/items?${groupParams}`);
       if (current !== detailGeneration.current) return;
-      setGallery(result.ids.map(id => ({ id, thumbnail_url: `/media/${id}/thumbnail` })));
+      setGallery(result.ids.map(id => ({ id, kind:item.kind, thumbnail_url: `/media/${id}/thumbnail` })));
     } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
     finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }
@@ -596,7 +596,7 @@ export default function Workspace({
       if (!result.ids.length) { notify('当前筛选条件下没有图片'); return; }
       const first = await api(`/api/items/${result.ids[0]}`);
       if (current !== detailGeneration.current) return;
-      setGallery(result.ids.map(id => ({ id, thumbnail_url: `/media/${id}/thumbnail` })));
+      setGallery(result.ids.map(id => ({ id, kind:'image', thumbnail_url: `/media/${id}/thumbnail` })));
       setSelected(first);
     } catch (e) { if (current === detailGeneration.current) notify(e.message); }
     finally { if (current === detailGeneration.current) setGalleryBusy(false); }

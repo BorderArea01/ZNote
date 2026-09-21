@@ -24,7 +24,7 @@ export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,gr
     const revision=createHash('sha256').update(JSON.stringify([key,anchor.collection_id,note?.version,rows.map(r=>[r.id,r.version,r.group_order,r.group_index])])).digest('hex');
     return {anchor,rows,note,kind,revision};
   }
-  const publicState=state=>({revision:state.revision,kind:state.kind,note_id:state.note?.id||null,items:state.rows.map(r=>({id:r.id,title:r.title,thumbnail_url:`/media/${r.id}/thumbnail`,version:r.version})),cover_id:state.rows[0].id});
+  const publicState=state=>({revision:state.revision,kind:state.kind,note_id:state.note?.id||null,items:state.rows.map(r=>({id:r.id,kind:r.kind,title:r.title,thumbnail_url:`/media/${r.id}/thumbnail`,version:r.version})),cover_id:state.rows[0].id});
   app.get('/api/item-groups/order',(req,res)=>res.json(publicState(snapshot(z.string().min(1).parse(req.query.id)))));
   app.post('/api/item-groups/order',(req,res)=>{
     const input=z.object({id:z.string(),revision:z.string().length(64),ids:z.array(z.string()).min(1).max(10000),sync_note:z.boolean().default(true)}).parse(req.body);
