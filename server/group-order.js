@@ -19,7 +19,7 @@ export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,gr
     const kind=anchor.kind==='note'?'image':anchor.kind;
     if(!['image','video'].includes(kind))throw fail(400,'这项内容不支持组内排序');
     const rows=db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,anchor.collection_id);
-    if(!rows.length)throw fail(404,'媒体组不存在');
+    if(!rows.length)throw fail(404,kind==='video'?'视频组不存在':'图片组不存在');
     const note=key.startsWith('note:')?db.prepare("SELECT * FROM items WHERE id=? AND kind='note' AND deleted_at IS NULL AND collection_id IS ?").get(key.slice(5),anchor.collection_id):null;
     const revision=createHash('sha256').update(JSON.stringify([key,anchor.collection_id,note?.version,rows.map(r=>[r.id,r.version,r.group_order,r.group_index])])).digest('hex');
     return {anchor,rows,note,kind,revision};

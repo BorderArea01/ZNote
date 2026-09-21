@@ -576,17 +576,34 @@ export default function Workspace({
     // fetching unrelated images when a video card is opened from an "all"
     // view.
     if (item.kind === 'video' && !isMediaGroup(item)) { setGallery(null); setGalleryBusy(false); return; }
-    setGallery(items.filter(i => i.kind === item.kind));
+    // A grouped media card owns its complete, ordered gallery. Do not seed a
+    // video detail with the current page (which often contains only the cover
+    // card); load the group snapshot so every member and thumbnail is ready
+    // for the bottom preview strip before navigation starts.
+    setGallery(isMediaGroup(item) ? [] : items.filter(i => i.kind === item.kind));
     setGalleryBusy(true);
     try {
       // Freeze only lightweight IDs; editing a title or sort timestamp cannot
       // move the page boundary and skip an image during continuous organizing.
-      const groupParams = isMediaGroup(item)
-        ? new URLSearchParams({collection:item.collection_id||'unfiled',kind:item.kind,group_key:item.group_key,gallery:'true'})
-        : `${params(0)}&gallery=true&gallery_scope=singles`;
-      const result = await api(`/api/items?${groupParams}`);
+      let result;
+      if (isMediaGroup(item)) {
+        try {
+          const order = await api(`/api/item-groups/order?id=${encodeURIComponent(item.id)}`);
+          result = { ids: order.items.map(member => member.id), items: order.items };
+        } catch (orderError) {
+          // Keep compatibility with servers from before the media-order route;
+          // the group query still returns the full member list and preserves
+          // the stored group_order/group_index ordering.
+          const groupParams = new URLSearchParams({collection:item.collection_id||'unfiled',kind:item.kind,group_key:item.group_key,gallery:'true'});
+          const fallback = await api(`/api/items?${groupParams}`);
+          result = { ids: fallback.ids, items: fallback.ids.map(id => ({id, kind:item.kind, thumbnail_url:`/media/${id}/thumbnail`})) };
+        }
+      } else {
+        result = await api(`/api/items?${params(0)}&gallery=true&gallery_scope=singles`);
+        result = { ids: result.ids, items: result.ids.map(id => ({ id, kind:item.kind, thumbnail_url: `/media/${id}/thumbnail` })) };
+      }
       if (current !== detailGeneration.current) return;
-      setGallery(result.ids.map(id => ({ id, kind:item.kind, thumbnail_url: `/media/${id}/thumbnail` })));
+      setGallery(result.items);
     } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
     finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }

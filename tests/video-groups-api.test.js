@@ -54,6 +54,7 @@ test('video uploads accept MKV and fold explicitly grouped videos into one card'
     assert.deepEqual(gallery.ids, [first.id, second.id]);
     const order = await (await request(`/api/item-groups/order?id=${first.id}`)).json();
     assert.equal(order.kind, 'video');
+    assert.deepEqual(order.items.map(item => item.kind), ['video', 'video']);
     const reordered = await request('/api/item-groups/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: first.id, revision: order.revision, ids: [second.id, first.id] }) });
     assert.equal(reordered.status, 200);
     assert.deepEqual((await reordered.json()).items.map(item => item.id), [second.id, first.id]);
