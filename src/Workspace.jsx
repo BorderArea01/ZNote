@@ -281,7 +281,10 @@ export default function Workspace({
       const item=await api('/api/items/'+row.item_id);
       if(current!==detailGeneration.current)return;
       if(item.deleted_at||item.collection_id!==actualCollection||item.kind!=='video')throw Error('视频已移动、删除或更换，请刷新播放记录');
-      setGallery([]);setSelected({...item,resume_position:row.completed?0:row.position});
+      // Playback history used to bypass the normal opener and clear the
+      // gallery. That made grouped videos look like a single standalone item
+      // with disabled previous/next buttons and no sibling previews.
+      await openItem({...item,resume_position:row.completed?0:row.position});
     }catch(e){if(current===detailGeneration.current){notify(e.message);videoProgress.reload();}}
   }
   useEffect(() => { if (selected?.kind === 'image' && !selected.deleted_at && selected.collection_id === actualCollection) reading.record(selected.id); }, [selected?.id, actualCollection]);
@@ -330,9 +333,6 @@ export default function Workspace({
     }catch(e){if(request===groupRequest.current&&current===generation.current)notify(e.message);}
     finally{if(request===groupRequest.current)setGroupSelecting(false);}
   }
-  function selectGroup(item){
-    return selectCards([{...item,group_key:item.kind==='note'?'note:'+item.id:item.group_key,group_count:1}],'toggle',{enter:!selecting,announce:true});
-  }
   const toggleSelection = (id, event) => {
     if(batchBusy||groupSelecting||selectionProgress||loading)return;
     const from=items.findIndex(item=>item.id===selectionAnchor.current),to=items.findIndex(item=>item.id===id),item=itemById.get(id);
@@ -353,7 +353,9 @@ export default function Workspace({
     state.id = null;
     state.triggered = false;
   }
-  function cardPointerDown(item, event) {
+  function cardPointerDown(event) {
+    const item = itemById.get(event.currentTarget.dataset.itemId);
+    if (!item) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const state = cardPress.current;
     // A new pointer sequence is a new gesture. Clear the click suppression left
@@ -386,6 +388,9 @@ export default function Workspace({
       if (state.target) state.target.classList.remove('is-long-pressing');
       state.id = null; state.target = null; state.triggered = false;
     } else clearCardPress();
+  }
+  function cardPointerLeave(event) {
+    if (event.pointerType === 'mouse') cardPointerUp();
   }
   function suppressCardClick(event) {
     const state = cardPress.current;
@@ -469,7 +474,7 @@ export default function Workspace({
     let cancelled=false;
     api('/api/items/'+encodeURIComponent(id)).then(item=>{
       if(cancelled)return;if(item.deleted_at)throw Error('此内容已在回收站');
-      chooseCollection(item.collection_id||'unfiled');setGallery(isMediaGroup(item)?[item]:[]);setSelected(item);
+      chooseCollection(item.collection_id||'unfiled');void openItem(item);
     }).catch(e=>{if(!cancelled)notify(e.message);});
     return()=>{cancelled=true};
   },[]);
@@ -678,7 +683,7 @@ export default function Workspace({
           if (current !== detailGeneration.current) return;
           chooseCollection(item.collection_id || 'unfiled');
           history.replaceState(null, '', location.pathname + location.search + '#item/' + item.id);
-          setGallery(isMediaGroup(item) ? [item] : []); setSelected(item);
+          void openItem(item);
         }).catch(e => { if (current === detailGeneration.current) setToast(e.message); });
       }
     };
@@ -1331,11 +1336,11 @@ export default function Workspace({
                 <TypedItems grouped={typeGrouping} order={typeOrder} selecting={selecting} items={items} layout={layout} restoreId={restoreAnchor.current?.id}>
                   {(item) => (
                     <article
-                      onPointerDown={e=>cardPointerDown(item,e)}
+                      onPointerDown={cardPointerDown}
                       onPointerMove={cardPointerMove}
                       onPointerUp={cardPointerUp}
                       onPointerCancel={clearCardPress}
-                      onPointerLeave={e=>{if(e.pointerType==='mouse')cardPointerUp();}}
+                      onPointerLeave={cardPointerLeave}
                       onContextMenu={e=>{if(cardPress.current.triggered||cardPress.current.suppressUntil>performance.now()){e.preventDefault();e.stopPropagation();}}}
                       onClick={e=>{if(suppressCardClick(e))return;if(selecting&&!e.target.closest('button,input,label'))toggleSelection(item.id,e);}}
                       data-item-id={item.id}
@@ -1373,7 +1378,7 @@ export default function Workspace({
                               decoding="async"
                             />
                           ) : item.kind === 'video' ? (
-                            <div className="video-card-preview">{item.thumbnail_url&&<img className="video-cover" src={item.thumbnail_url} alt="视频首帧" loading="lazy" onError={e=>{e.currentTarget.hidden=true}}/>}<Film size={42} /><strong>点击预览视频</strong><small>{item.video_codec || 'VIDEO'} · {item.duration ? `${Math.round(item.duration)} 秒` : '原文件'}</small></div>
+                            <div className="video-card-preview">{item.thumbnail_url&&<img className="video-cover" src={item.thumbnail_url} alt="视频首帧" loading="lazy" decoding="async" onError={e=>{e.currentTarget.hidden=true}}/>}<Film size={42} /><strong>点击预览视频</strong><small>{item.video_codec || 'VIDEO'} · {item.duration ? `${Math.round(item.duration)} 秒` : '原文件'}</small></div>
                           ) : (
                             <>
                               {item.thumbnail_url&&<img className="note-cover" src={item.thumbnail_url} alt={`${item.title} · 正文封面`} loading="lazy" decoding="async" onError={e=>{e.currentTarget.hidden=true}}/>}
@@ -1432,7 +1437,6 @@ export default function Workspace({
                       </button>
                       <div className="card-actions">
                         {selecting&&isMediaGroup(item)&&<button className="group-members-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`选择组内${item.kind === 'video' ? '视频' : '图片'} ${item.group_title||item.title}`} onClick={()=>selectCards([item],'toggle',{picker:true})}>选择组内{item.kind === 'video' ? '视频' : '图片'}{selectedGroupCounts.get(item.group_key)?` · ${selectedGroupCounts.get(item.group_key)}`:''}</button>}
-                        {isMediaGroup(item)&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部内容的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
                         {view === "trash" ? (
                           <><IconButton
                             disabled={batchBusy||groupSelecting||!!selectionProgress}
@@ -1526,7 +1530,7 @@ export default function Workspace({
         </div>
       )}
       <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || readingOpen || tasksOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
-      {tasksOpen&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);setGallery(isMediaGroup(item)?[item]:[]);setSelected(item);}catch(e){notify(e.message)}}}/>}
+      {tasksOpen&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);await openItem(item);}catch(e){notify(e.message)}}}/>}
       {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;
@@ -1550,9 +1554,7 @@ export default function Workspace({
           onClose={()=>{setImageExpanded(false);closeDetail();}}
           onSaved={saved}
           onTagSearch={tag=>{closeDetail();setImageExpanded(false);setView('all');setQuery('');setSearch('');setSelectedTags([tag]);setTagMode('all');setMobile(false);}}
-          onSelectGroup={selectGroup}
           onDetachGroup={detachFromGroup}
-          groupSelecting={groupSelecting}
           onGroupOrdered={result=>{if(['image','video'].includes(result.item.kind))setGallery(result.items);}}
           onDelete={remove}
           onRestore={restore}
@@ -1566,8 +1568,7 @@ export default function Workspace({
           }}
           onOpen={item => {
             if (actualCollection !== item.collection_id) chooseCollection(item.collection_id || 'unfiled');
-            else closeDetail();
-            setGallery(isMediaGroup(item) ? [item] : []); setSelected(item);
+            void openItem(item);
           }}
           onStep={stepImage}
           onImageViewed={id => reading.record(id)}
@@ -1651,7 +1652,7 @@ export default function Workspace({
           onOrganize={uploaded => { setUploadBatch(null); setGallery(uploaded); setSelected(uploaded[0]); }}
         />
       )}
-      {importing && <ImportsDialog collections={collections} currentCollection={actualCollection} onClose={() => setImporting(false)} onComplete={refresh} onOpen={async id => { try { const item = await api('/api/items/' + id); setImporting(false); setGallery([]); setSelected(item); } catch (e) { notify(e.message); } }} />}
+      {importing && <ImportsDialog collections={collections} currentCollection={actualCollection} onClose={() => setImporting(false)} onComplete={refresh} onOpen={async id => { try { const item = await api('/api/items/' + id); setImporting(false); await openItem(item); } catch (e) { notify(e.message); } }} />}
       {exporting && (
         <ExportDialog
           collections={collections}

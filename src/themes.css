@@ -86,6 +86,15 @@ html[data-style="glass"][data-theme="dark"] body {
   html[data-style="glass"] :is(.sidebar, .topbar, .dialog) { background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); }
   html[data-style="glass"] :is(.tag-browser, .item-card, .library-card, .workspace-label) { background: color-mix(in srgb, var(--surface) 80%, transparent); }
 }
+/* A blurred translucent layer is costly in mobile WebViews while scrolling.
+   Keep the glass palette but use an opaque surface on touch-sized screens. */
+@media (pointer: coarse) and (max-width: 760px) {
+  html[data-style="glass"] :is(.sidebar, .topbar, .dialog, .tag-browser, .item-card, .library-card, .workspace-label) {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
 
 /* Cyber's dedicated cyan/magenta palette supports both day and night. */
 :root[data-style="cyber"] { --tone: 252; --accent-light: #006c82; --accent-dark: #65f5ed; --panel-radius: 3px; --control-radius: 3px; --neon: #b42594; --panel-shadow: 3px 3px 0 #9654ce13; }

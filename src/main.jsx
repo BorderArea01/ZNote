@@ -359,9 +359,7 @@ function Detail({
   onClose,
   onSaved,
   onGroupOrdered,
-  onSelectGroup,
   onDetachGroup,
-  groupSelecting,
   onDelete,
   onRestore,
   onPurge,
@@ -604,7 +602,6 @@ function Detail({
             {dirty && <span className="unsaved">未保存</span>}
           </div>
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
-            {isMediaGroup(item)&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
             {isMediaGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             {isImageGroup(item)&&!item.group_key?.startsWith('note:')&&onDetachGroup&&<button onClick={detachCurrent} disabled={busy}><Unlink size={14}/>移出图片组</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>

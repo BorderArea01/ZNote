@@ -634,7 +634,7 @@ a {
 .gallery-strip-toggle{flex:0 0 auto!important;width:auto!important;height:auto!important;min-height:26px;padding:4px 8px!important;border:1px solid var(--border,#d9e1de)!important;border-radius:6px!important;background:var(--surface,#fff)!important;color:var(--ink,#18201e)!important;font-size:11px}
 .gallery-strip-toggle:hover{border-color:var(--green,#287464)!important;color:var(--green,#287464)!important}
 .gallery-strip-list{display:flex;gap:7px;overflow-x:auto;padding:2px;max-width:100%;justify-content:center;align-items:center;scrollbar-width:thin}
-.gallery-strip.is-expanded .gallery-strip-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:7px;max-height:min(220px,28vh);overflow-x:hidden;overflow-y:auto;align-items:start;justify-content:stretch;padding:4px}
+.gallery-strip.is-expanded .gallery-strip-list{display:grid;grid-template-columns:repeat(auto-fill,58px);gap:7px;max-height:min(220px,28vh);overflow-x:hidden;overflow-y:auto;align-items:start;justify-content:center;padding:4px}
 .gallery-strip-list>button{position:relative;flex:0 0 58px;width:58px;height:54px;border:2px solid transparent;border-radius:8px;background:var(--surface-2,#eef2f2);padding:2px;overflow:hidden}
 .gallery-strip-list>button[aria-current=true]{border-color:var(--green,#287464);box-shadow:0 0 0 2px color-mix(in srgb,var(--green,#287464) 18%,transparent)}
 .gallery-strip-list>button:hover:not(:disabled){border-color:var(--green,#287464);transform:translateY(-1px)}
@@ -647,7 +647,7 @@ a {
 .note-gallery-dialog .gallery-controls{justify-content:center;padding:10px}
 .markdown-preview img[role=button]{cursor:zoom-in}
 .media-description.markdown-preview{min-height:0;padding:12px 0;font-size:14px}
-@media(max-width:600px){.gallery-strip-list{justify-content:flex-start}.gallery-strip-list>button{flex-basis:48px;width:48px;height:46px}.gallery-strip.is-expanded .gallery-strip-list{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));max-height:200px}}
+@media(max-width:600px){.gallery-strip-list{justify-content:flex-start}.gallery-strip-list>button{flex-basis:48px;width:48px;height:46px}.gallery-strip.is-expanded .gallery-strip-list{grid-template-columns:repeat(auto-fill,48px);justify-content:center;max-height:200px}}
 .card-body {
   padding: 15px 16px 12px;
 }
@@ -1951,5 +1951,3 @@ a {
 }
 
 .card-actions{display:flex;align-items:center;gap:4px}
-html[data-style] .card-actions .select-group-button{display:flex;align-items:center;gap:4px;padding:5px 8px;font-size:11px;border-radius:8px;background:var(--surface);color:var(--ink);border:1px solid var(--border)}
-html[data-style] .item-card .card-actions:has(.select-group-button){top:10px;bottom:auto}
