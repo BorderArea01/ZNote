@@ -180,7 +180,9 @@ export function createApp({
       throw e;
     }
   };
-  const groupSize = db.prepare("SELECT count(*) n FROM items WHERE collection_id IS ? AND group_key=? AND kind='image' AND (deleted_at IS NOT NULL)=?");
+  // Media groups can contain images or videos. Keep the kind in the count so
+  // an accidental shared key can never fold different media types together.
+  const groupSize = db.prepare("SELECT count(*) n FROM items WHERE collection_id IS ? AND group_key=? AND kind=? AND (deleted_at IS NOT NULL)=?");
   const noteCoverCache = new Map();
   const noteCover = row => {
     if(row.kind!=='note')return null;
@@ -199,7 +201,7 @@ export function createApp({
   const serialize = (row) =>
     row && {
       ...row,
-      group_size: row.kind==='image'&&row.group_key ? groupSize.get(row.collection_id,row.group_key,row.deleted_at?1:0).n : undefined,
+      group_size: ['image','video'].includes(row.kind)&&row.group_key ? groupSize.get(row.collection_id,row.group_key,row.kind,row.deleted_at?1:0).n : undefined,
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
       url: row.file_key ? `/media/${row.id}/original` : null,
@@ -385,7 +387,7 @@ export function createApp({
   const collectionScope = (value, prefix = '') => value === undefined ? { sql: '', args: [] } :
     value === 'unfiled' ? { sql: ` AND ${prefix}collection_id IS NULL`, args: [] } :
     { sql: ` AND ${prefix}collection_id=?`, args: [z.string().max(100).parse(value)] };
-  const cardIdentity = "CASE WHEN kind='image' AND NULLIF(group_key,'') IS NOT NULL THEN 'group:'||group_key ELSE 'item:'||id END";
+  const cardIdentity = "CASE WHEN kind IN ('image','video') AND NULLIF(group_key,'') IS NOT NULL THEN kind||':group:'||group_key ELSE 'item:'||id END";
   const countCards = (scope, favorite=false) => db.prepare(`SELECT count(*) n FROM (
     SELECT 1 FROM items WHERE deleted_at IS NULL${favorite?' AND favorite=1':''}${scope.sql}
     GROUP BY collection_id, ${cardIdentity}
@@ -403,6 +405,10 @@ export function createApp({
       favorite_cards: countCards(scope,true),
       image_cards: db.prepare(`SELECT count(*) n FROM (
         SELECT 1 FROM items WHERE deleted_at IS NULL AND kind='image'${scope.sql}
+        GROUP BY collection_id, CASE WHEN group_key IS NULL OR group_key='' THEN 'item:'||id ELSE 'group:'||group_key END
+      )`).get(...scope.args).n,
+      video_cards: db.prepare(`SELECT count(*) n FROM (
+        SELECT 1 FROM items WHERE deleted_at IS NULL AND kind='video'${scope.sql}
         GROUP BY collection_id, CASE WHEN group_key IS NULL OR group_key='' THEN 'item:'||id ELSE 'group:'||group_key END
       )`).get(...scope.args).n,
       collections: db.prepare("SELECT count(*) n FROM collections").get().n,
@@ -543,16 +549,23 @@ export function createApp({
     }[q.sort];
     // Match the card's full-library group size, including NULL/unfiled scopes.
     // Filtering down to one member must not turn a real group into a single card.
-    const imageType="CASE WHEN group_key IS NOT NULL AND EXISTS (SELECT 1 FROM items member WHERE member.kind='image' AND member.collection_id IS items.collection_id AND member.group_key=items.group_key AND (member.deleted_at IS NULL)=(items.deleted_at IS NULL) AND member.id<>items.id) THEN 'group' ELSE 'image' END";
-    const cardType=`CASE WHEN kind='image' THEN (${imageType}) ELSE kind END`;
+    const mediaType="CASE WHEN kind IN ('image','video') AND group_key IS NOT NULL AND EXISTS (SELECT 1 FROM items member WHERE member.kind=items.kind AND member.collection_id IS items.collection_id AND member.group_key=items.group_key AND (member.deleted_at IS NULL)=(items.deleted_at IS NULL) AND member.id<>items.id) THEN 'group' ELSE kind END";
+    const cardType=`${mediaType}`;
     const typeSort=`CASE (${cardType}) ${q.type_order.split(',').map((type,index)=>`WHEN '${type}' THEN ${index}`).join(' ')} ELSE 4 END`;
     const sort=q.type_group==='true'?`${typeSort}, ${valueSort}`:valueSort;
-    if (q.gallery === 'true') return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${clause} AND kind='image' ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...args).map(item => item.id) });
+    if (q.gallery === 'true') {
+      // A gallery without an explicit kind is the historical image gallery;
+      // grouped video previews pass kind=video and retain their own order.
+      const galleryKind = q.kind || 'image';
+      const galleryClause = q.kind ? clause : `${clause} AND kind=?`;
+      const galleryArgs = q.kind ? args : [...args, galleryKind];
+      return res.json({ ids: db.prepare(`SELECT id FROM items WHERE ${galleryClause} ORDER BY ${q.group_key ? 'COALESCE(group_order,group_index), group_index, id' : sort}`).all(...galleryArgs).map(item => item.id) });
+    }
     const projection = q.summary === 'true'
       ? db.prepare('PRAGMA table_info(items)').all().map(({name}) => name === 'content' ? "CASE WHEN kind='note' THEN substr(content,1,1000) ELSE '' END AS content" : name).join(',') + ',length(content) AS content_length'
       : '*';
     const listSerialize = row => q.summary === 'true' ? { ...serialize(row), summary: true } : serialize(row);
-    const groupedQuery = `SELECT ${projection}, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, CASE WHEN group_key IS NULL THEN 'item:'||id ELSE 'group:'||group_key END`;
+    const groupedQuery = `SELECT ${projection}, MIN(COALESCE(group_order,group_index)) AS first_group_index, count(*) AS group_count FROM items WHERE ${clause} GROUP BY collection_id, ${cardIdentity}`;
     let offset = q.offset;
     if (q.anchor) {
       // Seek within the same filtered and grouped result, never fetch every

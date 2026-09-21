@@ -85,7 +85,7 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 | `POST /api/items/:id/restore` | 恢复内容 |
 | `POST /api/assets` | 上传一张图片，multipart `file` |
 | `POST /api/assets/batch` | 批量上传，返回逐文件结果 |
-| `POST /api/videos` | 上传视频原文件 |
+| `POST /api/videos` | 上传 MP4、WebM、MOV 或 MKV 视频原文件（单个不超过 500 MB） |
 | `GET /media/:id/original` | 原文件；视频支持 Range 请求 |
 | `GET /media/:id/thumbnail` | 按需图片缩略图 |
 | `GET/POST /api/collections` | 知识库查询与创建 |
@@ -154,7 +154,7 @@ view 支持 all / images / videos / notes / favorites / trash；mode 为 all / a
 
 ## 图片组与标签
 
-`GET /api/item-groups/order?id=条目ID` 获取同一知识库内完整图片组的 `items`、`cover_id`、`note_id` 和 `revision`。条目可为组内图片或所属笔记。
+`GET /api/item-groups/order?id=条目ID` 获取同一知识库内完整图片组的 `items`、`cover_id`、`note_id` 和 `revision`。条目可为组内图片或所属笔记；视频组沿用同一组标识、页序和封面字段，但当前界面只允许调整图片组顺序。
 
 `POST /api/item-groups/order` 接收 `{ id, revision, ids: [按展示顺序排列的全部图片ID], sync_note: true }`。第一张为封面；必须提交同组全部有效图片且不重复，组成员或版本变化返回 409，所有修改回滚。笔记配图默认同步正文图片位置（文字和链接保留），`sync_note: false` 仅调整素材库组顺序。成功返回新快照及更新后的锚点 `item`。需要 write 权限。
 
@@ -204,7 +204,7 @@ Webhook 可在设置中创建，也可通过管理员接口 `/api/webhooks` 管�
 
 移入回收站与永久删除会保留笔记的独立配图，自动替换其 Markdown 内部地址；笔记不再引用删除条目。保存笔记引用回收站或不存在的条目返回 409，须先恢复或换用有效配图。条目及笔记版本号可能随配图替换更新，请使用响应中的最新版本。媒体读取接口保留回收站预览能力，但不允许将该地址重新写入笔记。
 
-`GET /api/item-groups/selection?id=图片ID`：返回同知识库、同分组、同回收站状态的全部图片 `{ items: [{id, version, favorite, kind: "image"}], collection_id, group_key, trash }`，不受筛选或分页影响。支持笔记 ID 获取活动笔记配图；最多 10,000 项，超限返回错误，不截断选择。批量标签/整理/删除/恢复支持同样上限。完整选中某笔记的活动配图后批量移动，会同时移动该笔记。
+`GET /api/item-groups/selection?id=素材ID`：返回同知识库、同分组、同回收站状态的全部图片或视频 `{ items: [{id, version, favorite, kind}], collection_id, group_key, trash }`，不受筛选或分页影响。支持笔记 ID 获取活动笔记配图；最多 10,000 项，超限返回错误，不截断选择。批量标签/移动/收藏/删除/恢复支持同样上限。完整选中某笔记的活动配图后批量移动，会同时移动该笔记。
 
 ## 合并、追加与拆分图片组
 

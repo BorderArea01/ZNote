@@ -1,6 +1,6 @@
 import {ContentActions} from './ContentActions.jsx';
 import {SortControl,DEFAULT_TYPE_ORDER} from './SortControl.jsx';
-import {isImageGroup} from './image-group.js';
+import {isMediaGroup} from './media-group.js';
 import {detachImageFromGroup} from './group-detach.js';
 import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
@@ -151,8 +151,8 @@ export default function Workspace({
   }).filter(Boolean);
   const selectedGroupCounts = new Map();
   chosenItems.forEach(row=>{if(row.group_key)selectedGroupCounts.set(row.group_key,(selectedGroupCounts.get(row.group_key)||0)+1);});
-  const cardSelected = item => isImageGroup(item) ? selectedGroups.has(item.group_key) : selectedIds.has(item.id);
-  const cardPartial = item => isImageGroup(item)&&!cardSelected(item)&&!!selectedGroupCounts.get(item.group_key);
+  const cardSelected = item => isMediaGroup(item) ? selectedGroups.has(item.group_key) : selectedIds.has(item.id);
+  const cardPartial = item => isMediaGroup(item)&&!cardSelected(item)&&!!selectedGroupCounts.get(item.group_key);
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
@@ -468,7 +468,7 @@ export default function Workspace({
     let cancelled=false;
     api('/api/items/'+encodeURIComponent(id)).then(item=>{
       if(cancelled)return;if(item.deleted_at)throw Error('此内容已在回收站');
-      chooseCollection(item.collection_id||'unfiled');setGallery(item.kind==='image'?[item]:[]);setSelected(item);
+      chooseCollection(item.collection_id||'unfiled');setGallery(isMediaGroup(item)?[item]:[]);setSelected(item);
     }).catch(e=>{if(!cancelled)notify(e.message);});
     return()=>{cancelled=true};
   },[]);
@@ -554,7 +554,7 @@ export default function Workspace({
       } catch (e) { if (current === detailGeneration.current) notify(e.message); return; }
       finally { if (current === detailGeneration.current) setOpeningItem(null); }
     }
-    if (item.kind === 'note') {
+      if (item.kind === 'note') {
       try {
         const fresh = hydrated ? item : await api(`/api/items/${item.id}`);
         if (current !== detailGeneration.current) return;
@@ -564,14 +564,19 @@ export default function Workspace({
       return;
     }
     setSelected(item);
-    if (item.kind !== 'image') { setGallery(null); setGalleryBusy(false); return; }
-    setGallery(items.filter(i => i.kind === 'image'));
+    if (!['image','video'].includes(item.kind)) { setGallery(null); setGalleryBusy(false); return; }
+    // Standalone videos are opened directly; only an explicitly grouped video
+    // needs a gallery. Keeping them out of the image gallery query avoids
+    // fetching unrelated images when a video card is opened from an "all"
+    // view.
+    if (item.kind === 'video' && !isMediaGroup(item)) { setGallery(null); setGalleryBusy(false); return; }
+    setGallery(items.filter(i => i.kind === item.kind));
     setGalleryBusy(true);
     try {
       // Freeze only lightweight IDs; editing a title or sort timestamp cannot
       // move the page boundary and skip an image during continuous organizing.
-      const groupParams = isImageGroup(item)
-        ? new URLSearchParams({collection:item.collection_id||'unfiled',group_key:item.group_key,gallery:'true'})
+      const groupParams = isMediaGroup(item)
+        ? new URLSearchParams({collection:item.collection_id||'unfiled',kind:item.kind,group_key:item.group_key,gallery:'true'})
         : `${params(0)}&gallery=true&gallery_scope=singles`;
       const result = await api(`/api/items?${groupParams}`);
       if (current !== detailGeneration.current) return;
@@ -672,7 +677,7 @@ export default function Workspace({
           if (current !== detailGeneration.current) return;
           chooseCollection(item.collection_id || 'unfiled');
           history.replaceState(null, '', location.pathname + location.search + '#item/' + item.id);
-          setGallery(item.kind === 'image' ? [item] : []); setSelected(item);
+          setGallery(isMediaGroup(item) ? [item] : []); setSelected(item);
         }).catch(e => { if (current === detailGeneration.current) setToast(e.message); });
       }
     };
@@ -806,7 +811,7 @@ export default function Workspace({
   }, [view, selecting, selection, batchBusy, groupSelecting, selectionProgress, loading, query, search, params]);
   async function favorite(item) {
     try {
-      if(isImageGroup(item)) {
+      if(isMediaGroup(item)) {
         const result=await send('/api/item-groups/favorite',{group_key:item.group_key,collection_id:item.collection_id,favorite:!item.favorite,undo:true});saved(result);return;
       }
       const result = await send(
@@ -1340,7 +1345,7 @@ export default function Workspace({
                         <label className="card-select">
                           <input
                             type="checkbox"
-                            aria-label={`选择 ${isImageGroup(item)?item.group_title||item.title:item.title}`}
+                            aria-label={`选择 ${isMediaGroup(item)?item.group_title||item.title:item.title}`}
                             checked={cardSelected(item)} ref={node=>{if(node)node.indeterminate=!!cardPartial(item);}}
                             disabled={batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item))}
                             onClick={e => toggleSelection(item.id, e)}
@@ -1355,7 +1360,7 @@ export default function Workspace({
                         onClick={(e) => {if(suppressCardClick(e))return;selecting ? toggleSelection(item.id, e) : (e.ctrlKey||e.metaKey) ? toggleSelectionMode(item) : openItem(item)}}
                         aria-pressed={selecting ? cardPartial(item)?'mixed':cardSelected(item) : undefined}
                         disabled={selecting && (batchBusy || groupSelecting || !!selectionProgress || loading || (selection.length >= 10000 && !cardSelected(item)&&!cardPartial(item)))}
-                        aria-label={`${selecting ? cardSelected(item)?'取消选择':'选择' : '打开'} ${isImageGroup(item) ? item.group_title || item.title : item.title}`}
+                        aria-label={`${selecting ? cardSelected(item)?'取消选择':'选择' : '打开'} ${isMediaGroup(item) ? item.group_title || item.title : item.title}`}
                       >
                         <div className="card-preview">
                           {openingItem === item.id && <span className="card-opening"><Loader2 size={16} className="spin"/>正在打开…</span>}
@@ -1384,8 +1389,8 @@ export default function Workspace({
                               </p>
                             </>
                           )}
-                          <span className={`kind-chip${isImageGroup(item) ? ' group-chip' : ''}`}>
-                            {isImageGroup(item) ? <><Layers size={13} /> {item.group_count} 张</> : item.kind === "image" ? (
+                          <span className={`kind-chip${isMediaGroup(item) ? ' group-chip' : ''}`}>
+                            {isMediaGroup(item) ? <><Layers size={13} /> {item.group_count} {item.kind === 'video' ? '个视频' : '张'}</> : item.kind === "image" ? (
                               <Image size={13} />
                             ) : (
                               item.kind === 'video' ? <Film size={13} /> : <FileText size={13} />
@@ -1393,7 +1398,7 @@ export default function Workspace({
                           </span>
                         </div>
                         <div className="card-body">
-                          <h3>{isImageGroup(item) ? item.group_title || item.title : item.title}</h3>
+                          <h3>{isMediaGroup(item) ? item.group_title || item.title : item.title}</h3>
                           <div className="card-tags">
                             {item.tags.slice(0, 3).map((t) => (
                               <span key={t}># {t}</span>
@@ -1425,8 +1430,8 @@ export default function Workspace({
                         </div>
                       </button>
                       <div className="card-actions">
-                        {selecting&&isImageGroup(item)&&<button className="group-members-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`选择组内图片 ${item.group_title||item.title}`} onClick={()=>selectCards([item],'toggle',{picker:true})}>选择组内图片{selectedGroupCounts.get(item.group_key)?` · ${selectedGroupCounts.get(item.group_key)}`:''}</button>}
-                        {isImageGroup(item)&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部图片的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
+                        {selecting&&isMediaGroup(item)&&<button className="group-members-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`选择组内${item.kind === 'video' ? '视频' : '图片'} ${item.group_title||item.title}`} onClick={()=>selectCards([item],'toggle',{picker:true})}>选择组内{item.kind === 'video' ? '视频' : '图片'}{selectedGroupCounts.get(item.group_key)?` · ${selectedGroupCounts.get(item.group_key)}`:''}</button>}
+                        {isMediaGroup(item)&&<button className="select-group-button" disabled={groupSelecting||batchBusy||!!selectionProgress||loading} aria-label={`${selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'} ${item.group_title||item.title}`} title="切换该组全部内容的选择，包含筛选隐藏和未加载的成员" onClick={()=>selectGroup(item)}><Layers size={14}/>{selecting&&selectedGroups.has(item.group_key)?'取消整组':'选择整组'}</button>}
                         {view === "trash" ? (
                           <><IconButton
                             disabled={batchBusy||groupSelecting||!!selectionProgress}
@@ -1520,7 +1525,7 @@ export default function Workspace({
         </div>
       )}
       <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || readingOpen || tasksOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
-      {tasksOpen&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);setGallery(item.kind==='image'?[item]:[]);setSelected(item);}catch(e){notify(e.message)}}}/>}
+      {tasksOpen&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);setGallery(isMediaGroup(item)?[item]:[]);setSelected(item);}catch(e){notify(e.message)}}}/>}
       {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;
@@ -1561,7 +1566,7 @@ export default function Workspace({
           onOpen={item => {
             if (actualCollection !== item.collection_id) chooseCollection(item.collection_id || 'unfiled');
             else closeDetail();
-            setGallery(item.kind === 'image' ? [item] : []); setSelected(item);
+            setGallery(isMediaGroup(item) ? [item] : []); setSelected(item);
           }}
           onStep={stepImage}
           onImageViewed={id => reading.record(id)}
@@ -1572,7 +1577,7 @@ export default function Workspace({
           previousAvailable={galleryIndex > 0}
           nextAvailable={galleryIndex >= 0 && galleryIndex < galleryItems.length - 1}
           galleryBusy={galleryBusy}
-          galleryPosition={galleryIndex >= 0 ? `第 ${galleryIndex + 1} / ${galleryItems.length} 张` : null}
+          galleryPosition={galleryIndex >= 0 ? `第 ${galleryIndex + 1} / ${galleryItems.length} ${selected?.kind === 'video' ? '个' : '张'}` : null}
         />
       )}
       {purging&&<TrashDialog {...purging} onClose={()=>setPurging(null)} onDone={result=>{setPurging(null);setSelection([]);refresh();notify('已永久删除 '+result.count+' 项'+(result.pending_files?'，部分原文件等待自动释放':''));}}/>}

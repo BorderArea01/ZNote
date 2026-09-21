@@ -13,7 +13,7 @@ export function probeVideo(path) {
     let settled = false;
     const finish = (error, value) => { if (settled) return; settled = true; clearTimeout(timer); worker.terminate(); error ? reject(error) : resolve(value); };
     const timer = setTimeout(() => finish(fail(415, '视频分析超时，请检查文件是否完整')), 20000);
-    worker.once('message', value => finish(value.error ? fail(415, '无法识别视频，请上传包含视频画面的 MP4、WebM 或 MOV 文件') : null, value));
+    worker.once('message', value => finish(value.error ? fail(415, '无法识别视频，请上传包含视频画面的 MP4、WebM、MOV 或 MKV 文件') : null, value));
     worker.once('error', () => finish(fail(415, '视频分析失败，请检查文件格式')));
     worker.once('exit', () => { if (!settled) finish(fail(415, '视频分析未完成')); });
   });

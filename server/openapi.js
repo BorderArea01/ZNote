@@ -304,7 +304,7 @@ export const spec = {
       }),
     },
     '/api/videos': {
-      post: operation('上传视频（MP4/WebM/MOV，500 MB，保留原字节并去重）', ref('Item'), {
+      post: operation('上传视频（MP4/WebM/MOV/MKV，500 MB，保留原字节并去重）', ref('Item'), {
         requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' }, title: str, content: str, tags: { ...str, description: 'JSON 字符串数组' }, collection_id: str } } } } },
         responses: { 201: response(ref('Item')), 200: response(ref('Item')), ...errorResponses, 415: { description: '不支持的视频容器或未发现视频流' } },
       }),

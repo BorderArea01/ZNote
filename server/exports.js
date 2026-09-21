@@ -26,7 +26,7 @@ const ext = (item) =>
     "image/webp": "webp",
     "image/gif": "gif",
     "image/avif": "avif",
-    "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
+    "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-matroska": "mkv",
   })[item.mime] || "bin";
 const escape = (text) =>
   String(text).replace(

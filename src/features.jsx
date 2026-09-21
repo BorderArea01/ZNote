@@ -160,7 +160,7 @@ export function UploadDialog({
     })),
   );
   const [collection, setCollection] = useState(currentCollection || "");
-  const [grouped,setGrouped]=useState(true);
+  const [grouped,setGrouped]=useState(kind === 'image');
   const uploadBatch=useRef(null);
   const [tags, setTags] = useState([]);
   const [submitting, setRunning] = useState(false);
@@ -189,7 +189,7 @@ export function UploadDialog({
     const pending=displayRows.filter(row=>['pending','error'].includes(row.status));
     try {
       pending.forEach(row=>{if(row.task_id)taskStore.forget(row.task_id)});
-      if(!uploadBatch.current)uploadBatch.current={collection,tags:[...tags],group:kind==='image'&&grouped&&rows.length>1?{group_key:'upload:'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),group_title:rows[0].file.name.slice(0,200)}:null};
+      if(!uploadBatch.current)uploadBatch.current={collection,tags:[...tags],group:['image','video'].includes(kind)&&grouped&&rows.length>1?{group_key:`upload:${kind}:`+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),group_title:rows[0].file.name.replace(/\.[^.]+$/,'').slice(0,200)}:null};
       const batch=uploadBatch.current;
       const tickets=queueUploads(taskStore,pending.map(r=>r.file),batch.collection,batch.tags,pending.map(row=>batch.group?{...batch.group,group_index:row.group_index}:undefined));queuedIds.current=tickets.map(t=>t.id);
       tickets.forEach((ticket,index)=>update(pending[index].id,{task_id:ticket.id,status:'running',error:''}));
@@ -207,7 +207,7 @@ export function UploadDialog({
     >
       <div className="feature-body">
         <div className="upload-guidance"><span>{kind === 'video' ? '单个文件 ≤ 500 MB' : '单张图片 ≤ 100 MB'}</span><HelpHint label="批量上传">
-          {kind === 'video' ? '支持 MP4、WebM、MOV，每个不超过 500 MB。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '一次选择多张图片，统一放入知识库并添加多个标签。每张不超过 100 MB。'}
+          {kind === 'video' ? '支持 MP4、WebM、MOV、MKV，每个不超过 500 MB。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '一次选择多张图片，统一放入知识库并添加多个标签。每张不超过 100 MB。'}
         </HelpHint></div>
         <div
           className="upload-drop"
@@ -227,7 +227,7 @@ export function UploadDialog({
           ref={picker}
           type="file"
           multiple
-          accept={kind === 'video' ? '.mp4,.webm,.mov,video/mp4,video/webm,video/quicktime' : 'image/jpeg,image/png,image/webp,image/gif,image/avif'}
+          accept={kind === 'video' ? '.mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska' : 'image/jpeg,image/png,image/webp,image/gif,image/avif'}
           hidden
           onChange={(e) => {
             addFiles(e.target.files);
@@ -258,7 +258,7 @@ export function UploadDialog({
           collection={collection||null}
           disabled={running||!!uploadBatch.current}
         />
-        {kind==='image'&&rows.length>1&&<div className="upload-group-choice"><label><input type="checkbox" checked={grouped} onChange={e=>setGrouped(e.target.checked)} disabled={running||!!uploadBatch.current}/>上传后组成图片组</label><HelpHint label="上传图片组">按文件队列顺序组成一组，第一张作为封面并提供组名，不必另外命名。取消勾选则分别入库。失败重试仍归入同一组；不会拆散已有图片组。</HelpHint></div>}
+        {rows.length>1&&<div className="upload-group-choice"><label><input type="checkbox" checked={grouped} onChange={e=>setGrouped(e.target.checked)} disabled={running||!!uploadBatch.current}/>{kind==='video'?'上传后组成视频组':'上传后组成图片组'}</label><HelpHint label={kind==='video'?'上传视频组':'上传图片组'}>{kind==='video'?'按文件队列顺序组成一组，第一段视频作为封面和首个预览；取消勾选则分别入库。失败重试仍归入同一组。':'按文件队列顺序组成一组，第一张作为封面并提供组名，不必另外命名。取消勾选则分别入库。失败重试仍归入同一组；不会拆散已有图片组。'}</HelpHint></div>}
         <div className="upload-queue">
           {displayRows.slice(uploadPage*50,uploadPage*50+50).map((row) => (
             <div className="upload-row" key={row.id}>

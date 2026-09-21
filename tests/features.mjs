@@ -91,7 +91,9 @@ try {
   );
   await page.getByRole("button", { name: "关闭窗口" }).click();
   await page.waitForFunction(
-    () => document.querySelectorAll(".item-card").length === 2,
+    // The two valid uploads are intentionally folded into one image card;
+    // the invalid file remains visible in the upload dialog only.
+    () => document.querySelectorAll(".item-card").length === 1,
   );
   const records = await (
     await context.request.get(base + "/api/items?collection=" + a.id)
@@ -137,7 +139,7 @@ try {
   await page.getByRole("heading", { name: "还没有找到相关内容" }).waitFor();
   await page.getByLabel("标签匹配方式").selectOption("any");
   await page.waitForFunction(
-    () => document.querySelectorAll(".item-card").length === 3,
+    () => document.querySelectorAll(".item-card").length === 2,
   );
   checkpoint("batch tag edits preserve old tags; multi-tag all/any matching");
   await page.getByRole("button", { name: "设置与连接" }).click();
@@ -174,7 +176,7 @@ try {
   checkpoint(
     "default library and night theme persist on reload; other libraries are never loaded first",
   );
-  await page.getByRole("button", { name: "工作资料 3", exact: true }).click();
+  await page.getByRole("button", { name: "工作资料 2", exact: true }).click();
   await page.getByRole("button", { name: "导出", exact: true }).click();
   await page.screenshot({
     path: resolve("artifacts/night-export.png"),

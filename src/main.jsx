@@ -1,4 +1,4 @@
-import {isImageGroup} from './image-group.js';
+import {isImageGroup,isMediaGroup,isVideoGroup} from './media-group.js';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
 import { markdownImages } from '../shared/markdown-images.js';
@@ -461,7 +461,7 @@ function Detail({
       const value = { title, content, tags, collection_id: collection || null };
       if (item.id) { value.version = item.version; value.undo = true; }
       if (item.id && value.collection_id !== item.collection_id) onBeforeItemChange?.(item.kind==='note' ? [item.id,...noteImages.map(image=>image.url.match(/^\/media\/([^/]+)\//)?.[1])] : item.group_key ? [item.id,...galleryItems.map(image=>image.id)] : [item.id]);
-      const movingGroup=item.kind==='image'&&item.group_key&&value.collection_id!==item.collection_id;
+      const movingGroup=isMediaGroup(item)&&value.collection_id!==item.collection_id;
       const result = movingGroup
         ? await send('/api/item-groups/move',{...value,id:item.id,move_note:true})
         : await send(`/api/items${item.id ? `/${item.id}` : ""}`,value,item.id?'PATCH':'POST');
@@ -475,7 +475,7 @@ function Detail({
       onSaved(result);
       const failures=result.image_archive?.failures||[];
       if(failures.length)setError(`${failures.length} 张配图暂未归档：${failures[0].error}。可再次点击归档重试。`);
-      notify(result.moved_count?`已移动整组 ${result.moved_count} 张图片${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存',failures.length?null:result.undo);
+      notify(result.moved_count?`已移动整组 ${result.moved_count} ${item.kind==='video'?'个视频':'张图片'}${item.group_key?.startsWith('note:')?'及所属笔记':''}`:failures.length?'笔记已保存，部分配图尚未归档':result.image_archive?.archived?`已保存，${result.image_archive.archived} 张配图已归档`:'已保存',failures.length?null:result.undo);
       return result;
     } catch (e) {
       videoProgress?.allowItem(item.id);
@@ -558,6 +558,14 @@ function Detail({
           <p>{item.width} × {item.height} · {bytes(item.bytes)} · {item.video_codec}{item.duration ? ` · ${Math.round(item.duration)} 秒` : ''}</p>
           {videoError && <p role="alert">浏览器无法播放此编码或文件。原视频已保存，可下载后使用本地播放器打开。</p>}
           <a href={item.url} download={title}>下载原视频</a>
+          {isVideoGroup(item) && <>
+            <div className="gallery-controls">
+              <button disabled={!previousAvailable || busy || galleryBusy} onClick={() => step(-1)}>← 上一个</button>
+              {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
+              <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一个 →</button>
+            </div>
+            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} onSelect={index=>step(index-galleryIndex)}/>
+          </>}
         </div>}
         {item.kind === "image" && (
           <div className="image-stage">
@@ -596,7 +604,7 @@ function Detail({
             {dirty && <span className="unsaved">未保存</span>}
           </div>
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
-            {isImageGroup(item)&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
+            {isMediaGroup(item)&&onSelectGroup&&<button disabled={busy||groupSelecting} onClick={()=>{if(!dirty||confirm('有尚未保存的修改，确定关闭并选择整组吗？'))onSelectGroup(item)}}>{groupSelecting?'正在选择…':'选择整组'}</button>}
             {isImageGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             {isImageGroup(item)&&!item.group_key?.startsWith('note:')&&onDetachGroup&&<button onClick={detachCurrent} disabled={busy}><Unlink size={14}/>移出图片组</button>}
             <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
@@ -617,7 +625,7 @@ function Detail({
           />
           <div className="metadata-fields">
             <label>
-              <span className="metadata-label"><BookOpen size={15} />{isImageGroup(item)?'知识库 · 整组':'知识库'}</span>
+              <span className="metadata-label"><BookOpen size={15} />{isMediaGroup(item)?'知识库 · 整组':'知识库'}</span>
               <select
                 aria-label="所属知识库"
                 value={collection}

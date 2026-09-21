@@ -10,7 +10,12 @@ try {
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, position); return buffer.subarray(0, bytesRead);
   });
   const tracks = result.media?.track || [], general = tracks.find(t => t['@type'] === 'General'), video = tracks.find(t => t['@type'] === 'Video');
-  const formats = { 'MPEG-4': ['mp4', 'video/mp4'], WebM: ['webm', 'video/webm'], QuickTime: ['mov', 'video/quicktime'] };
+  const formats = {
+    'MPEG-4': ['mp4', 'video/mp4'],
+    WebM: ['webm', 'video/webm'],
+    QuickTime: ['mov', 'video/quicktime'],
+    Matroska: ['mkv', 'video/x-matroska'],
+  };
   if (!video || !Number(video.Width) || !Number(video.Height) || !formats[general?.Format]) throw Error('Unsupported video');
   const [extension, mime] = /^qt\s*$/i.test(String(general.CodecID || '')) ? ['mov', 'video/quicktime'] : formats[general.Format];
   const duration = Number(video.Duration || general.Duration);
