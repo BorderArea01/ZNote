@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { createApp } from '../server/app.js';
 
@@ -55,6 +56,8 @@ test('video uploads accept MKV and fold explicitly grouped videos into one card'
     const order = await (await request(`/api/item-groups/order?id=${first.id}`)).json();
     assert.equal(order.kind, 'video');
     assert.deepEqual(order.items.map(item => item.kind), ['video', 'video']);
+    const recovered = await (await request(`/api/item-groups/order?id=${randomUUID()}&kind=video&collection=${collection.id}&group_key=upload%3Avideo%3Atest-group`)).json();
+    assert.deepEqual(recovered.items.map(item => item.id), [first.id, second.id], 'stable group identity recovers a stale cover id');
     const reordered = await request('/api/item-groups/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: first.id, revision: order.revision, ids: [second.id, first.id] }) });
     assert.equal(reordered.status, 200);
     assert.deepEqual((await reordered.json()).items.map(item => item.id), [second.id, first.id]);

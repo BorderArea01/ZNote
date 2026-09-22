@@ -1,6 +1,7 @@
 import {ContentActions} from './ContentActions.jsx';
 import {SortControl,DEFAULT_TYPE_ORDER} from './SortControl.jsx';
 import {isMediaGroup} from './media-group.js';
+import {groupOrderPath} from './group-order.js';
 import {detachImageFromGroup} from './group-detach.js';
 import {TrashDialog} from './TrashDialog.jsx';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
@@ -157,6 +158,7 @@ export default function Workspace({
   const [batchBusy, setBatchBusy] = useState(false);
   const [gallery, setGallery] = useState(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
+  const [galleryError, setGalleryError] = useState('');
   const [openingItem, setOpeningItem] = useState(null);
   const [undoReceipt, setUndoReceipt] = useState(null), [undoOpen, setUndoOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
@@ -568,29 +570,30 @@ export default function Workspace({
         const fresh = hydrated ? item : await api(`/api/items/${item.id}`);
         if (current !== detailGeneration.current) return;
         if (fresh.collection_id !== item.collection_id || !!fresh.deleted_at !== !!item.deleted_at) throw Error('笔记已移动或删除，请刷新列表后打开');
-        setSelected(fresh); setGallery(null); setGalleryBusy(false);
+        setSelected(fresh); setGallery(null); setGalleryError(''); setGalleryBusy(false);
       } catch (e) { if (current === detailGeneration.current) notify(e.message); }
       return;
     }
     setSelected(item);
-    if (!['image','video'].includes(item.kind)) { setGallery(null); setGalleryBusy(false); return; }
+    if (!['image','video'].includes(item.kind)) { setGallery(null); setGalleryError(''); setGalleryBusy(false); return; }
     // Standalone videos are opened directly; only an explicitly grouped video
     // needs a gallery. Keeping them out of the image gallery query avoids
     // fetching unrelated images when a video card is opened from an "all"
     // view.
-    if (item.kind === 'video' && !isMediaGroup(item)) { setGallery(null); setGalleryBusy(false); return; }
+    if (item.kind === 'video' && !isMediaGroup(item)) { setGallery(null); setGalleryError(''); setGalleryBusy(false); return; }
     // A grouped media card owns its complete, ordered gallery. Do not seed a
     // video detail with the current page (which often contains only the cover
     // card); load the group snapshot so every member and thumbnail is ready
     // for the bottom preview strip before navigation starts.
     setGallery(isMediaGroup(item) ? [] : items.filter(i => i.kind === item.kind));
+    setGalleryError('');
     setGalleryBusy(true);
     try {
       // Freeze only lightweight IDs; editing a title or sort timestamp cannot
       // move the page boundary and skip an image during continuous organizing.
       let result;
+      const expected = Number(item.group_size ?? item.group_count ?? 0);
       if (isMediaGroup(item)) {
-        const expected = Number(item.group_size ?? item.group_count ?? 0);
         const normalize = values => values
           .filter(value => value?.id)
           .map(value => ({
@@ -599,7 +602,7 @@ export default function Workspace({
             thumbnail_url: value.thumbnail_url || `/media/${value.id}/thumbnail`,
           }));
         try {
-          const order = await api(`/api/item-groups/order?id=${encodeURIComponent(item.id)}`);
+          const order = await api(groupOrderPath({id:item.id,kind:item.kind,groupKey:item.group_key,collectionId:item.collection_id}));
           const orderedItems = normalize(Array.isArray(order.items) ? order.items : []);
           // Older servers and partially repaired groups have returned only the
           // anchor from this endpoint. Fall through to the explicit gallery
@@ -613,6 +616,7 @@ export default function Workspace({
           const groupParams = new URLSearchParams({collection:item.collection_id||'unfiled',kind:item.kind,group_key:item.group_key,gallery:'true'});
           const fallback = await api(`/api/items?${groupParams}`);
           const fallbackItems = normalize((fallback.ids || []).map(id => ({id, kind:item.kind})));
+          if (expected > 1 && fallbackItems.length < 2) throw orderError;
           result = { ids: fallbackItems.map(member => member.id), items: fallbackItems };
         }
       } else {
@@ -626,8 +630,11 @@ export default function Workspace({
       const members = result.items.some(member => member.id === item.id)
         ? result.items
         : [{id:item.id,kind:item.kind,thumbnail_url:item.thumbnail_url||`/media/${item.id}/thumbnail`}, ...result.items];
+      if (isMediaGroup(item) && expected > 1 && members.length < expected) {
+        throw Error(`${item.kind==='video'?'视频':'图片'}组成员读取不完整（${members.length}/${expected}），请刷新后重试`);
+      }
       setGallery(members);
-    } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
+    } catch (e) { if (current === detailGeneration.current) { setGallery([]); setGalleryError(e.message); setToast(e.message); } }
     finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }
   async function browseFilteredImages() {
@@ -1619,6 +1626,7 @@ export default function Workspace({
           previousAvailable={galleryIndex > 0}
           nextAvailable={galleryIndex >= 0 && galleryIndex < galleryItems.length - 1}
           galleryBusy={galleryBusy}
+          galleryError={galleryError}
           galleryPosition={galleryIndex >= 0 ? `第 ${galleryIndex + 1} / ${galleryItems.length} ${selected?.kind === 'video' ? '个' : '张'}` : null}
         />
       )}

@@ -3,6 +3,14 @@ import {z} from 'zod';
 import {reorderLocalImages} from '../shared/markdown-images.js';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,groupNoteImages}) {
+  const mediaKind = z.enum(['image','video']);
+  const collectionValue = z.union([z.uuid(), z.literal('unfiled'), z.null()]).transform(value => value === 'unfiled' || value === null ? null : value);
+  const groupKey = z.string().min(1).max(200);
+  const readScope = value => value === undefined ? undefined : collectionValue.parse(value);
+  const firstMember = (kind,key,collection,includeTrash=false) => db.prepare(
+    `SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND (deleted_at IS NOT NULL)=? ORDER BY COALESCE(group_order,group_index),group_index,id LIMIT 1`,
+  ).get(kind,key,collection,+includeTrash);
+
   app.get('/api/item-groups/selection',(req,res)=>{
     const anchor=getItem(z.string().min(1).parse(req.query.id));
     const key=anchor.kind==='note'?'note:'+anchor.id:anchor.group_key;
@@ -12,24 +20,46 @@ export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,gr
     if(!rows.length)throw fail(404,'图片组已没有可选成员');
     res.json({items:rows.map(row=>({...row,favorite:Boolean(row.favorite)})),collection_id:anchor.collection_id,group_key:key,trash:Boolean(anchor.deleted_at)});
   });
-  function snapshot(id) {
-    const anchor=getItem(id);if(anchor.deleted_at)throw fail(409,'请先恢复内容');
-    const key=anchor.kind==='note'?'note:'+anchor.id:anchor.group_key;
+  function snapshot(id, overrides = {}) {
+    // A folded card normally supplies a member id. Older cards and a group
+    // whose cover was moved can still carry a valid group key while that id
+    // no longer resolves to an active member. Resolve by the stable group
+    // identity as a second path so previews and ordering share one source.
+    const requestedId = id || null;
+    let anchor = null;
+    if(requestedId) {
+      try { anchor = getItem(requestedId); }
+      catch(error) { if(!overrides.group_key) throw error; }
+    }
+    let kind = overrides.kind ? mediaKind.parse(overrides.kind) : (anchor?.kind === 'note' ? 'image' : anchor?.kind);
+    let collection = overrides.collection_id !== undefined ? readScope(overrides.collection_id) : (anchor?.collection_id ?? null);
+    let key = overrides.group_key ? groupKey.parse(overrides.group_key) : (anchor?.kind === 'note' ? 'note:'+anchor.id : anchor?.group_key);
     if(!key)throw fail(400,'这项内容不属于媒体组');
-    const kind=anchor.kind==='note'?'image':anchor.kind;
     if(!['image','video'].includes(kind))throw fail(400,'这项内容不支持组内排序');
-    const rows=db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,anchor.collection_id);
+    if(anchor?.deleted_at && !overrides.group_key)throw fail(409,'请先恢复内容');
+    let rows=db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,collection);
+    if(!rows.length && overrides.group_key) {
+      const member = firstMember(kind,key,collection);
+      if(member) { anchor = member; rows = db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,collection); }
+    }
     if(!rows.length)throw fail(404,kind==='video'?'视频组不存在':'图片组不存在');
+    // If an id was stale, use the resolved member for the rest of the state;
+    // this keeps undo and the returned detail item inside the same group.
+    if(!anchor || anchor.kind === 'note' || anchor.group_key !== key || anchor.collection_id !== collection || anchor.deleted_at) anchor = firstMember(kind,key,collection);
     const note=key.startsWith('note:')?db.prepare("SELECT * FROM items WHERE id=? AND kind='note' AND deleted_at IS NULL AND collection_id IS ?").get(key.slice(5),anchor.collection_id):null;
     const revision=createHash('sha256').update(JSON.stringify([key,anchor.collection_id,note?.version,rows.map(r=>[r.id,r.version,r.group_order,r.group_index])])).digest('hex');
     return {anchor,rows,note,kind,revision};
   }
-  const publicState=state=>({revision:state.revision,kind:state.kind,note_id:state.note?.id||null,items:state.rows.map(r=>({id:r.id,kind:r.kind,title:r.title,thumbnail_url:`/media/${r.id}/thumbnail`,version:r.version})),cover_id:state.rows[0].id});
-  app.get('/api/item-groups/order',(req,res)=>res.json(publicState(snapshot(z.string().min(1).parse(req.query.id)))));
+  const publicState=state=>({revision:state.revision,kind:state.kind,note_id:state.note?.id||null,collection_id:state.anchor.collection_id,group_key:state.rows[0].group_key,items:state.rows.map(r=>({id:r.id,kind:r.kind,title:r.title,thumbnail_url:`/media/${r.id}/thumbnail`,version:r.version})),cover_id:state.rows[0].id});
+  app.get('/api/item-groups/order',(req,res)=>{
+    const query = z.object({id:z.string().min(1).optional(),kind:mediaKind.optional(),collection:z.string().optional(),group_key:groupKey.optional()}).parse(req.query);
+    if(!query.id&&!query.group_key)throw fail(400,'请提供媒体组成员或组标识');
+    res.json(publicState(snapshot(query.id,{kind:query.kind,collection_id:query.collection,group_key:query.group_key})));
+  });
   app.post('/api/item-groups/order',(req,res)=>{
-    const input=z.object({id:z.string(),revision:z.string().length(64),ids:z.array(z.string()).min(1).max(10000),sync_note:z.boolean().default(true)}).parse(req.body);
+    const input=z.object({id:z.string(),kind:mediaKind.optional(),collection_id:z.union([z.uuid(),z.literal('unfiled')]).nullable().optional(),group_key:groupKey.optional(),revision:z.string().length(64),ids:z.array(z.string()).min(1).max(10000),sync_note:z.boolean().default(true)}).parse(req.body);
     const {result,undo:receipt}=undo.run(req,'整组排序',()=>{
-      const state=snapshot(input.id),ids=new Set(input.ids);
+      const state=snapshot(input.id,input),ids=new Set(input.ids);
       if(input.revision!==state.revision||ids.size!==input.ids.length||ids.size!==state.rows.length||state.rows.some(r=>!ids.has(r.id)))throw fail(409,'图片组已被修改，请重新打开排序后重试');
       if(state.rows.every((row,index)=>row.id===input.ids[index]))return {...publicState(state),item:serialize(state.anchor)};
       let content;

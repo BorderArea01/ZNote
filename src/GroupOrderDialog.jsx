@@ -2,19 +2,20 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {ArrowLeft, ArrowRight, GripVertical} from 'lucide-react';
 import {Dialog} from './ui.jsx';
 import {api, send} from './api.js';
+import {groupOrderPath} from './group-order.js';
 
-export function GroupOrderDialog({id,kind='image',onClose,onDone}) {
+export function GroupOrderDialog({id,kind='image',groupKey='',collectionId,onClose,onDone}) {
   const [snapshot,setSnapshot]=useState(null),[items,setItems]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[sync,setSync]=useState(true),[page,setPage]=useState(0),[drag,setDrag]=useState(null);
   const pointer=useRef(null),pageSize=60;
   const mediaKind=snapshot?.kind||kind;
   const mediaLabel=mediaKind==='video'?'视频':'图片';
-  const load=useCallback(()=>{let active=true;setSnapshot(null);setItems([]);setError('');setPage(0);api('/api/item-groups/order?id='+encodeURIComponent(id)).then(value=>{if(active){setSnapshot(value);setItems(value.items)}}).catch(e=>active&&setError(e.message));return()=>{active=false}},[id]);
+  const load=useCallback(()=>{let active=true;setSnapshot(null);setItems([]);setError('');setPage(0);api(groupOrderPath({id,kind,groupKey,collectionId})).then(value=>{if(active){setSnapshot(value);setItems(value.items)}}).catch(e=>active&&setError(e.message));return()=>{active=false}},[id,kind,groupKey,collectionId]);
   useEffect(()=>load(),[load]);
   const displayError=mediaKind==='video'&&/图片组/.test(error)?error.replaceAll('图片组','视频组'):error;
   const dirty=!!snapshot&&items.some((item,i)=>item.id!==snapshot.items[i]?.id);
   const close=()=>{if(!busy&&(!dirty||confirm('排序尚未保存，确定关闭吗？')))onClose()};
   function move(fromId,toId){if(busy||fromId===toId)return;setItems(old=>{const next=[...old],from=next.findIndex(i=>i.id===fromId),to=next.findIndex(i=>i.id===toId);if(from<0||to<0)return old;next.splice(to,0,next.splice(from,1)[0]);return next})}
-  async function save(){setBusy(true);setError('');try{const result=await send('/api/item-groups/order',{id,revision:snapshot.revision,ids:items.map(i=>i.id),sync_note:sync,undo:true});onDone(result);onClose()}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function save(){setBusy(true);setError('');try{const result=await send('/api/item-groups/order',{id,kind,group_key:groupKey||undefined,collection_id:collectionId??null,revision:snapshot.revision,ids:items.map(i=>i.id),sync_note:sync,undo:true});onDone(result);onClose()}catch(e){setError(e.message)}finally{setBusy(false)}}
   return <Dialog title={`调整${mediaLabel}顺序`} className="group-order-dialog" onClose={close}>
     <div className="order-summary"><span>拖动排序 · 首个{mediaLabel}为封面</span><span>{items.length} 个{mediaLabel}</span></div>
     {!snapshot&&!error&&<p role="status">正在加载{mediaLabel}组…</p>}

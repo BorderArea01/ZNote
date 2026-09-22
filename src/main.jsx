@@ -6,6 +6,7 @@ import { mediaDescription } from '../shared/media-description.js';
 import {remarkMessageSpacing} from '../shared/message-blocks.js';
 import {MessageBlocks} from './MessageBlocks.jsx';
 import { GroupOrderDialog } from './GroupOrderDialog.jsx';
+import { groupOrderPath } from './group-order.js';
 import { useNoteDraft } from './useNoteDraft.js';
 import { DraftConflict } from './NoteDrafts.jsx';
 const NoteVersions = React.lazy(() => import('./NoteVersions.jsx'));
@@ -420,6 +421,7 @@ function Detail({
   previousAvailable,
   nextAvailable,
   galleryBusy,
+  galleryError,
   galleryPosition,
   galleryItems = [],
   galleryIndex = -1,
@@ -551,7 +553,7 @@ function Detail({
     setBusy(true); setError('');
     try {
       await send('/api/undo/' + orderUndo.id, {});
-      const [fresh, order] = await Promise.all([api('/api/items/' + item.id), api('/api/item-groups/order?id=' + encodeURIComponent(item.id))]);
+      const [fresh, order] = await Promise.all([api('/api/items/' + item.id), api(groupOrderPath({id:item.id,kind:item.kind,groupKey:item.group_key,collectionId:item.collection_id}))]);
       setItem(fresh);
       const pending = latestFields.current;
       if (pending.title === submitted.title) setTitle(fresh.title);
@@ -608,7 +610,7 @@ function Detail({
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一个 →</button>
             </div>
-            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} required expectedCount={item.group_size ?? item.group_count} onSelect={index=>step(index-galleryIndex)}/>
+            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} required expectedCount={item.group_size ?? item.group_count} error={galleryError} onSelect={index=>step(index-galleryIndex)}/>
           </>}
         </div>}
         {item.kind === "image" && (
@@ -903,7 +905,7 @@ function Detail({
         onStep={delta=>{if(noteIndex!==null){const index=noteIndex+delta;if(noteImages[index]){setNoteIndex(index);setLightbox(noteImages[index].url);}}else return step(delta);}}/>}
       {noteIndex!==null && noteImages[noteIndex] && <Dialog title="笔记配图" className="note-gallery-dialog" onClose={()=>setNoteIndex(null)}><button className="note-gallery-stage" ref={noteArea} {...noteSwipe} aria-label="展开笔记配图" onClick={()=>setLightbox(noteImages[noteIndex].url)}><img className="note-gallery-image" src={noteImages[noteIndex].url} alt={noteImages[noteIndex].alt}/></button><div className="gallery-controls">{!item.deleted_at&&<button disabled={busy} onClick={openSorting}>调整顺序</button>}<button disabled={!noteIndex} onClick={()=>setNoteIndex(i=>i-1)}>← 上一张</button><span>第 {noteIndex+1} / {noteImages.length} 张</span><button disabled={noteIndex===noteImages.length-1} onClick={()=>setNoteIndex(i=>i+1)}>下一张 →</button></div><GalleryStrip items={noteImages} index={noteIndex} onSelect={setNoteIndex}/></Dialog>}
       {versionsOpen && <React.Suspense fallback={null}><NoteVersions item={{...item,title,content}} onClose={() => setVersionsOpen(false)} onUse={async value => { if (!(await draft.keepCurrent())) return false; applyDraft({...value,collection_id:collection||null}); return true; }}/></React.Suspense>}
-      {sorting && <GroupOrderDialog id={item.id} kind={item.kind==='video'?'video':'image'} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify(`顺序已保存，首个${item.kind==='video'?'视频':'图片'}为封面`,result.undo);}}/>}
+      {sorting && <GroupOrderDialog id={item.id} kind={item.kind==='video'?'video':'image'} groupKey={item.group_key} collectionId={item.collection_id} onClose={()=>setSorting(false)} onDone={result=>{setItem(result.item);setContent(result.item.content);setNoteIndex(null);setOrderUndo(result.undo);onGroupOrdered?.(result);onSaved(result);notify(`顺序已保存，首个${item.kind==='video'?'视频':'图片'}为封面`,result.undo);}}/>}
       {copying && <OrganizeDialog copy items={[item]} collections={collections} onClose={() => setCopying(false)} onDone={() => { onSaved(); notify('已复用原图到目标知识库'); }} />}
     </Dialog>
   );

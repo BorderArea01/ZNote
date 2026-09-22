@@ -70,6 +70,11 @@ try {
   assert.equal(await videoDialog.locator('.gallery-strip-list > button[role="option"]').count(), 2);
   await videoDialog.getByRole('option', { name: '查看第 2 个视频', exact: true }).tap();
   await page.waitForFunction(() => document.querySelector('#item-title')?.value === '视频 2');
+  await videoDialog.getByRole('button', { name: '调整顺序', exact: true }).tap();
+  const orderDialog = page.getByRole('dialog', { name: '调整视频顺序', exact: true });
+  await orderDialog.locator('.order-card').nth(1).waitFor();
+  assert.equal(await orderDialog.locator('.order-card').count(), 2);
+  await orderDialog.getByRole('button', { name: '取消', exact: true }).click();
   console.log('PASS: note TOC anchors and grouped video preview strip/order');
 } finally {
   await browser.close();
