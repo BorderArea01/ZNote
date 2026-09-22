@@ -56,6 +56,8 @@ test('video uploads accept MKV and fold explicitly grouped videos into one card'
     const order = await (await request(`/api/item-groups/order?id=${first.id}`)).json();
     assert.equal(order.kind, 'video');
     assert.deepEqual(order.items.map(item => item.kind), ['video', 'video']);
+    const staleCard = await (await request(`/api/item-groups/order?id=${first.id}&kind=video&collection=unfiled&group_key=upload%3Avideo%3Aold-card-key`)).json();
+    assert.deepEqual(staleCard.items.map(item => item.id), [first.id, second.id], 'a valid member id wins over stale folded-card scope and key');
     const recovered = await (await request(`/api/item-groups/order?id=${randomUUID()}&kind=video&collection=${collection.id}&group_key=upload%3Avideo%3Atest-group`)).json();
     assert.deepEqual(recovered.items.map(item => item.id), [first.id, second.id], 'stable group identity recovers a stale cover id');
     const reordered = await request('/api/item-groups/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: first.id, revision: order.revision, ids: [second.id, first.id] }) });

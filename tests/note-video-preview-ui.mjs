@@ -65,6 +65,7 @@ try {
   await page.getByRole('button', { name: '打开 预览视频组', exact: true }).click();
   const videoDialog = page.getByRole('dialog', { name: '视频详情', exact: true });
   await videoDialog.locator('.gallery-strip').waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('.gallery-strip-list > button[role="option"]').length === 2);
   assert.equal(await videoDialog.locator('.gallery-strip-list > button[role="option"]').count(), 2);
   await videoDialog.getByRole('button', { name: '展开全部', exact: true }).tap();
   assert.equal(await videoDialog.locator('.gallery-strip-list > button[role="option"]').count(), 2);

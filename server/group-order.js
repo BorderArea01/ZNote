@@ -31,16 +31,31 @@ export function registerGroupOrderRoutes({app,db,undo,getItem,serialize,event,gr
       try { anchor = getItem(requestedId); }
       catch(error) { if(!overrides.group_key) throw error; }
     }
-    let kind = overrides.kind ? mediaKind.parse(overrides.kind) : (anchor?.kind === 'note' ? 'image' : anchor?.kind);
-    let collection = overrides.collection_id !== undefined ? readScope(overrides.collection_id) : (anchor?.collection_id ?? null);
-    let key = overrides.group_key ? groupKey.parse(overrides.group_key) : (anchor?.kind === 'note' ? 'note:'+anchor.id : anchor?.group_key);
-    if(!key)throw fail(400,'这项内容不属于媒体组');
+    const requestedKind = overrides.kind ? mediaKind.parse(overrides.kind) : undefined;
+    const requestedCollection = overrides.collection_id !== undefined ? readScope(overrides.collection_id) : undefined;
+    const requestedKey = overrides.group_key ? groupKey.parse(overrides.group_key) : undefined;
+    // A folded card may have been rendered before a move/re-group operation,
+    // so its key or collection can be stale even though its member id is still
+    // valid. Prefer the member's current identity first; use the supplied
+    // group identity only when the id cannot be resolved or has no group.
+    const anchorKind = anchor?.kind === 'note' ? 'image' : anchor?.kind;
+    const anchorKey = anchor?.kind === 'note' ? 'note:'+anchor.id : anchor?.group_key;
+    const anchorCollection = anchor?.collection_id ?? null;
+    const candidates = [];
+    if (anchorKey && ['image','video'].includes(anchorKind)) candidates.push({kind:anchorKind,key:anchorKey,collection:anchorCollection});
+    if (requestedKey) candidates.push({kind:requestedKind || anchorKind,key:requestedKey,collection:requestedCollection !== undefined ? requestedCollection : anchorCollection});
+    const candidate = candidates.find(value => ['image','video'].includes(value.kind) && value.key);
+    if(!candidate)throw fail(400,anchor ? '这项内容不属于媒体组' : '请提供有效的媒体组标识');
+    let kind = candidate.kind;
+    let collection = candidate.collection;
+    let key = candidate.key;
     if(!['image','video'].includes(kind))throw fail(400,'这项内容不支持组内排序');
     if(anchor?.deleted_at && !overrides.group_key)throw fail(409,'请先恢复内容');
     let rows=db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,collection);
-    if(!rows.length && overrides.group_key) {
-      const member = firstMember(kind,key,collection);
-      if(member) { anchor = member; rows = db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(kind,key,collection); }
+    if(!rows.length && requestedKey && candidate !== candidates[candidates.length - 1]) {
+      const fallback = candidates[candidates.length - 1];
+      const fallbackRows = db.prepare("SELECT * FROM items WHERE kind=? AND group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id").all(fallback.kind,fallback.key,fallback.collection);
+      if(fallbackRows.length) { kind=fallback.kind; key=fallback.key; collection=fallback.collection; rows=fallbackRows; }
     }
     if(!rows.length)throw fail(404,kind==='video'?'视频组不存在':'图片组不存在');
     // If an id was stale, use the resolved member for the rest of the state;
