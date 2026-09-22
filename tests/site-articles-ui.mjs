@@ -13,6 +13,17 @@ try{
   return {title:adapter.title,images:[...adapter.document.images].map(i=>i.src),links:adapter.document.querySelectorAll('a').length,calls};
  });
  assert.equal(pixiv.title,'多页作品');assert.equal(pixiv.images.length,3);assert.equal(pixiv.links,1);assert.deepEqual(pixiv.images,['1','2','3'].map(i=>`https://i.pximg.net/img-original/${i}.png`));assert.equal(pixiv.calls.length,2);
+ const biliState={opus:{id:'1168138243068133376',detail:{basic:{title:'B站图文示例 - 哔哩哔哩'},modules:[
+  {module_type:'MODULE_TYPE_TITLE',module_title:{text:'B站图文示例'}},
+  {module_type:'MODULE_TYPE_AUTHOR',module_author:{name:'图文作者'}},
+  {module_type:'MODULE_TYPE_CONTENT',module_content:{paragraphs:[
+   {text:{nodes:[{type:'TEXT_NODE_TYPE_WORD',word:{words:'第一行\n第二行'}}]}},
+   {pic:{pics:[{url:'http://i0.hdslb.com/bfs/new_dyn/one.png'},{url:'https://i0.hdslb.com/bfs/new_dyn/two.png'}]}}
+  ]}}
+ ]}}};
+ await page.setContent(`<script>window.__INITIAL_STATE__=${JSON.stringify(biliState)};</script>`);
+ const bili=await page.evaluate(async()=>{const a=await Adapters.siteArticle(document,new URL('https://m.bilibili.com/opus/1168138243068133376'));return{title:a.title,byline:a.byline,text:a.document.body.textContent,images:[...a.document.images].map(i=>i.src)};});
+ assert.equal(bili.title,'B站图文示例');assert.equal(bili.byline,'图文作者');assert.match(bili.text,/第一行[\s\S]*第二行/);assert.deepEqual(bili.images,['https://i0.hdslb.com/bfs/new_dyn/one.png','https://i0.hdslb.com/bfs/new_dyn/two.png']);
  await page.setContent(`<main><header><img src="https://pawchive.pw/avatar.png"></header><h1>正文作品</h1><div class="post__content"><p>正文 <a href="/reference">带链接</a></p></div>
  <figure><a href="https://file.pawchive.pw/data/a.png?f=one.png"><img src="https://img.pawchive.pw/thumbnail/a.png"></a></figure>
  <a class="fileThumb" href="https://file.pawchive.pw/data/b.jpg?f=two.jpg"><img src="https://img.pawchive.pw/thumbnail/b.jpg"></a>

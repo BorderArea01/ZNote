@@ -76,7 +76,12 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     const groupKey=liveOnly?(liveVideos.length>1?'capture:'+id:null):album?(mediaCount>1?'capture:'+id:null):'note:'+id;
     const tags=[...new Set([...job.input.tags, ...(plan.tags||[]).map(String).map(value=>value.slice(0,40)), ...(plan.author?[String(plan.author).slice(0,40)]:[])])].slice(0,30);
     let content=plan.content||'';
-    if(galleryEntries.length)content += '\n\n'+galleryEntries.map(({url,sourceIndex})=>`![配图 ${sourceIndex+1}](<${url}>)`).join('\n\n');
+    // Some platform parsers (notably Bilibili opus) already place every
+    // picture in the Markdown body. Add gallery-only pictures without
+    // duplicating references that are already present in the note.
+    const contentImages=new Set(markdownImages(content).map(image=>image.url));
+    const missingGallery=galleryEntries.filter(({url})=>!contentImages.has(url));
+    if(missingGallery.length)content += '\n\n'+missingGallery.map(({url,sourceIndex})=>`![配图 ${sourceIndex+1}](<${url}>)`).join('\n\n');
     const urls=[...new Set(markdownImages(content).map(v=>v.url))];
     if(urls.length>100)throw fail(413,'单次正文配图最多 100 张');
     const galleryIndex=new Map(galleryEntries.map(entry=>[entry.url,entry.sourceIndex]));

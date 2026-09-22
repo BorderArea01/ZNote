@@ -1,6 +1,112 @@
+const isBilibiliHost = host => /(?:^|\.)bilibili\.com$|(?:^|\.)b23\.tv$/i.test(host);
+const isBilibiliImage = value => {
+  try {
+    const url = new URL(String(value || '').replace(/^\/\//, 'https://').replace(/^http:/i, 'https:'));
+    return url.protocol === 'https:' && /(?:^|\.)hdslb\.com$|(?:^|\.)bilivideo\.com$|(?:^|\.)bilibili\.com$/i.test(url.hostname) && !url.username && !url.password ? url.href : '';
+  } catch { return ''; }
+};
+
+// Bilibili's opus page embeds a JSON SSR state instead of a normal article
+// element. Read only the assigned JSON; the extension never executes page
+// scripts or trusts arbitrary script text as markup.
+function bilibiliScriptJson(raw) {
+  const match = String(raw || '').match(/(?:window|self|globalThis)\.__INITIAL_STATE__\s*=\s*/);
+  if (!match) return null;
+  let value = String(raw).slice(match.index + match[0].length), depth = 0, quoted = false, escaped = false, end = 0;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (quoted) { if (escaped) escaped = false; else if (char === '\\') escaped = true; else if (char === '"') quoted = false; continue; }
+    if (char === '"') { quoted = true; continue; }
+    if (char === '{' || char === '[') depth++;
+    else if (char === '}' || char === ']') { depth--; if (depth === 0) { end = index + 1; break; } }
+  }
+  if (!end || end > 8 * 1024 * 1024) return null;
+  try { return JSON.parse(value.slice(0, end)); } catch { return null; }
+}
+function bilibiliDetail(document) {
+  for (const script of [...document.querySelectorAll('script:not([src])')].slice(0, 150)) {
+    const data = bilibiliScriptJson(script.textContent);
+    const detail = data?.opus?.detail || data?.opus?.data?.detail;
+    if (detail && Array.isArray(detail.modules)) return { data, detail };
+  }
+  return null;
+}
+function bilibiliNodesText(nodes) {
+  if (!Array.isArray(nodes)) return '';
+  return nodes.map(node => {
+    if (node?.word?.words != null) return String(node.word.words);
+    if (node?.rich) return String(node.rich.orig_text || node.rich.text || node.rich.emoji?.text || '');
+    if (node?.user) return String(node.user.name || node.user.nickname || node.user.uname || '');
+    if (node?.formula) return String(node.formula.text || node.formula.content || '');
+    return '';
+  }).join('');
+}
+function bilibiliCleanText(value) { return String(value || '').replace(/\r\n?/g, '\n').trim(); }
+function bilibiliAppendParagraph(doc, parent, paragraph, images, tags) {
+  if (!paragraph || typeof paragraph !== 'object') return;
+  const text = bilibiliCleanText(bilibiliNodesText(paragraph.text?.nodes));
+  if (text) {
+    const p = doc.createElement('p');
+    for (const node of paragraph.text?.nodes || []) {
+      const value = bilibiliNodesText([node]); if (!value) continue;
+      const rich = node.rich;
+      if (rich?.type === 'RICH_TEXT_NODE_TYPE_TOPIC') tags.push(value.replace(/^#|#$/g, '').trim());
+      if (rich?.jump_url) {
+        const link = doc.createElement('a');
+        try { const href = new URL(rich.jump_url.replace(/^\/\//, 'https://'), 'https://www.bilibili.com').href; if (/^https?:$/.test(new URL(href).protocol)) link.href = href; } catch {}
+        link.textContent = value; p.append(link);
+      } else p.append(doc.createTextNode(value));
+    }
+    if (!p.textContent) p.textContent = text;
+    parent.append(p);
+  }
+  const heading = bilibiliCleanText(bilibiliNodesText(paragraph.heading?.nodes));
+  if (heading) { const h = doc.createElement(`h${Math.min(6, Math.max(1, Number(paragraph.heading?.level) || 3))}`); h.textContent = heading; parent.append(h); }
+  const quote = bilibiliCleanText(bilibiliNodesText(paragraph.blockquote?.nodes));
+  if (quote) { const blockquote = doc.createElement('blockquote'); blockquote.textContent = quote; parent.append(blockquote); }
+  const code = bilibiliCleanText(paragraph.code?.content || paragraph.code?.text || bilibiliNodesText(paragraph.code?.nodes));
+  if (code) { const pre = doc.createElement('pre'); pre.textContent = code; parent.append(pre); }
+  for (const pic of paragraph.pic?.pics || []) {
+    const src = isBilibiliImage(pic?.url || pic?.url_default || pic?.urlDefault); if (!src || images.has(src)) continue;
+    images.add(src); const img = doc.createElement('img'); img.src = src; img.alt = `配图 ${images.size}`; img.setAttribute('data-znote-work-image', ''); parent.append(img);
+  }
+  const list = paragraph.list, children = Array.isArray(list?.children) ? list.children : [];
+  if (children.length) {
+    const listNode = doc.createElement(Number(list.style) === 1 ? 'ol' : 'ul');
+    for (const child of children) { const item = doc.createElement('li'); for (const nested of child?.children || []) bilibiliAppendParagraph(doc, item, nested, images, tags); if (item.textContent || item.querySelector('img')) listNode.append(item); }
+    if (listNode.childElementCount) parent.append(listNode);
+  }
+}
+function bilibiliArticle(document, detail) {
+  const titleModule = detail.modules.find(module => module?.module_type === 'MODULE_TYPE_TITLE');
+  const authorModule = detail.modules.find(module => module?.module_type === 'MODULE_TYPE_AUTHOR')?.module_author || {};
+  const title = String(titleModule?.module_title?.text || detail.basic?.title || document.title || 'B站图文笔记').replace(/\s+-\s*哔哩哔哩\s*$/i, '');
+  const author = String(authorModule.name || authorModule.uname || authorModule.nickname || '');
+  const clone = document.implementation.createHTMLDocument(title), article = clone.createElement('article');
+  const heading = clone.createElement('h1'); heading.textContent = title; article.append(heading);
+  if (author) { const byline = clone.createElement('p'); byline.textContent = `作者：${author}`; article.append(byline); }
+  const images = new Set(), tags = [];
+  for (const module of detail.modules) for (const paragraph of module?.module_content?.paragraphs || []) bilibiliAppendParagraph(clone, article, paragraph, images, tags);
+  if (!article.textContent.trim() && !images.size) return null;
+  clone.body.append(article);
+  return { document: clone, title, byline: author, selector: 'article', tags: [...new Set(tags)].filter(Boolean) };
+}
+
 // Site adapters read only the selected work, never creator-wide recommendations.
 export async function siteArticle(document, location, fetcher = fetch) {
   const host=location.hostname.replace(/^www\./,'');
+  if (isBilibiliHost(host)) {
+    const state = bilibiliDetail(document), rendered = state && bilibiliArticle(document, state.detail);
+    if (rendered) return rendered;
+    const source = document.querySelector('.opus-modules,.opus-detail,[class*="opus-detail"]');
+    if (source && /\/opus\//i.test(location.pathname)) {
+      const clone = document.implementation.createHTMLDocument(document.title), article = source.cloneNode(true);
+      article.querySelectorAll('nav,header,footer,button,[role="button"],[data-znote-overlay]').forEach(el => el.remove());
+      clone.body.append(article);
+      if (article.textContent.trim() || article.querySelector('img')) return { document: clone, title: document.title.replace(/\s+-\s*哔哩哔哩\s*$/i, ''), selector: 'article' };
+    }
+    throw Error('B站图文正文尚未加载，请打开完整作品后重试');
+  }
   if(host==='pixiv.net') {
     const id=location.pathname.match(/^\/(?:[a-z]{2}\/)?artworks\/(\d+)\/?$/)?.[1];
     if(!id) throw Error('请打开 Pixiv 单个作品详情页后采集正文');

@@ -14,6 +14,8 @@ const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
 const PIXIV_HOST = /^(?:www\.)?pixiv\.net$/i;
+const BILIBILI_HOST = /(?:^|\.)bilibili\.com$|(?:^|\.)b23\.tv$/i;
+const BILIBILI_IMAGE_HOST = /(?:^|\.)hdslb\.com$|(?:^|\.)bilivideo\.com$|(?:^|\.)bilibili\.com$/i;
 
 async function fetchDocument(value, signal, redirects = 0, extra = {}) {
   const url = new URL(value), host = url.hostname.replace(/^\[|\]$/g, '');
@@ -179,6 +181,122 @@ function extractPawCapture(html, url) {
   return { kind: 'note', url, title: title.slice(0, 200), content, images: images.map(value => value[0]), image_candidates: images, author };
 }
 
+function bilibiliImageUrl(value, base) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const href = absolute(value.trim().replace(/^\/\//, 'https://').replace(/^http:/i, 'https:'), base);
+  try {
+    const candidate = new URL(href);
+    if (candidate.protocol !== 'https:' || !BILIBILI_IMAGE_HOST.test(candidate.hostname) || candidate.username || candidate.password) return '';
+    return candidate.href;
+  } catch { return ''; }
+}
+
+function bilibiliNodeText(node) {
+  if (!node || typeof node !== 'object') return '';
+  if (node.word && typeof node.word.words === 'string') return node.word.words;
+  if (node.rich) return String(node.rich.orig_text || node.rich.text || node.rich.emoji?.text || '');
+  if (node.user) return String(node.user.name || node.user.nickname || node.user.uname || node.user.uid || '');
+  if (node.formula) return String(node.formula.text || node.formula.content || '');
+  return '';
+}
+
+function bilibiliTextBlock(value) {
+  return String(value || '').replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+}
+
+function bilibiliState(document) {
+  for (const script of [...document.querySelectorAll('script:not([src])')].slice(0, 150)) {
+    for (const data of scriptValues(script.textContent || '')) {
+      const detail = data?.opus?.detail || data?.opus?.data?.detail;
+      if (detail && Array.isArray(detail.modules)) return { data, detail };
+    }
+  }
+  return null;
+}
+
+function bilibiliMarkdown(detail, base) {
+  const images = [], candidates = [], tags = [], seenImages = new Set();
+  const imageMarkdown = pic => {
+    const first = bilibiliImageUrl(pic?.url || pic?.url_default || pic?.urlDefault, base);
+    const alternatives = [first, bilibiliImageUrl(pic?.live_url || pic?.liveUrl, base)].filter(Boolean);
+    const unique = [...new Set(alternatives)];
+    if (!unique.length) return '';
+    const key = unique[0];
+    if (seenImages.has(key)) return '';
+    seenImages.add(key); images.push(key); candidates.push(unique);
+    return `![配图 ${images.length}](<${key.replace(/>/g, '%3E')}>)`;
+  };
+  const nodeText = nodes => {
+    if (!Array.isArray(nodes)) return '';
+    return nodes.map(node => {
+      if (node?.rich?.type === 'RICH_TEXT_NODE_TYPE_TOPIC') {
+        const text = bilibiliNodeText(node);
+        const tag = text.replace(/^#|#$/g, '').trim();
+        if (tag) tags.push(tag);
+        return text;
+      }
+      return bilibiliNodeText(node);
+    }).join('');
+  };
+  const paragraph = (entry, depth = 0) => {
+    if (!entry || typeof entry !== 'object') return '';
+    const blocks = [];
+    const text = bilibiliTextBlock(nodeText(entry.text?.nodes));
+    if (text) blocks.push(text);
+    const heading = bilibiliTextBlock(nodeText(entry.heading?.nodes));
+    if (heading) blocks.push(`${'#'.repeat(Math.min(6, Math.max(1, Number(entry.heading?.level) || 3)))} ${heading}`);
+    const quote = bilibiliTextBlock(nodeText(entry.blockquote?.nodes));
+    if (quote) blocks.push(quote.split('\n').map(line => `> ${line}`).join('\n'));
+    const code = bilibiliTextBlock(entry.code?.content || entry.code?.text || nodeText(entry.code?.nodes));
+    if (code) blocks.push(`\`\`\`\n${code}\n\`\`\``);
+    const pics = Array.isArray(entry.pic?.pics) ? entry.pic.pics.map(imageMarkdown).filter(Boolean) : [];
+    if (pics.length) blocks.push(pics.join('\n\n'));
+    const list = entry.list;
+    const children = Array.isArray(list?.children) ? list.children : [];
+    if (children.length) {
+      const ordered = Number(list.style) === 1;
+      const rows = [];
+      for (const [index, child] of children.entries()) {
+        const nested = Array.isArray(child?.children) ? child.children : [];
+        const body = nested.map(item => paragraph(item, depth + 1)).filter(Boolean).join('\n\n');
+        if (!body) continue;
+        const prefix = ordered ? `${index + 1}. ` : '- ';
+        rows.push(body.split('\n').map((line, lineIndex) => lineIndex ? `  ${line}` : prefix + line).join('\n'));
+      }
+      if (rows.length) blocks.push(rows.join('\n'));
+    }
+    const card = entry.link_card;
+    if (card && typeof card === 'object') {
+      const cardText = bilibiliTextBlock(card.title || card.text || card.desc || '');
+      if (cardText) blocks.push(cardText);
+    }
+    return blocks.join('\n\n');
+  };
+  const contentModules = detail.modules.filter(module => module?.module_type === 'MODULE_TYPE_CONTENT' && module.module_content);
+  const blocks = contentModules.flatMap(module => (module.module_content.paragraphs || []).map(item => paragraph(item)).filter(Boolean));
+  return { content: blocks.join('\n\n').trim(), images, image_candidates: candidates, tags: [...new Set(tags)].slice(0, 30) };
+}
+
+function extractBilibiliCapture(html, url) {
+  const { document } = parseHTML(html), state = bilibiliState(document);
+  if (!state) return null;
+  const detail = state.detail, basic = detail.basic || {}, modules = Array.isArray(detail.modules) ? detail.modules : [];
+  const titleModule = modules.find(module => module?.module_type === 'MODULE_TYPE_TITLE');
+  const authorModule = modules.find(module => module?.module_type === 'MODULE_TYPE_AUTHOR')?.module_author || {};
+  const parsed = bilibiliMarkdown(detail, url);
+  if (!parsed.content && !parsed.images.length) return null;
+  if (parsed.images.length > 100) throw fail('B站图文配图超过 100 张，请分段采集');
+  const id = String(detail.id || state.data?.opus?.id || basic.rid_str || '').trim();
+  const canonical = /^\d+$/.test(id) ? `https://www.bilibili.com/opus/${id}` : url;
+  const rawTitle = titleModule?.module_title?.text || basic.title || document.title || 'B站图文笔记';
+  const title = String(rawTitle).replace(/\s+-\s*哔哩哔哩\s*$/i, '').slice(0, 200);
+  return {
+    kind: 'note', url: canonical, title, content: parsed.content,
+    images: parsed.images, image_candidates: parsed.image_candidates,
+    author: String(authorModule.name || authorModule.uname || authorModule.nickname || ''), tags: parsed.tags,
+  };
+}
+
 // Parse only JSON data. Never execute platform scripts, even in a VM.
 function scriptData(raw) {
   let value = raw.trim();
@@ -336,7 +454,17 @@ export function extractCapturePage(html, url) {
     if (dy && !/\/note\//.test(u.pathname) || /video/i.test(meta('og:type'))) return { kind: 'video', url };
     throw fail('平台未提供这篇作品的完整数据，可能需要登录或验证；可从原 App 直接分享图片，或用浏览器扩展采集');
   }
-  if (/(^|\.)(bilibili\.com|b23\.tv|x\.com|twitter\.com)$/.test(host)) return { kind: 'video', url };
+  if (BILIBILI_HOST.test(host)) {
+    const opus = extractBilibiliCapture(html, url);
+    if (opus) return opus;
+    // Bilibili has both video pages and text/image opus pages. Keep video
+    // imports on the existing media path, while reporting a useful error for
+    // an opus page whose SSR payload was not available (usually a login or
+    // platform verification response).
+    if (/\/opus\//i.test(u.pathname)) throw fail('B站图文正文尚未加载，可能需要登录或验证；请打开完整作品后重试');
+    if (!/\/read\//i.test(u.pathname)) return { kind: 'video', url };
+  }
+  if (/(^|\.)(x\.com|twitter\.com)$/.test(host)) return { kind: 'video', url };
   const title = meta('og:title') || document.title || '网页采集', author = meta('author');
   for (const node of document.querySelectorAll('script,style,noscript,iframe,form,nav,footer,header,svg')) node.remove();
   for (const image of document.querySelectorAll('img')) {

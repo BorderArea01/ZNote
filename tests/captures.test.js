@@ -36,6 +36,20 @@ const xhsMultiLive=()=>{
   const record={noteId:'6a9fb5d900000000270087d7',title:'多段实况',desc:'两张动态图片',user:{nickname:'小红书作者'},imageList:[image('one'),image('two')]};
   return '<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{[record.noteId]:{note:record}}}})+'</script>';
 };
+const biliOpus=()=>{
+  const picture=(name)=>({url:`http://i0.hdslb.com/bfs/new_dyn/${name}.png`,width:1200,height:800});
+  const state={opus:{id:'1168138243068133376',detail:{id:'1168138243068133376',basic:{title:'B站图文示例 - 哔哩哔哩',rid_str:'456'},modules:[
+    {module_type:'MODULE_TYPE_TITLE',module_title:{text:'B站图文示例'}},
+    {module_type:'MODULE_TYPE_AUTHOR',module_author:{name:'图文作者',jump_url:'//space.bilibili.com/42'}},
+    {module_type:'MODULE_TYPE_CONTENT',module_content:{paragraphs:[
+      {para_type:1,text:{nodes:[{type:'TEXT_NODE_TYPE_RICH',rich:{type:'RICH_TEXT_NODE_TYPE_TOPIC',text:'#示例标签#'}},{type:'TEXT_NODE_TYPE_WORD',word:{words:'第一行\n第二行'}}]}},
+      {para_type:8,heading:{level:2,nodes:[{type:'TEXT_NODE_TYPE_WORD',word:{words:'小标题'}}]}},
+      {para_type:5,list:{style:2,children:[{children:[{para_type:1,text:{nodes:[{type:'TEXT_NODE_TYPE_WORD',word:{words:'列表项'}}]}}]}]}},
+      {para_type:2,pic:{pics:[picture('one'),picture('two')]}}
+    ]}},
+  ]}}};
+  return '<script>window.__INITIAL_STATE__='+JSON.stringify(state)+';</script>';
+};
 test('mobile platform variants retain work identity, author and native playback data',async()=>{
   assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).host,'www.bilibili.com');
   assert.equal(new URL(platformUrl('https://m.bilibili.com/video/BV1Mi4d6gENF?p=2')).searchParams.get('p'),'2');
@@ -62,6 +76,21 @@ test('share parsing and article extraction preserve links, line breaks and exact
   const article=extractCapturePage('<html><head><title>文章</title></head><body><article><h1>文章</h1><p>第一行<br>第二行 <a href="/reference">参考链接</a></p><img data-src="/one.png"><p>'+('这是一段用于确认正文提取的文字。'.repeat(30))+'</p></article></body></html>','https://example.com/article');
   assert.match(article.content,/https:\/\/example.com\/reference/);assert.equal(markdownImages(article.content)[0].url,'https://example.com/one.png');assert.match(article.content,/第一行[\s\S]*\n第二行/);
   const video=extractCapturePage('<script id="RENDER_DATA">'+encodeURIComponent(JSON.stringify({aweme:{aweme_id:'123',author:{nickname:'作者'},desc:'视频',video:{}}}))+'</script>','https://www.douyin.com/video/123');assert.equal(video.kind,'video');
+});
+test('Bilibili opus pages become image-text notes with ordered pictures, author and topics',()=>{
+  const plan=extractCapturePage(biliOpus(),'https://m.bilibili.com/opus/1168138243068133376');
+  assert.equal(plan.kind,'note');assert.equal(plan.url,'https://www.bilibili.com/opus/1168138243068133376');assert.equal(plan.title,'B站图文示例');assert.equal(plan.author,'图文作者');
+  assert.deepEqual(plan.images,['https://i0.hdslb.com/bfs/new_dyn/one.png','https://i0.hdslb.com/bfs/new_dyn/two.png']);assert.deepEqual(plan.tags,['示例标签']);
+  assert.match(plan.content,/第一行\n第二行/);assert.match(plan.content,/小标题/);assert.match(plan.content,/- 列表项/);assert.equal(markdownImages(plan.content).length,2);
+  assert.equal(extractCapturePage('<html><title>视频</title></html>','https://www.bilibili.com/video/BV1xx').kind,'video');
+});
+test('Bilibili shared opus is archived through the mobile capture queue as one note',async t=>{
+  const dir=await mkdtemp(resolve('artifacts/capture-bilibili-opus-')),png=await sharp({create:{width:12,height:12,channels:3,background:'#456789'}}).png().toBuffer();
+  const runtime=createApp({dataDir:dir,captureOptions:{page:async()=>({url:'https://m.bilibili.com/opus/1168138243068133376',type:'text/html',buffer:Buffer.from(biliOpus())}),image:async()=>png}});
+  t.after(async()=>{await runtime.captures.stop();await runtime.imports.stop();await runtime.trash.stop();await runtime.backups.stop();await runtime.webhooks.stop();runtime.db.close();});
+  const job=runtime.captures.add({text:'分享这篇图文 https://b23.tv/jmy4yAs',image_mode:'note',collection_id:null,request_id:'bili-opus-mobile'});
+  const done=await runtime.captures.wait(job.id,AbortSignal.timeout(5000));assert.equal(done.status,'completed');assert.match(done.message,/图文已入库/);
+  const item=runtime.db.prepare('SELECT title,content,source_url,kind FROM items WHERE id=?').get(done.item_id);assert.equal(item.kind,'note');assert.equal(item.title,'B站图文示例');assert.equal(item.source_url,'https://www.bilibili.com/opus/1168138243068133376');assert.equal(markdownImages(item.content,true).length,2);assert.ok(!item.content.includes('i0.hdslb.com'));
 });
 test('Paw mobile capture keeps the original work files and body',()=>{
   const html='<main><h1>Paw 作品</h1><div class="post__content"><p>正文说明</p></div><figure><a href="https://file.pawchive.pw/data/a.png?f=a.png"><img src="https://img.pawchive.pw/thumb/a.png"></a></figure><a class="fileThumb" href="https://file.pawchive.st/data/b.jpg?f=b.jpg"><img src="https://img.pawchive.st/thumb/b.jpg"></a></main>';
