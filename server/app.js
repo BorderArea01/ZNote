@@ -26,7 +26,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { writeFile, unlink, readFile, mkdir, copyFile } from "node:fs/promises";
-import { MAX_VIDEO_BYTES, probeVideo, fileDigest, serveVideo } from './videos.js';
+import { MAX_VIDEO_BYTES, probeVideo, validateVideoPayload, fileDigest, serveVideo } from './videos.js';
 import { pipeline } from "node:stream/promises";
 import { resolve, join } from "node:path";
 import { networkInterfaces } from "node:os";
@@ -1118,6 +1118,7 @@ export function createApp({
         let tags; try { tags = fields.tags ? JSON.parse(fields.tags) : []; } catch { throw fail(400, '标签必须是 JSON 数组'); }
         const input = itemInput.parse({ ...fields, title: fields.title || filenameText(file.originalname), tags, collection_id: fields.collection_id || null });
         validateCollection(input.collection_id);
+        await validateVideoPayload(file.path);
         const media = await probeVideo(file.path), digest = await fileDigest(file.path);
         if (digest.bytes > MAX_VIDEO_BYTES) throw fail(413, '视频超过 500 MB');
         const existing = db.prepare('SELECT * FROM items WHERE hash=? AND collection_id IS ? ORDER BY deleted_at IS NOT NULL').get(digest.hash, input.collection_id);

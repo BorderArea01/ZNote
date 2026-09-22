@@ -3,6 +3,7 @@ import { api, settings, serverUrl, saveImage, limitedImage } from "./client.js";
 import { openGallery,pendingInlineGalleries } from './gallery-ticket.js';
 import { blockedSite } from './site-policy.js';
 import { startMediaTask, mediaTasksForTab } from './media-tasks.js';
+import { parseContentRange } from './video-fetch.js';
 const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
@@ -50,11 +51,14 @@ chrome.webRequest.onHeadersReceived.addListener(
       const policy=await settings();
       if (state.blocked || blockedSite(state.source_url,policy)) { delete states[details.tabId];await persist();return; }
       if(details.documentUrl && blockedSite(details.documentUrl,policy))return;
+      const range = parseContentRange(header('content-range'));
       addResource(state, {
         ...state.metadata,
         url: details.url,
         mime,
         bytes: header("content-length"),
+        total_bytes: range?.total || null,
+        partial: details.statusCode === 206 || Boolean(range),
       });
       state.updated = Date.now();
       await persist();
@@ -128,7 +132,7 @@ export async function resourceAction(resource, action, tabId) {
   let sourceUrl=resource.source_url;
   if(!sourceUrl&&Number.isInteger(tabId))sourceUrl=(await chrome.tabs.get(tabId)).url;
   if(sourceUrl&&blockedSite(sourceUrl,config))throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
-  if (action === "download" && resource.kind !== "hls") {
+  if (action === "download" && !['video', 'hls'].includes(resource.kind)) {
     await chrome.downloads.download({
       url: resource.url,
       filename: cleanFilename(resource),

@@ -1,3 +1,11 @@
+export function isInitializationSegment(url) {
+  let pathname;
+  try { pathname = new URL(url).pathname; } catch { return false; }
+  return /(?:^|\/)init(?:ialization)?(?:[-_][^/]*)?\.mp4$/i.test(pathname) ||
+    /(?:^|\/)seg-[^/]*-init\.mp4$/i.test(pathname) ||
+    /(?:^|\/)init-stream(?:[-_][^/]*)?\.mp4$/i.test(pathname);
+}
+
 export function mediaKind(url, mime = "") {
   let u;
   try {
@@ -12,6 +20,7 @@ export function mediaKind(url, mime = "") {
     u.href.length > 4096
   )
     return null;
+  if (isInitializationSegment(url)) return null;
   if (/mpegurl/i.test(mime) || /\.m3u8(?:$|[?#])/i.test(url)) return "hls";
   if (/\.(m4s|ts|aac)(?:$|[?#])/i.test(url) || /video\/mp2t/i.test(mime))
     return null;
@@ -51,6 +60,8 @@ export function addResource(state, value, allowImages=false) {
       resource.metadata_rank=rank;
     }
     if (value.bytes) resource.bytes = value.bytes;
+    if (value.total_bytes) resource.total_bytes = Math.max(Number(resource.total_bytes) || 0, Number(value.total_bytes) || 0) || null;
+    if (value.partial !== undefined) resource.partial = Boolean(value.partial);
     if (value.mime) {
       resource.mime = value.mime.slice(0, 100);
       resource.kind = kind;
@@ -63,6 +74,8 @@ export function addResource(state, value, allowImages=false) {
     kind,
     mime: (value.mime || "").slice(0, 100),
     bytes: Number(value.bytes) || null,
+    total_bytes: Number(value.total_bytes) || null,
+    partial: Boolean(value.partial),
     title: String(
       value.title || url.pathname.split("/").pop() || "网页资源",
     ).slice(0, 180),

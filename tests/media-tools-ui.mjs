@@ -341,6 +341,10 @@ try {
   await directRow.getByText(/已保存到知识库|知识库已收录/).waitFor({timeout:30000});
   assert.equal(context.pages().length,pagesBeforeDirectSave,'Direct video save must not open a tab');
   assert.ok((await (await context.request.get(base+'/api/items?kind=video')).json()).total>=1);
+  const directDownloadPages=context.pages().length;
+  await directRow.getByRole('button',{name:'下载',exact:true}).click();
+  await directRow.getByText('下载完成',{exact:true}).waitFor({timeout:30000});
+  assert.equal(context.pages().length,directDownloadPages,'Direct video download must not open a tab');
 
   await panel.getByRole('button',{name:'暂停嗅探',exact:true}).click();
   await page.evaluate(()=>fetch('/movie?id=paused').then(r=>r.arrayBuffer()));await page.waitForTimeout(200);

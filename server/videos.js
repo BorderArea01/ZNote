@@ -1,12 +1,43 @@
 import { Worker } from 'node:worker_threads';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createHash } from 'node:crypto';
 
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 const fail = (status, message) => Object.assign(new Error(message), { status });
+const SMALL_CONTAINER_CHECK = 2 * 1024 * 1024;
+
+function isoPayload(bytes) {
+  let offset = 0;
+  while (offset + 8 <= bytes.length) {
+    let size = bytes.readUInt32BE(offset), header = 8;
+    const type = bytes.toString('ascii', offset + 4, offset + 8);
+    if (size === 1) {
+      if (offset + 16 > bytes.length) break;
+      const large = Number(bytes.readBigUInt64BE(offset + 8));
+      if (!Number.isSafeInteger(large)) break;
+      size = large; header = 16;
+    }
+    if (size === 0) return type === 'mdat';
+    if (size < header || offset + size > bytes.length) break;
+    if (type === 'mdat') return true;
+    offset += size;
+  }
+  return false;
+}
+
+// MediaInfo can read dimensions from an fMP4 initialization segment even when
+// it contains no media payload. Reject that tiny, recognisable failure before
+// it is stored as a seemingly valid but unplayable video.
+export async function validateVideoPayload(path) {
+  const { size } = await stat(path);
+  if (size <= 0 || size > SMALL_CONTAINER_CHECK) return;
+  const bytes = await readFile(path);
+  if (bytes.length >= 8 && bytes.toString('ascii', 4, 8) === 'ftyp' && !isoPayload(bytes)) throw fail(415, '视频文件只有初始化片段，缺少可播放内容；请重新采集完整视频');
+}
+
 export function probeVideo(path) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./video-probe-worker.js', import.meta.url), { workerData: { path }, resourceLimits: { maxOldGenerationSizeMb: 128 } });

@@ -1,5 +1,6 @@
 import {videoDetails} from './video-details.js';
 import { blockedSite } from './site-policy.js';
+import {readPlayableVideo} from './video-fetch.js';
 export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [] };
 export async function settings() {
   const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
@@ -64,21 +65,15 @@ export async function saveDirectVideo(url, sourceUrl, title, signal, metadata = 
   const config = providedConfig || await settings();
   if (blockedSite(sourceUrl, config)) throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
   if (!/^https?:\/\//i.test(url || '')) throw new Error('播放器使用分段或 blob 地址，请改用“采集此页面的视频”');
-  const response = await fetch(url, { credentials: 'include', signal: signal || AbortSignal.timeout(300000) });
-  if (!response.ok) throw new Error('视频文件访问失败，可改用页面视频采集或下载后上传');
-  const max = 500 * 1024 * 1024;
-  if (Number(response.headers.get('content-length')) > max) { await response.body?.cancel(); throw new Error('视频超过 500 MB'); }
-  const mime = response.headers.get('content-type') || '';
-  if (mime && !/^(video\/|application\/octet-stream)/i.test(mime)) { await response.body?.cancel(); throw new Error('此地址不是直接视频文件，请使用页面视频采集'); }
-  const reader = response.body.getReader(), chunks = []; let size = 0;
-  try { while (true) { const {done,value} = await reader.read(); if (done) break; size += value.length; if (size > max) throw new Error('视频超过 500 MB'); chunks.push(value); } } finally { await reader.cancel(); }
+  const videoSignal = signal || AbortSignal.timeout(300000);
+  const blob = await readPlayableVideo(url, { signal: videoSignal, expectedTotal: Number(metadata.total_bytes) || 0 });
   const form = new FormData();
-  form.set('file', new Blob(chunks, { type: mime || 'video/mp4' }), '网页视频.mp4');
+  form.set('file', blob, '网页视频.mp4');
   const details=videoDetails({...metadata,title:title||metadata.title},config.tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean));
   form.set('title',details.title);
   form.set('content',details.content);
   if (/^https?:\/\//i.test(sourceUrl || '')) form.set('source_url', sourceUrl);
   form.set('tags',JSON.stringify(details.tags));
   if (config.collection_id) form.set('collection_id', config.collection_id);
-  return api('/api/videos', { method: 'POST', body: form, signal: signal || AbortSignal.timeout(300000) }, config);
+  return api('/api/videos', { method: 'POST', body: form, signal: videoSignal }, config);
 }

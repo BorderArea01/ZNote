@@ -35,6 +35,7 @@ test('video upload, validation, ranges, dedupe, export, backup restore and resta
     assert.equal((await readdir(join(dir, 'media'))).length, 2); assert.equal([mp4, shared].filter(item => item.shared).length, 1);
     assert.equal((await (await upload(file, a.id)).json()).duplicate, true);
     assert.equal((await upload(Buffer.from('not video'), a.id)).status, 415);
+    assert.equal((await upload(file.subarray(0, 751), a.id, '初始化片段.mp4')).status, 415);
     assert.equal((await upload(await readFile('public/icon.svg'), a.id)).status, 415);
     assert.equal((await request(mp4.url, { headers: { Cookie: '' } })).status, 401);
     const readToken = await (await post('/api/tokens', { name: '只读', scope: 'read' })).json();

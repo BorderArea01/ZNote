@@ -1,6 +1,7 @@
 import { api, saveDirectVideo, serverUrl } from './client.js';
 import { packageHls } from './hls-package.js';
 import { videoDetails } from './video-details.js';
+import { readPlayableVideo } from './video-fetch.js';
 
 const queue = [];
 const known = new Set();
@@ -68,6 +69,12 @@ async function process(task) {
       resource.url, resource.source_url, resource.title,
       controller.signal, resource, config,
     );
+  } else if (action === 'download') {
+    const blob = await readPlayableVideo(resource.url, {
+      signal: controller.signal,
+      expectedTotal: Number(resource.total_bytes) || 0,
+    });
+    await downloadBlob(blob, task);
   } else {
     throw new Error('此任务不需要后台媒体处理');
   }

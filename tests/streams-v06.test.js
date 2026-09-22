@@ -10,14 +10,18 @@ import { validatePlaylist } from "../server/streams.js";
 import { mediaTools } from '../server/imports.js';
 import {
   mediaKind,
+  isInitializationSegment,
   addResource,
 } from "../addons/browser/clipper/resource-store.js";
+import { isLikelyCompleteVideo, readCompleteVideo } from "../addons/browser/clipper/video-fetch.js";
 test("sniffer identifies media MIME and excludes fragments, deduplicates and bounds page resources", () => {
   assert.equal(
     mediaKind("https://site.test/stream", "application/vnd.apple.mpegurl"),
     "hls",
   );
   assert.equal(mediaKind("https://site.test/file", "video/mp4"), "video");
+  assert.equal(isInitializationSegment("https://video.twimg.com/ext_tw_video/1/pu/vid/avc1/1280x720/seg-m-init.mp4"), true);
+  assert.equal(mediaKind("https://video.twimg.com/ext_tw_video/1/pu/vid/avc1/1280x720/seg-m-init.mp4", "video/mp4"), null);
   assert.equal(mediaKind("blob:https://site.test/123"), null);
   assert.equal(mediaKind("https://a.test/a.ts", "video/mp2t"), null);
   const state = { resources: [], source_url: "https://site.test/post" };
@@ -30,6 +34,31 @@ test("sniffer identifies media MIME and excludes fragments, deduplicates and bou
   for (let i = 0; i < 150; i++)
     addResource(state, { url: "https://a.test/" + i + ".mp4" });
   assert.equal(state.resources.length, 100);
+});
+test('direct video saving reassembles range responses and rejects an init-only MP4', async () => {
+  const full = await readFile('tests/fixtures/sample.mp4');
+  const source = createServer((req, res) => {
+    const range = req.headers.range?.match(/^bytes=(\d+)-(\d+)$/);
+    const start = range ? Number(range[1]) : 0;
+    const end = range ? Math.min(Number(range[2]), full.length - 1) : Math.min(903, full.length - 1);
+    res.setHeader('Content-Type', 'video/mp4');
+    if (!req.url.includes('opaque')) res.setHeader('Content-Range', `bytes ${start}-${end}/${full.length}`);
+    res.statusCode = 206;
+    res.end(full.subarray(start, end + 1));
+  });
+  await new Promise(resolve => source.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${source.address().port}/partial.mp4`;
+    const blob = await readCompleteVideo(url, { fetcher: fetch, chunkSize: 128 });
+    assert.deepEqual(Buffer.from(await blob.arrayBuffer()), full);
+    assert.equal(await isLikelyCompleteVideo(blob), true);
+    const opaque = await readCompleteVideo(url + '?opaque=1', { fetcher: fetch, expectedTotal: full.length, chunkSize: 128 });
+    assert.deepEqual(Buffer.from(await opaque.arrayBuffer()), full);
+    const init = new Blob([full.subarray(0, 751)], { type: 'video/mp4' });
+    assert.equal(await isLikelyCompleteVideo(init), false);
+  } finally {
+    await new Promise(resolve => source.close(resolve));
+  }
 });
 test("HLS package rejects external paths and unsupported encrypted references", () => {
   for (const line of [
