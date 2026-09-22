@@ -555,7 +555,10 @@ export default function Workspace({
         const fresh = await api(`/api/items/${item.id}`);
         if (current !== detailGeneration.current) return;
         if (fresh.collection_id !== item.collection_id || !!fresh.deleted_at !== !!item.deleted_at) throw Error('内容已移动或删除，请刷新后打开');
-        item = { ...fresh, group_count: item.group_count };
+        // The grouped list adds group_count while the detail endpoint adds
+        // the complete group_size. Preserve both fields across hydration so
+        // a video card cannot silently lose its grouped-gallery identity.
+        item = { ...fresh, group_count: item.group_count ?? fresh.group_count, group_size: item.group_size ?? fresh.group_size };
         hydrated = true;
       } catch (e) { if (current === detailGeneration.current) notify(e.message); return; }
       finally { if (current === detailGeneration.current) setOpeningItem(null); }
@@ -587,23 +590,43 @@ export default function Workspace({
       // move the page boundary and skip an image during continuous organizing.
       let result;
       if (isMediaGroup(item)) {
+        const expected = Number(item.group_size ?? item.group_count ?? 0);
+        const normalize = values => values
+          .filter(value => value?.id)
+          .map(value => ({
+            ...value,
+            kind: value.kind || item.kind,
+            thumbnail_url: value.thumbnail_url || `/media/${value.id}/thumbnail`,
+          }));
         try {
           const order = await api(`/api/item-groups/order?id=${encodeURIComponent(item.id)}`);
-          result = { ids: order.items.map(member => member.id), items: order.items };
+          const orderedItems = normalize(Array.isArray(order.items) ? order.items : []);
+          // Older servers and partially repaired groups have returned only the
+          // anchor from this endpoint. Fall through to the explicit gallery
+          // query whenever the snapshot cannot satisfy the known group size.
+          if (expected > 1 && orderedItems.length < 2) throw Error('组内成员快照不完整');
+          result = { ids: orderedItems.map(member => member.id), items: orderedItems };
         } catch (orderError) {
           // Keep compatibility with servers from before the media-order route;
           // the group query still returns the full member list and preserves
           // the stored group_order/group_index ordering.
           const groupParams = new URLSearchParams({collection:item.collection_id||'unfiled',kind:item.kind,group_key:item.group_key,gallery:'true'});
           const fallback = await api(`/api/items?${groupParams}`);
-          result = { ids: fallback.ids, items: fallback.ids.map(id => ({id, kind:item.kind, thumbnail_url:`/media/${id}/thumbnail`})) };
+          const fallbackItems = normalize((fallback.ids || []).map(id => ({id, kind:item.kind})));
+          result = { ids: fallbackItems.map(member => member.id), items: fallbackItems };
         }
       } else {
         result = await api(`/api/items?${params(0)}&gallery=true&gallery_scope=singles`);
         result = { ids: result.ids, items: result.ids.map(id => ({ id, kind:item.kind, thumbnail_url: `/media/${id}/thumbnail` })) };
       }
       if (current !== detailGeneration.current) return;
-      setGallery(result.items);
+      // Keep the selected member in the strip even when a legacy response
+      // omitted it; this also keeps the current preview usable while the
+      // next refresh repairs a stale group snapshot.
+      const members = result.items.some(member => member.id === item.id)
+        ? result.items
+        : [{id:item.id,kind:item.kind,thumbnail_url:item.thumbnail_url||`/media/${item.id}/thumbnail`}, ...result.items];
+      setGallery(members);
     } catch (e) { if (current === detailGeneration.current) setToast(e.message); }
     finally { if (current === detailGeneration.current) setGalleryBusy(false); }
   }

@@ -104,11 +104,55 @@ function MarkdownImage({ src, alt }) {
   const url = attempt ? `${src}${src.includes('?') ? '&' : '?'}retry=${attempt}` : src;
   return <img src={url} alt={alt || '笔记图片'} loading="lazy" decoding="async" onError={() => setFailed(true)} role={onImage?'button':undefined} tabIndex={onImage?0:undefined} onClick={onImage?e=>{e.preventDefault();e.stopPropagation();onImage(src)}:undefined} onKeyDown={onImage?e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();onImage(src)}}:undefined} />;
 }
-function Markdown({ content, onLink, onImage, preserveSpacing = false }) {
+function stripMarkdownHeading(value) {
+  return String(value || '')
+    .replace(/[`*_~]/g, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+function markdownHeadings(content) {
+  const headings = [], lines = String(content || '').split(/\r?\n/);
+  let fenced = false;
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    const match = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!match) continue;
+    const text = stripMarkdownHeading(match[2]);
+    if (!text) continue;
+    const slug = text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'section';
+    headings.push({ level: match[1].length, text, id: `note-heading-${slug}-${headings.length + 1}` });
+  }
+  return headings;
+}
+function NoteToc({ headings }) {
+  if (!headings?.length) return null;
+  const jump = (event, id) => {
+    event.preventDefault();
+    const target = document.getElementById(id);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target?.focus?.({ preventScroll: true });
+  };
+  return <nav className="note-toc" aria-label="笔记目录">
+    <div className="note-toc-heading"><List size={15} /> <span>目录</span><small>{headings.length} 个标题</small></div>
+    <ol>{headings.map(heading => <li key={heading.id} className={`note-toc-level-${heading.level}`}><a href={`#${heading.id}`} onClick={event => jump(event, heading.id)}>{heading.text}</a></li>)}</ol>
+  </nav>;
+}
+function Markdown({ content, onLink, onImage, preserveSpacing = false, headings = [] }) {
   const markdown = content.replace(
     /\[\[([^\]\n]+)\]\]/g,
     (_, title) => `[${title}](#wiki/${encodeURIComponent(title)})`,
   );
+  const headingCursor = { value: 0 };
+  const headingComponents = Object.fromEntries(Array.from({ length: 6 }, (_, index) => {
+    const level = index + 1;
+    return [`h${level}`, ({ children }) => {
+      const heading = headings[headingCursor.value++];
+      return React.createElement(`h${level}`, { id: heading?.id, tabIndex: heading ? -1 : undefined }, children);
+    }];
+  }));
   return (
     <MarkdownImagesContext.Provider value={onImage}><ReactMarkdown
       remarkPlugins={preserveSpacing?[remarkGfm, remarkBreaks, remarkMessageSpacing]:[remarkGfm, remarkBreaks]}
@@ -129,6 +173,7 @@ function Markdown({ content, onLink, onImage, preserveSpacing = false }) {
           </a>
         ),
         img: MarkdownImage,
+        ...headingComponents,
       }}
     >
       {markdown}
@@ -388,6 +433,7 @@ function Detail({
   const [collection, setCollection] = useState(initial.collection_id || "");
   const [noteIndex,setNoteIndex] = useState(null);
   const noteImages = React.useMemo(()=>markdownImages(content,true).filter(i=>i.url.startsWith('/media/')).map((i,index)=>({...i,id:String(index),thumbnail_url:i.url.replace(/\/(original|thumbnail)(\?|$)/,'/thumbnail$2')})),[content]);
+  const noteHeadings = React.useMemo(() => initial.kind === 'note' ? markdownHeadings(content) : [], [initial.kind, content]);
   useEffect(()=>{const id=noteImages[noteIndex]?.url.match(/^\/media\/([a-f0-9-]{36})\//i)?.[1];if(id&&!item.deleted_at)onImageViewed?.(id);},[noteImages[noteIndex]?.url,item.deleted_at]);
   const [editing, setEditing] = useState(
     initial.kind === "note" && !initial.id,
@@ -562,7 +608,7 @@ function Detail({
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一个 →</button>
             </div>
-            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} onSelect={index=>step(index-galleryIndex)}/>
+            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} required expectedCount={item.group_size ?? item.group_count} onSelect={index=>step(index-galleryIndex)}/>
           </>}
         </div>}
         {item.kind === "image" && (
@@ -715,22 +761,26 @@ function Detail({
                 <MessageBlocks content={content} onChange={setContent} disabled={busy||!!item.deleted_at||!draft.ready} copyText={copyText} notify={notify}
                   render={text=><Markdown content={text} preserveSpacing onImage={src=>setNoteIndex(Math.max(0,noteImages.findIndex(i=>i.url===src)))} onLink={q=>{if(!dirty||confirm('尚未保存，确定离开吗？'))onSearch(q);}}/>}/>
               ) : (
-                <div className="markdown-preview">
-                  {content ? (
-                    <Markdown
-                      content={content}
-                      onImage={src=>setNoteIndex(Math.max(0,noteImages.findIndex(i=>i.url===src)))}
-                      onLink={(q) => {
-                        if (!dirty || confirm("尚未保存，确定离开吗？"))
-                          onSearch(q);
-                      }}
-                    />
-                  ) : (
-                    <p className="muted">
-                      这里还是空白，点击「编辑」写下第一句话。
-                    </p>
-                  )}
-                </div>
+                <>
+                  {content && <NoteToc headings={noteHeadings} />}
+                  <div className="markdown-preview note-markdown-preview">
+                    {content ? (
+                      <Markdown
+                        content={content}
+                        headings={noteHeadings}
+                        onImage={src=>setNoteIndex(Math.max(0,noteImages.findIndex(i=>i.url===src)))}
+                        onLink={(q) => {
+                          if (!dirty || confirm("尚未保存，确定离开吗？"))
+                            onSearch(q);
+                        }}
+                      />
+                    ) : (
+                      <p className="muted">
+                        这里还是空白，点击「编辑」写下第一句话。
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
             </>
           ) : (

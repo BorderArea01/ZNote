@@ -71,6 +71,7 @@
 .note-detail .tag-suggestions:empty { display: none; }
 .note-detail .detail-editor-content > .note-editor-toolbar { flex:0 0 auto; width:calc(100% - 40px); margin:6px 20px; padding:5px; }
 .note-detail .detail-editor-content > .draft-conflict { flex:0 0 auto; margin:8px 20px 4px; max-height:30%; overflow:auto; }
+.note-detail .detail-editor-content > .note-toc { flex:0 0 auto; width:calc(100% - 40px); margin:0 20px 8px; }
 .note-detail .detail-editor-content > .markdown-preview, .note-detail .markdown-editor { flex: 1 1 0; min-height: 0; max-height: none; height: auto; width: calc(100% - 40px); margin: 0 20px; overflow: auto; overscroll-behavior: contain; resize: none; padding: 12px; }
 .note-detail .backlinks { flex: 0 0 auto; max-height: 66px; overflow: auto; margin: 8px 20px; padding-top: 6px; gap: 4px; }
 .note-detail .detail-bottom { flex: 0 0 auto; margin: 0; padding: 10px 20px; background: var(--surface); }
@@ -101,7 +102,9 @@
   .note-detail .note-properties { padding: 8px 12px 0; }
   .note-detail .detail-editor-content > .note-editor-toolbar { width:calc(100% - 24px); margin:4px 12px; padding:5px; }
   .note-detail .detail-editor-content > .draft-conflict { margin:8px 12px 4px; }
+  .note-detail .detail-editor-content > .note-toc { width:calc(100% - 24px); margin:0 12px 6px; }
   .note-detail .detail-editor-content > .markdown-preview, .note-detail .markdown-editor { width: calc(100% - 24px); margin: 0 12px; }
+  .note-detail .detail-editor-content > .note-markdown-preview { padding:14px 15px; }
   .note-detail .detail-bottom { padding: 8px 12px max(8px,env(safe-area-inset-bottom)); }
 }
 .detail-dialog .metadata-fields > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

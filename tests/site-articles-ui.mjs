@@ -24,6 +24,8 @@ try{
  await page.setContent(`<script>window.__INITIAL_STATE__=${JSON.stringify(biliState)};</script>`);
  const bili=await page.evaluate(async()=>{const a=await Adapters.siteArticle(document,new URL('https://m.bilibili.com/opus/1168138243068133376'));return{title:a.title,byline:a.byline,text:a.document.body.textContent,images:[...a.document.images].map(i=>i.src)};});
  assert.equal(bili.title,'B站图文示例');assert.equal(bili.byline,'图文作者');assert.match(bili.text,/第一行[\s\S]*第二行/);assert.deepEqual(bili.images,['https://i0.hdslb.com/bfs/new_dyn/one.png','https://i0.hdslb.com/bfs/new_dyn/two.png']);
+ const biliRefetched=await page.evaluate(async(state)=>{document.body.innerHTML='<main>页面已水合，SSR 数据已移出</main>';const html=`<script>window.__INITIAL_STATE__=${JSON.stringify(state)};</script>`;const a=await Adapters.siteArticle(document,new URL('https://m.bilibili.com/opus/1168138243068133376'),async()=>({ok:true,text:async()=>html}));return{title:a.title,images:[...a.document.images].map(i=>i.src)};},biliState);
+ assert.equal(biliRefetched.title,'B站图文示例');assert.deepEqual(biliRefetched.images,['https://i0.hdslb.com/bfs/new_dyn/one.png','https://i0.hdslb.com/bfs/new_dyn/two.png']);
  await page.setContent(`<main><header><img src="https://pawchive.pw/avatar.png"></header><h1>正文作品</h1><div class="post__content"><p>正文 <a href="/reference">带链接</a></p></div>
  <figure><a href="https://file.pawchive.pw/data/a.png?f=one.png"><img src="https://img.pawchive.pw/thumbnail/a.png"></a></figure>
  <a class="fileThumb" href="https://file.pawchive.pw/data/b.jpg?f=two.jpg"><img src="https://img.pawchive.pw/thumbnail/b.jpg"></a>

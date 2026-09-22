@@ -91,12 +91,29 @@ function bilibiliArticle(document, detail) {
   clone.body.append(article);
   return { document: clone, title, byline: author, selector: 'article', tags: [...new Set(tags)].filter(Boolean) };
 }
+async function bilibiliFetchedArticle(document, location, fetcher) {
+  // Bilibili hydrates the opus page and may remove the SSR script from the
+  // live DOM before the extension's article window asks for it. Re-read the
+  // same page with the user's existing session, then parse the response in an
+  // inert document. This keeps the extractor independent of page globals and
+  // does not execute fetched scripts.
+  try {
+    const response = await fetcher(location.href, { credentials: 'include', redirect: 'follow', signal: AbortSignal.timeout(15000) });
+    if (!response?.ok) return null;
+    const html = await response.text();
+    if (html.length > 8 * 1024 * 1024) return null;
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const state = bilibiliDetail(parsed);
+    return state ? bilibiliArticle(parsed, state.detail) : null;
+  } catch { return null; }
+}
 
 // Site adapters read only the selected work, never creator-wide recommendations.
 export async function siteArticle(document, location, fetcher = fetch) {
   const host=location.hostname.replace(/^www\./,'');
   if (isBilibiliHost(host)) {
-    const state = bilibiliDetail(document), rendered = state && bilibiliArticle(document, state.detail);
+    const state = bilibiliDetail(document);
+    const rendered = state && bilibiliArticle(document, state.detail) || await bilibiliFetchedArticle(document, location, fetcher);
     if (rendered) return rendered;
     const source = document.querySelector('.opus-modules,.opus-detail,[class*="opus-detail"]');
     if (source && /\/opus\//i.test(location.pathname)) {
