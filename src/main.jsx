@@ -610,7 +610,7 @@ function Detail({
               {galleryPosition && <span className="gallery-position" aria-live="polite">{galleryPosition}</span>}
               <button disabled={!nextAvailable || busy || galleryBusy} onClick={() => step(1)}>下一个 →</button>
             </div>
-            <GalleryStrip items={galleryItems} index={galleryIndex} busy={busy||galleryBusy} required expectedCount={item.group_size ?? item.group_count} error={galleryError} onSelect={index=>step(index-galleryIndex)}/>
+            <GalleryStrip items={galleryItems} index={galleryIndex} kind={item.kind} busy={busy||galleryBusy} required expectedCount={item.group_size ?? item.group_count} error={galleryError} onSelect={index=>step(index-galleryIndex)}/>
           </>}
         </div>}
         {item.kind === "image" && (

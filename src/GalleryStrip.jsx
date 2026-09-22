@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-export function GalleryStrip({items=[],index,onSelect,busy=false,required=false,expectedCount=0,error=''}) {
+export function GalleryStrip({items=[],index,onSelect,busy=false,required=false,expectedCount=0,error='',kind=''}) {
   const [hovered,setHovered]=useState(false),[pinned,setPinned]=useState(false);
   // A grouped video can spend a short time waiting for its order snapshot.
   // Keep the strip mounted during that window so the viewer does not look as
@@ -11,7 +11,7 @@ export function GalleryStrip({items=[],index,onSelect,busy=false,required=false,
   // down. Once a group is larger than the collapsed window, use the explicit
   // toggle so the current thumbnail keeps its coordinates while hovering.
   const hoverExpand=items.length<=11;
-  const video=items.some(item=>item.kind==='video'),label=video?'视频':'图片',countLabel=video?'个视频':'张图片',itemLabel=video?'个视频':'张图片';
+  const video=kind==='video'||items.some(item=>item.kind==='video'),label=video?'视频':'图片',countLabel=video?'个视频':'张图片',itemLabel=video?'个视频':'张图片';
   const count = expectedCount > items.length ? `${items.length}/${expectedCount}` : items.length;
   const visible=expanded?items:items.slice(start,end),offset=expanded?0:start;
   const toggle=()=>{if(expanded){setHovered(false);setPinned(false);}else setPinned(true);};
