@@ -4,11 +4,7 @@ import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
 import {updateMediaTask,downloadMediaBlob} from './media-tasks.js';
 let directVideoBusy = false;
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server'].some(key => key in changes)) return;
-  chrome.tabs.query({url: ['http://*/*', 'https://*/*']}).then(tabs => Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {type: 'media-settings-changed'})))).catch(() => {});
-});
-chrome.runtime.onInstalled.addListener(() => {
+function setupContextMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'znote-image', title: '优先保存高清原图到 ZNote', contexts: ['image'] });
     chrome.contextMenus.create({ id: 'znote-image-current', title: '保存当前图片到 ZNote', contexts: ['image'] });
@@ -19,8 +15,19 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({ id: 'znote-gallery-link', title: '按链接采集图组到 ZNote', contexts: ['link'] });
     chrome.contextMenus.create({ id: 'znote-video-file', title: '保存当前视频文件到 ZNote', contexts: ['video'] });
   });
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server'].some(key => key in changes)) return;
+  chrome.tabs.query({url: ['http://*/*', 'https://*/*']}).then(tabs => Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {type: 'media-settings-changed'})))).catch(() => {});
+});
+chrome.runtime.onInstalled.addListener(() => {
+  setupContextMenus();
   chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
 });
+chrome.runtime.onStartup.addListener(setupContextMenus);
+// Also refresh menus when a developer reloads an unpacked extension. Chrome
+// does not consistently emit onInstalled for that workflow.
+setupContextMenus();
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'znote-image') record(() => collectImage(info, tab)).catch(() => {});
   if (info.menuItemId === 'znote-image-current') record(() => collectImage(info, tab, false)).catch(() => {});
