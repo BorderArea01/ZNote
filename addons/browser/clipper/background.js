@@ -1,4 +1,4 @@
-import { record, collectImage, capturePage, collectVideo } from './actions.js';
+import { record, collectImage, capturePage, collectVideo, collectGallery } from './actions.js';
 import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
@@ -16,6 +16,7 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({ id: 'znote-article', title: '保存页面正文为图文笔记', contexts: ['page'] });
     chrome.contextMenus.create({ id: 'znote-video', title: '采集此页面的视频到 ZNote', contexts: ['page', 'video'] });
     chrome.contextMenus.create({ id: 'znote-video-link', title: '采集此链接的视频到 ZNote', contexts: ['link'] });
+    chrome.contextMenus.create({ id: 'znote-gallery-link', title: '按链接采集图组到 ZNote', contexts: ['link'] });
     chrome.contextMenus.create({ id: 'znote-video-file', title: '保存当前视频文件到 ZNote', contexts: ['video'] });
   });
   chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
@@ -27,6 +28,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'znote-article') chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});
   if (info.menuItemId === 'znote-video') collectVideo(tab, info.pageUrl || tab.url).catch(() => {});
   if (info.menuItemId === 'znote-video-link') collectVideo(tab, info.linkUrl).catch(() => {});
+  if (info.menuItemId === 'znote-gallery-link') collectGallery(tab, info.linkUrl).catch(() => {});
   if (info.menuItemId === 'znote-video-file') record(async () => {
     if (directVideoBusy) throw new Error('已有一个视频文件正在上传，请等待完成');
     directVideoBusy = true;
@@ -66,6 +68,9 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (sender.id !== chrome.runtime.id || !['popup.html', 'options.html'].some(path => sender.url === chrome.runtime.getURL(path))) return;
   if (message.type === 'video') {
     chrome.tabs.get(message.tabId).then(tab => collectVideo(tab)).then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
+  }
+  if (message.type === 'gallery') {
+    chrome.tabs.get(message.tabId).then(tab => collectGallery(tab, message.text)).then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
   }
   if (message.type !== 'capture') return;
   record(async () => {

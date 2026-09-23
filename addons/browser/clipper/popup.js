@@ -7,12 +7,17 @@ let behavior = await settings();
 document.getElementById('shortcut-help').textContent = `悬停大图 · ${behavior.downloadKey.toUpperCase()} 下载 · ${behavior.saveKey.toUpperCase()} 入库`;
 const siteName = document.getElementById('site-name'), siteStatus = document.getElementById('site-status'), siteToggle = document.getElementById('site-toggle');
 const discoverButton = document.getElementById('discover'), platformVideoButton = document.getElementById('video');
+const galleryInput = document.getElementById('gallery-link'), galleryButton = document.getElementById('gallery-capture'), galleryStatus = document.getElementById('gallery-status'), galleryOpen = document.getElementById('gallery-open');
+if (tab?.url && /^https?:/i.test(tab.url)) galleryInput.value = tab.url;
 let siteState;
 function renderSiteState(message = '') {
   siteState = siteControlState(tab?.url, behavior);
   siteName.textContent = (() => { try { return new URL(tab?.url).host; } catch { return '当前页面不支持'; } })();
   discoverButton.disabled = !siteState.supported || siteState.blocked;
   platformVideoButton.disabled = !siteState.supported || siteState.blocked;
+  // Link capture is intentionally available even on pages without media
+  // injection (for example a blank tab): the pasted URL is the source page.
+  galleryButton.disabled = galleryButton.dataset.busy === 'true' || (siteState.supported && siteState.blocked && !siteState.automatic);
   siteToggle.disabled = !siteState.supported || siteState.automatic;
   siteToggle.setAttribute('aria-pressed', String(siteState.blocked));
   if (!siteState.supported) {
@@ -58,6 +63,30 @@ async function show() {
   if (lastResult.ok) link.href = serverUrl((await settings()).server) + '/#item/' + lastResult.itemId;
 }
 show();
+async function showGallery() {
+  const { lastCapture } = await chrome.storage.local.get('lastCapture');
+  if (!lastCapture) return;
+  const config = await settings(); if (serverUrl(config.server) !== serverUrl(lastCapture.server)) return;
+  try {
+    const job = await api('/api/captures/' + lastCapture.id);
+    galleryStatus.textContent = job.message;
+    galleryButton.dataset.busy = String(['queued', 'running'].includes(job.status));
+    galleryButton.textContent = galleryButton.dataset.busy === 'true' ? '图组采集中…' : '获取图组并保存';
+    galleryOpen.hidden = job.status !== 'completed';
+    if (job.status === 'completed') galleryOpen.href = serverUrl(config.server) + '/#item/' + job.item_id;
+    if (['completed','failed'].includes(job.status)) await chrome.action.setBadgeText({ text: job.status === 'completed' ? '✓' : '!' });
+  } catch (e) { galleryStatus.textContent = e.message; galleryOpen.hidden = true; }
+}
+galleryButton.addEventListener('click', async () => {
+  galleryButton.dataset.busy = 'true'; galleryButton.disabled = true; galleryStatus.textContent = '正在提交图组采集…'; galleryOpen.hidden = true;
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'gallery', tabId: tab.id, text: galleryInput.value.trim() });
+    if (!result?.ok) throw new Error(result?.error || '提交失败');
+    await showGallery();
+  } catch (e) { galleryStatus.textContent = e.message; }
+  finally { galleryButton.dataset.busy = 'false'; await showGallery(); renderSiteState(); }
+});
+showGallery(); setInterval(showGallery, 2000);
 const video = document.getElementById('video'), videoStatus = document.getElementById('video-status'), cancel = document.getElementById('cancel-video'), videoLink = document.getElementById('video-open');
 async function showVideo() {
   const { lastImport } = await chrome.storage.local.get('lastImport');

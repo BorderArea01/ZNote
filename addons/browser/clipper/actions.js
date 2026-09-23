@@ -57,4 +57,31 @@ export async function collectVideo(tab, url = tab.url) {
     await chrome.action.setBadgeText({ text: '!' }); throw e;
   }
 }
+export async function collectGallery(tab, text = tab?.url) {
+  try {
+    const config = await settings();
+    const value = String(text || '').trim();
+    if (!value) throw new Error('请粘贴作品链接或先打开作品页面');
+    const source = value.match(/https?:\/\/[^\s<>"\u200b]+/i)?.[0] || value;
+    assertSiteAllowed(source, config);
+    const job = await api('/api/captures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: value,
+        image_mode: 'group',
+        collection_id: config.collection_id || null,
+        tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
+        request_id: `clipper-gallery-${crypto.randomUUID()}`,
+      }),
+    });
+    await chrome.storage.local.set({ lastCapture: { id: job.id, server: serverUrlForJob(config.server), time: Date.now() } });
+    await chrome.action.setBadgeText({ text: '…' });
+    return job;
+  } catch (e) {
+    await chrome.storage.local.set({ lastResult: { ok: false, message: e.message, time: Date.now() } });
+    await chrome.action.setBadgeText({ text: '!' });
+    throw e;
+  }
+}
 const serverUrlForJob = value => value.replace(/\/$/, '');
