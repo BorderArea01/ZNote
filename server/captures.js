@@ -93,14 +93,26 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       let item=existing(imageId,job.input.collection_id);
       if(item && item.group_key!==groupKey)throw fail(409,'已保存的配图被重新分组，请恢复后重试');
       if(!item){
-        const candidates=plan.image_candidates?.find(values=>values[0]===url)||[url];let buffer,lastError;
+        const candidates=plan.image_candidates?.find(values=>values[0]===url)||[url];let lastError;
         for(const [attempt,candidate] of candidates.entries()){
           signal.throwIfAborted();
-          try { buffer=await image(candidate); if(attempt>0){usedFallback=true;patch(job.id,{image_fallback:true});} break; }
-          catch(e){lastError=e;}
+          let buffer;
+          try { buffer=await image(candidate); }
+          catch(e){lastError=e;continue;}
+          signal.throwIfAborted();
+          try {
+            item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${sourceIndex+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,content:album?plan.content||'':'',group_key:groupKey,group_index:sourceIndex,group_title:(plan.title||'网页采集').slice(0,200)});
+            if(attempt>0){usedFallback=true;patch(job.id,{image_fallback:true});}
+            break;
+          } catch(e) {
+            // A CDN may serve HEIC as its "original" even when the image
+            // store only accepts browser-compatible formats. Try the web
+            // display variant; other storage failures must surface directly.
+            if(e.status!==415)throw e;
+            lastError=e;
+          }
         }
-        if(!buffer)throw lastError||fail(422,'配图无法下载');
-        signal.throwIfAborted();item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${sourceIndex+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,content:album?plan.content||'':'',group_key:groupKey,group_index:sourceIndex,group_title:(plan.title||'网页采集').slice(0,200)});
+        if(!item)throw lastError||fail(422,'配图无法下载');
       }
       mapping.set(url,`/media/${item.id}/original`);
     }

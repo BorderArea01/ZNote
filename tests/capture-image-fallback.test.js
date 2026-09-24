@@ -16,6 +16,24 @@ test('original failure falls back per picture, preserves grouping/provenance and
   }finally{await manager.stop();db.close();}
 });
 
+test('unsupported original format falls back when saving the image',async()=>{
+  const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
+  const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteId:'abcd',title:'海边作品',imageList:[{urlOriginal:'https://cdn.example/original.heic',urlDefault:'https://cdn.example/display.jpg'}]}})+'</script>';
+  const saved=new Map(),calls=[];
+  const manager=createCaptureManager({db,dataDir:'unused',validateCollection:()=>{},work:fn=>fn(),exists:id=>saved.get(id),page:async()=>({url:'https://www.xiaohongshu.com/explore/abcd',type:'text/html',buffer:Buffer.from(html)}),image:async url=>{calls.push(url);return Buffer.from(url.endsWith('.heic')?'heic':'jpeg');},saveImage:async(buffer,item)=>{
+    if(buffer.toString()==='heic')throw Object.assign(Error('暂不支持此图片格式'),{status:415});
+    saved.set(item.id,item);return item;
+  },saveNote:item=>{saved.set(item.id,item);return item;}});
+  try{
+    const job=manager.add({text:'https://xhslink.cn/o/fixture',collection_id:'library',image_mode:'group'});
+    const result=await manager.wait(job.id,AbortSignal.timeout(5000));
+    assert.deepEqual(calls,['https://cdn.example/original.heic','https://cdn.example/display.jpg']);
+    assert.match(result.message,/备用图片版本/);
+    assert.equal(saved.size,1);
+    assert.equal(saved.get(result.item_id).source_url,'https://www.xiaohongshu.com/explore/abcd');
+  }finally{await manager.stop();db.close();}
+});
+
 for(const count of [1,2])test(`mobile album mode stores ${count} images without an extra note cover`,async()=>{
   const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
   const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteId:'abcd',desc:'第一行\n第二行',title:'作品',user:{nickname:'作者'},imageList:Array.from({length:count},(_,i)=>({urlOriginal:`https://cdn.example/${i}`}))}})+'</script>';
