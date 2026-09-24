@@ -20,6 +20,7 @@ import {
 import { Dialog, IconButton } from "./ui.jsx";
 import { api, send, bytes, uploadFile } from "./api.js";
 import { AppearanceSettings } from './appearance.jsx';
+import { filesFromDataTransfer, filterUploadFiles } from './file-drop.js';
 
 export function useTheme() {
   const [theme, setTheme] = useState(() => {
@@ -148,10 +149,13 @@ export function UploadDialog({
 }) {
   const taskStore=useTaskStore(),taskSnapshot=useTaskSnapshot();
   const taskById=new Map(taskSnapshot.jobs.map(job=>[job.id,job]));
+  const initialFiles = filterUploadFiles(files, kind);
   const [runError,setRunError]=useState('');
+  const [fileNotice,setFileNotice]=useState(files.length>initialFiles.length?`已跳过 ${files.length-initialFiles.length} 个不支持的文件。`:'' );
+  const [readingDrop,setReadingDrop]=useState(false);
   const [uploadPage,setUploadPage]=useState(0);
   const [rows, setRows] = useState(() =>
-    files.map((file,index) => ({
+    initialFiles.map((file,index) => ({
       id: Math.random(),
       group_index:index,
       file,
@@ -167,15 +171,18 @@ export function UploadDialog({
   const displayRows=rows.map(original=>{const task=taskById.get(original.task_id);return task?{...original,item:taskStore.result(task.id)||original.item,progress:task.progress,error:task.message,status:task.status==='completed'?(task.duplicate?'duplicate':'done'):task.status==='failed'||task.status==='cancelled'?'error':task.status==='queued'?'pending':'running'}:original});
   const running=submitting||displayRows.some(row=>row.status==='running'||row.status==='pending'&&row.task_id&&taskById.get(row.task_id)?.status==='queued');
   const queuedIds=useRef([]);
-  const picker = useRef();
+  const picker = useRef(), folderPicker = useRef();
   const update = (id, patch) =>
     setRows((previous) =>
       previous.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
-  const addFiles = (files) =>
+  const addFiles = (incoming) => {
+    const selected = [...incoming || []], accepted = filterUploadFiles(selected, kind), skipped = selected.length - accepted.length;
+    if (skipped) setFileNotice(`已跳过 ${skipped} 个不支持的文件，仅保留${kind === 'video' ? '视频' : '图片'}。`);
+    if (!accepted.length) return;
     setRows((previous) => [
       ...previous,
-      ...[...files].map((file,index) => ({
+      ...accepted.map((file,index) => ({
         id: Math.random(),
         group_index:Math.max(-1,...previous.map(r=>r.group_index))+1+index,
         file,
@@ -183,6 +190,7 @@ export function UploadDialog({
         progress: 0,
       })),
     ]);
+  };
   async function run() {
     setRunning(true);
     setRunError('');
@@ -207,21 +215,25 @@ export function UploadDialog({
     >
       <div className="feature-body">
         <div className="upload-guidance"><span>{kind === 'video' ? '单个文件 ≤ 500 MB' : '单张图片 ≤ 100 MB'}</span><HelpHint label="批量上传">
-          {kind === 'video' ? '支持 MP4、WebM、MOV、MKV，每个不超过 500 MB。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '一次选择多张图片，统一放入知识库并添加多个标签。每张不超过 100 MB。'}
+          {kind === 'video' ? '支持 MP4、WebM、MOV、MKV，每个不超过 500 MB。可以选择或拖入文件夹，文件会按顺序加入队列。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '可以一次选择多张图片，也可以把文件夹拖进来或选择文件夹。文件会按目录读取后统一放入知识库并添加多个标签；每张不超过 100 MB。'}
         </HelpHint></div>
         <div
           className="upload-drop"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+          onDrop={async (e) => {
             e.preventDefault();
-            if (!running) addFiles(e.dataTransfer.files);
+            if (running || readingDrop) return;
+            setReadingDrop(true);
+            try { addFiles(await filesFromDataTransfer(e.dataTransfer)); }
+            finally { setReadingDrop(false); }
           }}
         >
           <Upload size={25} />
-          <span>{kind === 'video' ? '拖入多个视频，或选择文件' : '拖入多张图片，或选择文件'}</span>
-          <button onClick={() => picker.current.click()} disabled={running}>
+          <span>{readingDrop ? '正在读取文件夹…' : kind === 'video' ? '拖入文件或文件夹，或选择文件' : '拖入图片文件夹，或选择文件'}</span>
+          <button type="button" onClick={() => picker.current.click()} disabled={running||readingDrop}>
             {kind === 'video' ? '选择视频' : '选择图片'}
           </button>
+          <button type="button" className="upload-folder-button" onClick={() => folderPicker.current.click()} disabled={running||readingDrop}>选择文件夹</button>
         </div>
         <input
           ref={picker}
@@ -234,6 +246,20 @@ export function UploadDialog({
             e.target.value = "";
           }}
         />
+        <input
+          ref={folderPicker}
+          type="file"
+          multiple
+          webkitdirectory=""
+          directory=""
+          accept={kind === 'video' ? '.mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska' : 'image/jpeg,image/png,image/webp,image/gif,image/avif'}
+          hidden
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        {fileNotice&&<p className="upload-file-notice" role="status">{fileNotice}</p>}
         <label className="feature-field">
           上传到知识库
           <select

@@ -70,6 +70,7 @@ import { TagFilter } from './TagFilter.jsx';
 import {useTagPage} from './useTagPage.js';
 import { ImportsDialog } from './Imports.jsx';
 import {TaskButton,TaskCenter,useTaskStore,queueUploads} from './Tasks.jsx';
+import { filesFromDataTransfer } from './file-drop.js';
 const labels = {
   home: "我的知识库",
   all: "全部内容",
@@ -1123,11 +1124,13 @@ export default function Workspace({
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false);
         }}
-        onDrop={(e) => {
+        onDrop={async (e) => {
           e.preventDefault();
           setDragging(false);
-          if (!selected && !uploadBatch)
-            setUploadBatch([...e.dataTransfer.files]);
+          if (!selected && !uploadBatch) {
+            const files = await filesFromDataTransfer(e.dataTransfer);
+            if (files.length) setUploadBatch(files);
+          }
         }}
       >
         <header className="topbar">
