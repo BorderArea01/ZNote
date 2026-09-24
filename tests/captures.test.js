@@ -62,12 +62,13 @@ test('mobile platform variants retain work identity, author and native playback 
 });
 test('platform images prefer original variants without altering unrelated signatures or artwork marks',()=>{
   const display='https://sns-webpic-qc.xhscdn.com/20260915/signature/1040g2sg0token!nd_dft_wlteh_webp_3?sign=keep';
-  assert.deepEqual(captureImageCandidates({urlDefault:display},'xhs','https://www.xiaohongshu.com/explore/abcd'),['https://sns-img-bd.xhscdn.com/1040g2sg0token',display]);
+  assert.deepEqual(captureImageCandidates({urlDefault:display},'xhs','https://www.xiaohongshu.com/explore/abcd'),['https://ci.xiaohongshu.com/1040g2sg0token?imageView2/format/webp','https://sns-img-bd.xhscdn.com/1040g2sg0token',display]);
+  assert.deepEqual(captureImageCandidates({urlOriginal:'https://sns-img-bd.xhscdn.com/1040g2sg0token',urlDefault:display},'xhs','https://www.xiaohongshu.com/explore/abcd'),['https://sns-img-bd.xhscdn.com/1040g2sg0token','https://ci.xiaohongshu.com/1040g2sg0token?imageView2/format/webp',display]);
   const signed='https://cdn.example/image.jpg?sign=keep&watermark=author';
   assert.deepEqual(captureImageCandidates({urlDefault:signed},'xhs','https://example.com'),[signed]);
   assert.deepEqual(captureImageCandidates({url_list:['https://cdn.example/display'],origin_url:'https://cdn.example/original',download_url_list:['https://cdn.example/watermark']},'douyin','https://www.douyin.com'),['https://cdn.example/original','https://cdn.example/display','https://cdn.example/watermark']);
   assert.deepEqual(captureImageCandidates({urlList:['https://cdn.example/camel-display'],downloadUrlList:['https://cdn.example/camel-watermark']},'douyin','https://www.douyin.com'),['https://cdn.example/camel-display','https://cdn.example/camel-watermark']);
-  const plan=extractCapturePage(xhs([display]),'https://www.xiaohongshu.com/explore/abcd');assert.equal(plan.images[0],plan.image_candidates[0][0]);assert.equal(plan.image_candidates[0].length,2);
+  const plan=extractCapturePage(xhs([display]),'https://www.xiaohongshu.com/explore/abcd');assert.equal(plan.images[0],plan.image_candidates[0][0]);assert.equal(plan.image_candidates[0].length,3);
 });
 test('share parsing and article extraction preserve links, line breaks and exact platform work',()=>{
   assert.deepEqual(sharedUrls('分享给你 https://xhslink.com/a/abcd。'),['https://xhslink.com/a/abcd']);
