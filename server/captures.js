@@ -166,7 +166,19 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
         browserPlan=extractCapturePage(raw.browser_html,source.href);
       }
       const jobs=read(), found=input.request_id&&jobs.find(j=>j.request_id===input.request_id);
-      if(found){if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'note')!==input.image_mode)throw fail(409,'这次分享编号已用于其他内容');if(browserPlan&&found.status==='failed'){found.plan=browserPlan;write(jobs);}return exposed(found);}
+      if(found){
+        if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'note')!==input.image_mode)throw fail(409,'这次分享编号已用于其他内容');
+        if(browserPlan&&found.status==='failed'){
+          // This is a fresh plan from the logged-in browser. Queue it here so
+          // retry() cannot discard video URLs as if they were stale cache.
+          found.plan=browserPlan;
+          found.status='queued';
+          found.message='等待服务器采集';
+          write(jobs);
+          schedule();
+        }
+        return exposed(found);
+      }
       if(stopped)throw fail(503,'服务正在停止');
       if(jobs.filter(j=>['queued','running'].includes(j.status)).length>=16)throw fail(429,'采集队列已满，请稍后重试');
       while(jobs.length>=100){const index=jobs.findIndex(j=>j.status==='completed');if(index<0)throw fail(429,'请先处理失败的采集任务');jobs.splice(index,1);}

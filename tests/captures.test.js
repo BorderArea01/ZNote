@@ -73,6 +73,11 @@ test('platform images prefer original variants without altering unrelated signat
 test('share parsing and article extraction preserve links, line breaks and exact platform work',()=>{
   assert.deepEqual(sharedUrls('分享给你 https://xhslink.com/a/abcd。'),['https://xhslink.com/a/abcd']);
   const note=extractCapturePage(xhs(),'https://www.xiaohongshu.com/explore/abcd');assert.equal(note.author,'旅行作者');assert.equal(note.images.length,2);assert.match(note.content,/第一行\n第二行/);
+  const hydrated=xhs().replace('{"note":','{"empty":new Map([]),"note":');
+  assert.equal(extractCapturePage(hydrated,'https://www.xiaohongshu.com/explore/abcd').images.length,2);
+  const videoRecord={noteId:'abcd',type:'video',desc:'视频说明',video:{media:{stream:{EF5:[{width:1080,height:1920,masterUrl:'https://cdn.example/video.mp4'}],EF6:[]}}}};
+  const videoHtml=`<script>window.__INITIAL_STATE__={"empty":new Map([]),"note":${JSON.stringify(videoRecord)}}</script>`;
+  assert.equal(extractCapturePage(videoHtml,'https://www.xiaohongshu.com/explore/abcd').video_urls[0],'https://cdn.example/video.mp4');
   assert.throws(()=>extractCapturePage(xhs(),'https://www.xiaohongshu.com/explore/ffff'),/完整数据/);
   const article=extractCapturePage('<html><head><title>文章</title></head><body><article><h1>文章</h1><p>第一行<br>第二行 <a href="/reference">参考链接</a></p><img data-src="/one.png"><p>'+('这是一段用于确认正文提取的文字。'.repeat(30))+'</p></article></body></html>','https://example.com/article');
   assert.match(article.content,/https:\/\/example.com\/reference/);assert.equal(markdownImages(article.content)[0].url,'https://example.com/one.png');assert.match(article.content,/第一行[\s\S]*\n第二行/);

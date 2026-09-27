@@ -14,6 +14,23 @@
       return url.href;
     } catch { return null; }
   }
+  function cardUrl(card, work) {
+    const target = new URL(work);
+    const id = target.pathname.split('/').filter(Boolean).at(-1);
+    for (const anchor of card.querySelectorAll('a[href*="xsec_token="]')) {
+      try {
+        const link = new URL(anchor.href);
+        if (link.hostname !== target.hostname || link.pathname.split('/').filter(Boolean).at(-1) !== id) continue;
+        const token = link.searchParams.get('xsec_token');
+        if (!token) continue;
+        target.searchParams.set('xsec_token', token);
+        const source = link.searchParams.get('xsec_source');
+        if (source) target.searchParams.set('xsec_source', source);
+        return target.href;
+      } catch {}
+    }
+    return work;
+  }
   function label(button, text, busy = false) {
     button.textContent = text;
     button.disabled = busy;
@@ -129,13 +146,14 @@
       if (!url) continue;
       const card = anchor.closest('.note-item, [class*="note-item"], article');
       if (!card) continue;
+      const captureUrl = cardUrl(card, url);
       const existing = card.querySelector(':scope > .znote-xhs-post-button');
       if (existing) {
-        if (!new URL(existing.dataset.znoteUrl).searchParams.has('xsec_token') && new URL(url).searchParams.has('xsec_token')) existing.dataset.znoteUrl = url;
+        if (!new URL(existing.dataset.znoteUrl).searchParams.has('xsec_token') && new URL(captureUrl).searchParams.has('xsec_token')) existing.dataset.znoteUrl = captureUrl;
         continue;
       }
       card.classList.add('znote-xhs-post-card');
-      card.append(buttonFor(url));
+      card.append(buttonFor(captureUrl));
     }
     const detailUrl = workUrl(location.href);
     const detail = document.querySelector('.znote-xhs-detail-button');

@@ -307,6 +307,9 @@ function scriptData(raw) {
     for (let i = 0; i < value.length; i++) {
       const c = value[i];
       if (!quoted && value.slice(i, i + 9) === 'undefined') { output += 'null'; i += 8; continue; }
+      // Xiaohongshu hydrates empty lookup tables as `new Map([])`. Replace
+      // this exact literal while parsing, without evaluating page scripts.
+      if (!quoted && value.slice(i, i + 11) === 'new Map([])') { output += '{}'; i += 10; continue; }
       output += c;
       if (quoted) { if (escaped) escaped = false; else if (c === '\\') escaped = true; else if (c === '"') quoted = false; }
       else if (c === '"') quoted = true;
@@ -439,8 +442,9 @@ export function extractCapturePage(html, url) {
       if (!record) continue;
       const galleryImages=galleryEntries(record, xhs ? 'xhs' : 'douyin');
       if (xhs && record.type === 'video' || dy && !galleryImages.length) {
-        const streams=xhs?record.video?.media?.stream?.h264||[]:[];
-        const candidates=xhs?[...streams].sort((a,b)=>(b.width*b.height-a.width*a.height)||(b.videoBitrate-a.videoBitrate)).flatMap(s=>[s.masterUrl,...(s.backupUrls||[])]):record.video?.play_addr?.url_list||[];
+        const variants=xhs?record.video?.media?.stream||{}:{};
+        const streams=xhs?Object.entries(variants).flatMap(([codec,list])=>(Array.isArray(list)?list:[]).map(stream=>({...stream,_codec:codec}))):[];
+        const candidates=xhs?streams.sort((a,b)=>Number(b._codec==='h264')-Number(a._codec==='h264')||(b.width*b.height-a.width*a.height)||(b.videoBitrate-a.videoBitrate)).flatMap(s=>[s.masterUrl,...(s.backupUrls||[])]):record.video?.play_addr?.url_list||[];
         return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||record.authorInfo?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8) };
       }
       const images = galleryImages.map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
