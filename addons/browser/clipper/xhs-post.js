@@ -23,12 +23,12 @@
   function pageToken(id) {
     return new Promise(resolve => {
       const nonce = crypto.randomUUID();
-      const timer = setTimeout(() => { window.removeEventListener('znote-xhs-token-response', receive); resolve({token:'',source:''}); }, 400);
+      const timer = setTimeout(() => { window.removeEventListener('znote-xhs-token-response', receive); resolve({token:'',source:'',detail:''}); }, 400);
       function receive(event) {
         if (event.detail?.nonce !== nonce || event.detail?.id !== id) return;
         clearTimeout(timer);
         window.removeEventListener('znote-xhs-token-response', receive);
-        resolve({token:event.detail.token || '',source:event.detail.source || ''});
+        resolve({token:event.detail.token || '',source:event.detail.source || '',detail:event.detail.detail || ''});
       }
       window.addEventListener('znote-xhs-token-response', receive);
       window.dispatchEvent(new CustomEvent('znote-xhs-token-request', {detail:{id,nonce}}));
@@ -38,6 +38,8 @@
     const id = new URL(url).pathname.match(/[a-f\d]+\/?$/i)?.[0]?.replace(/\/$/, '');
     if (!id) return '';
     const scripts = [];
+    const access = await pageToken(id);
+    if (access.detail) scripts.push(`<script>window.__INITIAL_STATE__=${access.detail}</script>`);
     function appendScripts(doc) {
       for (const script of doc.querySelectorAll('script:not([src])')) {
         const value = script.textContent || '';
@@ -47,7 +49,6 @@
     if (workUrl(location.href)?.split('?')[0] === url.split('?')[0]) appendScripts(document);
     const requestUrl = new URL(url);
     if (!requestUrl.searchParams.has('xsec_token')) {
-      const access = await pageToken(id);
       if (access.token) {
         const source = access.source || (location.pathname.startsWith('/search_result') ? 'pc_search' : location.pathname.startsWith('/user/profile') ? 'pc_user' : 'pc_feed');
         requestUrl.searchParams.set('xsec_token', access.token);
@@ -95,7 +96,8 @@
           button.title = job.message || '已保存到 ZNote';
           showToast(job.message || '已保存到知识库');
         } else {
-          throw new Error(job.status === 'failed' ? job.message : '采集仍在进行，请在 ZNote 采集记录查看');
+          const missingPage = !pageHtml && job.status === 'failed' && /平台未提供这篇作品的完整数据/.test(job.message || '');
+          throw new Error(missingPage ? '当前卡片缺少完整作品数据；请打开这篇作品的详情页，再点「保存到 ZNote」' : job.status === 'failed' ? job.message : '采集仍在进行，请在 ZNote 采集记录查看');
         }
       } catch (error) {
         label(button, '重试采集');
@@ -126,7 +128,12 @@
       const url = workUrl(anchor.href);
       if (!url) continue;
       const card = anchor.closest('.note-item, [class*="note-item"], article');
-      if (!card || card.querySelector(':scope > .znote-xhs-post-button')) continue;
+      if (!card) continue;
+      const existing = card.querySelector(':scope > .znote-xhs-post-button');
+      if (existing) {
+        if (!new URL(existing.dataset.znoteUrl).searchParams.has('xsec_token') && new URL(url).searchParams.has('xsec_token')) existing.dataset.znoteUrl = url;
+        continue;
+      }
       card.classList.add('znote-xhs-post-card');
       card.append(buttonFor(url));
     }

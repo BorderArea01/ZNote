@@ -29,12 +29,13 @@ try {
   await context.route('https://www.xiaohongshu.com/**', route => {
     const url=new URL(route.request().url());
     const accessible=url.pathname==='/explore'||url.searchParams.get('xsec_token')==='fixturetoken123';
-    return route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main style="position:relative"><article class="note-item" style="position:absolute;left:0;top:0;width:230px;height:260px"><a href="/explore/abcd">第一篇帖子</a></article><article class="note-item" style="position:absolute;left:250px;top:0;width:230px;height:260px"><a href="/explore/1234">第二篇帖子</a></article></main>${accessible?fixture:''}</body></html>`});
+    return route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main style="position:relative"><article class="note-item" style="position:absolute;left:0;top:0;width:230px;height:260px"><a href="/explore/abcd">第一篇帖子</a><a href="/explore/abcd?xsec_token=fixturetoken123&xsec_source=pc_search">带访问参数的链接</a></article><article class="note-item" style="position:absolute;left:250px;top:0;width:230px;height:260px"><a href="/explore/1234">第二篇帖子</a></article></main>${accessible?fixture:''}</body></html>`});
   });
   const tab = await context.newPage(); await tab.goto('https://www.xiaohongshu.com/explore'); await tab.bringToFront();
   const pageToken=await tab.evaluate(()=>new Promise(resolve=>{window.addEventListener('znote-xhs-token-response',event=>resolve(event.detail.token),{once:true});window.dispatchEvent(new CustomEvent('znote-xhs-token-request',{detail:{id:'abcd',nonce:'test'}}));setTimeout(()=>resolve(''),1000);}));
   assert.equal(pageToken,'fixturetoken123');
   await tab.locator('.note-item .znote-xhs-post-button').first().waitFor();
+  await tab.waitForFunction(() => document.querySelector('.note-item .znote-xhs-post-button')?.dataset.znoteUrl.includes('xsec_token=fixturetoken123'));
   const layout=await tab.locator('.note-item').evaluateAll(cards=>cards.map(card=>({position:getComputedStyle(card).position,x:card.getBoundingClientRect().x,y:card.getBoundingClientRect().y})));
   assert.deepEqual(layout.map(card=>card.position),['absolute','absolute']);
   assert.equal(layout[1].x-layout[0].x,250);
@@ -76,6 +77,11 @@ try {
   await tab.locator('.znote-xhs-detail-button').click();
   await tab.getByRole('button',{name:'已保存 ✓'}).last().waitFor({timeout:15000});
   assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,3);
+  await tab.goto('https://www.xiaohongshu.com/explore/def0');
+  await tab.evaluate(record => { window.__INITIAL_STATE__ = {note:{noteDetailMap:{def0:{note:record}}}}; }, note('def0'));
+  await tab.locator('.znote-xhs-detail-button').click();
+  await tab.locator('.znote-xhs-detail-button').getByText('已保存 ✓').waitFor({timeout:15000});
+  assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,4);
   await worker.evaluate(() => chrome.storage.local.set({blockedSites:['www.xiaohongshu.com']}));
   await tab.waitForFunction(() => document.querySelectorAll('.znote-xhs-post-button').length === 0);
   const desktop = await chromium.launchPersistentContext(join(dir, 'desktop-profile'), {channel:process.env.EXTENSION_BROWSER || 'msedge',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`],viewport:{width:1200,height:850}});
@@ -88,7 +94,7 @@ try {
     await desktopTab.locator('.note-item').hover();
     await desktopTab.waitForFunction(()=>getComputedStyle(document.querySelector('.znote-xhs-post-button')).opacity==='1');
   } finally { await desktop.close(); }
-  console.log('PASS: XHS cards and detail capture by mouse and touch, dedupe repeated clicks, recover from missing token, and honor site blacklist');
+  console.log('PASS: XHS cards and detail capture by mouse and touch, token link preference, live SPA detail state, dedupe, and site blacklist');
 } finally {
   await context.close(); await runtime.captures.stop(); await runtime.imports.stop(); await runtime.trash.stop(); await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(resolve => server.close(resolve)); runtime.db.close();
 }
