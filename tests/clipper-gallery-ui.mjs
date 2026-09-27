@@ -13,7 +13,7 @@ const runtime = createApp({ dataDir: dir, staticDir: resolve('dist'), captureOpt
 const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 const extension = resolve('addons/browser/clipper');
-const context = await chromium.launchPersistentContext(join(dir, 'profile'), { channel: process.env.EXTENSION_BROWSER || 'msedge', headless: true, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`], viewport: { width: 1200, height: 850 } });
+const context = await chromium.launchPersistentContext(join(dir, 'profile'), { channel: process.env.EXTENSION_BROWSER || 'msedge', headless: true, hasTouch: true, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`], viewport: { width: 1200, height: 850 } });
 const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
 const id = new URL(worker.url()).host;
 try {
@@ -24,14 +24,51 @@ try {
   const options = await context.newPage(); await options.goto(`chrome-extension://${id}/options.html`); await options.waitForFunction(() => document.body.dataset.ready === 'true');
   await options.locator('#server').fill(base); await options.locator('#token').fill(token.token); await options.getByRole('button', { name: '验证连接并读取知识库' }).click(); await options.getByText('连接成功，请选择知识库并保存设置', { exact: true }).waitFor();
   await options.getByRole('button', { name: '保存设置', exact: true }).click(); await options.getByText('已保存，可以右键图片或截图入库', { exact: true }).waitFor();
-  const tab = await context.newPage(); await tab.goto('https://www.xiaohongshu.com/explore/abcd'); await tab.bringToFront();
+  await context.route('https://www.xiaohongshu.com/**', route => route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main><article class="note-item" style="width:230px;height:260px"><a href="/explore/abcd?xsec_token=fixture">第一篇帖子</a></article><article class="note-item" style="width:230px;height:260px"><a href="/explore/1234?xsec_token=fixture">第二篇帖子</a></article></main></body></html>`}));
+  const tab = await context.newPage(); await tab.goto('https://www.xiaohongshu.com/explore'); await tab.bringToFront();
   const popup = await context.newPage(); await popup.goto(`chrome-extension://${id}/popup.html`);
   await popup.locator('#gallery-link').fill('分享给你 https://xhslink.com/a/abcd'); await popup.getByRole('button', { name: '获取图组并保存' }).click();
   await popup.locator('#gallery-status').waitFor({ state: 'visible' }); await popup.waitForFunction(() => /图片组已入库/.test(document.querySelector('#gallery-status')?.textContent || ''), null, { timeout: 10000 });
   assert.equal(await popup.locator('#gallery-open').getAttribute('href') !== null, true);
   const jobs = await (await context.request.get(base + '/api/captures')).json(); assert.equal(jobs.jobs.length, 1); assert.equal(jobs.jobs[0].status, 'completed');
   assert.equal(runtime.db.prepare("SELECT count(*) AS n FROM items WHERE group_key LIKE 'capture:%'").get().n, 2);
-  console.log('PASS: extension popup submits an XHS share link through the group capture queue and reports the completed grouped result');
+  await popup.close();
+  const first = tab.locator('.note-item').first();
+  await first.hover();
+  const firstButton = first.getByRole('button', {name:'保存这篇小红书帖子到 ZNote'});
+  await tab.screenshot({path:resolve('artifacts/clipper-xhs-post-button.png')});
+  await firstButton.click();
+  await first.getByRole('button', {name:'已保存 ✓'}).waitFor({timeout:15000});
+  assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,2);
+  await first.getByRole('button', {name:'已保存 ✓'}).click();
+  assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,2);
+  const second = tab.locator('.note-item').nth(1);
+  await worker.evaluate(() => chrome.storage.local.set({token:''}));
+  await second.getByRole('button', {name:'保存这篇小红书帖子到 ZNote'}).tap();
+  await second.getByRole('button', {name:'重试采集'}).waitFor();
+  assert.match(await tab.locator('.znote-xhs-post-toast').innerText(),/令牌/);
+  await worker.evaluate(value => chrome.storage.local.set({token:value}),token.token);
+  await second.getByRole('button', {name:'重试采集'}).tap();
+  await second.getByRole('button', {name:'已保存 ✓'}).waitFor({timeout:15000});
+  assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,3);
+  await tab.goto('https://www.xiaohongshu.com/explore/abcd?xsec_token=fixture');
+  await tab.locator('.znote-xhs-detail-button').waitFor();
+  await tab.locator('.znote-xhs-detail-button').click();
+  await tab.getByRole('button',{name:'已保存 ✓'}).last().waitFor({timeout:15000});
+  assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,3);
+  await worker.evaluate(() => chrome.storage.local.set({blockedSites:['www.xiaohongshu.com']}));
+  await tab.waitForFunction(() => document.querySelectorAll('.znote-xhs-post-button').length === 0);
+  const desktop = await chromium.launchPersistentContext(join(dir, 'desktop-profile'), {channel:process.env.EXTENSION_BROWSER || 'msedge',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`],viewport:{width:1200,height:850}});
+  try {
+    await desktop.route('https://www.xiaohongshu.com/**',route=>route.fulfill({contentType:'text/html',body:'<article class="note-item" style="width:230px;height:260px"><a href="/explore/abcd">第一篇帖子</a></article>'}));
+    const desktopTab=await desktop.newPage(); await desktopTab.goto('https://www.xiaohongshu.com/explore');
+    const desktopButton=desktopTab.getByRole('button',{name:'保存这篇小红书帖子到 ZNote'});
+    await desktopButton.waitFor();
+    assert.equal(await desktopButton.evaluate(element=>getComputedStyle(element).opacity),'0');
+    await desktopTab.locator('.note-item').hover();
+    await desktopTab.waitForFunction(()=>getComputedStyle(document.querySelector('.znote-xhs-post-button')).opacity==='1');
+  } finally { await desktop.close(); }
+  console.log('PASS: XHS cards and detail capture by mouse and touch, dedupe repeated clicks, recover from missing token, and honor site blacklist');
 } finally {
   await context.close(); await runtime.captures.stop(); await runtime.imports.stop(); await runtime.trash.stop(); await runtime.backups.stop(); await runtime.webhooks.stop(); await new Promise(resolve => server.close(resolve)); runtime.db.close();
 }

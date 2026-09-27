@@ -69,6 +69,20 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (sender.id === chrome.runtime.id && sender.tab && /^(media-|hover-resource)/.test(message.type || '')) {
     discover(message, sender).then(value => reply({ ok: true, value }), error => reply({ ok: false, error: error.message })); return true;
   }
+  if (sender.id === chrome.runtime.id && sender.tab && sender.frameId === 0 &&
+      ['xhs-post-capture', 'xhs-post-status'].includes(message.type)) {
+    const page = (() => { try { return new URL(sender.url); } catch { return null; } })();
+    const source = (() => { try { return new URL(message.url); } catch { return null; } })();
+    const workPath = /^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i;
+    if (page?.protocol !== 'https:' || page.hostname !== 'www.xiaohongshu.com' ||
+        (message.type === 'xhs-post-capture' && (source?.protocol !== 'https:' || source.hostname !== page.hostname || !workPath.test(source.pathname)))) {
+      reply({ ok: false, error: '只可采集小红书作品链接' }); return;
+    }
+    const operation = message.type === 'xhs-post-capture'
+      ? collectGallery(sender.tab, source.href, { dedupe: true })
+      : api(`/api/captures/${encodeURIComponent(String(message.id || ''))}`);
+    operation.then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
+  }
   if (sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL('popup.html') && message.type === 'open-panel') {
     chrome.tabs.sendMessage(message.tabId, { type: 'open-media-panel' }, { frameId: 0 }).then(result => reply(result || { ok: false, error: '此页面未能打开媒体浮窗' }), () => reply({ ok: false, error: '此页面不允许扩展运行，或需要刷新页面' })); return true;
   }

@@ -1,0 +1,111 @@
+(() => {
+  if (window.top !== window) return;
+  const workPath = /^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i;
+  const buttons = new Set();
+  let enabled = false;
+  let scanTimer = 0;
+  let currentPath = '';
+
+  function workUrl(value) {
+    try {
+      const url = new URL(value, location.href);
+      if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || !workPath.test(url.pathname)) return null;
+      url.hash = '';
+      return url.href;
+    } catch { return null; }
+  }
+  function label(button, text, busy = false) {
+    button.textContent = text;
+    button.disabled = busy;
+    button.setAttribute('aria-label', text === '保存到 ZNote' ? '保存这篇小红书帖子到 ZNote' : text);
+    button.title = text;
+  }
+  function buttonFor(url, detail = false) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `znote-xhs-post-button${detail ? ' znote-xhs-detail-button' : ''}`;
+    button.dataset.znoteUrl = url;
+    label(button, '保存到 ZNote');
+    buttons.add(button);
+    button.addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (button.disabled) return;
+      label(button, '采集中…', true);
+      try {
+        const result = await chrome.runtime.sendMessage({ type: 'xhs-post-capture', url: button.dataset.znoteUrl });
+        if (!result?.ok) throw new Error(result?.error || '提交失败');
+        let job = result.job;
+        for (let i = 0; i < 150 && ['queued', 'running'].includes(job.status); i++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const next = await chrome.runtime.sendMessage({ type: 'xhs-post-status', id: job.id });
+          if (!next?.ok) throw new Error(next?.error || '无法读取采集状态');
+          job = next.job;
+        }
+        if (job.status === 'completed') {
+          label(button, '已保存 ✓');
+          button.title = job.message || '已保存到 ZNote';
+          showToast(job.message || '已保存到知识库');
+        } else {
+          throw new Error(job.status === 'failed' ? job.message : '采集仍在进行，请在 ZNote 采集记录查看');
+        }
+      } catch (error) {
+        label(button, '重试采集');
+        button.title = error.message || '采集失败';
+        showToast(error.message || '采集失败，请重试');
+      }
+    }, true);
+    return button;
+  }
+  function showToast(message) {
+    let toast = document.querySelector('.znote-xhs-post-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.className = 'znote-xhs-post-toast';
+      toast.setAttribute('role', 'status');
+      document.documentElement.append(toast);
+    }
+    toast.textContent = `ZNote：${message}`;
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => toast.remove(), 6000);
+  }
+  function scan() {
+    scanTimer = 0;
+    currentPath = location.href;
+    if (!enabled) return;
+    for (const button of buttons) if (!button.isConnected) buttons.delete(button);
+    for (const anchor of document.querySelectorAll('a[href*="/explore/"], a[href*="/discovery/item/"]')) {
+      const url = workUrl(anchor.href);
+      if (!url) continue;
+      const card = anchor.closest('.note-item, [class*="note-item"], article');
+      if (!card || card.querySelector(':scope > .znote-xhs-post-button')) continue;
+      card.classList.add('znote-xhs-post-card');
+      card.append(buttonFor(url));
+    }
+    const detailUrl = workUrl(location.href);
+    const detail = document.querySelector('.znote-xhs-detail-button');
+    if (detailUrl && !detail) document.documentElement.append(buttonFor(detailUrl, true));
+    else if (!detailUrl && detail) { detail.remove(); buttons.delete(detail); }
+    else if (detailUrl && detail && detail.dataset.znoteUrl !== detailUrl) {
+      detail.dataset.znoteUrl = detailUrl;
+      label(detail, '保存到 ZNote');
+    }
+  }
+  function schedule() {
+    if (!scanTimer) scanTimer = setTimeout(scan, 180);
+  }
+  async function refresh() {
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'media-settings' });
+      enabled = result?.ok && !result.value?.blocked;
+    } catch { enabled = false; }
+    for (const button of buttons) if (!enabled) button.remove();
+    if (!enabled) buttons.clear();
+    document.querySelector('.znote-xhs-post-toast')?.remove();
+    if (enabled) schedule();
+  }
+  chrome.runtime.onMessage.addListener(message => { if (message.type === 'media-settings-changed') refresh(); });
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+  setInterval(() => { if (location.href !== currentPath) schedule(); }, 700);
+  refresh();
+})();

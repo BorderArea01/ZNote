@@ -57,14 +57,17 @@ export async function collectVideo(tab, url = tab.url) {
     await chrome.action.setBadgeText({ text: '!' }); throw e;
   }
 }
-export async function collectGallery(tab, text = tab?.url) {
+export async function collectGallery(tab, text = tab?.url, { dedupe = false } = {}) {
   try {
     const config = await settings();
     const value = String(text || '').trim();
     if (!value) throw new Error('请粘贴作品链接或先打开作品页面');
     const source = value.match(/https?:\/\/[^\s<>"\u200b]+/i)?.[0] || value;
     assertSiteAllowed(source, config);
-    const job = await api('/api/captures', {
+    const requestId = dedupe
+      ? `clipper-xhs-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
+      : `clipper-gallery-${crypto.randomUUID()}`;
+    let job = await api('/api/captures', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -72,9 +75,10 @@ export async function collectGallery(tab, text = tab?.url) {
         image_mode: 'group',
         collection_id: config.collection_id || null,
         tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
-        request_id: `clipper-gallery-${crypto.randomUUID()}`,
+        request_id: requestId,
       }),
     });
+    if (dedupe && job.status === 'failed') job = await api(`/api/captures/${job.id}/retry`, { method: 'POST' });
     await chrome.storage.local.set({ lastCapture: { id: job.id, server: serverUrlForJob(config.server), time: Date.now() } });
     await chrome.action.setBadgeText({ text: '…' });
     return job;

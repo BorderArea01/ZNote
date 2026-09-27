@@ -1,0 +1,23 @@
+.znote-xhs-post-card { position: relative !important; }
+.znote-xhs-post-button {
+  position: absolute !important; top: 10px !important; right: 10px !important; z-index: 60 !important;
+  display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  min-height: 32px !important; padding: 0 10px !important; border: 1px solid rgba(255,255,255,.32) !important;
+  border-radius: 999px !important; background: rgba(24,29,44,.91) !important; color: #fff !important;
+  font: 600 12px/1.2 system-ui,sans-serif !important; white-space: nowrap !important;
+  box-shadow: 0 3px 12px rgba(0,0,0,.22) !important; cursor: pointer !important;
+  opacity: 0; transform: translateY(-2px); transition: opacity .15s, transform .15s !important;
+}
+.znote-xhs-post-card:hover > .znote-xhs-post-button,
+.znote-xhs-post-card:focus-within > .znote-xhs-post-button,
+.znote-xhs-post-button:hover,
+.znote-xhs-post-button:focus-visible { opacity: 1 !important; transform: none !important; }
+.znote-xhs-post-button:disabled { cursor: progress !important; }
+.znote-xhs-detail-button { position: fixed !important; top: 86px !important; right: 24px !important; opacity: 1 !important; z-index: 2147483000 !important; }
+.znote-xhs-post-toast {
+  position: fixed !important; right: 24px !important; bottom: 24px !important; z-index: 2147483001 !important;
+  max-width: min(420px, calc(100vw - 48px)) !important; padding: 10px 14px !important; border-radius: 12px !important;
+  background: #222b3c !important; color: #fff !important; box-shadow: 0 8px 30px #0005 !important;
+  font: 13px/1.5 system-ui,sans-serif !important;
+}
+@media (hover: none) { .znote-xhs-post-card > .znote-xhs-post-button { opacity: 1 !important; transform: none !important; } }
