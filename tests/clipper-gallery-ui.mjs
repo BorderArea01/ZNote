@@ -10,7 +10,7 @@ import { createApp } from '../server/app.js';
 const dir = await mkdtemp(resolve('artifacts/clipper-gallery-ui-'));
 const image = await sharp({ create: { width: 24, height: 24, channels: 3, background: '#7a967e' } }).png().toBuffer();
 const note = id => ({noteId:id,title:'小红书图组验收',desc:'两张图',user:{nickname:'测试作者'},imageList:[{urlDefault:'https://sns.example/one.jpg'},{urlDefault:'https://sns.example/two.jpg'}]});
-const fixture = '<script>window.__INITIAL_STATE__=' + JSON.stringify({ note: { noteDetailMap: { abcd: { note: note('abcd') }, '1234': { note: note('1234') } } } }) + '</script>';
+const fixture = '<script>window.__INITIAL_STATE__=' + JSON.stringify({ note: { noteDetailMap: { abcd: { note: note('abcd'), xsecToken:'fixturetoken123', xsecSource:'pc_search' }, '1234': { note: note('1234'), xsecToken:'fixturetoken123', xsecSource:'pc_search' } } } }) + '</script>';
 const runtime = createApp({ dataDir: dir, staticDir: resolve('dist'), captureOptions: { page: async url => ({ url: url.includes('xhslink.com') ? 'https://www.xiaohongshu.com/explore/abcd' : url, type: 'text/html', buffer: Buffer.from(url.includes('xhslink.com') ? fixture : '<html><title>需验证</title></html>') }), image: async () => image } });
 const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -26,8 +26,14 @@ try {
   const options = await context.newPage(); await options.goto(`chrome-extension://${id}/options.html`); await options.waitForFunction(() => document.body.dataset.ready === 'true');
   await options.locator('#server').fill(base); await options.locator('#token').fill(token.token); await options.getByRole('button', { name: '验证连接并读取知识库' }).click(); await options.getByText('连接成功，请选择知识库并保存设置', { exact: true }).waitFor();
   await options.getByRole('button', { name: '保存设置', exact: true }).click(); await options.getByText('已保存，可以右键图片或截图入库', { exact: true }).waitFor();
-  await context.route('https://www.xiaohongshu.com/**', route => route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main style="position:relative"><article class="note-item" style="position:absolute;left:0;top:0;width:230px;height:260px"><a href="/explore/abcd">第一篇帖子</a></article><article class="note-item" style="position:absolute;left:250px;top:0;width:230px;height:260px"><a href="/explore/1234">第二篇帖子</a></article></main>${fixture}</body></html>`}));
+  await context.route('https://www.xiaohongshu.com/**', route => {
+    const url=new URL(route.request().url());
+    const accessible=url.pathname==='/explore'||url.searchParams.get('xsec_token')==='fixturetoken123';
+    return route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main style="position:relative"><article class="note-item" style="position:absolute;left:0;top:0;width:230px;height:260px"><a href="/explore/abcd">第一篇帖子</a></article><article class="note-item" style="position:absolute;left:250px;top:0;width:230px;height:260px"><a href="/explore/1234">第二篇帖子</a></article></main>${accessible?fixture:''}</body></html>`});
+  });
   const tab = await context.newPage(); await tab.goto('https://www.xiaohongshu.com/explore'); await tab.bringToFront();
+  const pageToken=await tab.evaluate(()=>new Promise(resolve=>{window.addEventListener('znote-xhs-token-response',event=>resolve(event.detail.token),{once:true});window.dispatchEvent(new CustomEvent('znote-xhs-token-request',{detail:{id:'abcd',nonce:'test'}}));setTimeout(()=>resolve(''),1000);}));
+  assert.equal(pageToken,'fixturetoken123');
   await tab.locator('.note-item .znote-xhs-post-button').first().waitFor();
   const layout=await tab.locator('.note-item').evaluateAll(cards=>cards.map(card=>({position:getComputedStyle(card).position,x:card.getBoundingClientRect().x,y:card.getBoundingClientRect().y})));
   assert.deepEqual(layout.map(card=>card.position),['absolute','absolute']);
@@ -65,7 +71,7 @@ try {
   await second.getByRole('button', {name:'重试采集'}).tap();
   await second.getByRole('button', {name:'已保存 ✓'}).waitFor({timeout:15000});
   assert.equal((await (await context.request.get(base + '/api/captures')).json()).jobs.length,3);
-  await tab.goto('https://www.xiaohongshu.com/explore/abcd');
+  await tab.goto('https://www.xiaohongshu.com/explore/abcd?xsec_token=fixturetoken123');
   await tab.locator('.znote-xhs-detail-button').waitFor();
   await tab.locator('.znote-xhs-detail-button').click();
   await tab.getByRole('button',{name:'已保存 ✓'}).last().waitFor({timeout:15000});

@@ -20,6 +20,20 @@
     button.setAttribute('aria-label', text === '保存到 ZNote' ? '保存这篇小红书帖子到 ZNote' : text);
     button.title = text;
   }
+  function pageToken(id) {
+    return new Promise(resolve => {
+      const nonce = crypto.randomUUID();
+      const timer = setTimeout(() => { window.removeEventListener('znote-xhs-token-response', receive); resolve({token:'',source:''}); }, 400);
+      function receive(event) {
+        if (event.detail?.nonce !== nonce || event.detail?.id !== id) return;
+        clearTimeout(timer);
+        window.removeEventListener('znote-xhs-token-response', receive);
+        resolve({token:event.detail.token || '',source:event.detail.source || ''});
+      }
+      window.addEventListener('znote-xhs-token-response', receive);
+      window.dispatchEvent(new CustomEvent('znote-xhs-token-request', {detail:{id,nonce}}));
+    });
+  }
   async function browserPage(url) {
     const id = new URL(url).pathname.match(/[a-f\d]+\/?$/i)?.[0]?.replace(/\/$/, '');
     if (!id) return '';
@@ -31,8 +45,17 @@
       }
     }
     if (workUrl(location.href)?.split('?')[0] === url.split('?')[0]) appendScripts(document);
+    const requestUrl = new URL(url);
+    if (!requestUrl.searchParams.has('xsec_token')) {
+      const access = await pageToken(id);
+      if (access.token) {
+        const source = access.source || (location.pathname.startsWith('/search_result') ? 'pc_search' : location.pathname.startsWith('/user/profile') ? 'pc_user' : 'pc_feed');
+        requestUrl.searchParams.set('xsec_token', access.token);
+        requestUrl.searchParams.set('xsec_source', source);
+      }
+    }
     try {
-      const response = await fetch(url, { credentials: 'include', signal: AbortSignal.timeout(15000) });
+      const response = await fetch(requestUrl, { credentials: 'include', signal: AbortSignal.timeout(15000) });
       if (response.ok && response.headers.get('content-type')?.includes('text/html') && workUrl(response.url)?.split('?')[0] === url.split('?')[0]) {
         appendScripts(new DOMParser().parseFromString(await response.text(), 'text/html'));
       }
@@ -56,7 +79,9 @@
       try {
         const postUrl = button.dataset.znoteUrl;
         const pageHtml = await browserPage(postUrl);
-        const result = await chrome.runtime.sendMessage({ type: 'xhs-post-capture', url: postUrl, pageHtml });
+        const sourceUrl = new URL(postUrl);
+        sourceUrl.search = '';
+        const result = await chrome.runtime.sendMessage({ type: 'xhs-post-capture', url: sourceUrl.href, pageHtml });
         if (!result?.ok) throw new Error(result?.error || '提交失败');
         let job = result.job;
         for (let i = 0; i < 150 && ['queued', 'running'].includes(job.status); i++) {
