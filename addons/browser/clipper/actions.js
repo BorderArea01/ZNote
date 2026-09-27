@@ -57,7 +57,7 @@ export async function collectVideo(tab, url = tab.url) {
     await chrome.action.setBadgeText({ text: '!' }); throw e;
   }
 }
-export async function collectGallery(tab, text = tab?.url, { dedupe = false } = {}) {
+export async function collectGallery(tab, text = tab?.url, { dedupe = false, browserHtml = '' } = {}) {
   try {
     const config = await settings();
     const value = String(text || '').trim();
@@ -76,6 +76,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false } = 
         collection_id: config.collection_id || null,
         tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
         request_id: requestId,
+        ...(browserHtml ? { browser_html: browserHtml } : {}),
       }),
     });
     if (dedupe && job.status === 'failed') job = await api(`/api/captures/${job.id}/retry`, { method: 'POST' });

@@ -20,6 +20,27 @@
     button.setAttribute('aria-label', text === '保存到 ZNote' ? '保存这篇小红书帖子到 ZNote' : text);
     button.title = text;
   }
+  async function browserPage(url) {
+    const id = new URL(url).pathname.match(/[a-f\d]+\/?$/i)?.[0]?.replace(/\/$/, '');
+    if (!id) return '';
+    const scripts = [];
+    function appendScripts(doc) {
+      for (const script of doc.querySelectorAll('script:not([src])')) {
+        const value = script.textContent || '';
+        if (value.includes(id) && /__INITIAL_STATE__|__SETUP_SERVER_STATE__|noteDetailMap/.test(value) && new TextEncoder().encode(script.outerHTML).length < 1400000) scripts.push(script.outerHTML);
+      }
+    }
+    if (workUrl(location.href)?.split('?')[0] === url.split('?')[0]) appendScripts(document);
+    try {
+      const response = await fetch(url, { credentials: 'include', signal: AbortSignal.timeout(15000) });
+      if (response.ok && response.headers.get('content-type')?.includes('text/html') && workUrl(response.url)?.split('?')[0] === url.split('?')[0]) {
+        appendScripts(new DOMParser().parseFromString(await response.text(), 'text/html'));
+      }
+    } catch {}
+    let result = '<html><body>';
+    for (const script of scripts) if (new TextEncoder().encode(result + script).length < 1500000) result += script;
+    return result === '<html><body>' ? '' : result + '</body></html>';
+  }
   function buttonFor(url, detail = false) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -33,7 +54,9 @@
       if (button.disabled) return;
       label(button, '采集中…', true);
       try {
-        const result = await chrome.runtime.sendMessage({ type: 'xhs-post-capture', url: button.dataset.znoteUrl });
+        const postUrl = button.dataset.znoteUrl;
+        const pageHtml = await browserPage(postUrl);
+        const result = await chrome.runtime.sendMessage({ type: 'xhs-post-capture', url: postUrl, pageHtml });
         if (!result?.ok) throw new Error(result?.error || '提交失败');
         let job = result.job;
         for (let i = 0; i < 150 && ['queued', 'running'].includes(job.status); i++) {

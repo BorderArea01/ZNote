@@ -158,12 +158,19 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     add(raw){
       const input=captureInput.parse(raw);validateCollection(input.collection_id);
       const urls=sharedUrls(input.text);if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
+      let browserPlan=null;
+      if(raw?.browser_html!==undefined){
+        if(typeof raw.browser_html!=='string'||Buffer.byteLength(raw.browser_html)>1500000)throw fail(413,'浏览器作品数据过大');
+        const source=new URL(urls[0]);
+        if(source.protocol!=='https:'||source.hostname!=='www.xiaohongshu.com'||!/^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i.test(source.pathname))throw fail(400,'浏览器作品数据只支持小红书单帖');
+        browserPlan=extractCapturePage(raw.browser_html,source.href);
+      }
       const jobs=read(), found=input.request_id&&jobs.find(j=>j.request_id===input.request_id);
-      if(found){if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'note')!==input.image_mode)throw fail(409,'这次分享编号已用于其他内容');return exposed(found);}
+      if(found){if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'note')!==input.image_mode)throw fail(409,'这次分享编号已用于其他内容');if(browserPlan&&found.status==='failed'){found.plan=browserPlan;write(jobs);}return exposed(found);}
       if(stopped)throw fail(503,'服务正在停止');
       if(jobs.filter(j=>['queued','running'].includes(j.status)).length>=16)throw fail(429,'采集队列已满，请稍后重试');
       while(jobs.length>=100){const index=jobs.findIndex(j=>j.status==='completed');if(index<0)throw fail(429,'请先处理失败的采集任务');jobs.splice(index,1);}
-      const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:input.text.slice(0,100),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
+      const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:browserPlan?.title||input.text.slice(0,100),...(browserPlan?{plan:browserPlan}:{}),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
       jobs.push(job);write(jobs);schedule();return exposed(job);
     },
     retry(id){const job=this.get(id);if(job.status!=='failed')throw fail(409,'只有失败的采集任务可以重试');validateCollection(job.collection_id);const previous=read().find(j=>j.id===id);patch(id,{status:'queued',message:'等待重新采集',...(previous.plan?.kind==='video'?{plan:null}:{})});schedule();return this.get(id);},

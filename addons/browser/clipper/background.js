@@ -78,8 +78,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
         (message.type === 'xhs-post-capture' && (source?.protocol !== 'https:' || source.hostname !== page.hostname || !workPath.test(source.pathname)))) {
       reply({ ok: false, error: '只可采集小红书作品链接' }); return;
     }
+    if (message.type === 'xhs-post-capture' && message.pageHtml && (typeof message.pageHtml !== 'string' || new TextEncoder().encode(message.pageHtml).length > 1500000)) {
+      reply({ ok: false, error: '浏览器作品数据过大' }); return;
+    }
     const operation = message.type === 'xhs-post-capture'
-      ? collectGallery(sender.tab, source.href, { dedupe: true })
+      ? collectGallery(sender.tab, source.href, { dedupe: true, browserHtml: message.pageHtml })
       : api(`/api/captures/${encodeURIComponent(String(message.id || ''))}`);
     operation.then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
   }
