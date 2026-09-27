@@ -24,8 +24,13 @@ try {
   const options = await context.newPage(); await options.goto(`chrome-extension://${id}/options.html`); await options.waitForFunction(() => document.body.dataset.ready === 'true');
   await options.locator('#server').fill(base); await options.locator('#token').fill(token.token); await options.getByRole('button', { name: '验证连接并读取知识库' }).click(); await options.getByText('连接成功，请选择知识库并保存设置', { exact: true }).waitFor();
   await options.getByRole('button', { name: '保存设置', exact: true }).click(); await options.getByText('已保存，可以右键图片或截图入库', { exact: true }).waitFor();
-  await context.route('https://www.xiaohongshu.com/**', route => route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main><article class="note-item" style="width:230px;height:260px"><a href="/explore/abcd?xsec_token=fixture">第一篇帖子</a></article><article class="note-item" style="width:230px;height:260px"><a href="/explore/1234?xsec_token=fixture">第二篇帖子</a></article></main></body></html>`}));
+  await context.route('https://www.xiaohongshu.com/**', route => route.fulfill({contentType:'text/html',body:`<!doctype html><html><body><main style="position:relative"><article class="note-item" style="position:absolute;left:0;top:0;width:230px;height:260px"><a href="/explore/abcd?xsec_token=fixture">第一篇帖子</a></article><article class="note-item" style="position:absolute;left:250px;top:0;width:230px;height:260px"><a href="/explore/1234?xsec_token=fixture">第二篇帖子</a></article></main></body></html>`}));
   const tab = await context.newPage(); await tab.goto('https://www.xiaohongshu.com/explore'); await tab.bringToFront();
+  await tab.locator('.note-item .znote-xhs-post-button').first().waitFor();
+  const layout=await tab.locator('.note-item').evaluateAll(cards=>cards.map(card=>({position:getComputedStyle(card).position,x:card.getBoundingClientRect().x,y:card.getBoundingClientRect().y})));
+  assert.deepEqual(layout.map(card=>card.position),['absolute','absolute']);
+  assert.equal(layout[1].x-layout[0].x,250);
+  assert.equal(layout[1].y-layout[0].y,0);
   const popup = await context.newPage(); await popup.goto(`chrome-extension://${id}/popup.html`);
   await popup.locator('#gallery-link').fill('分享给你 https://xhslink.com/a/abcd'); await popup.getByRole('button', { name: '获取图组并保存' }).click();
   await popup.locator('#gallery-status').waitFor({ state: 'visible' }); await popup.waitForFunction(() => /图片组已入库/.test(document.querySelector('#gallery-status')?.textContent || ''), null, { timeout: 10000 });
