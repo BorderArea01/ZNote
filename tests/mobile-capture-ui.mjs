@@ -10,7 +10,7 @@ const base='http://127.0.0.1:'+server.address().port,browser=await chromium.laun
 const post=async(path,data)=>{const r=await context.request.post(base+path,{data});assert.ok(r.ok(),await r.text());return r.json();};
 try{
  await post('/api/auth/setup',{password:'0953'});const library=await post('/api/collections',{name:'手机采集验收'});await page.goto(base);await page.getByRole('heading',{name:library.name,exact:true}).tap();
- const buttons=page.getByRole('button',{name:'网络采集',exact:true});if(!await buttons.isVisible())await page.getByRole('button',{name:'更多操作',exact:true}).tap();await buttons.tap();
+ const buttons=page.getByRole('button',{name:'网络采集',exact:true});if(!await buttons.isVisible())await page.getByRole('button',{name:'添加',exact:true}).tap();await page.getByRole('button',{name:'网络采集',exact:true}).filter({visible:true}).tap();
  const dialog=page.getByRole('dialog',{name:'网络采集',exact:true});await dialog.getByLabel('分享内容').fill('从手机分享 https://example.com/article');await dialog.locator('.capture-panel select').selectOption(library.id);
  await dialog.getByRole('button',{name:'手机与网页采集说明',exact:true}).tap();await page.waitForTimeout(100);assert.ok(await page.getByText('粘贴 App 分享文字或网页链接，由服务器保存正文、配图或视频。',{exact:false}).isVisible());await dialog.getByRole('button',{name:'手机与网页采集说明',exact:true}).tap();
  await dialog.getByRole('button',{name:'采集到知识库',exact:true}).tap();await dialog.getByRole('button',{name:'查看内容',exact:true}).waitFor({timeout:15000});

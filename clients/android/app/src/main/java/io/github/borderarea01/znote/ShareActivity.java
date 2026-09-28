@@ -21,7 +21,7 @@ public class ShareActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ArrayList<Uri> files=new ArrayList<>();
     private final ArrayList<String> collectionIds=new ArrayList<>();
-    private String sessionCookie="";
+    private String sessionCookie="",sessionToken="";
     private String origin="",requestId=UUID.randomUUID().toString(),jobId="";
     private EditText text;
     private View emptyState;
@@ -126,7 +126,7 @@ public class ShareActivity extends Activity {
             Bundle session=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"session",null,null);
             if(session==null)throw new IOException("无法读取连接信息，请打开知识库登录");
             try{origin=MainActivity.normalize(session.getString("origin",""));}catch(Exception e){throw new IOException("先打开知识库，设置服务器地址并登录，再返回此页。分享内容仍在这里。");}
-            sessionCookie=session.getString("cookie","");
+            sessionCookie=session.getString("cookie","");sessionToken=session.getString("token","");
             if(!preferences().contains("migrated"))preferences().edit().putBoolean("migrated",true).putString("share_collection",session.getString("share_collection","")).putBoolean("capture_as_note",session.getBoolean("capture_as_note",false)).apply();
             JSONObject result=request("GET","/api/collections",null);JSONArray rows=result.optJSONArray("collections");
             if(rows==null)throw new IOException("知识库列表格式不正确，请更新服务器");
@@ -150,7 +150,7 @@ public class ShareActivity extends Activity {
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}
                 ui(()->{String message="已保存 "+files.size()+" 个媒体文件";if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(true,message);Toast.makeText(this,message,Toast.LENGTH_SHORT).show();finish();}else saved(message+"，可返回原 App");});
             }
-        }catch(Exception e){ui(()->{String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);status.setText(message);});}});
+        }catch(Exception e){ui(()->{if(e instanceof CaptureLoginRequired)login.setVisibility(View.VISIBLE);String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);status.setText(message);});}});
     }
     private void poll(){
         if(!visible||jobId.isEmpty()||isDestroyed())return;
@@ -159,18 +159,19 @@ public class ShareActivity extends Activity {
             if("completed".equals(state)){saved(job.optString("message","已保存到知识库"));}
             else if("failed".equals(state)){busy=false;save.setText("重试采集");save.setEnabled(true);save.setOnClickListener(v->{save.setEnabled(false);worker.execute(()->{try{request("POST","/api/captures/"+jobId+"/retry","{}");ui(()->{busy=true;poll();});}catch(Exception e){ui(()->{status.setText(e.getMessage());save.setEnabled(true);});}});});}
             else handler.postDelayed(this::poll,1500);
-        });}catch(Exception e){ui(()->{if(!trackedJob.equals(jobId)||completed)return;status.setText("暂时无法读取任务状态，服务器可能仍在处理。正在重连…");handler.postDelayed(this::poll,5000);});}});
+        });}catch(Exception e){ui(()->{if(!trackedJob.equals(jobId)||completed)return;if(e instanceof CaptureLoginRequired){login.setVisibility(View.VISIBLE);status.setText(e.getMessage());return;}status.setText("暂时无法读取任务状态，服务器可能仍在处理。正在重连…");handler.postDelayed(this::poll,5000);});}});
     }
     private HttpURLConnection connection(String method,String path)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(origin+path).openConnection();c.setRequestMethod(method);c.setInstanceFollowRedirects(false);c.setConnectTimeout(10000);c.setReadTimeout(30000);
-        if(sessionCookie!=null&&!sessionCookie.isEmpty())c.setRequestProperty("Cookie",sessionCookie);return c;
+        if(sessionToken!=null&&!sessionToken.isEmpty())c.setRequestProperty("Authorization","Bearer "+sessionToken);else if(sessionCookie!=null&&!sessionCookie.isEmpty())c.setRequestProperty("Cookie",sessionCookie);return c;
     }
+    private static class CaptureLoginRequired extends IOException { CaptureLoginRequired(){super("手机采集授权已失效，请打开知识库重新登录；分享内容已保留");} }
     private JSONObject response(HttpURLConnection c)throws Exception{
         int code=c.getResponseCode();InputStream stream=code>=400?c.getErrorStream():c.getInputStream();ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         if(stream!=null)try(InputStream in=stream){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(bytes.size()+n>2*1024*1024)throw new IOException("服务器返回内容过大");bytes.write(b,0,n);}}
         String raw=bytes.toString("UTF-8");JSONObject result;
         try{result=raw.trim().startsWith("[")?new JSONObject().put("collections",new JSONArray(raw)):new JSONObject(raw);}catch(Exception e){throw new IOException("服务器响应异常，请检查连接或更新 ZNote");}
-        if(code==401)throw new IOException("请先打开知识库登录，然后返回这里继续保存");
+        if(code==401)throw new CaptureLoginRequired();
         if(code<200||code>=300)throw new IOException(result.optString("error","保存失败（HTTP "+code+"）"));return result;
     }
     private JSONObject request(String method,String path,String body)throws Exception{

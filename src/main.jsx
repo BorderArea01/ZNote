@@ -296,6 +296,7 @@ function App() {
       try {
         await api("/api/me");
         setAuth(true);
+        window.ZNoteCapture?.authorize?.();
       } catch (e) {
         if (e.status === 401) setAuth(false);
         else throw e;
