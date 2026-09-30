@@ -22,3 +22,10 @@ test('ordinary file drops still use the FileList fallback', async () => {
   const image = file('image.png', 'image/png');
   assert.deepEqual(await filesFromDataTransfer({ items: [], files: [image] }), [image]);
 });
+
+test('the FileList copy of a dropped PSD does not create a second candidate', async () => {
+  const fromEntry = new File(['layers'], 'painting.psd', { type: 'image/vnd.adobe.photoshop' });
+  const fromList = new File(['layers'], 'painting.psd', { type: 'image/vnd.adobe.photoshop' });
+  const transfer = { items: [{ kind: 'file', webkitGetAsEntry: () => fileEntry(fromEntry) }], files: [fromList] };
+  assert.deepEqual(await filesFromDataTransfer(transfer), [fromEntry]);
+});

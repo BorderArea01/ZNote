@@ -262,7 +262,7 @@ export const spec = {
       }),
     },
     "/api/assets": {
-      post: operation("上传图片（100 MB，按内容哈希去重）", ref("Item"), {
+      post: operation("上传图片（普通图片 100 MB，PSD 200 MB，按内容哈希去重）", ref("Item"), {
         requestBody: {
           required: true,
           content: {

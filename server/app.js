@@ -1,5 +1,5 @@
 import {typeOrderSchema} from './saved-views.js';
-import { MAX_IMAGE_BYTES, compressLargeImage } from './image-limits.js';
+import { MAX_IMAGE_BYTES, MAX_PSD_BYTES, compressLargeImage } from './image-limits.js';
 import {localMediaReferences} from '../shared/local-media.js';
 import {appendMessageBlocks} from '../shared/message-blocks.js';
 import {legacyGalleryPage} from '../shared/gallery-group.js';
@@ -942,9 +942,10 @@ export function createApp({
     });
     validateCollection(input.collection_id);
     let buffer = file.buffer || (await readFile(file.path));
-    if (buffer.length > MAX_IMAGE_BYTES) throw fail(413, '单张图片不能超过 100 MB');
-    if (fields.image_size_mode && !['original', 'compress'].includes(fields.image_size_mode)) throw fail(400, '图片大小处理方式不正确');
     const isPsd = buffer.toString('ascii', 0, 4) === '8BPS';
+    if (buffer.length > (isPsd ? MAX_PSD_BYTES : MAX_IMAGE_BYTES))
+      throw fail(413, isPsd ? '单个 PSD 不能超过 200 MB' : '单张图片不能超过 100 MB');
+    if (fields.image_size_mode && !['original', 'compress'].includes(fields.image_size_mode)) throw fail(400, '图片大小处理方式不正确');
     if (isPsd && fields.image_size_mode === 'compress') throw fail(422, 'PSD 需保留原始图层，不能作为普通图片压缩');
     if (fields.image_size_mode === 'compress') {
       let compressed;
@@ -1037,7 +1038,7 @@ export function createApp({
   const upload = multer({
     dest: join(dataDir, 'uploads'),
     limits: {
-      fileSize: MAX_IMAGE_BYTES,
+      fileSize: MAX_PSD_BYTES,
       files: 1,
       fields: 12,
       fieldSize: 512000,
@@ -1053,7 +1054,7 @@ export function createApp({
   const batch = multer({
     dest: join(dataDir, "uploads"),
     limits: {
-      fileSize: MAX_IMAGE_BYTES,
+      fileSize: MAX_PSD_BYTES,
       files: 20,
       fields: 12,
       fieldSize: 512000,
@@ -1334,7 +1335,7 @@ export function createApp({
       return res.status(400).json({
         error:
           err.code === "LIMIT_FILE_SIZE"
-            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单张图片不能超过 100 MB')
+            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单个 PSD 不能超过 200 MB；其他图片不能超过 100 MB')
             : "上传格式或数量超出限制",
       });
     if (String(err.message).includes("UNIQUE constraint"))

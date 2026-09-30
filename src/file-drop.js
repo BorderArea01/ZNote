@@ -37,7 +37,12 @@ export async function filesFromDataTransfer(dataTransfer) {
   const items = [...(dataTransfer?.items || [])].filter(item => item.kind === 'file');
   const entries = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
   const direct = [...(dataTransfer?.files || [])];
-  if (entries.length) return uniqueFiles([...(await Promise.all(entries.map(readEntry))).flat(), ...direct]);
+  // FileList is a second view of the same dropped entries in Chromium.
+  // entry.file() creates fresh File objects, so object-identity dedupe cannot help.
+  if (entries.length === items.length && entries.length) {
+    const expanded = (await Promise.all(entries.map(readEntry))).flat();
+    return uniqueFiles(expanded.length ? expanded : direct);
+  }
   return uniqueFiles(direct);
 }
 

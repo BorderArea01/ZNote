@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 
 export const MAX_IMAGE_BYTES = 100 * 1024 * 1024;
+export const MAX_PSD_BYTES = 200 * 1024 * 1024;
 export const COMPRESSED_IMAGE_BYTES = 25 * 1024 * 1024;
 
 function isApng(buffer) {
