@@ -162,7 +162,7 @@ function extractPawCapture(html, url) {
   const isOriginal = value => {
     try {
       const candidate = new URL(value, url);
-      return /^https?:$/.test(candidate.protocol) && /^file\.pawchive\.(?:pw|st)$/i.test(candidate.hostname) && /\.(?:avif|bmp|gif|jpe?g|png|webp)$/i.test(candidate.searchParams.get('f') || candidate.pathname);
+      return /^https?:$/.test(candidate.protocol) && !candidate.username && !candidate.password && /^(?:file|n[1-9]\d*)\.pawchive\.(?:pw|st)$/i.test(candidate.hostname) && candidate.pathname.startsWith('/data/') && /\.(?:avif|bmp|gif|jpe?g|png|webp)$/i.test(candidate.searchParams.get('f') || candidate.pathname);
     } catch { return false; }
   };
   const images = [], seen = new Set();

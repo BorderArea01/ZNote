@@ -158,7 +158,7 @@ export async function siteArticle(document, location, fetcher = fetch) {
     const clone=document.implementation.createHTMLDocument(document.title), article=main.cloneNode(true);
     article.querySelectorAll('nav,aside,.post-card--preview,.post__comments,.post__recommendations,[data-znote-overlay]').forEach(el=>el.remove());
     const isOriginal=value=>{
-      try{const url=new URL(value,location.href);return /^https?:$/.test(url.protocol)&&/^file\.pawchive\.(pw|st)$/.test(url.hostname)&&/\.(avif|bmp|gif|jpe?g|png|webp)$/i.test(url.searchParams.get('f')||url.pathname);}catch{return false;}
+      try{const url=new URL(value,location.href);return /^https?:$/.test(url.protocol)&&!url.username&&!url.password&&/^(?:file|n[1-9]\d*)\.pawchive\.(pw|st)$/.test(url.hostname)&&url.pathname.startsWith('/data/')&&/\.(avif|bmp|gif|jpe?g|png|webp)$/i.test(url.searchParams.get('f')||url.pathname);}catch{return false;}
     };
     const seen=new Set();
     for(const link of article.querySelectorAll('figure a[href],a.fileThumb[href]')){
@@ -166,7 +166,7 @@ export async function siteArticle(document, location, fetcher = fetch) {
       if(seen.has(url)){link.remove();continue;} seen.add(url);
       const img=clone.createElement('img');img.src=url;img.alt=link.querySelector('img')?.alt||`作品配图 ${seen.size}`;img.setAttribute('data-znote-work-image','');
       const source=link.querySelector('img');
-      try {const preview=new URL(source?.getAttribute('data-src')||source?.getAttribute('src')||url,location.href);if(/^https?:$/.test(preview.protocol)&&/^(?:img|file)\.pawchive\.(pw|st)$/.test(preview.hostname)&&!preview.username&&!preview.password)img.setAttribute('data-znote-preview',preview.href);}catch{}
+      try {const preview=new URL(source?.getAttribute('data-src')||source?.getAttribute('src')||url,location.href);if(/^https?:$/.test(preview.protocol)&&/^(?:img|file|n[1-9]\d*)\.pawchive\.(pw|st)$/.test(preview.hostname)&&!preview.username&&!preview.password)img.setAttribute('data-znote-preview',preview.href);}catch{}
       link.replaceWith(img);
     }
     for(const image of article.querySelectorAll('img')) if(!seen.has(image.getAttribute('src'))&&!image.closest('.post__content'))image.remove();

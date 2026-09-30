@@ -20,7 +20,7 @@ export function workLocation(target, loc = location) {
     if(imageId)return new URL('/artworks/'+imageId,loc.origin);
   }
   if(/^pawchive\.(pw|st)$/.test(host)) {
-    if(!candidates.some(c=>/^https?:\/\/(?:img|file)\.pawchive\.(pw|st)\//.test(c.url)))return null;
+    if(!candidates.some(c=>/^https?:\/\/(?:img|file|n[1-9]\d*)\.pawchive\.(pw|st)\//.test(c.url)))return null;
     const pattern=/^\/(?:fanbox|patreon)\/user\/[^/]+\/post\/[^/]+\/?$/;
     const link=workLink(target,loc,pattern);if(link)return link;
     if(pattern.test(loc.pathname)&&target.closest('main')&&!target.closest('.post-card--preview,.post__comments,.post__recommendations,header,aside,nav'))return new URL(loc.href);
