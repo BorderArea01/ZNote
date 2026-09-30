@@ -17,7 +17,7 @@ import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images
 import { fetchRemoteImage } from './remote-images.js';
 import multer from "multer";
 import sharp from "sharp";
-import { PSD_MIME, psdDimensions, psdPreview } from './psd.js';
+import { PSD_MIME, psdDimensions, psdPreview, psdLayers, psdLayerImage, psdComposite } from './psd.js';
 import { z } from "zod";
 import {
   createHash,
@@ -1169,6 +1169,53 @@ export function createApp({
   });
   app.delete('/api/imports/:id', (req, res) => res.json(imports.cancel(req.params.id)));
   app.post('/api/imports/:id/retry',(req,res)=>{const previous=imports.get(req.params.id);validateCollection(previous.collection_id);res.status(202).json(imports.retry(req.params.id));});
+  app.get('/api/items/:id/psd-layers', async (req, res) => {
+    const item = getItem(req.params.id);
+    if (item.mime !== PSD_MIME) throw fail(404, '这不是 PSD 文件');
+    try { res.json(psdLayers(await originalBuffer(dataDir, item))); }
+    catch (error) { throw fail(422, error.message || '无法读取 PSD 图层'); }
+  });
+  app.get('/media/:id/layer/:path', async (req, res) => {
+    const item = getItem(req.params.id);
+    if (item.mime !== PSD_MIME) throw fail(404, '这不是 PSD 文件');
+    if (!/^(0|[1-9]\d{0,3})(\.(0|[1-9]\d{0,3}))*$/.test(req.params.path)) throw fail(400, '图层路径无效');
+    const download = req.query.download === '1';
+    const key = `${item.hash}:layer:${req.params.path}`;
+    let result;
+    try {
+      if (download) result = await psdLayerImage(await originalBuffer(dataDir, item), req.params.path, { download });
+      else {
+        let buffer = previewCache.get(key);
+        if (!buffer) buffer = await thumbnailQueue.run(key, async () => {
+          const image = await psdLayerImage(await originalBuffer(dataDir, item), req.params.path);
+          cachePreview(key, image.buffer);
+          return image.buffer;
+        });
+        result = { buffer, mime: 'image/webp' };
+      }
+    } catch (error) { throw fail(422, error.message || '无法读取 PSD 图层'); }
+    res.set('Cache-Control', 'private, no-cache');
+    if (download) res.attachment(`layer-${req.params.path}.png`);
+    res.type(result.mime).send(result.buffer);
+  });
+  app.get('/media/:id/composite', async (req, res) => {
+    const item = getItem(req.params.id);
+    if (item.mime !== PSD_MIME) throw fail(404, '这不是 PSD 文件');
+    const visibility = req.query.v;
+    if (typeof visibility !== 'string' || !/^[01]{1,1000}$/.test(visibility)) throw fail(400, '图层显示状态无效');
+    const key = `${item.hash}:composite:${visibility}`;
+    let buffer = previewCache.get(key);
+    if (!buffer) {
+      try { buffer = await thumbnailQueue.run(key, async () => {
+        const result = await psdComposite(await originalBuffer(dataDir, item), visibility);
+        cachePreview(key, result);
+        return result;
+      }); }
+      catch (error) { throw fail(422, error.message || '无法合成 PSD 图层'); }
+    }
+    res.set('Cache-Control', 'private, no-cache');
+    res.type('image/webp').send(buffer);
+  });
   app.get("/media/:id/:variant", async (req, res) => {
     const item = getItem(req.params.id);
     if (!item.file_key) throw fail(404, "图片不存在");

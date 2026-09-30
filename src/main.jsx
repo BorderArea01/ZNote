@@ -12,6 +12,7 @@ import { DraftConflict } from './NoteDrafts.jsx';
 const NoteVersions = React.lazy(() => import('./NoteVersions.jsx'));
 import { GalleryStrip } from './GalleryStrip.jsx';
 import { ZoomViewer } from './ZoomViewer.jsx';
+import { PsdLayerDialog } from './PsdLayerDialog.jsx';
 import { useImageSwipe } from './useImageSwipe.js';
 import { VideoPlayer } from './VideoProgress.jsx';
 import { createRoot } from "react-dom/client";
@@ -448,6 +449,7 @@ function Detail({
   const setLightbox=value=>{setLightboxValue(value);if(initial.kind==='image')onExpandedImageChange?.(!!value);};
   const [copying, setCopying] = useState(false);
   const [sorting,setSorting] = useState(false);
+  const [psdLayersOpen,setPsdLayersOpen] = useState(false);
   const [orderUndo,setOrderUndo] = useState(null);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const openSorting=async()=>{if(!dirty||await save())setSorting(true)};
@@ -625,6 +627,7 @@ function Detail({
                 <Download size={16} />
                 {item.preview_url ? '下载 PSD 原文件' : '原图'}
               </a>
+              {item.preview_url && <button type="button" onClick={() => setPsdLayersOpen(true)}><Layers size={15}/>查看图层</button>}
             </span>
             <div className="gallery-controls">
               <button disabled={!previousAvailable || busy || galleryBusy} onClick={() => step(-1)}>← 上一张</button>
@@ -900,6 +903,7 @@ function Detail({
           setBusy(false);
         }}
       />
+      {psdLayersOpen && item.preview_url && <PsdLayerDialog item={item} onClose={() => setPsdLayersOpen(false)}/>}
       {lightbox && <ZoomViewer src={lightbox} alt={noteIndex!==null?noteImages[noteIndex]?.alt:title} onClose={()=>setLightbox(false)} busy={busy||galleryBusy}
         previousAvailable={noteIndex!==null?noteIndex>0:previousAvailable} nextAvailable={noteIndex!==null?noteIndex<noteImages.length-1:nextAvailable}
         position={noteIndex!==null?`第 ${noteIndex+1} / ${noteImages.length} 张`:galleryPosition}

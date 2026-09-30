@@ -261,6 +261,9 @@ export const spec = {
         parameters: [id],
       }),
     },
+    "/api/items/{id}/psd-layers": {
+      get: operation("读取 PSD 图层层级及原始显示状态", { type: 'object' }, { parameters: [id] }),
+    },
     "/api/assets": {
       post: operation("上传图片（普通图片 100 MB，PSD 200 MB，按内容哈希去重）", ref("Item"), {
         requestBody: {
@@ -318,11 +321,17 @@ export const spec = {
             name: "variant",
             in: "path",
             required: true,
-            schema: { type: "string", enum: ["original", "thumbnail"] },
+            schema: { type: "string", enum: ["original", "thumbnail", "preview"] },
           },
         ],
         responses: { 200: { description: "媒体二进制" }, 206: { description: '视频字节范围，包含 Content-Range 与 Accept-Ranges' }, 416: { description: '无效或不可满足的字节范围' }, ...errorResponses },
       },
+    },
+    "/media/{id}/layer/{path}": {
+      get: { summary: "预览 PSD 单个图层；download=1 下载透明 PNG", parameters: [id, { name: 'path', in: 'path', required: true, schema: str }], responses: { 200: { description: '图层图片' }, ...errorResponses } },
+    },
+    "/media/{id}/composite": {
+      get: { summary: "按图层开关状态生成近似合成预览，原 PSD 不变", parameters: [id, { name: 'v', in: 'query', required: true, schema: { type: 'string', pattern: '^[01]{1,1000}$' } }], responses: { 200: { description: '合成 WebP 预览' }, ...errorResponses } },
     },
     "/api/collections": {
       get: operation("知识库列表", list(ref("Collection"))),
