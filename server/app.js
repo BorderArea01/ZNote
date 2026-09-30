@@ -17,6 +17,7 @@ import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images
 import { fetchRemoteImage } from './remote-images.js';
 import multer from "multer";
 import sharp from "sharp";
+import { PSD_MIME, psdDimensions, psdPreview } from './psd.js';
 import { z } from "zod";
 import {
   createHash,
@@ -36,6 +37,7 @@ import { spec } from "./openapi.js";
 import {
   packOriginal,
   originalStream,
+  originalBuffer,
   thumbnail,
   storageStats,
 } from "./storage.js";
@@ -205,6 +207,7 @@ export function createApp({
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
       url: row.file_key ? `/media/${row.id}/original` : null,
+      preview_url: row.mime === PSD_MIME ? `/media/${row.id}/preview` : null,
       thumbnail_url: ['image','video'].includes(row.kind) ? `/media/${row.id}/thumbnail` : noteCover(row),
       file_key: undefined,
       thumbnail_key: undefined,
@@ -941,6 +944,8 @@ export function createApp({
     let buffer = file.buffer || (await readFile(file.path));
     if (buffer.length > MAX_IMAGE_BYTES) throw fail(413, '单张图片不能超过 100 MB');
     if (fields.image_size_mode && !['original', 'compress'].includes(fields.image_size_mode)) throw fail(400, '图片大小处理方式不正确');
+    const isPsd = buffer.toString('ascii', 0, 4) === '8BPS';
+    if (isPsd && fields.image_size_mode === 'compress') throw fail(422, 'PSD 需保留原始图层，不能作为普通图片压缩');
     if (fields.image_size_mode === 'compress') {
       let compressed;
       try { compressed = await compressLargeImage(buffer); }
@@ -950,9 +955,9 @@ export function createApp({
     }
     let metadata;
     try {
-      metadata = await sharp(buffer, { limitInputPixels: 80000000 }).metadata();
+      metadata = isPsd ? { format: 'psd', ...psdDimensions(buffer) } : await sharp(buffer, { limitInputPixels: 80000000 }).metadata();
     } catch {
-      throw fail(415, "无法识别图片，请使用 JPEG、PNG、WebP、GIF 或 AVIF");
+      throw fail(415, "无法识别图片，请使用 JPEG、PNG、WebP、GIF、AVIF 或 8 位 PSD");
     }
     const formats = {
       jpeg: ["jpg", "image/jpeg"],
@@ -961,6 +966,7 @@ export function createApp({
       gif: ["gif", "image/gif"],
       avif: ["avif", "image/avif"],
       heif: ["avif", "image/avif"],
+      psd: ['psd', PSD_MIME],
     };
     if (
       !formats[metadata.format] ||
@@ -983,16 +989,16 @@ export function createApp({
     const old = db.prepare('SELECT * FROM items WHERE hash=?').get(digest);
     if (old) return { ...insert(input, imageReference(old), fixedId), shared: true };
     const [extension, mime] = formats[metadata.format];
-    const preview = await sharp(buffer, { limitInputPixels: 80000000 })
-      .rotate()
-      .resize({
-        width: 800,
-        height: 800,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 82 })
-      .toBuffer();
+    let preview;
+    try {
+      preview = isPsd ? await psdPreview(buffer, 800) : await sharp(buffer, { limitInputPixels: 80000000 })
+        .rotate()
+        .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer();
+    } catch {
+      throw fail(415, isPsd ? 'PSD 合成画面无法预览；请在绘图软件中保存合成图层后重试' : '图片无法生成预览');
+    }
     const packed = await packOriginal(buffer);
     const key =
       randomUUID() + "." + extension + (packed.codec === "gzip" ? ".gz" : "");
@@ -1165,9 +1171,22 @@ export function createApp({
   app.get("/media/:id/:variant", async (req, res) => {
     const item = getItem(req.params.id);
     if (!item.file_key) throw fail(404, "图片不存在");
-    if (!["original", "thumbnail"].includes(req.params.variant))
+    if (!["original", "thumbnail", "preview"].includes(req.params.variant))
       throw fail(404, "图片版本不存在");
     res.set("Cache-Control", "private, no-cache");
+    if (req.params.variant === 'preview') {
+      if (item.mime !== PSD_MIME) throw fail(404, '此文件没有独立预览');
+      const key = `${item.hash}:preview`;
+      let buffer = previewCache.get(key);
+      if (!buffer) {
+        buffer = await thumbnailQueue.run(key, async () => {
+          const result = await psdPreview(await originalBuffer(dataDir, item));
+          cachePreview(key, result);
+          return result;
+        });
+      } else cachePreview(key, buffer);
+      return res.type('image/webp').send(buffer);
+    }
     if (item.kind === 'video' && req.params.variant === 'original') {
       return serveVideo(req, res, dataDir, item);
     }
@@ -1182,6 +1201,7 @@ export function createApp({
       } else cachePreview(item.hash, buffer);
       res.type("image/webp").send(buffer);
     } else {
+      if (item.mime === PSD_MIME) res.attachment(`${item.title.replace(/\.psd$/i, '')}.psd`);
       res.type(item.mime);
       await pipeline(originalStream(dataDir, item), res);
     }

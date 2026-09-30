@@ -7,6 +7,7 @@ import { readFile, writeFile, unlink, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
+import { PSD_MIME, psdPreview } from './psd.js';
 
 const compress = promisify(gzip),
   decompress = promisify(gunzip);
@@ -39,6 +40,7 @@ export async function originalBuffer(dir, item) {
     : buffer;
 }
 export async function thumbnail(dir, item) {
+  if (item.mime === PSD_MIME) return psdPreview(await originalBuffer(dir, item), 800);
   return sharp(await originalBuffer(dir, item), { limitInputPixels: 80000000 })
     .rotate()
     .resize({

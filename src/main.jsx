@@ -444,7 +444,7 @@ function Detail({
   const [busy, setBusy] = useState(false);
   const [backlinks, setBacklinks] = useState([]);
   const [error, setError] = useState("");
-  const [lightbox, setLightboxValue] = useState(initial.kind==='image'&&expandedImage?initial.url:false);
+  const [lightbox, setLightboxValue] = useState(initial.kind==='image'&&expandedImage?(initial.preview_url||initial.url):false);
   const setLightbox=value=>{setLightboxValue(value);if(initial.kind==='image')onExpandedImageChange?.(!!value);};
   const [copying, setCopying] = useState(false);
   const [sorting,setSorting] = useState(false);
@@ -492,7 +492,7 @@ function Detail({
   };
   const insertImages = (images) => {
     const text = images
-      .map((i) => `![${i.title.replace(/[\[\]]/g, "")}](${i.url})`)
+      .map((i) => `![${i.title.replace(/[\[\]]/g, "")}](${i.preview_url||i.url})`)
       .join("\n\n");
     const pos = textarea.current?.selectionStart ?? content.length;
     setContent(
@@ -546,7 +546,7 @@ function Detail({
     finally{setBusy(false)}
   }
   const swipeDisabled=busy||galleryBusy||copying||sorting||!!lightbox;
-  const imageSwipe=useImageSwipe({identity:item.id,disabled:swipeDisabled,onTap:()=>setLightbox(item.url),onSwipe:delta=>{if(delta<0?previousAvailable:nextAvailable)void step(delta);}});
+  const imageSwipe=useImageSwipe({identity:item.id,disabled:swipeDisabled,onTap:()=>setLightbox(item.preview_url||item.url),onSwipe:delta=>{if(delta<0?previousAvailable:nextAvailable)void step(delta);}});
   const noteSwipe=useImageSwipe({identity:noteImages[noteIndex]?.url,disabled:swipeDisabled,onTap:()=>setLightbox(noteImages[noteIndex].url),onSwipe:delta=>setNoteIndex(i=>Math.max(0,Math.min(noteImages.length-1,i+delta)))});
   async function undoOrder() {
     if (busy || dirty || !orderUndo) return;
@@ -616,14 +616,14 @@ function Detail({
         </div>}
         {item.kind === "image" && (
           <div className="image-stage">
-            <button ref={imageArea} {...imageSwipe} onClick={() => setLightbox(item.url)} aria-label="全屏查看图片" title="左右滑动或滚轮翻图 · 点击展开缩放">
-              <img src={item.url} alt={title} />
+            <button ref={imageArea} {...imageSwipe} onClick={() => setLightbox(item.preview_url||item.url)} aria-label="全屏查看图片" title="左右滑动或滚轮翻图 · 点击展开缩放">
+              <img src={item.preview_url||item.url} alt={title} />
             </button>
             <span>
-              {item.width} × {item.height} · {bytes(item.bytes)}
-              <a href={item.url} download={title}>
+              {item.width} × {item.height} · {bytes(item.bytes)}{item.preview_url && ' · PSD 合成预览'}
+              <a href={item.url} download={item.preview_url ? `${title.replace(/\.psd$/i,'')}.psd` : title}>
                 <Download size={16} />
-                原图
+                {item.preview_url ? '下载 PSD 原文件' : '原图'}
               </a>
             </span>
             <div className="gallery-controls">

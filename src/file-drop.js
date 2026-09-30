@@ -1,4 +1,4 @@
-const IMAGE_EXTENSIONS = /\.(?:avif|gif|jpe?g|png|webp)$/i;
+const IMAGE_EXTENSIONS = /\.(?:avif|gif|jpe?g|png|psd|webp)$/i;
 const VIDEO_EXTENSIONS = /\.(?:mkv|mov|mp4|webm)$/i;
 const MAX_DROPPED_FILES = 2000;
 

@@ -1545,7 +1545,7 @@ export default function Workspace({
       <input
         ref={fileInput}
         type="file"
-        accept="image/*"
+        accept="image/*,.psd"
         multiple
         hidden
         onChange={(e) => {

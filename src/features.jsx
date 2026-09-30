@@ -215,7 +215,7 @@ export function UploadDialog({
     >
       <div className="feature-body">
         <div className="upload-guidance"><span>{kind === 'video' ? '单个文件 ≤ 500 MB' : '单张图片 ≤ 100 MB'}</span><HelpHint label="批量上传">
-          {kind === 'video' ? '支持 MP4、WebM、MOV、MKV，每个不超过 500 MB。可以选择或拖入文件夹，文件会按顺序加入队列。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '可以一次选择多张图片，也可以把文件夹拖进来或选择文件夹。文件会按目录读取后统一放入知识库并添加多个标签；每张不超过 100 MB。'}
+          {kind === 'video' ? '支持 MP4、WebM、MOV、MKV，每个不超过 500 MB。可以选择或拖入文件夹，文件会按顺序加入队列。保存原文件，浏览器可播放的编码支持直接预览；不支持时可下载。' : '支持 JPEG、PNG、WebP、GIF、AVIF 和 8 位 PSD；PSD 保留分层原文件，网页显示合成预览。可批量选择或拖入文件夹，单个文件不超过 100 MB。'}
         </HelpHint></div>
         <div
           className="upload-drop"
@@ -239,7 +239,7 @@ export function UploadDialog({
           ref={picker}
           type="file"
           multiple
-          accept={kind === 'video' ? '.mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska' : 'image/jpeg,image/png,image/webp,image/gif,image/avif'}
+          accept={kind === 'video' ? '.mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,.psd,image/vnd.adobe.photoshop'}
           hidden
           onChange={(e) => {
             addFiles(e.target.files);
@@ -252,7 +252,7 @@ export function UploadDialog({
           multiple
           webkitdirectory=""
           directory=""
-          accept={kind === 'video' ? '.mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska' : 'image/jpeg,image/png,image/webp,image/gif,image/avif'}
+          accept={kind === 'video' ? '.mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,.psd,image/vnd.adobe.photoshop'}
           hidden
           onChange={(e) => {
             addFiles(e.target.files);

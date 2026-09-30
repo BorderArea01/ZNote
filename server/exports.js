@@ -26,6 +26,7 @@ const ext = (item) =>
     "image/webp": "webp",
     "image/gif": "gif",
     "image/avif": "avif",
+    "image/vnd.adobe.photoshop": "psd",
     "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-matroska": "mkv",
   })[item.mime] || "bin";
 const escape = (text) =>
@@ -90,7 +91,7 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
     const collection = allCollections.find(c => c.id === item.collection_id);
     const folder = collection ? `${safeName(collection.name)}-${collection.id.slice(0,8)}` : '未分类';
     const suffix = item.kind !== 'note' ? ext(item) : 'md';
-    const title = safeName(item.title.replace(/\.(png|jpe?g|webp|gif|avif|mp4|webm|mov|md)$/i, ''));
+    const title = safeName(item.title.replace(/\.(png|jpe?g|webp|gif|avif|psd|mp4|webm|mov|md)$/i, ''));
     let path = query.layout === 'legacy'
       ? item.kind !== 'note' ? `${item.kind === 'video' ? 'videos' : 'images'}/${fileName(item)}` : `notes/${item.id}.md`
       : `${folder}/${item.kind === 'image' ? '图片' : item.kind === 'video' ? '视频' : '笔记'}/${title}-${item.id.slice(0,8)}.${suffix}`;

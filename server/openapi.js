@@ -299,7 +299,7 @@ export const spec = {
             ],
           }),
           ...errorResponses,
-          415: { description: "图片格式不支持" },
+          415: { description: "图片格式不支持；图片上传支持 JPEG、PNG、WebP、GIF、AVIF 和 8 位 PSD" },
         },
       }),
     },

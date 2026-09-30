@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
+    "ag-psd": "31.0.2",
     "archiver": "^7.0.1",
     "express": "^5.1.0",
     "hls.js": "1.6.15",
