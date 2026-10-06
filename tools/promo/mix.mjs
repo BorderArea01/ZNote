@@ -9,6 +9,7 @@ const root = join(source, '../../output/promo-znote');
 const scenes = JSON.parse(await readFile(join(source, 'storyboard.json'), 'utf8'));
 const duration = scenes.reduce((sum, scene) => sum + scene.seconds, 0);
 const voiceVariant = process.argv[2] || 'warm';
+const fullHD = process.argv.includes('--1080p');
 if (!['warm', 'lively'].includes(voiceVariant)) throw new Error(`Unknown voice: ${voiceVariant}`);
 const rate = 48000;
 const samples = new Float32Array(Math.round(duration * rate));
@@ -37,14 +38,14 @@ for(let i=0;i<samples.length;i++)wave.writeInt16LE(Math.round(Math.max(-1,Math.m
 await mkdir(root,{recursive:true});
 const narration=join(root,`narration-${voiceVariant}.wav`);
 await writeFile(narration,wave);
-const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', join(root, 'render-cache', 'visual.webm'), '-i', join(root, 'music.wav'), '-i', narration];
+const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', join(root, 'render-cache', fullHD ? 'visual-1080p.webm' : 'visual.webm'), '-i', join(root, 'music.wav'), '-i', narration];
 const filters = ['[1:a]aresample=48000,asetpts=N/SR/TB,volume=0.55[bg]', '[2:a]asplit=2[voice][control]'];
 filters.push('[bg][control]sidechaincompress=threshold=0.025:ratio=4:attack=40:release=450[ducked]');
 filters.push(`[ducked][voice]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.93,atrim=duration=${duration.toFixed(3)}[a]`);
 const suffix = voiceVariant === 'warm' ? '自然配音-女声' : '自然配音-男声';
-const target = join(root, `ZNote-宣传片-${suffix}.mp4`);
+const target = join(root, `ZNote-宣传片-${suffix}${fullHD ? '-1080P' : ''}.mp4`);
 const temporary = target.replace(/\.mp4$/, '.tmp.mp4');
-args.push('-filter_complex', filters.join(';'), '-map', '0:v:0', '-map', '[a]', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-t', duration.toFixed(3), temporary);
+args.push('-filter_complex', filters.join(';'), '-map', '0:v:0', '-map', '[a]', '-c:v', 'libx264', '-preset', 'medium', '-crf', fullHD ? '18' : '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-t', duration.toFixed(3), temporary);
 await mkdir(root, { recursive: true });
 const code = await new Promise((resolve, reject) => {
   const child = spawn(ffmpeg, args, { stdio: ['ignore', 'inherit', 'inherit'] });
