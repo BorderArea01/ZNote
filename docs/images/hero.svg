@@ -12,8 +12,10 @@
   <circle cx="1260" cy="65" r="210" fill="none" stroke="#bfc6ef" stroke-opacity=".09"/>
   <circle cx="1260" cy="65" r="290" fill="none" stroke="#bfc6ef" stroke-opacity=".07"/>
   <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif">
-    <rect x="66" y="67" width="60" height="60" rx="18" fill="url(#mark)"/>
-    <path d="M83 84H109L83 110H109" fill="none" stroke="#1c2440" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(66 67) scale(.9375)">
+  <rect width="64" height="64" rx="18" fill="#153E39"/>
+  <path d="M16 23C23 14 35 24 46 18C49 16.5 49 20.5 43 25.5L20 42.5C16 46 18 49 22 46.5C30 41.5 42 51 49 42" fill="none" stroke="#FBF8ED" stroke-width="6.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
     <text x="148" y="108" fill="#c5ccea" font-size="15" letter-spacing="4">YOUR LOCAL KNOWLEDGE LIBRARY</text>
     <text x="64" y="232" fill="#f5f4fb" font-size="91" font-weight="650" letter-spacing="-3">ZNote</text>
     <text x="68" y="292" fill="#e3e5f3" font-size="28">图片、视频与想法的私人收藏馆</text>

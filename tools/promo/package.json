@@ -1,0 +1,6 @@
+{
+  "name": "znote-promo-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": { "node-edge-tts": "1.2.10" }
+}

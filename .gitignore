@@ -11,6 +11,8 @@ data/
 *.pem
 *.key
 artifacts/
+# Promotional exports, narration and render caches are generated locally.
+/output/promo-znote/
 *.log
 tools/media/
 tools/windows-server/
