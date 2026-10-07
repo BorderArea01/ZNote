@@ -10,7 +10,8 @@ try{
  const origin='chrome-extension://'+new URL(worker.url()).host;
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/popup.html');await page.locator('#shortcut-help').filter({hasText:'Z 入库'}).waitFor();
- assert.equal(await page.locator('.tools button').count(),4);
+ assert.equal(await page.getByRole('tab').count(),3);
+ assert.equal(await page.locator('.tools button').count(),2);
  await page.locator('body').screenshot({path:resolve('artifacts/v091-extension-popup.png')});
  await page.locator('#settings').click();
  const options=context.pages().find(p=>p.url().includes('options.html'))||await context.waitForEvent('page');

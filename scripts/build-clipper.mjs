@@ -1,5 +1,8 @@
 import { build } from "esbuild";
-import { copyFile, readFile, readdir, writeFile } from "node:fs/promises";
+import { copyFile, readFile, readdir, writeFile, mkdir } from "node:fs/promises";
+await mkdir('addons/browser/clipper/ui', {recursive:true});
+for(const file of ['panel.js','panel.css'])await copyFile('addons/browser/common/'+file,'addons/browser/clipper/ui/'+file);
+await copyFile('addons/browser/common/help.js','addons/browser/clipper/help.js');
 await build({
   entryPoints: ["addons/browser/clipper/article-source.js"],
   bundle: true,

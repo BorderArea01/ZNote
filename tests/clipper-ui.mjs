@@ -84,7 +84,7 @@ try {
   const submitted=await options.evaluate(async()=>{const {collectVideo}=await import('./actions.js');return collectVideo({url:'https://x.com/test/status/123',title:'测试'});});
   let done;for(let i=0;i<100;i++){done=await(await context.request.get(base+'/api/imports/'+submitted.id)).json();if(done.status==='completed')break;await new Promise(r=>setTimeout(r,50));}
   assert.equal(done.status,'completed',done.message); assert.ok(requests.every(r=>!r.authorization));
-  const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);await popup.locator('#video-open:not([hidden])').waitFor();await popup.screenshot({path:resolve('artifacts/v05-clipper-popup.png')});
+  const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);await popup.getByRole('tab',{name:/任务/}).click();await popup.locator('#video-open:not([hidden])').waitFor();await popup.screenshot({path:resolve('artifacts/v05-clipper-popup.png')});
   assert.equal(await popup.locator('#video-open').getAttribute('href'),base+'/#item/'+done.item_id);
   console.log('PASS: extension direct video bytes/source, platform job submission, popup completion and open link');
   await tab.bringToFront();

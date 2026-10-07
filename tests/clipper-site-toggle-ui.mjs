@@ -25,12 +25,12 @@ const installMock = async (page, initial) => {
     let store = { ...value }, openedOptions = 0;
     const chromeMock = {
       tabs: { query: async () => [{ id: 23, url: 'https://www.example.com/gallery/1', title: '示例作品' }], create: async () => ({ id: 24 }) },
-      storage: { local: { get: async keys => {
+      storage: { onChanged: { addListener() {} }, session: { get: async () => ({}) }, local: { get: async keys => {
         if (Array.isArray(keys)) return Object.fromEntries(keys.filter(key => key in store).map(key => [key, store[key]]));
         if (typeof keys === 'string') return { [keys]: store[keys] };
         return { ...store };
       }, set: async next => { Object.assign(store, next); } } },
-      runtime: { getURL: path => 'chrome-extension://test/' + path, sendMessage: async () => ({ ok: true }), openOptionsPage: async () => { openedOptions++; } },
+      runtime: { getManifest: () => ({version:'0.9.32'}), getURL: path => 'chrome-extension://test/' + path, sendMessage: async () => ({ ok: true }), openOptionsPage: async () => { openedOptions++; } },
       action: { setBadgeText: async () => {} },
     };
     Object.defineProperty(window, 'chrome', { configurable: true, value: chromeMock });

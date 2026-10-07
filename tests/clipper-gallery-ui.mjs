@@ -43,6 +43,7 @@ try {
   assert.equal(layout[1].x-layout[0].x,250);
   assert.equal(layout[1].y-layout[0].y,0);
   const popup = await context.newPage(); await popup.goto(`chrome-extension://${id}/popup.html`);
+  await popup.getByText('粘贴链接采集',{exact:true}).click();
   await popup.locator('#gallery-link').fill('分享给你 https://xhslink.com/a/abcd'); await popup.getByRole('button', { name: '获取图组并保存' }).click();
   await popup.locator('#gallery-status').waitFor({ state: 'visible' }); await popup.waitForFunction(() => /图片组已入库/.test(document.querySelector('#gallery-status')?.textContent || ''), null, { timeout: 10000 });
   assert.equal(await popup.locator('#gallery-open').getAttribute('href') !== null, true);

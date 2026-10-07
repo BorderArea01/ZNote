@@ -13,6 +13,7 @@
 当前公开组件：
 
 - [ZNote · 网页采集](browser/clipper/README.md)
+- [浏览器插件统一管理](browser/README.md)
 - [微信收件连接器](connectors/weixin/README.md)
 - [AI 对话学习笔记](ai/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md)
 

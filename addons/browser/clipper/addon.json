@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "clipper",
+  "name": "ZNote · 网页采集",
+  "visibility": "public",
+  "extension": ".",
+  "expectedId": "ndfidbdoncgiaamafhgfpbdnbeiedile",
+  "capabilities": ["image", "gallery", "video", "article", "screenshot"],
+  "build": {"cwd": "../../..", "script": "clipper:build"},
+  "assets": ["ui/panel.js", "ui/panel.css", "help.js", "popup.css"]
+}

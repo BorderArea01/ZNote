@@ -52,7 +52,7 @@ try {
     await tab.screenshot({path:resolve(`artifacts/x-post-${touch?'touch':'desktop'}.png`)});
     await worker.evaluate(()=>chrome.storage.local.set({blockedSites:['x.com']}));await save.waitFor({state:'hidden'});
     await worker.evaluate(()=>chrome.storage.local.set({blockedSites:[]}));await tab.getByRole('button',{name:'保存这条推文的全部图片到 ZNote'}).waitFor();
-    await tab.locator('article').evaluate(article=>article.remove());await tab.locator('.znote-x-post-button').waitFor({state:'hidden'});
+    await tab.locator('article').evaluate(article=>article.remove());await tab.locator('#znote-x-page-button').waitFor();assert.equal(await tab.locator('article .znote-x-post-button').count(),0);
     await context.close();contexts.pop();
   }
   console.log('PASS desktop/touch: persisted server/extension policy, HelpHint pin/close, X post capture, inline feedback, error recovery, ordered group and remarks, dedupe, blacklist and unmount');

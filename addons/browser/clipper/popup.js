@@ -1,123 +1,107 @@
 import { settings, serverUrl, api } from './client.js';
 import { siteControlState, toggleSiteBlock } from './site-policy.js';
-const status = document.getElementById('status'), capture = document.getElementById('capture');
+import { pluginShell } from './ui/panel.js';
+const $ = id => document.getElementById(id), selectPanel = pluginShell();
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-document.getElementById('article').addEventListener('click',async()=>{await chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});window.close();});
-let behavior = await settings();
-document.getElementById('shortcut-help').textContent = `悬停大图 · ${behavior.downloadKey.toUpperCase()} 下载 · ${behavior.saveKey.toUpperCase()} 入库`;
-const siteName = document.getElementById('site-name'), siteStatus = document.getElementById('site-status'), siteToggle = document.getElementById('site-toggle');
-const discoverButton = document.getElementById('discover'), platformVideoButton = document.getElementById('video');
-const galleryInput = document.getElementById('gallery-link'), galleryButton = document.getElementById('gallery-capture'), galleryStatus = document.getElementById('gallery-status'), galleryOpen = document.getElementById('gallery-open');
-if (tab?.url && /^https?:/i.test(tab.url)) galleryInput.value = tab.url;
-let siteState;
-function renderSiteState(message = '') {
-  siteState = siteControlState(tab?.url, behavior);
-  siteName.textContent = (() => { try { return new URL(tab?.url).host; } catch { return '当前页面不支持'; } })();
-  discoverButton.disabled = !siteState.supported || siteState.blocked;
-  platformVideoButton.disabled = !siteState.supported || siteState.blocked;
-  // Link capture is intentionally available even on pages without media
-  // injection (for example a blank tab): the pasted URL is the source page.
-  galleryButton.disabled = galleryButton.dataset.busy === 'true' || (siteState.supported && siteState.blocked && !siteState.automatic);
-  siteToggle.disabled = !siteState.supported || siteState.automatic;
-  siteToggle.setAttribute('aria-pressed', String(siteState.blocked));
-  if (!siteState.supported) {
-    siteToggle.textContent = '不适用于此页面';
-    siteStatus.textContent = '仅支持普通 HTTP(S) 网站';
-  } else if (siteState.automatic) {
-    siteToggle.textContent = '自动停用';
-    siteStatus.textContent = 'ZNote 页面不会显示图片预览或视频嗅探';
-  } else if (siteState.blocked && siteState.direct.length) {
-    siteToggle.textContent = '恢复此网址';
-    siteStatus.textContent = siteState.other.length
-      ? `本站规则已启用；移除后仍会匹配：${siteState.other.join(', ')}`
-      : '图片预览、视频浮窗和资源嗅探已关闭';
-  } else if (siteState.blocked) {
-    siteToggle.textContent = '管理黑名单';
-    siteStatus.textContent = `此网址已被规则覆盖：${siteState.matching.join(', ')}`;
-  } else {
-    siteToggle.textContent = '禁用此网址';
-    siteStatus.textContent = message || '关闭此网站的悬停预览、视频浮窗和资源嗅探';
-  }
+let config = await settings(), siteState, galleryBusy = false, taskLoading = false, refreshQueued = false;
+const jobs = new Map(), refs = new Map();
+$('page-title').textContent = tab?.title || '当前页面';
+$('shortcut-help').textContent = `${config.downloadKey.toUpperCase()} 下载 · ${config.saveKey.toUpperCase()} 入库`;
+if (/^https?:/i.test(tab?.url || '')) $('gallery-link').value = tab.url;
+function renderSite() {
+  siteState = siteControlState(tab?.url, config);
+  $('site-name').textContent = (() => { try { return new URL(tab.url).host; } catch { return '当前页面不支持'; } })();
+  for (const id of ['discover','video','current-capture']) $(id).disabled = !siteState.supported || siteState.blocked || (id === 'current-capture' && galleryBusy);
+  for (const id of ['capture','capture-region','article']) $(id).disabled = !siteState.supported;
+  $('gallery-capture').disabled = galleryBusy || (siteState.supported && siteState.blocked && !siteState.automatic);
+  $('site-toggle').disabled = !siteState.supported || siteState.automatic;
+  $('site-toggle').setAttribute('aria-pressed', String(siteState.blocked));
+  $('site-toggle').textContent = !siteState.supported ? '不适用于此页面' : siteState.automatic ? '自动停用' : siteState.blocked ? (siteState.direct.length ? '恢复此网址' : '管理黑名单') : '禁用此网址';
+  $('site-status').textContent = !siteState.supported ? '仅支持 HTTP(S) 网页' : siteState.automatic ? '知识库页面自动停用嗅探' : siteState.blocked ? '本站预览与嗅探已停用' : '本站采集已开启';
 }
-renderSiteState();
-siteToggle.addEventListener('click', async () => {
-  if (!siteState?.supported || siteState.automatic) return;
-  if (siteState.blocked && !siteState.direct.length) { await chrome.runtime.openOptionsPage(); return; }
-  siteToggle.disabled = true;
+renderSite();
+$('site-toggle').onclick = async () => {
+  if (siteState.blocked && !siteState.direct.length) return chrome.runtime.openOptionsPage();
+  try { const next = toggleSiteBlock(tab.url, config); await chrome.storage.local.set({blockedSites:next.blockedSites}); config = await settings(); renderSite(); }
+  catch (error) { $('site-status').textContent = error.message; }
+};
+async function connect() {
+  $('destination').disabled = true; $('connection-retry').hidden = true;
+  if (!config.token) { $('connection-state').textContent = '尚未连接知识库，预览与下载仍可使用'; return; }
+  $('connection-state').textContent = '正在读取知识库…';
   try {
-    const next = toggleSiteBlock(tab.url, behavior);
-    if (!next.changed) throw new Error('请在连接设置中调整覆盖此网址的黑名单规则');
-    await chrome.storage.local.set({ blockedSites: next.blockedSites });
-    behavior = await settings();
-    renderSiteState(next.blocked ? '此网址已禁用，当前页面立即生效' : '此网址已恢复');
-  } catch (error) {
-    siteStatus.textContent = error.message;
-  } finally { siteToggle.disabled = false; renderSiteState(siteStatus.textContent); }
-});
-document.getElementById('discover').addEventListener('click',async()=>{try{const result=await chrome.runtime.sendMessage({type:'open-panel',tabId:tab.id});if(!result?.ok)throw new Error(result?.error||'打开失败');window.close();}catch(e){status.textContent=e.message;}});
-async function show() {
-  const { lastResult } = await chrome.storage.local.get('lastResult');
-  if (!lastResult) return;
-  status.textContent = lastResult.message;
-  const link = document.getElementById('open'); link.hidden = !lastResult.ok;
-  if (lastResult.ok) link.href = serverUrl((await settings()).server) + '/#item/' + lastResult.itemId;
+    const collections = await api('/api/collections', {signal:AbortSignal.timeout(8000)}, config);
+    $('destination').replaceChildren(new Option('未分类',''), ...collections.map(c => new Option(c.name,c.id)));
+    if (config.collection_id && !collections.some(c => c.id === config.collection_id)) {const missing=new Option('原知识库已删除，请重新选择',config.collection_id);missing.disabled=true;$('destination').append(missing);$('destination').value=config.collection_id;throw Error('原目标知识库已删除，请重新选择');}
+    $('destination').value = config.collection_id; $('connection-state').textContent = '';
+  } catch (error) { $('connection-state').textContent = error.message; $('connection-retry').hidden = false; }
+  finally { $('destination').disabled = $('destination').options.length <= 1 && !!$('connection-state').textContent; }
 }
-show();
-async function showGallery() {
-  const { lastCapture } = await chrome.storage.local.get('lastCapture');
-  if (!lastCapture) return;
-  const config = await settings(); if (serverUrl(config.server) !== serverUrl(lastCapture.server)) return;
-  try {
-    const job = await api('/api/captures/' + lastCapture.id);
-    galleryStatus.textContent = job.message;
-    galleryButton.dataset.busy = String(['queued', 'running'].includes(job.status));
-    galleryButton.textContent = galleryButton.dataset.busy === 'true' ? '图组采集中…' : '获取图组并保存';
-    galleryOpen.hidden = job.status !== 'completed';
-    if (job.status === 'completed') galleryOpen.href = serverUrl(config.server) + '/#item/' + job.item_id;
-    if (['completed','failed'].includes(job.status)) await chrome.action.setBadgeText({ text: job.status === 'completed' ? '✓' : '!' });
-  } catch (e) { galleryStatus.textContent = e.message; galleryOpen.hidden = true; }
+$('destination').onchange = async () => {
+  const previous = config.collection_id;
+  try { await chrome.storage.local.set({collection_id:$('destination').value}); config = await settings(); $('connection-state').textContent = ''; }
+  catch (error) { $('destination').value = previous; $('connection-state').textContent = error.message; }
+};
+$('connection-retry').onclick = async () => { config=await settings(); await connect(); };
+connect();
+function saveFeedback(message, error = false) { $('last-task').hidden=false; $('last-task').dataset.state=error?'failed':'completed'; $('status').textContent=message; selectPanel('tasks-panel'); updateCount(); }
+async function message(type, extra={}) { const result=await chrome.runtime.sendMessage({type,tabId:tab?.id,...extra}); if(!result?.ok)throw Error(result?.error||'操作失败，请重试');return result; }
+async function captureWork(text) {
+  if(galleryBusy)return; galleryBusy=true; renderSite();
+  $('gallery-task').hidden=false; $('gallery-status').textContent='正在提交作品采集…'; $('gallery-open').hidden=true; selectPanel('tasks-panel');
+  try { const result=await message('gallery',{text}); jobs.delete('captures'); await refreshTasks(true); if(!result.job)throw Error('服务器没有返回采集任务'); }
+  catch(error){$('gallery-task').dataset.state='failed';$('gallery-status').textContent=error.message;}
+  finally{galleryBusy=false;renderSite();updateCount();}
 }
-galleryButton.addEventListener('click', async () => {
-  galleryButton.dataset.busy = 'true'; galleryButton.disabled = true; galleryStatus.textContent = '正在提交图组采集…'; galleryOpen.hidden = true;
-  try {
-    const result = await chrome.runtime.sendMessage({ type: 'gallery', tabId: tab.id, text: galleryInput.value.trim() });
-    if (!result?.ok) throw new Error(result?.error || '提交失败');
-    await showGallery();
-  } catch (e) { galleryStatus.textContent = e.message; }
-  finally { galleryButton.dataset.busy = 'false'; await showGallery(); renderSiteState(); }
-});
-showGallery(); setInterval(showGallery, 2000);
-const video = document.getElementById('video'), videoStatus = document.getElementById('video-status'), cancel = document.getElementById('cancel-video'), videoLink = document.getElementById('video-open');
-async function showVideo() {
-  const { lastImport } = await chrome.storage.local.get('lastImport');
-  if (!lastImport) return;
-  const config = await settings(); if (serverUrl(config.server) !== serverUrl(lastImport.server)) return;
-  try {
-    const job = await api('/api/imports/' + lastImport.id);
-    videoStatus.textContent = job.message; cancel.hidden = !['queued','running'].includes(job.status);
-    videoLink.hidden = job.status !== 'completed';
-    if (job.status === 'completed') videoLink.href = serverUrl(config.server) + '/#item/' + job.item_id;
-    if (['completed','failed','cancelled'].includes(job.status)) await chrome.action.setBadgeText({ text: job.status === 'completed' ? '✓' : '!' });
-  } catch (e) { videoStatus.textContent = e.message; cancel.hidden = true; }
+$('current-capture').onclick=()=>captureWork(tab?.url||'');
+$('gallery-capture').onclick=()=>captureWork($('gallery-link').value.trim());
+$('discover').onclick=async()=>{try{await message('open-panel');window.close();}catch(e){saveFeedback(e.message,true);}};
+$('article').onclick=()=>{chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});window.close();};
+$('capture-region').onclick=()=>{chrome.runtime.sendMessage({type:'capture-region',tabId:tab.id}).catch(()=>{});window.close();};
+$('capture').onclick=async()=>{ $('capture').disabled=true;saveFeedback('正在截图并上传…');try{await message('capture');await refreshTasks(true);}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
+$('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel');$('video-task').hidden=false;$('video-status').textContent='正在提交视频采集…';try{await message('video');jobs.delete('imports');await refreshTasks(true);}catch(e){$('video-status').textContent=e.message;$('video-task').dataset.state='failed';}finally{renderSite();updateCount();}};
+const running=job=>['queued','running'].includes(job?.status);
+async function task(kind, ref, force) {
+  const prefix=kind==='captures'?'gallery':'video', card=$(prefix+'-task');
+  if(!ref||serverUrl(config.server)!==serverUrl(ref.server)){card.hidden=true;jobs.delete(kind);refs.delete(kind);return;}
+  card.hidden=false;const previous=refs.get(kind);refs.set(kind,ref);
+  if(!force&&previous?.id===ref.id&&jobs.has(kind)&&!running(jobs.get(kind)))return;
+  try{
+    const job=await api('/api/'+kind+'/'+ref.id,{signal:AbortSignal.timeout(8000)},config);jobs.set(kind,job);
+    card.dataset.state=job.status;$(prefix+'-status').textContent=job.message;
+    $(prefix+'-open').hidden=job.status!=='completed'||!job.item_id;
+    if(job.item_id)$(prefix+'-open').href=serverUrl(config.server)+'/#item/'+encodeURIComponent(job.item_id);
+    $(prefix+'-retry').hidden=!['failed','cancelled'].includes(job.status);
+    if(kind==='imports')$('cancel-video').hidden=!running(job);
+  }catch(e){$(prefix+'-status').textContent=e.message;card.dataset.state='failed';$(prefix+'-open').hidden=true;$(prefix+'-retry').hidden=false;if(kind==='imports')$('cancel-video').hidden=true;}
 }
-video.addEventListener('click', async () => {
-  video.disabled = true; videoStatus.textContent = '正在提交采集…';
-  try { const result = await chrome.runtime.sendMessage({ type: 'video', tabId: tab.id }); if (!result?.ok) throw new Error(result?.error || '提交失败'); await showVideo(); }
-  catch (e) { videoStatus.textContent = e.message; } finally { video.disabled = false; }
-});
-cancel.addEventListener('click', async () => {
-  try { const { lastImport } = await chrome.storage.local.get('lastImport'); await api('/api/imports/' + lastImport.id, { method: 'DELETE' }); await showVideo(); }
-  catch (e) { videoStatus.textContent = e.message; }
-});
-showVideo(); setInterval(showVideo, 2000);
-document.getElementById('settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
-document.getElementById('capture-region').addEventListener('click', () => {
-  chrome.runtime.sendMessage({type:'capture-region',tabId:tab.id}).catch(()=>{});
-  window.close();
-});
-capture.addEventListener('click', async () => {
-  capture.disabled = true; status.textContent = '正在截图并上传…';
-  try { const result = await chrome.runtime.sendMessage({ type: 'capture', tabId: tab.id }); if (!result?.ok) throw new Error(result?.error || '截图失败'); await show(); }
-  catch (e) { status.textContent = e.message; }
-  finally { capture.disabled = false; }
-});
+for(const [kind,prefix] of [['captures','gallery'],['imports','video']])$(prefix+'-retry').onclick=async()=>{
+  const ref=refs.get(kind);if(!ref)return;
+  $(prefix+'-retry').disabled=true;
+  try{const previous=jobs.get(kind);if(previous&&['failed','cancelled'].includes(previous.status))await api('/api/'+kind+'/'+ref.id+'/retry',{method:'POST'},config);jobs.delete(kind);await refreshTasks(true);}catch(e){$(prefix+'-status').textContent=e.message;}finally{$(prefix+'-retry').disabled=false;}
+};
+$('cancel-video').onclick=async()=>{const ref=refs.get('imports');if(!ref)return;try{await api('/api/imports/'+ref.id,{method:'DELETE'},config);await refreshTasks(true);}catch(e){$('video-status').textContent=e.message;}};
+function updateCount(){const count=[...jobs.values()].filter(job=>running(job)||job.status==='failed').length+document.querySelectorAll('#media-task-list [data-state=running],#media-task-list [data-state=failed]').length;$('task-count').textContent=count;$('task-count').hidden=!count;$('tasks-empty').hidden=[...document.querySelectorAll('#tasks-panel .task-card')].some(card=>!card.hidden);}
+async function refreshTasks(force=false){
+  if(taskLoading){if(force)refreshQueued=true;return;}taskLoading=true;
+  try{
+    const local=await chrome.storage.local.get(['lastResult','lastCapture','lastImport']);
+    if(local.lastResult){$('last-task').hidden=false;$('status').textContent=local.lastResult.message;$('last-task').dataset.state=local.lastResult.ok?'completed':'failed';$('open').hidden=!local.lastResult.ok||!local.lastResult.itemId;if(local.lastResult.itemId)$('open').href=serverUrl(config.server)+'/#item/'+encodeURIComponent(local.lastResult.itemId);}
+    await Promise.allSettled([task('captures',local.lastCapture,force),task('imports',local.lastImport,force)]);
+    const stored=await chrome.storage.session.get('mediaTasks');$('media-task-list').replaceChildren();
+    for(const value of Object.values(stored.mediaTasks||{}).filter(t=>t.tabId===tab?.id).sort((a,b)=>b.updated-a.updated).slice(0,10)){
+      const card=document.createElement('article');card.className='task-card';card.dataset.state=value.status;const title=document.createElement('strong'),state=document.createElement('p');title.textContent=value.title||'媒体任务';state.textContent=value.message||value.status;card.append(title,state);
+      if(value.itemId){const link=document.createElement('a');link.href=serverUrl(config.server)+'/#item/'+encodeURIComponent(value.itemId);link.target='_blank';link.rel='noreferrer';link.textContent='查看已保存内容 ↗';card.append(link);}if(value.status==='failed'){const retry=document.createElement('button');retry.textContent='回到本页重试';retry.onclick=$('discover').onclick;card.append(retry);}$('media-task-list').append(card);
+    }
+    updateCount();
+  }finally{taskLoading=false;if(refreshQueued){refreshQueued=false;refreshTasks(true);}}
+}
+refreshTasks(true);const poll=setInterval(()=>refreshTasks(),2000);window.addEventListener('pagehide',()=>clearInterval(poll),{once:true});
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&['lastCapture','lastImport'].some(key=>key in changes)){jobs.clear();refreshTasks(true);}});
+document.querySelector('[data-panel-tabs]').addEventListener('panel-change',e=>{if(e.detail==='tasks-panel')refreshTasks();});
+for(const [id,key] of [['quick-hover','hover'],['quick-dock','dock']]){
+  $(id).checked=config[key]!==false;$(id).onchange=async()=>{try{await chrome.storage.local.set({[key]:$(id).checked});config=await settings();$('plugin-status').textContent='已保存，当前网页同步生效';}catch(e){$(id).checked=config[key]!==false;$('plugin-status').textContent=e.message;}};
+}
+$('settings').onclick=()=>chrome.runtime.openOptionsPage();
+$('library-open').onclick=()=>chrome.tabs.create({url:serverUrl(config.server)});
+document.body.dataset.ready='true';

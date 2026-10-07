@@ -3,18 +3,11 @@ import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
 import {updateMediaTask,downloadMediaBlob} from './media-tasks.js';
+import {contextMenuEntries} from './entry-menu.js';
 let directVideoBusy = false;
 function setupContextMenus() {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'znote-image', title: '优先保存高清原图到 ZNote', contexts: ['image'] });
-    chrome.contextMenus.create({ id: 'znote-image-current', title: '保存当前图片到 ZNote', contexts: ['image'] });
-    chrome.contextMenus.create({ id: 'znote-capture', title: '截图当前页面到 ZNote', contexts: ['page'] });
-    chrome.contextMenus.create({ id: 'znote-capture-region', title: '框选截图到 ZNote', contexts: ['page'] });
-    chrome.contextMenus.create({ id: 'znote-article', title: '保存页面正文为图文笔记', contexts: ['page'] });
-    chrome.contextMenus.create({ id: 'znote-video', title: '采集此页面的视频到 ZNote', contexts: ['page', 'video'] });
-    chrome.contextMenus.create({ id: 'znote-video-link', title: '采集此链接的视频到 ZNote', contexts: ['link'] });
-    chrome.contextMenus.create({ id: 'znote-gallery-link', title: '按链接采集图组到 ZNote', contexts: ['link'] });
-    chrome.contextMenus.create({ id: 'znote-video-file', title: '保存当前视频文件到 ZNote', contexts: ['video'] });
+    for(const entry of contextMenuEntries())chrome.contextMenus.create(entry);
   });
 }
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -30,6 +23,7 @@ chrome.runtime.onStartup.addListener(setupContextMenus);
 // does not consistently emit onInstalled for that workflow.
 setupContextMenus();
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'znote-work') collectGallery(tab).catch(() => {});
   if (info.menuItemId === 'znote-image') record(() => collectImage(info, tab)).catch(() => {});
   if (info.menuItemId === 'znote-image-current') record(() => collectImage(info, tab, false)).catch(() => {});
   if (info.menuItemId === 'znote-capture') record(() => capturePage(tab)).catch(() => {});

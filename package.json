@@ -19,6 +19,7 @@
     "storage:optimize": "node scripts/optimize-storage.mjs --service-stopped",
     "media:setup": "node scripts/setup-media.mjs",
     "clipper:build": "node scripts/build-clipper.mjs",
+    "addons": "node scripts/browser-addons.mjs",
     "test:media-tools-ui": "npm run build && node tests/media-tools-ui.mjs",
     "test:weixin-daily-ui": "npm run build && node tests/weixin-daily-ui.mjs",
     "pretest": "node scripts/prepare-tests.mjs"

@@ -14,6 +14,7 @@
 - [API 指南](API.md)：鉴权、读写接口、OpenAPI、Webhook 与事件
 - [扩展总索引](../addons/README.md)：浏览器、连接器和 AI 工作流插件
 - [扩展设计](EXTENSION-DESIGN.md)：采集扩展的边界与实现约定
+- [浏览器插件维护](BROWSER-ADDONS.md)：统一登记、固定 ID 检查、构建与按需打包
 
 ## 开发与维护
 
