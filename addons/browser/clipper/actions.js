@@ -36,12 +36,42 @@ export async function collectImage(info, tab, preferOriginal = true) {
   }
   throw lastError || new Error('无法读取图片，可改用页面截图');
 }
-export async function capturePage(tab) {
+export async function capturePage(tab, region = null) {
   const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
   if (active?.id !== tab.id) throw new Error('当前标签页已经改变，请重新点击截图');
   const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-  const blob = await (await fetch(dataUrl)).blob();
-  return saveImage(blob, { title: `${tab.title || '网页'} · 截图`, filename: '页面截图.png', source_url: tab.url });
+  let blob = await (await fetch(dataUrl)).blob();
+  if (region) blob = await cropScreenshot(blob, region);
+  return saveImage(blob, { title: `${tab.title || '网页'} · ${region?'区域截图':'截图'}`, filename: region?'区域截图.png':'页面截图.png', source_url: tab.url, capture_note: region?'手动框选的页面截图':'当前页面可见区域截图' });
+}
+export async function cropScreenshot(blob, region) {
+  const { x, y, width, height, viewportWidth, viewportHeight } = region;
+  if (![x,y,width,height,viewportWidth,viewportHeight].every(Number.isFinite) || x<0 || y<0 || width<8 || height<8 || viewportWidth<=0 || viewportHeight<=0 || x+width>viewportWidth+1 || y+height>viewportHeight+1) throw Error('截图区域无效，请重新框选');
+  const image=await createImageBitmap(blob);
+  try {
+    const scaleX=image.width/viewportWidth, scaleY=image.height/viewportHeight;
+    if(Math.abs(scaleX-scaleY)>0.05)throw Error('页面尺寸已改变，请重新框选');
+    const left=Math.round(x*scaleX),top=Math.round(y*scaleY),w=Math.min(image.width-left,Math.round(width*scaleX)),h=Math.min(image.height-top,Math.round(height*scaleY));
+    const canvas=new OffscreenCanvas(w,h);canvas.getContext('2d').drawImage(image,left,top,w,h,0,0,w,h);
+    return await canvas.convertToBlob({type:'image/png'});
+  } finally { image.close(); }
+}
+export async function captureRegion(tab) {
+  let selected;
+  try { selected=await chrome.tabs.sendMessage(tab.id,{type:'select-capture-region'},{frameId:0}); }
+  catch { throw Error('此页面尚不能框选截图，请刷新网页后重试'); }
+  if(selected?.cancelled)return {cancelled:true};
+  if(!selected?.region)throw Error(selected?.error||'未选择截图区域');
+  const current=await chrome.tabs.get(tab.id);
+  if(current.url!==selected.source_url)throw Error('页面已切换，请重新框选');
+  await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:'正在保存截图…'},{frameId:0}).catch(()=>{});
+  try {
+    const item=await record(()=>capturePage(current,selected.region));
+    await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:'区域截图已保存到知识库'},{frameId:0}).catch(()=>{});
+    return item;
+  } catch(e) {
+    await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:e.message||'截图保存失败，可重新框选重试'},{frameId:0}).catch(()=>{});throw e;
+  }
 }
 export async function collectVideo(tab, url = tab.url) {
   const config = await settings();
@@ -64,8 +94,14 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
     if (!value) throw new Error('请粘贴作品链接或先打开作品页面');
     const source = value.match(/https?:\/\/[^\s<>"\u200b]+/i)?.[0] || value;
     assertSiteAllowed(source, config);
+    if (!browserHtml && tab?.id && /^https:\/\/www\.xiaohongshu\.com\/(?:explore|discovery\/item)\/[a-f\d]+(?:[/?#]|$)/i.test(source)) {
+      // Reuse the logged-in page's complete work data for the popup and link
+      // entry as well as the per-post button. Server-only HTML can be gated.
+      const result = await chrome.tabs.sendMessage(tab.id, { type: 'post-capture-page', url: source }, { frameId: 0 }).catch(() => null);
+      if (result?.ok) browserHtml = result.pageHtml || '';
+    }
     const requestId = dedupe
-      ? `clipper-xhs-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
+      ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?'x':'xhs'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
       : `clipper-gallery-${crypto.randomUUID()}`;
     let job = await api('/api/captures', {
       method: 'POST',
@@ -73,6 +109,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
       body: JSON.stringify({
         text: value,
         image_mode: 'group',
+        ...(['original','compress'].includes(config.largeImageDefault) ? { image_size_mode:config.largeImageDefault } : {}),
         collection_id: config.collection_id || null,
         tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
         request_id: requestId,

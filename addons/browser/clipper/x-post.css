@@ -1,0 +1,15 @@
+.znote-x-post-button {
+  flex: 0 0 auto !important; align-self: center !important; margin: 0 4px !important;
+  min-height: 32px !important; padding: 5px 10px !important; border: 1px solid #648e8770 !important;
+  border-radius: 999px !important; background: #153e391a !important; color: #579e91 !important;
+  font: 600 12px/1.3 system-ui,sans-serif !important; cursor: pointer !important;
+}
+.znote-x-post-button:hover,.znote-x-post-button:focus-visible { background: #579e9133 !important; outline: 2px solid #579e91 !important; }
+.znote-x-post-button:disabled { opacity: .65 !important; cursor: progress !important; }
+.znote-post-toast {
+  position: fixed !important; bottom: 90px !important; right: 16px !important; z-index: 2147483647 !important;
+  display: flex !important; align-items: center !important; gap: 14px !important; max-width: min(420px,calc(100vw - 32px)) !important;
+  padding: 12px 16px !important; border: 1px solid #648e8766 !important; border-radius: 14px !important;
+  background: #172b29 !important; color: #fbf8ed !important; font: 13px/1.5 system-ui,sans-serif !important; box-shadow: 0 8px 30px #0005 !important;
+}
+.znote-post-toast button { flex: 0 0 auto !important; background: transparent !important; color: inherit !important; border: 0 !important; font: 22px system-ui !important; min-width: 32px !important; min-height: 32px !important; cursor: pointer !important; }

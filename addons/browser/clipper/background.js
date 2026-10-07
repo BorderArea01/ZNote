@@ -1,4 +1,4 @@
-import { record, collectImage, capturePage, collectVideo, collectGallery } from './actions.js';
+import { record, collectImage, capturePage, captureRegion, collectVideo, collectGallery } from './actions.js';
 import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
@@ -9,6 +9,7 @@ function setupContextMenus() {
     chrome.contextMenus.create({ id: 'znote-image', title: '优先保存高清原图到 ZNote', contexts: ['image'] });
     chrome.contextMenus.create({ id: 'znote-image-current', title: '保存当前图片到 ZNote', contexts: ['image'] });
     chrome.contextMenus.create({ id: 'znote-capture', title: '截图当前页面到 ZNote', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'znote-capture-region', title: '框选截图到 ZNote', contexts: ['page'] });
     chrome.contextMenus.create({ id: 'znote-article', title: '保存页面正文为图文笔记', contexts: ['page'] });
     chrome.contextMenus.create({ id: 'znote-video', title: '采集此页面的视频到 ZNote', contexts: ['page', 'video'] });
     chrome.contextMenus.create({ id: 'znote-video-link', title: '采集此链接的视频到 ZNote', contexts: ['link'] });
@@ -32,6 +33,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'znote-image') record(() => collectImage(info, tab)).catch(() => {});
   if (info.menuItemId === 'znote-image-current') record(() => collectImage(info, tab, false)).catch(() => {});
   if (info.menuItemId === 'znote-capture') record(() => capturePage(tab)).catch(() => {});
+  if (info.menuItemId === 'znote-capture-region') captureRegion(tab).catch(() => {});
   if (info.menuItemId === 'znote-article') chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});
   if (info.menuItemId === 'znote-video') collectVideo(tab, info.pageUrl || tab.url).catch(() => {});
   if (info.menuItemId === 'znote-video-link') collectVideo(tab, info.linkUrl).catch(() => {});
@@ -70,18 +72,20 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     discover(message, sender).then(value => reply({ ok: true, value }), error => reply({ ok: false, error: error.message })); return true;
   }
   if (sender.id === chrome.runtime.id && sender.tab && sender.frameId === 0 &&
-      ['xhs-post-capture', 'xhs-post-status'].includes(message.type)) {
+      ['xhs-post-capture', 'xhs-post-status', 'x-post-capture', 'x-post-status'].includes(message.type)) {
     const page = (() => { try { return new URL(sender.url); } catch { return null; } })();
     const source = (() => { try { return new URL(message.url); } catch { return null; } })();
     const workPath = /^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i;
-    if (page?.protocol !== 'https:' || page.hostname !== 'www.xiaohongshu.com' ||
+    const isX = message.type.startsWith('x-post-');
+    const xHost = host => /^(?:www\.|mobile\.)?(?:x|twitter)\.com$/.test(host || '');
+    if (isX ? page?.protocol !== 'https:' || !xHost(page.hostname) || (message.type === 'x-post-capture' && (source?.protocol !== 'https:' || !xHost(source.hostname) || !/^\/[\w]+\/status\/\d+\/?$/.test(source.pathname))) : page?.protocol !== 'https:' || page.hostname !== 'www.xiaohongshu.com' ||
         (message.type === 'xhs-post-capture' && (source?.protocol !== 'https:' || source.hostname !== page.hostname || !workPath.test(source.pathname)))) {
-      reply({ ok: false, error: '只可采集小红书作品链接' }); return;
+      reply({ ok: false, error: '只可采集当前平台的单条作品链接' }); return;
     }
     if (message.type === 'xhs-post-capture' && message.pageHtml && (typeof message.pageHtml !== 'string' || new TextEncoder().encode(message.pageHtml).length > 1500000)) {
       reply({ ok: false, error: '浏览器作品数据过大' }); return;
     }
-    const operation = message.type === 'xhs-post-capture'
+    const operation = message.type.endsWith('-capture')
       ? collectGallery(sender.tab, source.href, { dedupe: true, browserHtml: message.pageHtml })
       : api(`/api/captures/${encodeURIComponent(String(message.id || ''))}`);
     operation.then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
@@ -95,6 +99,9 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   }
   if (message.type === 'gallery') {
     chrome.tabs.get(message.tabId).then(tab => collectGallery(tab, message.text)).then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
+  }
+  if (message.type === 'capture-region') {
+    chrome.tabs.get(message.tabId).then(captureRegion).then(item => reply({ok:true,item}),e=>reply({ok:false,error:e.message})); return true;
   }
   if (message.type !== 'capture') return;
   record(async () => {

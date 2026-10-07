@@ -65,7 +65,7 @@ export function libraryBatch(group, persist, changed, downloading) {
         states[i] = 'active'; changed();
         $('save-status').textContent = `正在入库 ${i + 1} / ${states.length}…`;
         try {
-          const blob = await limitedImage(group.images[i], AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]));
+          const blob = await limitedImage(group.images[i], AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]));
           controller.signal.throwIfAborted();
           uploading = true;
           // A stop waits for an in-flight upload's response so we can record a
@@ -76,7 +76,7 @@ export function libraryBatch(group, persist, changed, downloading) {
             title: `${group.title.slice(0, 175)} · ${String(i + 1).padStart(3, '0')}`,
             ...grouping, group_index:i, image_url: group.images[i],
             capture_note: `作品：${group.title}\n页码：${i + 1} / ${states.length}`,
-          }, AbortSignal.timeout(30000), config);
+          }, AbortSignal.timeout(180000), config);
           states[i] = item.duplicate ? 'duplicate' : 'done';
         } catch (e) {
           states[i] = controller.signal.aborted && !uploading ? 'pending' : 'failed';

@@ -186,7 +186,7 @@ test('capture archives image groups locally, retries without duplication, persis
   const request=(path,method='GET',body)=>fetch(base+path,{method,headers:{Cookie:cookie,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
   const json=async(...args)=>{const r=await request(...args);assert.ok(r.ok,await r.clone().text());return r.json();};
   const library=await json('/api/collections','POST',{name:'手机收集'}),other=await json('/api/collections','POST',{name:'其他'}),xhsLibrary=await json('/api/collections','POST',{name:'小红书实况'});
-  const input={text:'好看的作品 https://xhslink.com/a/abcd',collection_id:library.id,request_id:'mobile-test'};
+  const input={text:'好看的作品 https://xhslink.com/a/abcd',image_mode:'note',collection_id:library.id,request_id:'mobile-test'};
   const job=await json('/api/captures','POST',input);assert.equal((await json('/api/captures','POST',input)).id,job.id);
   await assert.rejects(runtime.captures.wait(job.id,AbortSignal.timeout(5000)),/失败/);assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE kind='image'").get().n,1);
   failImage=false;await json('/api/captures/'+job.id+'/retry','POST',{});const done=await runtime.captures.wait(job.id,AbortSignal.timeout(5000));

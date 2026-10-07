@@ -72,6 +72,7 @@ import { IconButton, Dialog } from "./ui.jsx";
 import { useTheme, TagInput, PreferencesSections } from "./features.jsx";
 import {WeixinSettings} from './WeixinSettings.jsx';
 import {ClientSettings} from './ClientSettings.jsx';
+import {CaptureSettings} from './CaptureSettings.jsx';
 import {ExternalAssistantSettings} from './ExternalAssistant.jsx';
 import { OrganizeDialog } from './organize.jsx';
 import { BackupSettings } from './backups.jsx';
@@ -972,6 +973,7 @@ function SettingsPanel({
           storage={storage}
         />
         <BackupSettings />
+        <CaptureSettings />
         <ClientSettings />
         <ExternalAssistantSettings />
         <WeixinSettings collections={collections} onOpen={id=>{onClose();const target='#item/'+id;if(location.hash===target)window.dispatchEvent(new HashChangeEvent('hashchange'));else location.hash=target;}}/>

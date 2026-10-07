@@ -111,6 +111,10 @@ cancel.addEventListener('click', async () => {
 });
 showVideo(); setInterval(showVideo, 2000);
 document.getElementById('settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
+document.getElementById('capture-region').addEventListener('click', () => {
+  chrome.runtime.sendMessage({type:'capture-region',tabId:tab.id}).catch(()=>{});
+  window.close();
+});
 capture.addEventListener('click', async () => {
   capture.disabled = true; status.textContent = '正在截图并上传…';
   try { const result = await chrome.runtime.sendMessage({ type: 'capture', tabId: tab.id }); if (!result?.ok) throw new Error(result?.error || '截图失败'); await show(); }

@@ -1,7 +1,7 @@
 import {videoDetails} from './video-details.js';
 import { blockedSite } from './site-policy.js';
 import {readPlayableVideo} from './video-fetch.js';
-export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [] };
+export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [], largeImageDefault: 'inherit' };
 export async function settings() {
   const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
   const config = { ...defaults, ...stored };
@@ -24,12 +24,13 @@ export async function api(path, options = {}, config = null) {
   return data;
 }
 export async function saveImage(blob, details, signal, config = null) {
-  if (blob.size > 25 * 1024 * 1024) throw new Error('图片超过 25 MB');
+  if (blob.size > 100 * 1024 * 1024) throw new Error('图片超过 100 MB');
   config ||= await settings();
   const data = new FormData();
   data.set('file', blob, details.filename || '网页图片.png');
+  if (['original', 'compress'].includes(config.largeImageDefault)) data.set('image_size_mode', config.largeImageDefault);
   data.set('title', (details.title || details.filename || '网页图片').slice(0, 200));
-  data.set('content', [details.image_url ? details.capture_note || '' : '当前页面可见区域截图', /^https?:\/\//i.test(details.source_url || '') ? `来源链接：${details.source_url}` : ''].filter(Boolean).join('\n\n'));
+  data.set('content', [details.capture_note || (details.image_url ? '' : '当前页面可见区域截图'), /^https?:\/\//i.test(details.source_url || '') ? `来源链接：${details.source_url}` : ''].filter(Boolean).join('\n\n'));
   data.set('tags', JSON.stringify(config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean)));
   if (config.collection_id) data.set('collection_id', config.collection_id);
   if (/^https?:\/\//i.test(details.source_url || '')) data.set('source_url', details.source_url);
@@ -49,13 +50,13 @@ export async function limitedImage(url, signal) {
   if (!response.ok) throw new Error(`读取图片失败 ${response.status}，可改用页面截图`);
   const mime = response.headers.get('content-type') || '';
   if (mime && !/^(image\/|application\/octet-stream)/i.test(mime)) { await response.body?.cancel(); throw new Error('候选地址没有返回图片'); }
-  if (Number(response.headers.get('content-length') || 0) > 25 * 1024 * 1024) throw new Error('图片超过 25 MB');
+  if (Number(response.headers.get('content-length') || 0) > 100 * 1024 * 1024) { await response.body?.cancel(); throw new Error('图片超过 100 MB'); }
   const reader = response.body.getReader(), chunks = []; let size = 0;
   try {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.length;
-      if (size > 25 * 1024 * 1024) throw new Error('图片超过 25 MB');
+      if (size > 100 * 1024 * 1024) throw new Error('图片超过 100 MB');
       chunks.push(value);
     }
   } finally { await reader.cancel(); }

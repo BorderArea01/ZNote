@@ -20,6 +20,8 @@
         <label>下载图片快捷键<input id="download-key" maxlength="1" pattern="[A-Za-z0-9]" required autocomplete="off" /></label>
         <label>保存知识库快捷键<input id="save-key" maxlength="1" pattern="[A-Za-z0-9]" required autocomplete="off" /></label>
         <label>预览最大宽度（像素）<input id="preview-width" type="number" min="240" max="1200" step="40" required /></label>
+        <label>超过 25 MB 的图片<select id="large-image-default"><option value="inherit">跟随 ZNote 设置</option><option value="original">自动保存原图</option><option value="compress">自动低损压缩</option></select></label>
+        <p data-help-for="behavior-heading" data-help-label="大图片处理">默认使用 ZNote「设置与连接 → 采集与文件」的策略，也可为此扩展单独选择。原文件最多 100 MB，压缩由服务器完成；不能处理的图片会标记失败，批量任务继续后面的图片，重试跳过已保存项。</p>
         <p data-help-for="behavior-heading" data-help-label="预览与快捷键">默认 S 下载、Z 入库，可选择不同的单个字母或数字。仅在大图预览展开时生效，输入文字时不会触发。预览会避开视频封面，移开约 150 毫秒后关闭；从原图移向按钮的间隙会保留通行时间。预览旁的滑杆也可调整大小。</p>
         <label style="grid-column:1/-1">网站黑名单<textarea id="blocked-sites" rows="4" placeholder="example.com&#10;https://example.org:8443"></textarea></label>
         <p data-help-for="behavior-heading" data-help-label="网站黑名单">每行一个域名（包含子域名）或网站地址（区分端口）；也可在扩展弹窗一键禁用当前网站。黑名单关闭图片预览、媒体浮窗和视频嗅探。当前连接的 ZNote 网站自动停用，其他 ZNote 地址也会由页面标记识别。</p>

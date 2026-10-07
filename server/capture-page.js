@@ -10,6 +10,7 @@ import { publicAddress } from './remote-images.js';
 import { captureImageCandidates } from './capture-images.js';
 import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { proxyAgent } from './network-proxy.js';
+import { xPost, extractXPost } from './capture-x.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -55,6 +56,15 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
 
 export async function fetchCapturePage(value, signal, redirects = 0) {
   const url = new URL(value);
+  const post = xPost(value);
+  if (post) {
+    // X's own embed endpoint, also used by react-tweet. Keep IDs as strings;
+    // the floating-point token calculation is the upstream endpoint protocol.
+    const token = (Number(post.id) / 1e15 * Math.PI).toString(36).replace(/(0+|\.)/g, '');
+    const resource = await fetchDocument(`https://cdn.syndication.twimg.com/tweet-result?id=${post.id}&lang=en&token=${token}`, signal, 0, { json: true });
+    let data; try { data = JSON.parse(resource.buffer.toString('utf8')); } catch { throw fail('X 返回了无法读取的作品数据'); }
+    return { url: post.url, type: 'application/x-znote-capture-plan', buffer: Buffer.from(''), plan: extractXPost(data, post.url) };
+  }
   if (PIXIV_HOST.test(url.hostname) && /^\/(?:[a-z]{2}\/)?artworks\/\d+\/?$/i.test(url.pathname)) return fetchPixivPlan(url, signal);
   const resource = await fetchDocument(value, signal, redirects);
   if (EH_HOST.test(url.hostname) && /^\/g\/\d+\/[a-z0-9]+\/?$/i.test(url.pathname)) return expandEHentai(resource, signal);

@@ -177,7 +177,12 @@
     document.querySelector('.znote-xhs-post-toast')?.remove();
     if (enabled) schedule();
   }
-  chrome.runtime.onMessage.addListener(message => { if (message.type === 'media-settings-changed') refresh(); });
+  chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (message.type === 'media-settings-changed') refresh();
+    if (message.type === 'post-capture-page' && sender.id === chrome.runtime.id && enabled && workUrl(message.url)) {
+      browserPage(message.url).then(pageHtml => reply({ ok: true, pageHtml }), () => reply({ ok: false })); return true;
+    }
+  });
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
   setInterval(() => { if (location.href !== currentPath) schedule(); }, 700);
   refresh();

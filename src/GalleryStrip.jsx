@@ -10,7 +10,7 @@ export function GalleryStrip({items=[],index,onSelect,busy=false,required=false,
   // Auto-expansion must not move the thumbnail under a mouse that is already
   // down. Once a group is larger than the collapsed window, use the explicit
   // toggle so the current thumbnail keeps its coordinates while hovering.
-  const hoverExpand=items.length<=11;
+  const hoverExpand=items.length<=11&&window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const video=kind==='video'||items.some(item=>item.kind==='video'),label=video?'视频':'图片',countLabel=video?'个视频':'张图片',itemLabel=video?'个视频':'张图片';
   const count = expectedCount > items.length ? `${items.length}/${expectedCount}` : items.length;
   const visible=expanded?items:items.slice(start,end),offset=expanded?0:start;

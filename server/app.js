@@ -54,6 +54,7 @@ import { createClipperPairing } from './clipper-pair.js';
 import { withSource } from './source.js';
 import { createImportManager } from './imports.js';
 import { createCaptureManager } from './captures.js';
+import { captureSettings, saveCaptureSettings } from './capture-settings.js';
 import { registerStreamRoutes } from './streams.js';
 import { registerGroupOrderRoutes } from './group-order.js';
 import { registerTags } from './tags.js';
@@ -350,6 +351,8 @@ export function createApp({
       ? next()
       : next(fail(403, "此操作需要管理员会话"));
   app.get("/api/me", (req, res) => res.json({ scope: req.auth.scope }));
+  app.get('/api/capture-settings', (req, res) => res.json(captureSettings(db)));
+  app.patch('/api/capture-settings', admin, (req, res) => res.json(saveCaptureSettings(db, req.body)));
   app.post("/api/auth/logout", (req, res) => {
     db.prepare("DELETE FROM tokens WHERE id=?").run(req.auth.id);
     res.clearCookie("znote_session");
@@ -947,10 +950,17 @@ export function createApp({
       throw fail(413, isPsd ? '单个 PSD 不能超过 200 MB' : '单张图片不能超过 100 MB');
     if (fields.image_size_mode && !['original', 'compress'].includes(fields.image_size_mode)) throw fail(400, '图片大小处理方式不正确');
     if (isPsd && fields.image_size_mode === 'compress') throw fail(422, 'PSD 需保留原始图层，不能作为普通图片压缩');
-    if (fields.image_size_mode === 'compress') {
+    const sizeMode = fields.image_size_mode || (isPsd ? 'original' : captureSettings(db).image_size_mode);
+    if (sizeMode === 'compress') {
       let compressed;
       try { compressed = await compressLargeImage(buffer); }
-      catch (error) { throw fail(422, error.message); }
+      catch (error) {
+        // A global preference must not flatten animation or strand a queue.
+        // Explicit per-file compression requests still report their failure.
+        if (fields.image_size_mode) throw fail(422, error.message);
+        compressed = { buffer };
+        input.content = (input.content + '\n\n自动压缩未适用，已保留原文件：' + error.message).trim();
+      }
       buffer = compressed.buffer;
       if (compressed.quality) input.content = (input.content + `\n\n已低损压缩为 WebP（质量 ${compressed.quality}），原文件 ${(compressed.originalBytes / 1048576).toFixed(1)} MB；此副本无法恢复原文件。`).trim();
     }
