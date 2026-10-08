@@ -23,7 +23,7 @@ async function extract() {
   });
   clone
     .querySelectorAll(
-      '[data-znote-overlay],script,style,iframe,form,input,button,nav,[hidden],[aria-hidden="true"]',
+      '[data-znote-overlay],[data-znote-page-tools],script,style,iframe,form,input,button,nav,[hidden],[aria-hidden="true"]',
     )
     .forEach((el) => el.remove());
   const urlFor = (value, image = false) => {

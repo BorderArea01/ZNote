@@ -39,10 +39,13 @@ export async function collectImage(info, tab, preferOriginal = true) {
 export async function capturePage(tab, region = null) {
   const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
   if (active?.id !== tab.id) throw new Error('当前标签页已经改变，请重新点击截图');
-  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-  let blob = await (await fetch(dataUrl)).blob();
-  if (region) blob = await cropScreenshot(blob, region);
-  return saveImage(blob, { title: `${tab.title || '网页'} · ${region?'区域截图':'截图'}`, filename: region?'区域截图.png':'页面截图.png', source_url: tab.url, capture_note: region?'手动框选的页面截图':'当前页面可见区域截图' });
+  await chrome.tabs.sendMessage(tab.id,{type:'prepare-page-screenshot'},{frameId:0}).catch(()=>{});
+  try {
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    let blob = await (await fetch(dataUrl)).blob();
+    if (region) blob = await cropScreenshot(blob, region);
+    return await saveImage(blob, { title: `${tab.title || '网页'} · ${region?'区域截图':'截图'}`, filename: region?'区域截图.png':'页面截图.png', source_url: tab.url, capture_note: region?'手动框选的页面截图':'当前页面可见区域截图' });
+  } finally {await chrome.tabs.sendMessage(tab.id,{type:'restore-page-screenshot'},{frameId:0}).catch(()=>{});}
 }
 export async function cropScreenshot(blob, region) {
   const { x, y, width, height, viewportWidth, viewportHeight } = region;
@@ -60,6 +63,16 @@ export async function captureRegion(tab) {
   let selected;
   try { selected=await chrome.tabs.sendMessage(tab.id,{type:'select-capture-region'},{frameId:0}); }
   catch { throw Error('此页面尚不能框选截图，请刷新网页后重试'); }
+  return finishCaptureRegion(tab,selected);
+}
+export async function startCaptureRegion(tab) {
+  let result;
+  try{result=await chrome.tabs.sendMessage(tab.id,{type:'select-capture-region-start'},{frameId:0});}
+  catch{throw Error('此页面尚不能框选截图，请刷新网页后重试');}
+  if(!result?.ok)throw Error(result?.error||'框选界面未能打开，请刷新网页后重试');
+  return {started:true};
+}
+export async function finishCaptureRegion(tab,selected) {
   if(selected?.cancelled)return {cancelled:true};
   if(!selected?.region)throw Error(selected?.error||'未选择截图区域');
   const current=await chrome.tabs.get(tab.id);
@@ -101,7 +114,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
       if (result?.ok) browserHtml = result.pageHtml || '';
     }
     const requestId = dedupe
-      ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?'x':'xhs'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
+      ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?'x':/^https:\/\/www\.xiaohongshu\.com\//.test(source)?'xhs':'work'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
       : `clipper-gallery-${crypto.randomUUID()}`;
     let job = await api('/api/captures', {
       method: 'POST',

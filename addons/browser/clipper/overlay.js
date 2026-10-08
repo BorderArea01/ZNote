@@ -485,8 +485,14 @@
     head.append(headTitle);
     head.append(button("收起", closePanel));
     panel.append(head);
-    globalThis.ZNotePageTools?.onClose(closePanel);
-    globalThis.ZNotePageTools?.onLayout(height=>{panel.style.bottom=(height+42)+'px';panel.style.maxHeight=`min(710px,calc(100dvh - ${height+54}px))`;});
+    globalThis.ZNotePageTools?.onClose(()=>{closePanel();hide();});
+    globalThis.ZNotePageTools?.onLayout((height,anchor)=>{
+      const above=anchor.top-20,below=innerHeight-anchor.bottom-20;
+      panel.style.right=Math.max(8,innerWidth-anchor.right)+'px';
+      if(above>=below){panel.style.top='auto';panel.style.bottom=(innerHeight-anchor.top+12)+'px';}
+      else{panel.style.bottom='auto';panel.style.top=(anchor.bottom+12)+'px';}
+      panel.style.maxHeight=Math.max(100,Math.min(710,Math.max(above,below)))+'px';
+    });
     const controls = element("div", null, { class: "controls" });
     controls.append(button("扫描", scan));
     const pause = button("暂停嗅探", async () => {

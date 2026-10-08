@@ -1,4 +1,5 @@
-import { record, collectImage, capturePage, captureRegion, collectVideo, collectGallery } from './actions.js';
+import { record, collectImage, capturePage, captureRegion, startCaptureRegion, collectVideo, collectGallery } from './actions.js';
+import { pageAction } from './page-actions.js';
 import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
@@ -39,6 +40,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }).catch(() => {});
 });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if(sender.id===chrome.runtime.id&&sender.tab&&sender.frameId===0&&['page-tools-action','page-tools-status','page-tools-position','region-capture-selection'].includes(message.type)){
+    pageAction(message,sender).then(value=>reply({ok:true,...value}),error=>reply({ok:false,error:error.message}));return true;
+  }
   if(message.type==='znote-post-ready'&&sender.id===chrome.runtime.id&&sender.tab&&sender.frameId===0){reply({ok:true,protocol:1,version:chrome.runtime.getManifest().version});return;}
   if(sender.id===chrome.runtime.id&&message.target==='background'&&message.type==='media-task-update'){
     updateMediaTask(message.task).then(task=>reply({ok:true,task}),error=>reply({ok:false,error:error.message}));return true;
@@ -97,6 +101,9 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   }
   if (message.type === 'capture-region') {
     chrome.tabs.get(message.tabId).then(captureRegion).then(item => reply({ok:true,item}),e=>reply({ok:false,error:e.message})); return true;
+  }
+  if (message.type === 'capture-region-start') {
+    chrome.tabs.get(message.tabId).then(startCaptureRegion).then(value=>reply({ok:true,...value}),e=>reply({ok:false,error:e.message}));return true;
   }
   if (message.type !== 'capture') return;
   record(async () => {

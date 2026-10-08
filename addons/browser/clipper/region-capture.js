@@ -4,6 +4,7 @@
   const clamp=(n,max)=>Math.max(0,Math.min(max,n));
   function select(reply) {
     cancelCurrent?.();
+    globalThis.ZNotePageTools?.suspend(true);
     document.getElementById('znote-region-result')?.remove();
     const host=document.createElement('div');host.setAttribute('data-znote-overlay','');host.id='znote-region-capture';
     host.style.cssText='position:fixed!important;inset:0!important;z-index:2147483647!important;touch-action:none!important;cursor:crosshair!important;';
@@ -14,7 +15,7 @@
     let start, region, closed=false;
     const dimensions={viewportWidth:innerWidth,viewportHeight:innerHeight};
     function cleanup(){host.remove();window.removeEventListener('resize',cancel);window.removeEventListener('pagehide',cancel);window.removeEventListener('keydown',keys,true);if(cancelCurrent===cancel)cancelCurrent=null;}
-    function cancel(){if(closed)return;closed=true;cleanup();reply({cancelled:true});}
+    function cancel(){if(closed)return;closed=true;cleanup();globalThis.ZNotePageTools?.suspend(false);reply({cancelled:true});}
     function save(){if(closed||!region||confirm.disabled)return;closed=true;const source_url=location.href;cleanup();requestAnimationFrame(()=>requestAnimationFrame(()=>reply({region:{...region,...dimensions},source_url})));}
     function keys(event){if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();cancel();}if(event.key==='Enter'&&!helpButton.matches(':focus')){event.preventDefault();event.stopImmediatePropagation();save();}}
     const point=e=>({x:clamp(e.clientX,innerWidth),y:clamp(e.clientY,innerHeight)});
@@ -43,10 +44,26 @@
   }
   chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(sender.id!==chrome.runtime.id)return;
+    if(message.type==='prepare-page-screenshot'){
+      globalThis.ZNotePageTools?.suspend(true);window.dispatchEvent(new Event('znote-hide-preview'));
+      requestAnimationFrame(()=>requestAnimationFrame(()=>reply({ok:true})));return true;
+    }
+    if(message.type==='restore-page-screenshot'){globalThis.ZNotePageTools?.suspend(false);reply({ok:true});return;}
     if(message.type==='select-capture-region'){select(reply);return true;}
+    if(message.type==='select-capture-region-start'){
+      try{select(async selection=>{
+        if(selection.cancelled)return;
+        try{const result=await chrome.runtime.sendMessage({type:'region-capture-selection',selection});if(!result?.ok)throw Error(result?.error||'截图保存失败，请重试');}
+        catch(e){globalThis.ZNotePageTools?.notice(e.message,{error:true,key:'screenshot'});}
+        finally{globalThis.ZNotePageTools?.suspend(false);}
+      });reply({ok:true});}catch(e){globalThis.ZNotePageTools?.suspend(false);reply({ok:false,error:e.message});}
+      return;
+    }
     if(message.type==='region-capture-result'){
       // Give the compositor an unobstructed frame before captureVisibleTab.
       if(message.message==='正在保存截图…')return;
+      globalThis.ZNotePageTools?.suspend(false);
+      if(globalThis.ZNotePageTools){globalThis.ZNotePageTools.notice(message.message,{error:message.message!=='区域截图已保存到知识库',key:'screenshot'});return;}
       document.getElementById('znote-region-result')?.remove();const toast=document.createElement('div');toast.id='znote-region-result';toast.setAttribute('role','status');toast.textContent='ZNote：'+message.message;
       toast.style.cssText='position:fixed;right:16px;bottom:24px;z-index:2147483647;max-width:calc(100vw - 32px);padding:14px 18px;border:1px solid #648e87;border-radius:12px;background:#172b29;color:#fbf8ed;font:13px/1.5 system-ui;box-shadow:0 8px 28px #0005';document.documentElement.append(toast);setTimeout(()=>toast.remove(),6000);
     }

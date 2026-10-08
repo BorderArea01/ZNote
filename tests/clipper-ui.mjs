@@ -88,12 +88,12 @@ try {
   assert.equal(await popup.locator('#video-open').getAttribute('href'),base+'/#item/'+done.item_id);
   console.log('PASS: extension direct video bytes/source, platform job submission, popup completion and open link');
   await tab.bringToFront();
-  const overlay=tab.locator('[data-znote-overlay]'),dock=overlay.getByRole('button',{name:'ZNote 视频嗅探'}),preview=overlay.locator('.preview');
+  const overlay=tab.locator('[data-znote-overlay]'),dock=tab.locator('[data-znote-page-tools]').getByRole('button',{name:'ZNote 视频嗅探'}),preview=overlay.locator('.preview');
   await dock.waitFor({state:'visible'});await tab.locator('body > img').hover();await preview.waitFor({state:'visible'});
   await dock.click();const mediaPanel=overlay.getByRole('dialog',{name:'ZNote 视频嗅探'});await mediaPanel.waitFor({state:'visible'});
   await options.evaluate(async origin=>chrome.storage.local.set({blockedSites:[origin]}),sourceUrl);
   await options.waitForFunction(origin=>document.querySelector('#blocked-sites')?.value===origin,sourceUrl);
-  await tab.waitForFunction(()=>{const root=document.querySelector('[data-znote-overlay]')?.shadowRoot;return root?.querySelector('.dock')?.classList.contains('hidden')&&root?.querySelector('.panel')?.classList.contains('hidden')&&root?.querySelector('.preview')?.classList.contains('hidden')});
+  await tab.waitForFunction(()=>{const root=document.querySelector('[data-znote-overlay]')?.shadowRoot,tools=document.querySelector('[data-znote-page-tools]')?.shadowRoot;return tools?.querySelector('.dock')?.classList.contains('hidden')&&root?.querySelector('.panel')?.classList.contains('hidden')&&root?.querySelector('.preview')?.classList.contains('hidden')});
   await tab.locator('body > img').hover();await tab.waitForTimeout(450);assert.equal(await preview.isVisible(),false);
   const blockedActions=await options.evaluate(async url=>{
     const {collectImage,collectVideo}=await import('./actions.js');const {saveDirectVideo}=await import('./client.js');const capture={srcUrl:url+'/picture.png',pageUrl:url};const tab={url,title:'黑名单测试'};const messages=[];

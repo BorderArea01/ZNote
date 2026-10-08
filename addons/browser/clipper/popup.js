@@ -57,7 +57,7 @@ $('current-capture').onclick=()=>captureWork(tab?.url||'');
 $('gallery-capture').onclick=()=>captureWork($('gallery-link').value.trim());
 $('discover').onclick=async()=>{try{await message('open-panel');window.close();}catch(e){saveFeedback(e.message,true);}};
 $('article').onclick=()=>{chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});window.close();};
-$('capture-region').onclick=()=>{chrome.runtime.sendMessage({type:'capture-region',tabId:tab.id}).catch(()=>{});window.close();};
+$('capture-region').onclick=async()=>{ $('capture-region').disabled=true;try{await message('capture-region-start');window.close();}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
 $('capture').onclick=async()=>{ $('capture').disabled=true;saveFeedback('正在截图并上传…');try{await message('capture');await refreshTasks(true);}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
 $('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel');$('video-task').hidden=false;$('video-status').textContent='正在提交视频采集…';try{await message('video');jobs.delete('imports');await refreshTasks(true);}catch(e){$('video-status').textContent=e.message;$('video-task').dataset.state='failed';}finally{renderSite();updateCount();}};
 const running=job=>['queued','running'].includes(job?.status);

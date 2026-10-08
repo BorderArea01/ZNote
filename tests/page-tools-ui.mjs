@@ -22,8 +22,8 @@ try{
   await worker.evaluate(config=>chrome.storage.local.set(config),{server:base,token:token.token});
   await context.route('https://x.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><body style="background:#111;color:white;font:16px system-ui"><main style="padding:30px">继续浏览作品</main></body></html>'}));
   const page=await context.newPage();await page.goto(source);const save=page.locator('#znote-x-page-button'),tools=page.locator('[data-znote-page-tools]'),feedback=tools.locator('.feedback'),click=node=>touch?node.tap():node.click();
-  await save.waitFor();await tools.getByRole('button',{name:'ZNote 视频嗅探',exact:true}).waitFor();assert.equal(await tools.count(),1);assert.equal(await tools.locator('.actions').getByRole('button').count(),2);
-  await tools.evaluate(node=>node.remove());await save.waitFor();assert.equal(await tools.count(),1);assert.equal(await tools.locator('.actions').getByRole('button').count(),2);
+  await save.waitFor();await tools.getByRole('button',{name:'ZNote 视频嗅探',exact:true}).waitFor();assert.equal(await tools.count(),1);assert.equal(await tools.locator('.actions [data-tool]').count(),2);
+  await tools.evaluate(node=>node.remove());await save.waitFor();assert.equal(await tools.count(),1);assert.equal(await tools.locator('.actions [data-tool]').count(),2);
   await worker.evaluate(()=>globalThis.__testFault='empty');await click(save);await feedback.filter({hasText:'扩展后台未响应'}).waitFor();assert.equal(await page.locator('.znote-post-toast').count(),0);assert.equal(runtime.db.prepare('SELECT count(*) n FROM items').get().n,touch?2:0);
   await page.screenshot({path:join(dir,`failure-${touch?'touch':'desktop'}.png`)});
   await click(tools.getByRole('button',{name:'关闭采集提示'}));assert.equal(await feedback.isHidden(),true);assert.equal(await save.isVisible(),true);
@@ -34,7 +34,7 @@ try{
   await save.focus();await page.keyboard.press('Escape');await panel.waitFor({state:'hidden'});await feedback.waitFor({state:'hidden'});
   await page.setViewportSize({width:320,height:640});assert.equal(await tools.evaluate(node=>{const b=node.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth;}),true);
   await page.screenshot({path:join(dir,`toolbar-${touch?'touch':'desktop'}.png`)});
-  await worker.evaluate(()=>chrome.runtime.reload());await click(save);await feedback.filter({hasText:'重新加载'}).waitFor();await page.reload();await save.waitFor();await click(save);await save.filter({hasText:'已保存'}).waitFor({timeout:15000});
+  const restarted=context.waitForEvent('serviceworker');await worker.evaluate(()=>chrome.runtime.reload());await restarted;await click(save);await feedback.filter({hasText:'重新加载'}).waitFor();await page.reload();await save.waitFor();await click(save);await save.filter({hasText:'已保存'}).waitFor({timeout:15000});
   await context.close();context=null;
  }
  console.log('PASS shared page toolbar: desktop/touch, empty response retry, old protocol detection, server save/deduplication, feedback close/Escape, video panel separation, narrow viewport and extension reload recovery; evidence '+dir);

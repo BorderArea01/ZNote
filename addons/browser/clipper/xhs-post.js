@@ -92,8 +92,9 @@
     button.addEventListener('click', async event => {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (button.disabled) return;
+      if (!event.isTrusted || button.disabled) return;
       label(button, '采集中…', true);
+      const started=Date.now();globalThis.ZNotePageTools?.progress('正在读取浏览器作品数据…',{key:'xhs'});
       try {
         const postUrl = button.dataset.znoteUrl;
         const pageHtml = await browserPage(postUrl);
@@ -103,6 +104,7 @@
         if (!result?.ok) throw new Error(result?.error || '提交失败');
         let job = result.job;
         for (let i = 0; i < 150 && ['queued', 'running'].includes(job.status); i++) {
+          globalThis.ZNotePageTools?.progress(job.message||'等待服务器采集',{key:'xhs',elapsed:Math.floor((Date.now()-started)/1000)});
           await new Promise(resolve => setTimeout(resolve, 2000));
           const next = await chrome.runtime.sendMessage({ type: 'xhs-post-status', id: job.id });
           if (!next?.ok) throw new Error(next?.error || '无法读取采集状态');
@@ -125,6 +127,7 @@
     return button;
   }
   function showToast(message) {
+    if(globalThis.ZNotePageTools){globalThis.ZNotePageTools.notice(message,{key:'xhs',error:!/已入库|已保存/.test(message)});return;}
     let toast = document.querySelector('.znote-xhs-post-toast');
     if (!toast) {
       toast = document.createElement('div');

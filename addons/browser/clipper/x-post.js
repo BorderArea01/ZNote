@@ -35,8 +35,9 @@
       const button = document.createElement('button'); button.type = 'button'; button.className = 'znote-x-post-button'; button.dataset.url = url;
       button.textContent = '保存图组'; button.setAttribute('aria-label', '保存这条推文的全部图片到 ZNote');
       button.addEventListener('click', async event => {
-        event.preventDefault(); event.stopPropagation(); if (button.disabled) return;
+        event.preventDefault(); event.stopPropagation(); if (!event.isTrusted || button.disabled) return;
         button.disabled = true; button.textContent = '采集中…';
+        const started=Date.now();globalThis.ZNotePageTools?.progress('正在提交本帖…');
         try {
           const ready=await request('znote-post-ready');
           if(ready.protocol!==1)throw Error(reconnect);
@@ -44,6 +45,7 @@
           let job = result.job;
           if(!job?.id||!job.status)throw Error('扩展未返回采集任务，请重新加载扩展后重试');
           for (let i = 0; i < 150 && ['queued', 'running'].includes(job.status); i++) {
+            globalThis.ZNotePageTools?.progress(job.message||'等待服务器采集',{elapsed:Math.floor((Date.now()-started)/1000)});
             await new Promise(resolve => setTimeout(resolve, 2000));
             const next = await request('x-post-status',{id:job.id});
             if(!next.job?.status)throw Error('扩展未返回任务状态，可在 ZNote 采集记录查看');job = next.job;

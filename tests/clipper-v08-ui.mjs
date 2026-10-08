@@ -124,6 +124,7 @@ try {
   for (let i = 0; i < 10; i++) await slider.press("ArrowLeft");
   const after = await preview.locator("img").boundingBox();
   assert.ok(after.width < before.width);
+  await worker.evaluate(async()=>{const deadline=Date.now()+5000;while((await chrome.storage.local.get('previewWidth')).previewWidth!==320){if(Date.now()>deadline)throw Error('预览大小未保存');await new Promise(resolve=>setTimeout(resolve,20));}});
   const width = (
     await worker.evaluate(() => chrome.storage.local.get("previewWidth"))
   ).previewWidth;
