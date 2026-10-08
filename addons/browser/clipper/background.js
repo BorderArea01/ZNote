@@ -39,6 +39,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }).catch(() => {});
 });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if(message.type==='znote-post-ready'&&sender.id===chrome.runtime.id&&sender.tab&&sender.frameId===0){reply({ok:true,protocol:1,version:chrome.runtime.getManifest().version});return;}
   if(sender.id===chrome.runtime.id&&message.target==='background'&&message.type==='media-task-update'){
     updateMediaTask(message.task).then(task=>reply({ok:true,task}),error=>reply({ok:false,error:error.message}));return true;
   }

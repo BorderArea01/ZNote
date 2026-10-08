@@ -48,7 +48,7 @@ try {
     const saved=runtime.db.prepare("SELECT id,kind,group_key,group_index,content,source_url FROM items WHERE deleted_at IS NULL ORDER BY group_index").all();assert.equal(saved.length,4);assert.ok(saved.every(row=>row.kind==='image'&&row.content.startsWith('作品正文\n第二行')&&row.source_url===source));assert.equal(new Set(saved.map(row=>row.group_key)).size,1);assert.deepEqual(saved.map(row=>row.group_index),[0,1,2,3]);
     await page.goto(base+'/#item/'+saved[0].id);const strip=page.getByRole('navigation',{name:'图片缩略图列'});await strip.waitFor();await strip.getByRole('option',{name:'查看第 3 张图片'}).waitFor();await click(strip.getByRole('option',{name:'查看第 3 张图片'}));await strip.getByRole('option',{name:'查看第 3 张图片',selected:true}).waitFor();
     await click(strip.getByRole('option',{name:'查看第 4 张图片'}));await strip.getByRole('option',{name:'查看第 4 张图片',selected:true}).waitFor();assert.equal(await page.getByRole('button',{name:'下一张 →',exact:true}).isDisabled(),true);await page.keyboard.press('Escape');await strip.waitFor({state:'hidden'});
-    await click(tab.getByRole('button',{name:'关闭采集提示'}));await tab.locator('.znote-post-toast').waitFor({state:'hidden'});
+    await click(tab.getByRole('button',{name:'关闭采集提示'}));await tab.locator('[data-znote-page-tools] .feedback').waitFor({state:'hidden'});
     await tab.screenshot({path:resolve(`artifacts/x-post-${touch?'touch':'desktop'}.png`)});
     await worker.evaluate(()=>chrome.storage.local.set({blockedSites:['x.com']}));await save.waitFor({state:'hidden'});
     await worker.evaluate(()=>chrome.storage.local.set({blockedSites:[]}));await tab.getByRole('button',{name:'保存这条推文的全部图片到 ZNote'}).waitFor();

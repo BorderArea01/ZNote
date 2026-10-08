@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZNote · 网页采集",
-  "version": "0.9.32",
+  "version": "0.9.33",
   "description": "悬停高清大图，S 下载、Z 保存知识库；视频嗅探支持 MP4 与 m3u8，保留作品标题、作者与来源。",
   "permissions": [
     "activeTab",
@@ -19,7 +19,7 @@
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://www.x.com/*", "https://twitter.com/*", "https://www.twitter.com/*", "https://mobile.twitter.com/*"],
-      "js": ["x-post.js"],
+      "js": ["page-tools.js", "x-post.js"],
       "css": ["x-post.css"],
       "run_at": "document_idle"
     },
@@ -41,6 +41,7 @@
         "https://*/*"
       ],
       "js": [
+        "page-tools.js",
         "candidates.js",
         "image-candidates.js",
         "preview-layout.js",

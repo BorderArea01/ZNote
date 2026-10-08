@@ -46,7 +46,7 @@
     renderedCards = new Map(),
     mediaTasks = new Map(), taskSummary,
     scanTimer, scanInFlight, scanQueued=false, lastScan=0;
-  const own = (event) => event.composedPath().includes(host);
+  const own = (event) => event.composedPath().includes(host) || event.composedPath().includes(globalThis.ZNotePageTools?.host);
   const shortcutHelp = () => `${downloadKey.toUpperCase()} 下载 · ${saveKey.toUpperCase()} 入库`;
   async function refreshSettings() {
     try {
@@ -472,7 +472,7 @@
     );
     dock.className = "dock";
     dock.setAttribute("aria-label", "ZNote 视频嗅探");
-    root.append(dock);
+    if(globalThis.ZNotePageTools)globalThis.ZNotePageTools.register('video',dock);else root.append(dock);
     panel = element("div", null, {
       class: "panel hidden",
       role: "dialog",
@@ -485,6 +485,8 @@
     head.append(headTitle);
     head.append(button("收起", closePanel));
     panel.append(head);
+    globalThis.ZNotePageTools?.onClose(closePanel);
+    globalThis.ZNotePageTools?.onLayout(height=>{panel.style.bottom=(height+42)+'px';panel.style.maxHeight=`min(710px,calc(100dvh - ${height+54}px))`;});
     const controls = element("div", null, { class: "controls" });
     controls.append(button("扫描", scan));
     const pause = button("暂停嗅探", async () => {
