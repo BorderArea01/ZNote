@@ -1,7 +1,7 @@
 // One owner for page actions and their feedback. No credentials or network API.
 (() => {
   if (window !== top || !/^https?:$/.test(location.protocol) || globalThis.ZNotePageTools) return;
-  let host, root, bar, actions, feedback, text, close, timer, owner, menu, more, progress, position, closeMenu, suspended=false, allowed=false;
+  let host, root, bar, actions, feedback, text, close, timer, owner, menu, more, progress, position, closeMenu, suspended=false, allowed=false, saveAction='save';
   const layout=new Set();
   const dismissed=new Set();
   const refresh = () => { bar.hidden = !allowed || suspended; };
@@ -36,18 +36,18 @@
     menu.innerHTML='<div class="menu-heading"><label for="znote-tools-destination">目标知识库</label></div><select id="znote-tools-destination" aria-label="目标知识库"><option value="">正在读取…</option></select><div class="grid"></div><p class="help" role="tooltip" hidden></p>';
     style.textContent+=`.menu-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}.menu .help-button{border-radius:50%;width:26px;min-height:26px;padding:0}.menu .link-toggle{width:100%;margin-top:8px}.link-form{display:grid;gap:6px;margin-top:8px}.link-form textarea{width:100%;min-height:72px;resize:vertical;border:1px solid #466052;border-radius:8px;background:#213129;color:#e9f2ed;padding:8px;font:12px/1.5 system-ui}.progress{appearance:none}.progress::-webkit-progress-bar{background:#304b3a;border-radius:3px}.progress::-webkit-progress-value{background:#91c4a2;border-radius:3px}`;
     const destination=menu.querySelector('select');destination.disabled=true;
-    async function connect(){destination.disabled=true;try{const {value}=await request('media-connect');destination.replaceChildren(new Option('未分类',''),...value.collections.map(c=>new Option(c.name,c.id)));if(value.collection_id&&!value.collections.some(c=>c.id===value.collection_id))throw Error('目标知识库已删除，请在扩展设置中重新选择');destination.value=value.collection_id||'';destination.disabled=false;}catch(e){notice(e.message,{error:true,key:'tools'});}}
+    async function connect(){if(saveAction==='download')return;destination.disabled=true;try{const {value}=await request('media-connect');destination.replaceChildren(new Option('未分类',''),...value.collections.map(c=>new Option(c.name,c.id)));if(value.collection_id&&!value.collections.some(c=>c.id===value.collection_id))throw Error('目标知识库已删除，请在扩展设置中重新选择');destination.value=value.collection_id||'';destination.disabled=false;}catch(e){notice(e.message,{error:true,key:'tools'});}}
     destination.onchange=async()=>{destination.disabled=true;try{await request('media-destination',{collection_id:destination.value});}catch(e){notice(e.message,{error:true,key:'tools'});}finally{await connect();}};
     const grid=menu.querySelector('.grid');
     for(const [label,action] of [['框选截图','region'],['可见页面截图','screenshot'],['保存页面正文','article'],['解析作品视频','video'],['前往知识库','library'],['扩展设置','settings']]){
-      const button=document.createElement('button');button.type='button';button.textContent=label;grid.append(button);
+      const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.action=action;grid.append(button);
       button.onclick=async e=>{if(!e.isTrusted)return;closeMenu();root.dispatchEvent(new CustomEvent('tools-close'));button.disabled=true;try{
         if(action==='region'){await request('page-tools-action',{action});return;}
         if(action==='screenshot'){globalThis.ZNotePageTools.suspend(true);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));}
         else if(action==='video')globalThis.ZNotePageTools.progress('正在提交视频解析…',{key:'work'});
         const result=await request('page-tools-action',{action});
         if(result.job)await track(result.job,'imports');
-        else if(action==='screenshot')notice('页面截图已保存到知识库',{key:'tools'});
+        else if(action==='screenshot'){if(result.item?.kind==='download')await track(result.item);else notice('页面截图已保存到知识库',{key:'tools'});}
       }catch(e){notice(e.message,{error:true,key:'work'});}finally{button.disabled=false;if(action==='screenshot')globalThis.ZNotePageTools.suspend(false);}};
     }
     const linkToggle=document.createElement('button');linkToggle.type='button';linkToggle.className='link-toggle';linkToggle.textContent='粘贴作品链接';linkToggle.setAttribute('aria-expanded','false');menu.append(linkToggle);
@@ -82,6 +82,7 @@
   function notice(message,{error=false,key='post',busy=false}={}){mount();if(busy&&dismissed.has(key))return;if(!busy)dismissed.delete(key);clearTimeout(timer);owner=key;text.textContent=message;feedback.dataset.error=String(error);feedback.hidden=false;progress.hidden=!busy;if(!busy)timer=setTimeout(()=>clear(key),error?20000:6000);}
   function clear(key) { if(!feedback || (key && key!==owner))return;clearTimeout(timer);feedback.hidden=true;owner=null; }
   async function track(job,kind='captures'){
+    if(job?.kind==='download')kind='download';
     const started=Date.now();
     while(['queued','running'].includes(job?.status)){
       globalThis.ZNotePageTools.progress(job.message||'等待服务器处理',{key:'work',elapsed:Math.floor((Date.now()-started)/1000)});
@@ -101,7 +102,15 @@
     onLayout(fn){mount();layout.add(fn);emitLayout();},
   };
   let work;
-  async function refreshSettings(){try{const {value}=await request('media-settings',{znotePage:!!document.querySelector('meta[name="znote-app"]')});allowed=!value.blocked&&value.dock!==false;mount();refresh();}catch{allowed=false;if(bar)refresh();}}
+  async function refreshSettings(){try{const {value}=await request('media-settings',{znotePage:!!document.querySelector('meta[name="znote-app"]')});allowed=!value.blocked&&value.dock!==false;saveAction=value.saveAction==='download'?'download':'save';mount();refreshMode();refresh();}catch{allowed=false;if(bar)refresh();}}
+  function refreshMode(){
+    const download=saveAction==='download';
+    menu.querySelector('select').hidden=download;
+    menu.querySelector('.menu-heading label').textContent=download?'下载到浏览器默认目录':'目标知识库';
+    menu.querySelector('[data-action="article"]').textContent=download?'下载页面正文':'保存页面正文';
+    menu.querySelector('.link-form button').textContent=download?'下载链接中的作品':'采集链接中的作品';
+    if(work&&!work.disabled){work.textContent=download?'ZNote · 下载当前作品':'ZNote · 采集当前作品';work.setAttribute('aria-label',download?'下载当前作品':'采集当前作品');}
+  }
   function updateWork(){
     mount();const x=/^(?:www\.|mobile\.)?(?:x|twitter)\.com$/.test(location.hostname)&&/^\/[\w]+\/status\/\d+/.test(location.pathname);
     if(x){work?.remove();work=null;return;}
@@ -110,13 +119,13 @@
       work=document.createElement('button');work.type='button';work.className='znote-work-button';work.dataset.url=location.href;work.setAttribute('aria-label','采集当前作品');globalThis.ZNotePageTools.register('work',work);
       work.onclick=async e=>{
         if(!e.isTrusted||e.currentTarget.disabled)return;
-        const button=e.currentTarget;button.disabled=true;button.textContent='采集中…';closeMenu();
-        try{dismissed.delete('work');globalThis.ZNotePageTools.progress('正在提交当前作品…',{key:'work'});const result=await request('page-tools-action',{action:'work'});await track(result.job);button.textContent='已保存 ✓';}
+        const button=e.currentTarget,mode=saveAction;button.disabled=true;button.textContent='采集中…';closeMenu();
+        try{dismissed.delete('work');globalThis.ZNotePageTools.progress('正在提交当前作品…',{key:'work'});const result=await request('page-tools-action',{action:'work'});await track(result.job);button.textContent=result.job?.kind==='download'?'已下载 ✓':'已保存 ✓';}
         catch(error){button.textContent='重试采集';notice(error.message,{error:true,key:'work'});}
-        finally{button.disabled=false;}
+        finally{button.disabled=false;if(mode!==saveAction)refreshMode();}
       };
     }
-    if(!work.disabled)work.textContent='ZNote · 采集当前作品';
+    refreshMode();
   }
   chrome.runtime.onMessage.addListener(message=>{if(message.type==='media-settings-changed')refreshSettings();if(message.type==='media-page-changed'){updateWork();if(!work?.disabled)clear('work');}});
   mount();request('page-tools-position').then(result=>{if(result.position)place(result.position);}).catch(()=>{});updateWork();refreshSettings();

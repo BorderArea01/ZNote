@@ -3,6 +3,7 @@
   const workPath = /^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i;
   const buttons = new Set();
   let enabled = false;
+  let saveAction='save';
   let scanTimer = 0;
   let currentPath = '';
 
@@ -32,6 +33,7 @@
     return work;
   }
   function label(button, text, busy = false) {
+    if(text==='保存到 ZNote' && saveAction==='download')text='下载本帖';
     button.textContent = text;
     button.disabled = busy;
     button.setAttribute('aria-label', text === '保存到 ZNote' ? '保存这篇小红书帖子到 ZNote' : text);
@@ -111,7 +113,7 @@
           job = next.job;
         }
         if (job.status === 'completed') {
-          label(button, '已保存 ✓');
+          label(button, job.kind==='download'?'已下载 ✓':'已保存 ✓');
           button.title = job.message || '已保存到 ZNote';
           showToast(job.message || '已保存到知识库');
         } else {
@@ -127,7 +129,7 @@
     return button;
   }
   function showToast(message) {
-    if(globalThis.ZNotePageTools){globalThis.ZNotePageTools.notice(message,{key:'xhs',error:!/已入库|已保存/.test(message)});return;}
+    if(globalThis.ZNotePageTools){globalThis.ZNotePageTools.notice(message,{key:'xhs',error:!/已入库|已保存|下载完成/.test(message)});return;}
     let toast = document.querySelector('.znote-xhs-post-toast');
     if (!toast) {
       toast = document.createElement('div');
@@ -174,6 +176,7 @@
     try {
       const result = await chrome.runtime.sendMessage({ type: 'media-settings' });
       enabled = result?.ok && !result.value?.blocked;
+      saveAction=result?.value?.saveAction||'save';for(const button of buttons)if(!button.disabled)label(button,'保存到 ZNote');
     } catch { enabled = false; }
     for (const button of buttons) if (!enabled) button.remove();
     if (!enabled) buttons.clear();

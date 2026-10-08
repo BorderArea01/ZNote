@@ -1,5 +1,12 @@
 import { saveImage, limitedImage, api, settings } from './client.js';
 import { blockedSite } from './site-policy.js';
+import {startMediaTask, downloadJob, getDownloadJob} from './media-tasks.js';
+export async function captureJob(id, tabId) {
+  return await getDownloadJob(id,tabId) || await api('/api/captures/'+encodeURIComponent(id));
+}
+async function downloadTask(resource, tab, config) {
+  return downloadJob(await startMediaTask(resource,'download',tab.id,config));
+}
 const assertSiteAllowed = (url, config) => {
   if (blockedSite(url, config)) throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
 };
@@ -7,7 +14,7 @@ export async function record(operation) {
   await chrome.action.setBadgeText({ text: '…' });
   try {
     const item = await operation();
-    await chrome.storage.local.set({ lastResult: { ok: true, message: item.duplicate ? '此知识库已收录，已补充来源' : '已保存到知识库', itemId: item.id, time: Date.now() } });
+    await chrome.storage.local.set({ lastResult: { ok: true, message: item.kind==='download' ? '已加入后台下载，可在任务中查看进度' : item.duplicate ? '此知识库已收录，已补充来源' : '已保存到知识库', itemId: item.kind==='download'?null:item.id, time: Date.now() } });
     await chrome.action.setBadgeBackgroundColor({ color: '#5865ce' }); await chrome.action.setBadgeText({ text: '✓' });
     return item;
   } catch (error) {
@@ -24,6 +31,7 @@ export async function collectImage(info, tab, preferOriginal = true) {
     try { candidates = await chrome.tabs.sendMessage(tab.id, { type: 'image-candidates', srcUrl: info.srcUrl }, { frameId: info.frameId || 0 }); } catch {}
   }
   const urls = [...new Set([...(Array.isArray(candidates) ? candidates.map(c => c.url) : []), info.srcUrl])];
+  if(config.saveAction==='download')return downloadTask({id:urls[0],kind:'image',urls,title:info.selectionText||tab.title||'网页图片',source_url:info.pageUrl||tab.url},tab,config);
   let lastError;
   for (const url of urls) {
     let image;
@@ -37,6 +45,7 @@ export async function collectImage(info, tab, preferOriginal = true) {
   throw lastError || new Error('无法读取图片，可改用页面截图');
 }
 export async function capturePage(tab, region = null) {
+  const config=await settings();
   const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
   if (active?.id !== tab.id) throw new Error('当前标签页已经改变，请重新点击截图');
   await chrome.tabs.sendMessage(tab.id,{type:'prepare-page-screenshot'},{frameId:0}).catch(()=>{});
@@ -44,7 +53,13 @@ export async function capturePage(tab, region = null) {
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
     let blob = await (await fetch(dataUrl)).blob();
     if (region) blob = await cropScreenshot(blob, region);
-    return await saveImage(blob, { title: `${tab.title || '网页'} · ${region?'区域截图':'截图'}`, filename: region?'区域截图.png':'页面截图.png', source_url: tab.url, capture_note: region?'手动框选的页面截图':'当前页面可见区域截图' });
+    if(config.saveAction==='download'){
+      const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';
+      for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+      const url='data:image/png;base64,'+btoa(binary);
+      return downloadTask({id:crypto.randomUUID(),kind:'image',urls:[url],title:`${tab.title||'网页'} · ${region?'区域截图':'截图'}`,source_url:tab.url},tab,config);
+    }
+    return await saveImage(blob, { title: `${tab.title || '网页'} · ${region?'区域截图':'截图'}`, filename: region?'区域截图.png':'页面截图.png', source_url: tab.url, capture_note: region?'手动框选的页面截图':'当前页面可见区域截图' },undefined,config);
   } finally {await chrome.tabs.sendMessage(tab.id,{type:'restore-page-screenshot'},{frameId:0}).catch(()=>{});}
 }
 export async function cropScreenshot(blob, region) {
@@ -80,7 +95,7 @@ export async function finishCaptureRegion(tab,selected) {
   await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:'正在保存截图…'},{frameId:0}).catch(()=>{});
   try {
     const item=await record(()=>capturePage(current,selected.region));
-    await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:'区域截图已保存到知识库'},{frameId:0}).catch(()=>{});
+    await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:item.kind==='download'?'截图已加入后台下载':'区域截图已保存到知识库'},{frameId:0}).catch(()=>{});
     return item;
   } catch(e) {
     await chrome.tabs.sendMessage(tab.id,{type:'region-capture-result',message:e.message||'截图保存失败，可重新框选重试'},{frameId:0}).catch(()=>{});throw e;
@@ -89,6 +104,7 @@ export async function finishCaptureRegion(tab,selected) {
 export async function collectVideo(tab, url = tab.url) {
   const config = await settings();
   assertSiteAllowed(tab?.url, config);
+  if(config.saveAction==='download')return downloadTask({id:url,kind:'work',text:url,title:tab.title||'作品视频',source_url:url,videoOnly:true},tab,config);
   try {
     const job = await api('/api/imports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, collection_id: config.collection_id || null, tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }) });
     // The server owns long downloads; closing the popup or suspending the worker is safe.
@@ -113,6 +129,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
       const result = await chrome.tabs.sendMessage(tab.id, { type: 'post-capture-page', url: source }, { frameId: 0 }).catch(() => null);
       if (result?.ok) browserHtml = result.pageHtml || '';
     }
+    if(config.saveAction==='download')return downloadTask({id:source,kind:'work',text:value,browserHtml,title:tab.title||'网页作品',source_url:source},tab,config);
     const requestId = dedupe
       ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?'x':/^https:\/\/www\.xiaohongshu\.com\//.test(source)?'xhs':'work'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
       : `clipper-gallery-${crypto.randomUUID()}`;

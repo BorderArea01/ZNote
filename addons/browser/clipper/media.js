@@ -12,6 +12,9 @@ import { blockedSite } from './site-policy.js';
 const $ = (id) => document.getElementById(id),
   ticket = new URL(location.href).searchParams.get("id");
 let resource, controller, hls, objectURL;
+async function renderMode(){const config=await settings();$('download').hidden=config.saveAction!=='download';$('save').hidden=config.saveAction!=='save';}
+await renderMode();
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.saveAction)renderMode();});
 function report(text) {
   $("status").textContent = text;
 }

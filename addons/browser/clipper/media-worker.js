@@ -1,4 +1,6 @@
-import { api, saveDirectVideo, serverUrl } from './client.js';
+import { api, saveDirectVideo, serverUrl, limitedImage } from './client.js';
+import {downloadWork} from './work-download.js';
+import {imageFilename} from './gallery-download.js';
 import { packageHls } from './hls-package.js';
 import { videoDetails } from './video-details.js';
 import { readPlayableVideo } from './video-fetch.js';
@@ -14,7 +16,7 @@ const update = (task, status, message, extra = {}) =>
     task: { id: task.id, status, message, ...extra },
   }).catch(() => {});
 
-async function downloadBlob(blob, task) {
+async function downloadBlob(blob, task, filename) {
   const url = URL.createObjectURL(blob);
   try {
     const result = await chrome.runtime.sendMessage({
@@ -22,7 +24,7 @@ async function downloadBlob(blob, task) {
       type: 'media-task-download',
       taskId: task.id,
       url,
-      filename: 'ZNote/' + String(task.resource.title || '网页视频')
+      filename: filename || 'ZNote/' + String(task.resource.title || '网页视频')
         .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 110) + '.mp4',
     });
     if (!result?.ok) throw new Error(result?.error || '浏览器下载失败');
@@ -36,7 +38,15 @@ async function process(task) {
   const controller = new AbortController();
   await update(task, 'running', action === 'save' ? '正在保存到知识库…' : '正在准备下载…');
   let item;
-  if (resource.kind === 'hls') {
+  if(resource.kind==='work') {
+    const result=await downloadWork(resource,config,(blob,name)=>downloadBlob(blob,task,name),message=>update(task,'running',message));
+    await update(task,'complete',`${result.count} 项下载完成`);return;
+  } else if(resource.kind==='image' && action==='download') {
+    let blob,lastError;
+    for(const url of resource.urls||[resource.url]){try{blob=await limitedImage(url);break;}catch(e){lastError=e;}}
+    if(!blob)throw lastError||Error('无法读取图片');
+    await downloadBlob(blob,task,imageFilename(resource.title,0,(resource.urls||[resource.url])[0],blob.type));
+  } else if (resource.kind === 'hls') {
     if (!config.token) throw new Error('m3u8 处理需要先连接 ZNote');
     const bundle = await packageHls(resource.url, {
       signal: controller.signal,

@@ -11,6 +11,8 @@
       <h1>浏览器媒体工具</h1>
       <h2 id="behavior-heading">浏览器行为</h2>
       <form id="behavior">
+        <label><span id="save-action-heading">默认保存方式</span><select id="save-action"><option value="save">保存到知识库</option><option value="download">下载到本机</option></select></label>
+        <p data-help-for="save-action-heading" data-help-label="默认保存方式">页面只显示选中的一种保存操作，另一种按钮与快捷键停用。图片、套图、视频、作品采集和截图统一使用此设置；正在进行的任务沿用启动时的方式。下载不会创建知识库内容。平台作品解析仍可能需要连接 ZNote，直接图片和已发现视频可直接下载。</p>
         <label
           ><input id="hover-enabled" type="checkbox" /> 悬停预览高清图片</label
         ><label
@@ -22,7 +24,7 @@
         <label>预览最大宽度（像素）<input id="preview-width" type="number" min="240" max="1200" step="40" required /></label>
         <label>超过 25 MB 的图片<select id="large-image-default"><option value="inherit">跟随 ZNote 设置</option><option value="original">自动保存原图</option><option value="compress">自动低损压缩</option></select></label>
         <p data-help-for="behavior-heading" data-help-label="大图片处理">默认使用 ZNote「设置与连接 → 采集与文件」的策略，也可为此扩展单独选择。原文件最多 100 MB，压缩由服务器完成；不能处理的图片会标记失败，批量任务继续后面的图片，重试跳过已保存项。</p>
-        <p data-help-for="behavior-heading" data-help-label="预览与快捷键">默认 S 下载、Z 入库，可选择不同的单个字母或数字。仅在大图预览展开时生效，输入文字时不会触发。预览会避开视频封面，移开约 150 毫秒后关闭；从原图移向按钮的间隙会保留通行时间。预览旁的滑杆也可调整大小。</p>
+        <p data-help-for="behavior-heading" data-help-label="预览与快捷键">只启用当前保存方式的快捷键：下载默认 S，入库默认 Z。仅在大图预览展开时生效，输入文字时不会触发。预览会避开视频封面，移开约 150 毫秒后关闭；从原图移向按钮的间隙会保留通行时间。预览旁的滑杆也可调整大小。</p>
         <label style="grid-column:1/-1">网站黑名单<textarea id="blocked-sites" rows="4" placeholder="example.com&#10;https://example.org:8443"></textarea></label>
         <p data-help-for="behavior-heading" data-help-label="网站黑名单">每行一个域名（包含子域名）或网站地址（区分端口）；也可在扩展弹窗一键禁用当前网站。黑名单关闭图片预览、媒体浮窗和视频嗅探。当前连接的 ZNote 网站自动停用，其他 ZNote 地址也会由页面标记识别。</p>
         <button type="submit">保存浏览器行为</button>

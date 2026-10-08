@@ -1,7 +1,7 @@
 // One menu tree; background.js retains the handlers and storage ownership.
-export function contextMenuEntries() {
+export function contextMenuEntries(mode='save') {
   const all=['page','image','video','link','selection'];
-  return [
+  const entries = [
     {id:'znote-root',title:'ZNote · 保存与采集',contexts:all,documentUrlPatterns:['http://*/*','https://*/*']},
     {id:'znote-work',parentId:'znote-root',title:'采集当前作品',contexts:['page']},
     {id:'znote-image',parentId:'znote-root',title:'保存高清原图',contexts:['image']},
@@ -16,4 +16,5 @@ export function contextMenuEntries() {
     {id:'znote-video-link',parentId:'znote-media-menu',title:'解析链接中的视频',contexts:['link']},
     {id:'znote-video-file',parentId:'znote-media-menu',title:'保存当前视频文件',contexts:['video']},
   ];
+  return mode==='download'?entries.map(entry=>({...entry,title:entry.title.replace(/保存与采集/g,'下载').replace(/保存|采集/g,'下载')})):entries;
 }

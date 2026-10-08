@@ -120,7 +120,7 @@ try {
   });
   await page.goto(sourceUrl);
   const overlay = page.locator("[data-znote-overlay]");
-  await overlay
+  await page.locator('[data-znote-page-tools]')
     .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .waitFor();
   const sample=page.locator("#sample");
@@ -162,6 +162,7 @@ try {
   await preview.getByRole('button',{name:'Z 保存知识库',exact:true}).focus();await page.keyboard.press('z');
   await preview.getByText('已收录，保留原备注并补充来源', {exact:true}).waitFor();
   console.log('PASS: Z saves the current image while focus is on a ZNote preview button');
+  await worker.evaluate(()=>chrome.storage.local.set({saveAction:'download'}));
   await preview.getByRole('button',{name:'S 下载',exact:true}).click();
   await preview.getByText("已交给浏览器下载", { exact: true }).waitFor();
   let downloads;
@@ -181,13 +182,14 @@ try {
   await options.goto('chrome-extension://' + id + '/options.html');
   await options.getByRole('button',{name:'预览与快捷键说明',exact:true}).hover();
   await options.getByRole('tooltip').waitFor();
-  assert.ok((await options.getByRole('tooltip').textContent()).includes('Z 入库'));
+  assert.ok((await options.getByRole('tooltip').textContent()).includes('入库默认 Z'));
   await options.keyboard.press('Escape'); assert.equal(await options.getByRole('tooltip').count(),0);
   await captureEvidence(options,{path:resolve('artifacts/v082-extension-settings.png'),fullPage:true});
   await options.waitForFunction(()=>document.body.dataset.ready === 'true');
-  await options.locator('#download-key').fill('D'); await options.locator('#save-key').fill('D');
+  await options.locator('#download-key').fill('D');await options.locator('#save-action').selectOption('save');await options.locator('#save-key').fill('D');
   await options.getByRole('button',{name:'保存浏览器行为'}).click();
-  await options.getByText('下载和入库快捷键不能相同',{exact:true}).waitFor();
+  await options.getByText('浏览器行为已保存，已打开网页同步生效',{exact:true}).waitFor();
+  assert.equal((await worker.evaluate(()=>chrome.storage.local.get('saveKey'))).saveKey,'d','exclusive actions may share one hotkey');
   await options.locator('#save-key').fill('Q');
   await options.getByRole('button',{name:'保存浏览器行为'}).click();
   await options.getByText('浏览器行为已保存，已打开网页同步生效',{exact:true}).waitFor();
@@ -211,9 +213,11 @@ try {
   await page.locator('#badge').hover(); await page.waitForTimeout(300);assert.ok(await preview.isVisible());
   await captureEvidence(page,{path:resolve('artifacts/v07-covered-card.png')});
   const beforeDownloads=(await worker.evaluate(()=>chrome.downloads.search({}))).length;
+  await worker.evaluate(()=>chrome.storage.local.set({saveAction:'download'}));await preview.getByRole('button',{name:'D 下载',exact:true}).waitFor();
   await page.keyboard.press('d'); await preview.getByText('已交给浏览器下载',{exact:true}).waitFor();
   assert.ok((await worker.evaluate(()=>chrome.downloads.search({}))).length>beforeDownloads);
   await page.keyboard.press('Escape');
+  await worker.evaluate(()=>chrome.storage.local.set({saveAction:'save'}));
   await page.evaluate(()=>{document.querySelector('#card').outerHTML='<div id="background" style="width:300px;height:200px;background-image:url(/large.png)"><span style="display:block;padding:40px">背景图片卡片</span></div>';});
   await page.locator('#background span').hover();await preview.waitFor({state:'visible'});
   await page.keyboard.press('Escape');
@@ -256,7 +260,7 @@ try {
   await page.bringToFront();
   await page.locator("#typing").fill("s k");
   assert.equal(await page.locator("#typing").inputValue(), "s k");
-  await overlay
+  await page.locator('[data-znote-page-tools]')
     .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .click();
   const panel = overlay.getByRole("dialog", { name: "ZNote 视频嗅探" });
@@ -315,6 +319,7 @@ try {
   assert.ok(videos.items[0].duration >= 3.9);
   await context.request.patch(base+'/api/preferences',{data:{default_collection_id:collection.id}});
   const library=await context.newPage();await library.goto(base+'/#item/'+videos.items[0].id);await library.locator('video').waitFor();await library.waitForFunction(()=>document.querySelector('video')?.readyState>=2);await library.locator('video').evaluate(async v=>{v.muted=true;await v.play();});await library.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.ok(await library.locator('video').evaluate(v=>v.webkitAudioDecodedByteCount)>0);await library.keyboard.press('Escape');await library.locator('.video-cover').first().evaluate(img=>img.decode());await captureEvidence(library,{path:resolve('artifacts/v097-video-library.png')});await library.close();
+  await worker.evaluate(()=>chrome.storage.local.set({saveAction:'download'}));
   await media.getByRole("button", { name: "下载", exact: true }).click();
   await media.getByText("已交给浏览器下载", { exact: true }).waitFor();
   for (let i = 0; i < 100; i++) {
@@ -336,12 +341,14 @@ try {
   assert.ok(downloads.filter((d) => d.state === "complete").length >= 3);
 
   const directRow=panel.locator('.item').filter({hasText:'视频文件'}).first();
+  await worker.evaluate(()=>chrome.storage.local.set({saveAction:'save'}));
   const pagesBeforeDirectSave=context.pages().length;
   await directRow.getByRole('button',{name:'保存知识库',exact:true}).click();
   await directRow.getByText(/已保存到知识库|知识库已收录/).waitFor({timeout:30000});
   assert.equal(context.pages().length,pagesBeforeDirectSave,'Direct video save must not open a tab');
   assert.ok((await (await context.request.get(base+'/api/items?kind=video')).json()).total>=1);
   const directDownloadPages=context.pages().length;
+  await worker.evaluate(()=>chrome.storage.local.set({saveAction:'download'}));
   await directRow.getByRole('button',{name:'下载',exact:true}).click();
   await directRow.getByText('下载完成',{exact:true}).waitFor({timeout:30000});
   assert.equal(context.pages().length,directDownloadPages,'Direct video download must not open a tab');
@@ -354,7 +361,7 @@ try {
   sniffer=await worker.evaluate(()=>chrome.storage.session.get('sniffTabs'));const nextStates=Object.values(sniffer.sniffTabs).filter(s=>s.source_url.endsWith('/?next=1'));assert.ok(nextStates.length);assert.ok(nextStates.every(s=>s.resources.every(r=>r.source_url.endsWith('/?next=1'))));
   await page.reload();
   await page
-    .locator("[data-znote-overlay]")
+    .locator("[data-znote-page-tools]")
     .getByRole("button", { name: "ZNote 视频嗅探", exact: true })
     .click();
   const state = await worker.evaluate(() =>

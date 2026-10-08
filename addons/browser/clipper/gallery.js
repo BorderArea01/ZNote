@@ -67,8 +67,12 @@ try {
   if(!group||Date.now()-group.created>86400000)throw Error('作品列表已过期，请从原网页重新打开');
   $('title').textContent=group.title;$('source').href=group.source_url;
   group.images.forEach((url,i)=>{states.push(['done','failed'].includes(group.states?.[i])?group.states[i]:'pending');const li=document.createElement('li'),button=document.createElement('button'),label=document.createElement('b'),state=document.createElement('span');label.textContent=`第 ${i+1} 张`;button.append(label,state);button.onclick=()=>show(i);li.append(button);$('pages').append(li);buttons.push(button);});
-  library=libraryBatch(group,persist,draw,()=>running);
+  $('download').hidden=group.action==='save';
+  document.querySelector('.library').hidden=group.action!=='save';
+  $('progress').hidden=group.action==='save';
+  library=group.action==='save'?libraryBatch(group,persist,draw,()=>running):null;
+  if(group.action!=='save')for(const node of document.querySelectorAll('#collection,#tags,#save,#save-cancel,#save-progress,#save-status'))node.closest('label')?node.closest('label').hidden=true:node.hidden=true;
   show(0);
-  library.connect();
+  library?.connect();
   if(!group.started&&group.action!=='save')startDownload();else $('status').textContent=`已下载 ${states.filter(s=>s==='done').length} / ${group.images.length} 张。`;
 } catch(e) {$('status').textContent=e.message;$('title').textContent='无法打开作品';}

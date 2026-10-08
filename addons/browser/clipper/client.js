@@ -1,10 +1,11 @@
 import {videoDetails} from './video-details.js';
 import { blockedSite } from './site-policy.js';
 import {readPlayableVideo} from './video-fetch.js';
-export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [], largeImageDefault: 'inherit' };
+export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, saveAction: 'save', downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [], largeImageDefault: 'inherit' };
 export async function settings() {
   const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
   const config = { ...defaults, ...stored };
+  config.saveAction = stored.saveAction === 'download' ? 'download' : 'save';
   // The original S/K pair was also persisted when changing preview size or visibility.
   // Interpret that legacy default as S/Z; explicit choices saved by this version stay intact.
   if (!stored.shortcutVersion && config.downloadKey === 's' && config.saveKey === 'k') config.saveKey = 'z';
@@ -38,14 +39,17 @@ export async function saveImage(blob, details, signal, config = null) {
   data.set('captured_at', new Date().toISOString());
   return api('/api/assets', { method: 'POST', body: data, signal }, config);
 }
+export async function prepareImageRequests() {
+  await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[8301],addRules:[{
+    id:8301,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'Referer',operation:'set',value:'https://www.pixiv.net/'}]},
+    condition:{requestDomains:['pximg.net'],initiatorDomains:[chrome.runtime.id],resourceTypes:['xmlhttprequest']}
+  }]});
+}
 export async function limitedImage(url, signal) {
   if (!/^(https?:|data:image\/)/i.test(url)) throw new Error('此图片地址无法直接获取，可使用页面截图');
-  if(/^https:\/\/[^/]*\.pximg\.net\//i.test(url)) {
-    await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[8301],addRules:[{
-      id:8301,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'Referer',operation:'set',value:'https://www.pixiv.net/'}]},
-      condition:{requestDomains:['pximg.net'],initiatorDomains:[chrome.runtime.id],resourceTypes:['xmlhttprequest']}
-    }]});
-  }
+  // Offscreen documents expose only runtime; their background task installs
+  // this fixed, extension-only rule before handing them any image downloads.
+  if(/^https:\/\/[^/]*\.pximg\.net\//i.test(url) && chrome.declarativeNetRequest)await prepareImageRequests();
   const response = await fetch(url, { credentials: 'include', signal: signal || AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(`读取图片失败 ${response.status}，可改用页面截图`);
   const mime = response.headers.get('content-type') || '';

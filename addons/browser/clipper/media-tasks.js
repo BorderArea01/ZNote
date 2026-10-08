@@ -1,4 +1,4 @@
-import { settings } from './client.js';
+import { settings, prepareImageRequests } from './client.js';
 
 const KEY = 'mediaTasks';
 const OFFSCREEN_PATH = 'media-worker.html';
@@ -26,11 +26,12 @@ async function ensureOffscreen() {
   await creating;
 }
 
-export async function startMediaTask(resource, action, tabId) {
+export async function startMediaTask(resource, action, tabId, providedConfig = null) {
   if (!['save', 'download'].includes(action)) throw new Error('后台任务类型无效');
-  const config = await settings();
+  const config = providedConfig || await settings();
   if (action === 'save' && !config.token) throw new Error('请先在连接设置中连接 ZNote');
   if (resource.kind === 'hls' && !config.token) throw new Error('m3u8 合并需要先连接 ZNote');
+  if(action==='download'&&['image','work'].includes(resource.kind))await prepareImageRequests();
   const tasks = await load();
   const existing = Object.values(tasks).find(task =>
     task.tabId === tabId && task.resourceId === resource.id && task.action === action && ['queued', 'running'].includes(task.status));
@@ -63,6 +64,13 @@ export async function mediaTasksForTab(tabId) {
   return Object.values(await load()).filter(task => task.tabId === tabId).sort((a, b) => b.updated - a.updated).slice(0, 20);
 }
 
+export const downloadJob = task => ({...task, kind:'download', status:task.status==='complete'?'completed':task.status});
+export async function getDownloadJob(id, tabId) {
+  const task=(await load())[id];
+  if(!task || task.tabId!==tabId || task.action!=='download')return null;
+  return downloadJob(task);
+}
+
 export async function updateMediaTask(patch) {
   if (!patch?.id) throw new Error('后台任务编号无效');
   const tasks = await load(), task = tasks[patch.id];
@@ -75,14 +83,14 @@ export async function updateMediaTask(patch) {
 
 export async function downloadMediaBlob(message) {
   if (!/^blob:chrome-extension:\/\//.test(message.url || '')) throw new Error('后台下载地址无效');
-  let id, settled = false, downloadListener;
+  let id, settled = false, downloadListener, timer;
   const completion = new Promise((resolve, reject) => {
     downloadListener = delta => {
       if (delta.id !== id || !delta.state) return;
       if (delta.state.current === 'complete') finish(resolve);
       else if (delta.state.current === 'interrupted') finish(() => reject(new Error('浏览器下载被中断')));
     };
-    const finish = callback => { if(settled)return;settled=true;chrome.downloads.onChanged.removeListener(downloadListener);callback({ id }); };
+    const finish = callback => { if(settled)return;settled=true;clearTimeout(timer);chrome.downloads.onChanged.removeListener(downloadListener);callback({ id }); };
     chrome.downloads.onChanged.addListener(downloadListener);
   });
   try {
@@ -92,6 +100,7 @@ export async function downloadMediaBlob(message) {
       settled=true;chrome.downloads.onChanged.removeListener(downloadListener);return { id };
     }
     if (current?.state === 'interrupted') throw new Error('浏览器下载被中断');
+    timer=setTimeout(()=>{if(settled)return;chrome.downloads.cancel(id).catch(()=>{});downloadListener({id,state:{current:'interrupted'}});},120000);
     return completion;
   } catch(error) {
     settled=true;chrome.downloads.onChanged.removeListener(downloadListener);throw error;

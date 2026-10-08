@@ -1,5 +1,6 @@
 import { collectGallery, collectVideo, record, capturePage, startCaptureRegion, finishCaptureRegion } from './actions.js';
 import { api, settings, serverUrl } from './client.js';
+import {getDownloadJob} from './media-tasks.js';
 
 // Content scripts act only on their own top frame. Never trust a page tabId,
 // server URL or arbitrary API path supplied in a message.
@@ -16,7 +17,8 @@ export async function pageAction(message, sender) {
     return {position:(await chrome.storage.local.get('pageToolsPosition')).pageToolsPosition};
   }
   if (message.type === 'page-tools-status') {
-    if(!['captures','imports'].includes(message.kind)||!/^[a-f\d-]{36}$/i.test(message.id||''))throw Error('采集任务无效');
+    if(!['captures','imports','download'].includes(message.kind)||!/^[a-f\d-]{36}$/i.test(message.id||''))throw Error('采集任务无效');
+    if(message.kind==='download'){const job=await getDownloadJob(message.id,tab.id);if(!job)throw Error('下载任务不存在');return {job};}
     return {job:await api(`/api/${message.kind}/${message.id}`)};
   }
   if (message.type === 'region-capture-selection') return {item:await finishCaptureRegion(tab,message.selection)};

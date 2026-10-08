@@ -20,6 +20,7 @@ await cdp.send('Browser.setDownloadBehavior',{behavior:'default'});const errors=
 const preview=page.locator('[data-znote-overlay]').locator('.preview');
 const counter=()=>preview.locator('[aria-label="作品页码"]');
 try{
+ await worker.evaluate(()=>chrome.storage.local.set({saveAction:'download'}));
  await page.goto(base);await page.locator('[data-znote-overlay]').waitFor({state:'attached'});await page.locator('#source').hover();await counter().filter({hasText:'1 / 3'}).waitFor();
  // Keep the mouse on the website thumbnail: do not hover any extension button.
  await page.mouse.wheel(0,100);await counter().filter({hasText:'2 / 3'}).waitFor({timeout:5000});assert.equal(await page.evaluate(()=>scrollY),0);

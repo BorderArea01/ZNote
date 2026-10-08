@@ -6,7 +6,15 @@ const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 let config = await settings(), siteState, galleryBusy = false, taskLoading = false, refreshQueued = false;
 const jobs = new Map(), refs = new Map();
 $('page-title').textContent = tab?.title || '当前页面';
-$('shortcut-help').textContent = `${config.downloadKey.toUpperCase()} 下载 · ${config.saveKey.toUpperCase()} 入库`;
+function renderMode(){
+  const download=config.saveAction==='download';
+  $('shortcut-help').textContent=download?`${config.downloadKey.toUpperCase()} 下载`:`${config.saveKey.toUpperCase()} 入库`;
+  document.querySelector('.destination-row').hidden=download;$('connection-state').hidden=download;
+  $('current-capture').firstElementChild.textContent=download?'下载当前作品':'采集当前作品';
+  $('gallery-capture').textContent=download?'获取图组并下载':'获取图组并保存';
+  $('article').textContent=download?'下载正文':'保存正文';
+}
+renderMode();
 if (/^https?:/i.test(tab?.url || '')) $('gallery-link').value = tab.url;
 function renderSite() {
   siteState = siteControlState(tab?.url, config);
@@ -26,6 +34,7 @@ $('site-toggle').onclick = async () => {
   catch (error) { $('site-status').textContent = error.message; }
 };
 async function connect() {
+  if(config.saveAction==='download')return;
   $('destination').disabled = true; $('connection-retry').hidden = true;
   if (!config.token) { $('connection-state').textContent = '尚未连接知识库，预览与下载仍可使用'; return; }
   $('connection-state').textContent = '正在读取知识库…';
@@ -49,7 +58,7 @@ async function message(type, extra={}) { const result=await chrome.runtime.sendM
 async function captureWork(text) {
   if(galleryBusy)return; galleryBusy=true; renderSite();
   $('gallery-task').hidden=false; $('gallery-status').textContent='正在提交作品采集…'; $('gallery-open').hidden=true; selectPanel('tasks-panel');
-  try { const result=await message('gallery',{text}); jobs.delete('captures'); await refreshTasks(true); if(!result.job)throw Error('服务器没有返回采集任务'); }
+  try { const result=await message('gallery',{text}); jobs.delete('captures'); await refreshTasks(true); if(!result.job)throw Error('服务器没有返回采集任务');if(result.job.kind==='download')$('gallery-task').hidden=true; }
   catch(error){$('gallery-task').dataset.state='failed';$('gallery-status').textContent=error.message;}
   finally{galleryBusy=false;renderSite();updateCount();}
 }
@@ -59,7 +68,7 @@ $('discover').onclick=async()=>{try{await message('open-panel');window.close();}
 $('article').onclick=()=>{chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});window.close();};
 $('capture-region').onclick=async()=>{ $('capture-region').disabled=true;try{await message('capture-region-start');window.close();}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
 $('capture').onclick=async()=>{ $('capture').disabled=true;saveFeedback('正在截图并上传…');try{await message('capture');await refreshTasks(true);}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
-$('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel');$('video-task').hidden=false;$('video-status').textContent='正在提交视频采集…';try{await message('video');jobs.delete('imports');await refreshTasks(true);}catch(e){$('video-status').textContent=e.message;$('video-task').dataset.state='failed';}finally{renderSite();updateCount();}};
+$('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel');$('video-task').hidden=false;$('video-status').textContent='正在提交视频采集…';try{const result=await message('video');jobs.delete('imports');await refreshTasks(true);if(result.job?.kind==='download')$('video-task').hidden=true;}catch(e){$('video-status').textContent=e.message;$('video-task').dataset.state='failed';}finally{renderSite();updateCount();}};
 const running=job=>['queued','running'].includes(job?.status);
 async function task(kind, ref, force) {
   const prefix=kind==='captures'?'gallery':'video', card=$(prefix+'-task');
@@ -98,6 +107,7 @@ async function refreshTasks(force=false){
 }
 refreshTasks(true);const poll=setInterval(()=>refreshTasks(),2000);window.addEventListener('pagehide',()=>clearInterval(poll),{once:true});
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&['lastCapture','lastImport'].some(key=>key in changes)){jobs.clear();refreshTasks(true);}});
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.saveAction)settings().then(value=>{config=value;renderMode();connect();});});
 document.querySelector('[data-panel-tabs]').addEventListener('panel-change',e=>{if(e.detail==='tasks-panel')refreshTasks();});
 for(const [id,key] of [['quick-hover','hover'],['quick-dock','dock']]){
   $(id).checked=config[key]!==false;$(id).onchange=async()=>{try{await chrome.storage.local.set({[key]:$(id).checked});config=await settings();$('plugin-status').textContent='已保存，当前网页同步生效';}catch(e){$(id).checked=config[key]!==false;$('plugin-status').textContent=e.message;}};

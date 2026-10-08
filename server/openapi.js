@@ -765,6 +765,7 @@ const captureRequest={type:"object",required:["text"],properties:{text:{type:"st
 spec.paths["/api/captures"]={get:operation("读取持久化的手机/网页采集记录",{type:"object"}),post:operation("提交分享链接，由服务器归档图文或视频",{type:"object"},{requestBody:body(captureRequest),description:"需要 write 权限。每次一个链接；最多 16 个待处理任务、100 条记录。相同 request_id 去重。202 仅代表接收，须查询直到 completed 才是入库成功。图片原文件上限 100 MB，视频上限 500 MB，正文配图最多 100 张；平台验证或部分配图失败时记录失败，重试复用已保存配图。重启中断任务保留为 failed。",responses:{202:response({type:"object"}),...errorResponses}})};
 spec.paths["/api/captures/{id}"]={get:operation("读取采集状态、结果 item_id 或失败原因",{type:"object"},{parameters:[id]}),delete:operation("移除已完成或失败的采集记录，不删除内容",{type:"object"},{parameters:[id]})};
 spec.paths["/api/captures/{id}/retry"]={post:operation("重试失败的采集",{type:"object"},{parameters:[id]})};
+  spec.paths["/api/captures/resolve"]={post:operation("仅解析作品资源供本机下载，不入库",{type:"object",properties:{plan:{type:"object"}}},{requestBody:body(captureRequest),description:"需要 write 权限。使用已有平台解析、原图候选和全部实况片段；不创建条目、采集任务或下载缓存。浏览器作品数据仍仅接受已登录小红书单帖，最大 1.5 MB。解析最长 60 秒。"})};
 
 const capturePolicy={type:"object",required:["image_size_mode"],properties:{image_size_mode:{type:"string",enum:["original","compress"],default:"original"}}};
 spec.paths["/api/capture-settings"]={get:operation("读取图片上传与采集的大文件策略",capturePolicy),patch:operation("保存大文件自动处理策略（管理员）",capturePolicy,{requestBody:body(capturePolicy)})};

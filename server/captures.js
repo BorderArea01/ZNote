@@ -159,6 +159,25 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
   }
   const schedule=()=>{pending=pending.then(pump).catch(()=>{});};
   const manager={
+    // Resolve only: local browser downloads must never create items or jobs.
+    async resolve(raw, signal = AbortSignal.timeout(60000)) {
+      const input=captureInput.parse(raw),urls=sharedUrls(input.text);
+      if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
+      if(raw.browser_html!==undefined){
+        if(typeof raw.browser_html!=='string'||Buffer.byteLength(raw.browser_html)>1500000)throw fail(413,'浏览器作品数据过大');
+        const source=new URL(urls[0]);
+        if(source.protocol!=='https:'||source.hostname!=='www.xiaohongshu.com'||!/^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i.test(source.pathname))throw fail(400,'浏览器作品数据只支持小红书单帖');
+        return extractCapturePage(raw.browser_html,source.href);
+      }
+      const resource=await page(urls[0],signal);signal.throwIfAborted();
+      if(resource.plan)return resource.plan;
+      if(resource.type.startsWith('image/'))return {kind:'note',url:resource.url,title:'网页图片',images:[resource.url]};
+      let plan;
+      try{plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);}catch(e){if(!douyinWork(resource.url))throw e;}
+      if(douyinWork(resource.url)&&!plan?.images?.length&&!plan?.video_urls?.length)plan=await renderDouyinCapture(resource.url,signal);
+      if(plan.content?.length>450000)throw fail(413,'正文过长');
+      return plan;
+    },
     recover(){const jobs=read();for(const j of jobs)if(['queued','running'].includes(j.status)){j.status='failed';j.message='恢复备份后任务已保留，请重试';}write(jobs);},
     list:()=>read().reverse().map(exposed),
     get(id){const job=read().find(j=>j.id===id);if(!job)throw fail(404,'采集记录不存在');return exposed(job);},

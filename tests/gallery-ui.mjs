@@ -19,6 +19,7 @@ const worker=context.serviceWorkers()[0]||await context.waitForEvent('servicewor
 // Native browser download handling preserves extension-provided subfolders and filenames.
 const cdp=await context.newCDPSession(page);await cdp.send('Browser.setDownloadBehavior',{behavior:'default'});
 try{
+ await worker.evaluate(()=>chrome.storage.local.set({saveAction:'download'}));
  await page.goto(base);await page.locator('[data-znote-overlay]').waitFor({state:'attached'});await page.locator('#first').hover();
  const preview=page.locator('[data-znote-overlay]').locator('.preview');await preview.getByText('1 / 3',{exact:true}).waitFor();
  await preview.getByRole('button',{name:'下一张',exact:true}).hover();await page.mouse.wheel(0,100);

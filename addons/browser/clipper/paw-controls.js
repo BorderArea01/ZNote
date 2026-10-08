@@ -9,9 +9,9 @@ globalThis.ZNotePawControls=class {
     this.toolbar.style.color='#edf0fa';
     this.tools=make('section');this.tools.className='paw-tools';this.title=make('strong','当前作品');this.status=make('p');this.status.className='paw-status';this.status.setAttribute('role','status');const actions=make('div');actions.className='paw-actions';
     this.tools.append(this.title,actions,this.status);gallery.setTools(this.tools);gallery.onShow=()=>this.describe();
-    this.buttons=[];const action=(parent,text,label,mode,primary=false)=>{const b=make('button',text);b.type='button';b.setAttribute('aria-label',label);if(primary)b.classList.add('paw-primary');b.onclick=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopPropagation();this.run(mode);};this.buttons.push(b);parent.append(b);};
+    this.buttons=[];const action=(parent,text,label,mode,primary=false)=>{const b=make('button',text);b.type='button';b.dataset.saveAction=mode==='download'?'download':'save';b.setAttribute('aria-label',label);if(primary)b.classList.add('paw-primary');b.onclick=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopPropagation();this.run(mode);};this.buttons.push(b);parent.append(b);};
     action(this.toolbar,'整组入库','此作品整组入库','save',true);action(this.toolbar,'本图入库','保存当前图片到知识库','single-save');action(this.toolbar,'↓ 下载套图','下载此作品套图','download');
-    action(actions,'整组入库','保存当前套图到知识库','save',true);action(actions,'本图入库','保存当前图片到知识库','single-save');
+    action(actions,'整组入库','保存当前套图到知识库','save',true);action(actions,'本图入库','保存当前图片到知识库','single-save');action(actions,'下载套图','下载当前套图到本机','download');
     const retry=make('button','重新识别');retry.onclick=e=>{if(e.isTrusted){this.target=null;this.describe();window.dispatchEvent(new Event('znote-work-updated'));}};actions.append(retry);
     document.addEventListener('pointermove',e=>{
       if(!e.isTrusted||!this.enabled||this.busy)return;this.checkRoute();
@@ -34,11 +34,20 @@ globalThis.ZNotePawControls=class {
     this.describe();
   }
   hideToolbar(){this.toolbar.hidden=true;}
+  setSaveAction(mode){this.buttons.forEach(button=>button.hidden=button.dataset.saveAction!==mode);}
   setEnabled(value){this.enabled=value;if(!value){this.hideToolbar();this.gallery.panel.hidden=true;this.gallery.badge.hidden=true;}else if(this.gallery.panel.hidden)this.gallery.badge.hidden=false;}
   checkRoute(){if(this.route===location.href)return;this.route=location.href;this.generation++;this.target=null;this.hideToolbar();this.status.textContent='';this.describe();window.dispatchEvent(new Event('znote-page-changed'));}
   current(){return this.target?.isConnected&&globalThis.ZNoteWorkLocation?.(this.target)?this.target:[...document.querySelectorAll('main figure img,main a.fileThumb img')].find(t=>globalThis.ZNoteWorkLocation?.(t));}
   describe(){if(this.busy)return;const t=this.current(),url=t&&globalThis.ZNoteWorkLocation?.(t);this.title.textContent=url?(t.closest('.post-card--preview')?.querySelector('h1,h2,h3,.post-card__heading')?.textContent||document.querySelector('main h1')?.textContent||'当前作品'):'请选择作品';this.status.textContent=url?'':'悬停作品封面，或打开作品详情页';}
-  place(){if(!this.target)return;const r=this.target.getBoundingClientRect();this.toolbar.hidden=false;const w=this.toolbar.offsetWidth,h=this.toolbar.offsetHeight;this.toolbar.style.left=Math.max(8,Math.min(innerWidth-w-8,r.right-w))+'px';this.toolbar.style.top=Math.max(8,Math.min(innerHeight-h-8,r.top+6))+'px';}
+  place(){
+    if(!this.target)return;const r=this.target.getBoundingClientRect();this.toolbar.hidden=false;
+    const w=this.toolbar.offsetWidth,h=this.toolbar.offsetHeight;
+    // Keep even tiny thumbnails hoverable. Place the action beside the image,
+    // with a touching edge so moving onto it cannot dismiss it in a gap.
+    const right=r.right+w<=innerWidth-8,left=r.left-w>=8;
+    this.toolbar.style.left=Math.max(8,Math.min(innerWidth-w-8,right?r.right:left?r.left-w:r.left))+'px';
+    this.toolbar.style.top=Math.max(8,Math.min(innerHeight-h-8,right||left?r.top:r.bottom))+'px';
+  }
   async run(mode){
     if(!this.enabled||this.busy)return;this.checkRoute();const target=this.current();if(!target){this.gallery.show();this.describe();return;}
     const generation=this.generation,url=location.href;this.busy=true;this.buttons.forEach(b=>b.disabled=true);this.status.textContent='正在识别当前套图…';

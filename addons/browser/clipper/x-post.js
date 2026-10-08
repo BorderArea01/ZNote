@@ -31,9 +31,12 @@
   function toast(message,error=false) {
     globalThis.ZNotePageTools?.notice(message,{error,key:'post'});
   }
+  let saveAction='save';
+  function modeLabel(button){if(button.disabled)return;const download=saveAction==='download';button.textContent=button.id==='znote-x-page-button'?(download?'ZNote · 下载本帖':'ZNote · 保存本帖'):(download?'下载图组':'保存图组');button.setAttribute('aria-label',download?'下载这条推文的全部图片':'保存这条推文的全部图片到 ZNote');}
   function createButton(url) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'znote-x-post-button'; button.dataset.url = url;
       button.textContent = '保存图组'; button.setAttribute('aria-label', '保存这条推文的全部图片到 ZNote');
+      modeLabel(button);
       button.addEventListener('click', async event => {
         event.preventDefault(); event.stopPropagation(); if (!event.isTrusted || button.disabled) return;
         button.disabled = true; button.textContent = '采集中…';
@@ -51,7 +54,7 @@
             if(!next.job?.status)throw Error('扩展未返回任务状态，可在 ZNote 采集记录查看');job = next.job;
           }
           if (job.status !== 'completed') throw Error(job.status === 'failed' ? job.message : '采集仍在进行，可在 ZNote 采集记录查看');
-          button.textContent = '已保存 ✓'; toast(job.message);
+          button.textContent = job.kind==='download'?'已下载 ✓':'已保存 ✓'; toast(job.message);
         } catch (e) { button.textContent = '重试采集'; toast(e.message || '采集失败',true); }
         finally { button.disabled = false; }
       });
@@ -62,7 +65,7 @@
     const match=location.pathname.match(/^\/([\w]+)\/status\/(\d+)(?:\/(?:photo|video)\/\d+)?\/?$/);
     const detail=match?`https://x.com/${match[1]}/status/${match[2]}`:'';
     if(pageButton?.dataset.url!==detail||pageButton&&!pageButton.isConnected){pageButton?.remove();pageButton=null;globalThis.ZNotePageTools?.clear('post');}
-    if(detail&&!pageButton){pageButton=createButton(detail);pageButton.id='znote-x-page-button';pageButton.classList.add('znote-x-page-button');pageButton.textContent='ZNote · 保存本帖';globalThis.ZNotePageTools?.register('post',pageButton);}
+    if(detail&&!pageButton){pageButton=createButton(detail);pageButton.id='znote-x-page-button';pageButton.classList.add('znote-x-page-button');modeLabel(pageButton);globalThis.ZNotePageTools?.register('post',pageButton);}
     for (const article of document.querySelectorAll('article[data-testid="tweet"]')) {
       const url = postUrl(article), existing = article.querySelector('.znote-x-post-button');
       if (url!==detail&&existing?.dataset.url === url) continue;
@@ -83,7 +86,7 @@
   }
   function schedule() { if (!timer) timer = setTimeout(scan, 200); }
   async function refresh() {
-    try { const result = await chrome.runtime.sendMessage({ type: 'media-settings' }); enabled = result?.ok && !result.value?.blocked; } catch { enabled = false; }
+    try { const result = await chrome.runtime.sendMessage({ type: 'media-settings' }); enabled = result?.ok && !result.value?.blocked;saveAction=result?.value?.saveAction||'save';document.querySelectorAll('.znote-x-post-button').forEach(modeLabel);if(pageButton)modeLabel(pageButton); } catch { enabled = false; }
     if (!enabled) {document.querySelectorAll('.znote-x-post-button').forEach(node=>node.remove());pageButton?.remove();pageButton=null;globalThis.ZNotePageTools?.clear('post');}
     else schedule();
   }

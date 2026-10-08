@@ -1,7 +1,7 @@
 import { markdownImages, replaceMarkdownImages } from '../../../shared/markdown-images.js';
 import { api, settings, serverUrl, limitedImage } from "./client.js";
 const $ = (id) => document.getElementById(id);
-let article, saved;
+let article, saved, config;
 try {
   const tabId = Number(new URL(location.href).searchParams.get("tab"));
   if (!Number.isInteger(tabId))
@@ -17,8 +17,12 @@ try {
   $("title").value = article.title;
   $("content").value = article.content;
   $("source").href = article.source_url;
-  const config = await settings(),
-    collections = await api("/api/collections");
+  config = await settings();
+  const download=config.saveAction==='download',collections = download?[]:await api("/api/collections");
+  if(download){
+    for(const id of ['collection','tags','archive-images'])$(id).closest('label').hidden=true;
+    document.querySelector('.hint').hidden=true;$("save").textContent='下载 Markdown 正文';
+  }
   $("collection").replaceChildren(
     new Option("未分类", ""),
     ...collections.map((c) => new Option(c.name, c.id)),
@@ -45,6 +49,13 @@ $("save").addEventListener("click", async () => {
     if (tags.length >= 30) throw new Error("请为来源网站标签留出一个位置");
     let content = $("content").value;
     if (content.length > 480000) throw new Error("正文过长，请分段保存");
+    if(config.saveAction==='download'){
+      const {downloadBlob}=await import('./gallery-download.js');
+      const blob=new Blob([`# ${title}\n\n${content}\n\n来源：${article.source_url}\n`],{type:'text/markdown;charset=utf-8'});
+      const name=title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/^[. ]+|[. ]+$/g,'').slice(0,80)||'网页正文';
+      await downloadBlob(blob,`ZNote/${name}.md`,AbortSignal.timeout(120000));
+      $("status").textContent='正文下载完成，保留原配图链接与来源';$("save").textContent='已下载';return;
+    }
     let archived = 0, bytes = 0; const started=Date.now();
     if ($("archive-images").checked) {
       const refs=markdownImages(content), selected=[...new Set(refs.map(i=>i.url))], replacements=new Map();

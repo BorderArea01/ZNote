@@ -2,6 +2,14 @@ import { settings, serverUrl, api } from './client.js';
 import { parseBlockedSites } from './site-policy.js';
 const $ = id => document.getElementById(id);
 const current = await settings();
+$('save-action').value = current.saveAction;
+function showActionSettings(){
+  const download=$('save-action').value==='download';
+  $('download-key').closest('label').hidden=!download;
+  $('save-key').closest('label').hidden=download;
+  $('large-image-default').closest('label').hidden=download;
+}
+$('save-action').onchange=showActionSettings;showActionSettings();
 $('hover-enabled').checked = current.hover;
 $('dock-enabled').checked = current.dock;
 $('download-key').value = current.downloadKey.toUpperCase();
@@ -20,10 +28,9 @@ $('behavior').addEventListener('submit', async event => {
   try {
     const downloadKey = $('download-key').value.trim().toLowerCase(), saveKey = $('save-key').value.trim().toLowerCase();
     if (!/^[a-z0-9]$/.test(downloadKey) || !/^[a-z0-9]$/.test(saveKey)) throw new Error('快捷键请设置为单个字母或数字');
-    if (downloadKey === saveKey) throw new Error('下载和入库快捷键不能相同');
     const previewWidth = Number($('preview-width').value);
     if (!Number.isInteger(previewWidth) || previewWidth < 240 || previewWidth > 1200) throw new Error('预览宽度应为 240～1200');
-    await chrome.storage.local.set({ hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, shortcutVersion: 1, previewWidth, largeImageDefault:$('large-image-default').value, blockedSites:parseBlockedSites($('blocked-sites').value) });
+    await chrome.storage.local.set({ saveAction: $('save-action').value, hover: $('hover-enabled').checked, dock: $('dock-enabled').checked, downloadKey, saveKey, shortcutVersion: 1, previewWidth, largeImageDefault:$('large-image-default').value, blockedSites:parseBlockedSites($('blocked-sites').value) });
     blockedSitesDirty = false;
     $('status').textContent = '浏览器行为已保存，已打开网页同步生效';
   } catch (e) { $('status').textContent = e.message; }

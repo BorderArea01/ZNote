@@ -33,6 +33,7 @@
     previewCache, originalButton, groupLoading=false, failedIndex=null,
     downloadKey = 's',
     saveKey = 'z',
+    saveAction = 'save',
     previewWidth = 720,
     sizeInput,
     hideTimer,
@@ -47,15 +48,23 @@
     mediaTasks = new Map(), taskSummary,
     scanTimer, scanInFlight, scanQueued=false, lastScan=0;
   const own = (event) => event.composedPath().includes(host) || event.composedPath().includes(globalThis.ZNotePageTools?.host);
-  const shortcutHelp = () => `${downloadKey.toUpperCase()} 下载 · ${saveKey.toUpperCase()} 入库`;
+  const shortcutHelp = () => saveAction==='download'?`${downloadKey.toUpperCase()} 下载`:`${saveKey.toUpperCase()} 入库`;
   async function refreshSettings() {
     try {
       const config = await send({type: 'media-settings',znotePage:!!document.querySelector('meta[name="znote-app"]')});
       hoverAllowed = config.hover; dockAllowed = config.dock;
+      saveAction=config.saveAction==='download'?'download':'save';
+      downloadButton.classList.toggle('hidden',saveAction!=='download');saveButton.classList.toggle('hidden',saveAction!=='save');
+      batchButton.classList.toggle('hidden',saveAction!=='download');batchSaveButton.classList.toggle('hidden',saveAction!=='save');
+      root.querySelectorAll('[data-library-destination]').forEach(node=>node.hidden=saveAction!=='save');
+      if(saveAction==='download')root.querySelector('[aria-label="图片入库目标知识库"]')?.setAttribute('hidden','');
+      pawControls?.setSaveAction(saveAction);
+      draw();
       siteBlocked = config.blocked;
       if(window===top&&/^pawchive\.(pw|st)$/.test(location.hostname.replace(/^www\./,''))){
         if(!siteBlocked&&!pawControls){inlineGallery ||= new globalThis.ZNoteInlineGallery(root,{persistent:true});pawControls=new globalThis.ZNotePawControls(root,inlineGallery,send);}
         pawControls?.setEnabled(!siteBlocked);
+        pawControls?.setSaveAction(saveAction);
       }
       if(siteBlocked){
         enabled=false;resources=[];recentMedia.clear();
@@ -66,7 +75,7 @@
         globalThis.ZNoteDouyinObserve?.(false);globalThis.ZNoteVideoThumbnailCancel?.();
       } else if(inlineGallery&&!pawControls) inlineGallery.badge.hidden=false;
       downloadKey = /^[a-z0-9]$/.test(config.downloadKey) ? config.downloadKey : 's';
-      saveKey = /^[a-z0-9]$/.test(config.saveKey) && config.saveKey !== downloadKey ? config.saveKey : (downloadKey === 'z' ? 's' : 'z');
+      saveKey = /^[a-z0-9]$/.test(config.saveKey) ? config.saveKey : 'z';
       downloadButton.textContent = `${downloadKey.toUpperCase()} 下载`;
       saveButton.textContent = `${saveKey.toUpperCase()} 保存知识库`;
       previewLabel.textContent = shortcutHelp();
@@ -139,7 +148,7 @@
     for(const group of [...groups].reverse()){
       let r=group.items.find(x=>x.id===selectedVariants.get(group.key))||group.primary;
       const task=latestTaskFor(r.id);
-      retained.add(group.key);const signature=JSON.stringify([r.id,group.items,task]),cached=renderedCards.get(group.key);
+      retained.add(group.key);const signature=JSON.stringify([r.id,group.items,task,saveAction]),cached=renderedCards.get(group.key);
       if(cached?.signature===signature){if(list.children[position]!==cached.node)list.insertBefore(cached.node,list.children[position]||null);position++;continue}
       cached?.node.remove();
       const item=element('article',null,{class:'item','data-resource-id':r.id,'data-work-id':r.work_id||''});
@@ -161,7 +170,7 @@
         choices.addEventListener('change',()=>{selectedVariants.set(group.key,choices.value);draw()});item.append(choices);
       }
       const actions=element('div',null,{class:'actions'});
-      for(const [label,action]of [['预览','preview'],['下载','download'],['保存知识库','save']]){const btn=button(label,()=>act(r,action,btn));if(action==='save')btn.classList.add('primary');actions.append(btn)}
+      for(const [label,action]of [['预览','preview'],[saveAction==='download'?'下载':'保存知识库',saveAction]]){const btn=button(label,()=>act(r,action,btn));btn.dataset.saveAction=action;if(action==='save')btn.classList.add('primary');actions.append(btn)}
       item.append(actions);
       if(task){const taskState=element('span',task.message,{class:'task-state '+task.status,role:'status'});item.append(taskState);}
       list.insertBefore(item,list.children[position]||null);position++;renderedCards.set(group.key,{signature,node:item});
@@ -225,6 +234,7 @@
       const taskState=await send({type:'media-task-list'});
       mediaTasks=new Map((taskState.tasks||[]).map(task=>[task.id,task]));
       updateTaskSummary(taskState.tasks?.[0]);
+      if(saveAction==='download'){notify('下载到浏览器默认目录');return;}
       const config = await send({ type: "media-connect" });
       selector.replaceChildren(
         new Option("未分类", ""),
@@ -375,7 +385,7 @@
     previousButton.disabled = requestedIndex === 0;
     nextButton.disabled = requestedIndex === imageGroup.images.length - 1;
     batchButton.textContent = `批量下载 ${imageGroup.images.length} 张`;
-    batchButton.hidden = !!pawControls;
+    batchButton.hidden = !!pawControls || saveAction!=='download';
     batchSaveButton.textContent = `批量入库 ${imageGroup.images.length} 张`;
   }
   function continuePendingSave() {
@@ -463,7 +473,7 @@
     document.documentElement.append(host);
     root = host.attachShadow({ mode: "open" });
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(css + videoCss + ":host>div,:host>button{pointer-events:auto}");
+    sheet.replaceSync(css + videoCss + "[hidden]{display:none!important}.actions{grid-template-columns:1fr 1.5fr}:host>div,:host>button{pointer-events:auto}");
     root.adoptedStyleSheets = [sheet];
     dock = button("▶ 视频", () =>
       panel.classList.contains("hidden")
@@ -510,6 +520,7 @@
       libraryLabel = element("label", "保存知识库"),
       tagsLabel = element("label", "标签（逗号分隔）");
     selector = element("select", null, { "aria-label": "保存知识库" });
+    destination.dataset.libraryDestination='true';
     selector.append(new Option("默认知识库", ""));
     tagInput = element("input", null, {
       "aria-label": "采集标签",
@@ -578,6 +589,7 @@
       }catch(e){previewLabel.textContent=e.message;}finally{destinationButton.disabled=false;}
     });
     const previewDestination=element('select',null,{'aria-label':'图片入库目标知识库',hidden:''});
+    destinationButton.dataset.libraryDestination='true';
     previewDestination.style.maxWidth='180px';
     previewDestination.addEventListener('change',async e=>{
       if(!e.isTrusted)return;
@@ -702,10 +714,10 @@
         if (!hoverURL || preview.classList.contains("hidden")) return;
         if(imageGroup && ['ArrowLeft','ArrowRight'].includes(e.key)) {e.preventDefault();e.stopImmediatePropagation();turnPage(e.key==='ArrowRight'?1:-1);return;}
         const key = e.key.toLowerCase();
-        if (key === downloadKey || key === saveKey) {
+        if (key === (saveAction==='download'?downloadKey:saveKey)) {
           e.preventDefault();
           e.stopImmediatePropagation();
-          hoverAction(key === downloadKey ? "download" : "save");
+          hoverAction(saveAction);
         }
       },
       true,

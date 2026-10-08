@@ -1,18 +1,20 @@
-import { record, collectImage, capturePage, captureRegion, startCaptureRegion, collectVideo, collectGallery } from './actions.js';
+import { record, collectImage, capturePage, captureRegion, startCaptureRegion, collectVideo, collectGallery, captureJob } from './actions.js';
 import { pageAction } from './page-actions.js';
 import { saveDirectVideo, settings, api } from './client.js';
 import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
-import {updateMediaTask,downloadMediaBlob} from './media-tasks.js';
+import {updateMediaTask,downloadMediaBlob,startMediaTask} from './media-tasks.js';
 import {contextMenuEntries} from './entry-menu.js';
 let directVideoBusy = false;
-function setupContextMenus() {
+async function setupContextMenus() {
+  const config=await settings();
   chrome.contextMenus.removeAll(() => {
-    for(const entry of contextMenuEntries())chrome.contextMenus.create(entry);
+    for(const entry of contextMenuEntries(config.saveAction))chrome.contextMenus.create(entry);
   });
 }
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !['hover', 'dock', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server'].some(key => key in changes)) return;
+  if (area !== 'local' || !['hover', 'dock', 'saveAction', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server'].some(key => key in changes)) return;
+  if(changes.saveAction)setupContextMenus();
   chrome.tabs.query({url: ['http://*/*', 'https://*/*']}).then(tabs => Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {type: 'media-settings-changed'})))).catch(() => {});
 });
 chrome.runtime.onInstalled.addListener(() => {
@@ -36,7 +38,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'znote-video-file') record(async () => {
     if (directVideoBusy) throw new Error('已有一个视频文件正在上传，请等待完成');
     directVideoBusy = true;
-    try { const metadata=await chrome.tabs.sendMessage(tab.id,{type:'video-metadata',url:info.srcUrl},{frameId:info.frameId||0}).catch(()=>({}));return await saveDirectVideo(info.srcUrl,metadata.source_url||info.pageUrl||tab.url,metadata.title||tab.title,undefined,metadata); } finally { directVideoBusy = false; }
+    try { const config=await settings(),metadata=await chrome.tabs.sendMessage(tab.id,{type:'video-metadata',url:info.srcUrl},{frameId:info.frameId||0}).catch(()=>({}));if(config.saveAction==='download')return {...await startMediaTask({id:info.srcUrl,url:info.srcUrl,kind:'video',source_url:metadata.source_url||info.pageUrl||tab.url,title:metadata.title||tab.title},'download',tab.id,config),kind:'download'};return await saveDirectVideo(info.srcUrl,metadata.source_url||info.pageUrl||tab.url,metadata.title||tab.title,undefined,metadata,config); } finally { directVideoBusy = false; }
   }).catch(() => {});
 });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
@@ -86,7 +88,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     }
     const operation = message.type.endsWith('-capture')
       ? collectGallery(sender.tab, source.href, { dedupe: true, browserHtml: message.pageHtml })
-      : api(`/api/captures/${encodeURIComponent(String(message.id || ''))}`);
+      : captureJob(String(message.id||''),sender.tab.id);
     operation.then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
   }
   if (sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL('popup.html') && message.type === 'open-panel') {

@@ -1167,6 +1167,7 @@ export function createApp({
     saveVideo:(file,fields)=>saveVideo(file,{...fields,tags:JSON.stringify(fields.tags)}),...captureOptions});
   app.get('/api/captures',(req,res)=>res.json({jobs:captures.list()}));
   app.post('/api/captures',(req,res)=>res.status(202).json(captures.add(req.body)));
+  app.post('/api/captures/resolve',async(req,res)=>res.json({plan:await captures.resolve(req.body)}));
   app.get('/api/captures/:id',(req,res)=>res.json(captures.get(req.params.id)));
   app.delete('/api/captures/:id',(req,res)=>res.json(captures.remove(req.params.id)));
   app.post('/api/captures/:id/retry',(req,res)=>res.status(202).json(captures.retry(req.params.id)));
