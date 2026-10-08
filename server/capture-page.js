@@ -12,6 +12,7 @@ import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { proxyAgent } from './network-proxy.js';
 import { xPost, extractXPost } from './capture-x.js';
 import { extractComicChapter } from './capture-comic.js';
+import {ehPolicy} from './capture-eh-policy.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -21,6 +22,7 @@ const BILIBILI_IMAGE_HOST = /(?:^|\.)hdslb\.com$|(?:^|\.)bilivideo\.com$|(?:^|\.
 
 async function fetchDocument(value, signal, redirects = 0, extra = {}) {
   const url = new URL(value), host = url.hostname.replace(/^\[|\]$/g, '');
+  ehPolicy.check(value);
   if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.port && !['80','443'].includes(url.port)) throw fail('仅支持公开网页的 HTTP(S) 链接');
   signal.throwIfAborted();
   const addresses = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true });
@@ -48,7 +50,7 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
       if (Number(res.headers['content-length']) > limit) { res.destroy(); reject(fail('页面或图片超过采集大小上限')); return; }
       const chunks = []; let size = 0;
       res.on('data', chunk => { size += chunk.length; if (size > limit) { res.destroy(); reject(fail('页面或图片超过采集大小上限')); } else chunks.push(chunk); });
-      res.on('end', () => resolve({ url: url.href, type, buffer: Buffer.concat(chunks) })); res.on('error', reject);
+      res.on('end', () => {const buffer=Buffer.concat(chunks),blocked=ehPolicy.response(url.href,buffer);if(blocked)reject(blocked);else resolve({ url: url.href, type, buffer });}); res.on('error', reject);
     });
     const timer = setTimeout(() => req.destroy(fail('网页读取超时，请重试')), 20000);
     req.on('close', () => clearTimeout(timer)); req.on('error', reject); req.end();
@@ -80,6 +82,7 @@ function pageUrl(value, base, pattern) {
 }
 
 function ehGalleryPage(html, url) {
+  const warning=ehContentWarning(html);if(warning)throw warning;
   const { document } = parseHTML(html), title = document.querySelector('#gn')?.textContent?.trim() || document.title || 'E-Hentai 图集';
   const pageLinks = [...document.querySelectorAll('#gdt a[href]')].map(anchor => {
     const href = pageUrl(anchor.getAttribute('href'), url, /^\/s\/[a-z0-9]+\/\d+-\d+$/i);
@@ -90,6 +93,12 @@ function ehGalleryPage(html, url) {
   const tags = [...document.querySelectorAll('#taglist a')].map(node => node.textContent?.trim()).filter(Boolean);
   const uploader = document.querySelector('#gdn a')?.textContent?.trim() || '';
   return { title, pageLinks, total, tags, uploader };
+}
+
+export function ehContentWarning(html){
+  const {document}=parseHTML(html);
+  if(![...document.querySelectorAll('h1')].some(node=>node.textContent.trim()==='Content Warning'))return null;
+  return Object.assign(Error('E-Hentai 返回内容警告页；请先在原网页点击 View Gallery，再采集确认后的链接'),{status:422,code:'EH_CONTENT_WARNING'});
 }
 
 function ehImagePage(html, url) {
@@ -116,11 +125,11 @@ async function expandEHentai(resource, signal) {
   for (const page of pageResources) for (const entry of ehGalleryPage(page.buffer.toString('utf8'), page.url).pageLinks) pageLinks.set(entry.index, entry.href);
   const ordered = [...pageLinks.entries()].sort((a, b) => a[0] - b[0]).slice(0, total || 200);
   const imagePages = [];
-  // Four concurrent page reads keep an entire 200-page gallery from opening a
-  // large socket burst while avoiding the serial delay of image-page loading.
-  for (let offset = 0; offset < ordered.length; offset += 4) {
+  // Limit page reads to two; a detected ban stops subsequent batches and
+  // the shared policy also prevents queued tasks/retries hitting that exit.
+  for (let offset = 0; offset < ordered.length; offset += 2) {
     signal.throwIfAborted();
-    const batch = await Promise.all(ordered.slice(offset, offset + 4).map(([, href]) => fetchDocument(href, signal, 0, { referer: galleryUrl })));
+    const batch = await Promise.all(ordered.slice(offset, offset + 2).map(([, href]) => fetchDocument(href, signal, 0, { referer: galleryUrl })));
     imagePages.push(...batch.map((page, batchIndex) => ({ page, index: ordered[offset + batchIndex][0] })));
   }
   const images = imagePages.sort((a, b) => a.index - b.index).map(({ page, index }) => {

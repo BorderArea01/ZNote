@@ -9,6 +9,7 @@ import { videoDetails } from '../shared/video-details.js';
 import { fetchRemoteImage } from './remote-images.js';
 import { fetchCapturePage, extractCapturePage } from './capture-page.js';
 import {extractBrowserXPost} from './capture-x.js';
+import {ehSite,ehPolicy} from './capture-eh-policy.js';
 import { downloadVideo } from './imports.js';
 import { downloadCaptureVideo } from './capture-video.js';
 import {douyinWork,renderDouyinCapture} from './capture-browser.js';
@@ -31,6 +32,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     return item;
   }
   async function process(job, signal) {
+    ehPolicy.check(job.source_url);
     validateCollection(job.input.collection_id);
     const id=stableId('capture:'+job.id), before=existing(id,job.input.collection_id);
     if(before){patch(job.id,{status:'completed',message:'已入库',item_id:id});return;}
@@ -101,7 +103,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
           signal.throwIfAborted();
           let buffer;
           try { buffer=await image(candidate); }
-          catch(e){lastError=e;continue;}
+          catch(e){if(e.code==='EH_RATE_LIMIT')throw e;lastError=e;continue;}
           signal.throwIfAborted();
           try {
             item=await saveImage(buffer,{id:imageId,title:(plan.title||'网页配图').slice(0,180)+` · ${sourceIndex+1}`,source_url:plan.url,collection_id:job.input.collection_id,tags,content:album?plan.content||'':'',image_size_mode:job.input.image_size_mode,group_key:groupKey,group_index:sourceIndex,group_title:(plan.title||'网页采集').slice(0,200)});
@@ -120,6 +122,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       mapping.set(url,`/media/${item.id}/original`);
       } catch (error) {
         signal.throwIfAborted();
+        if(error.code==='EH_RATE_LIMIT')throw error;
         imageErrors.push(`第 ${index+1} 张：${error.message}`);
       }
     }
@@ -220,7 +223,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:browserPlan?.title||input.text.slice(0,100),...(browserPlan?{plan:browserPlan}:{}),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
       jobs.push(job);write(jobs);schedule();return exposed(job);
     },
-    retry(id){const job=this.get(id);if(job.status!=='failed')throw fail(409,'只有失败的采集任务可以重试');validateCollection(job.collection_id);const previous=read().find(j=>j.id===id);patch(id,{status:'queued',message:'等待重新采集',...(previous.plan?.kind==='video'?{plan:null}:{})});schedule();return this.get(id);},
+    retry(id){const job=this.get(id);if(job.status!=='failed')throw fail(409,'只有失败的采集任务可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);const previous=read().find(j=>j.id===id);patch(id,{status:'queued',message:'等待重新采集',...(previous.plan?.kind==='video'||ehSite(job.source_url)?{plan:null}:{})});schedule();return this.get(id);},
     remove(id){const job=this.get(id);if(!['completed','failed'].includes(job.status))throw fail(409,'请等待任务结束后再移除记录');write(read().filter(j=>j.id!==id));return {removed:true};},
     async wait(id,signal){while(true){signal.throwIfAborted();const job=this.get(id);if(job.status==='completed')return job;if(job.status==='failed')throw fail(422,job.message);await sleep(200,undefined,{signal});}},
     async cancelAll(){for(const job of read())if(job.status==='queued')patch(job.id,{status:'failed',message:'采集已停止，可重试'});active?.controller.abort();await pending;},

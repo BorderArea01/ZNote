@@ -4,6 +4,7 @@ import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
 import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { proxyAgent } from './network-proxy.js';
+import {ehSite,ehPolicy} from './capture-eh-policy.js';
 const MAX = MAX_IMAGE_BYTES;
 export function publicAddress(address) {
   if(isIP(address)===4) {
@@ -20,6 +21,7 @@ export async function fetchRemoteImage(value, redirects=0) {
     const buffer=Buffer.from(m[2],'base64'); if(buffer.length>MAX) throw Error('图片超过 100 MB'); return buffer;
   }
   const url=new URL(value);
+  ehPolicy.check(value);
   if(!['http:','https:'].includes(url.protocol)||url.username||url.password) throw Error('图片地址无效');
   const host=url.hostname.replace(/^\[|\]$/g,''), addresses=isIP(host)?[{address:host,family:isIP(host)}]:await lookup(host,{all:true});
   if(!addresses.length || addresses.some(v=>!publicAddress(v.address))) throw Error('服务器不能采集本机或内网图片地址，请通过上传归档');
@@ -37,7 +39,14 @@ export async function fetchRemoteImage(value, redirects=0) {
       if(res.statusCode!==200) {res.resume();reject(Error(`图片读取失败 HTTP ${res.statusCode}`));return;}
       if(Number(res.headers['content-length'])>MAX){res.destroy();reject(Error('图片超过 100 MB'));return;}
       const type=res.headers['content-type']||'';
-      if(type && !/^(image\/|application\/octet-stream)/i.test(type)){res.destroy();reject(Error('地址未返回图片'));return;}
+      if(type && !/^(image\/|application\/octet-stream)/i.test(type)){
+        if(ehSite(value)&&/^text\//i.test(type)){
+          const chunks=[];let length=0;
+          res.on('data',chunk=>{length+=chunk.length;if(length>16384){res.destroy();reject(Error('地址未返回图片'));}else chunks.push(chunk);});
+          res.on('end',()=>reject(ehPolicy.response(value,Buffer.concat(chunks))||Error('地址未返回图片')));res.on('error',reject);
+        }else{res.destroy();reject(Error('地址未返回图片'));}
+        return;
+      }
       const chunks=[];let size=0;
       res.on('data',chunk=>{size+=chunk.length;if(size>MAX){res.destroy();reject(Error('图片超过 100 MB'));}else chunks.push(chunk);});
       res.on('end',()=>resolve(Buffer.concat(chunks)));res.on('error',reject);
