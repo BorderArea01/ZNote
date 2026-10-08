@@ -61,7 +61,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
         const options={url:plan.url,plan,dir,signal,progress:message=>patch(job.id,{message})};
         const file=await (plan.video_urls?.length?captureVideo(options):video(options));signal.throwIfAborted();
         const details=videoDetails({...file,title:file.title||plan.title,author:plan.author||file.author},job.input.tags);
-        const item=await saveVideo(file,{...details,content:[details.content,file.description||''].filter(Boolean).join('\n\n'),source_url:plan.url,collection_id:job.input.collection_id});
+        const item=await saveVideo(file,{...details,content:[details.content,plan.content||'',file.description||''].filter(Boolean).join('\n\n'),source_url:plan.url,collection_id:job.input.collection_id});
         patch(job.id,{status:'completed',message:'视频已入库',item_id:item.id,title:item.title});
       }finally{await rm(dir,{recursive:true,force:true});}
       return;

@@ -44,7 +44,7 @@
         try {
           const ready=await request('znote-post-ready');
           if(ready.protocol!==1)throw Error(reconnect);
-          const browserPost=globalThis.ZNoteXPostReader?.read(url);
+          const browserPost=await globalThis.ZNoteXPostReader?.read(url);
           if(browserPost?.error)throw Error(browserPost.error);
           const result = await request('x-post-capture',{url,...(browserPost?{browserPost}:{})});
           let job = result.job;
@@ -89,13 +89,13 @@
   function schedule() { if (!timer) timer = setTimeout(scan, 200); }
   async function refresh() {
     try { const result = await chrome.runtime.sendMessage({ type: 'media-settings' }); enabled = result?.ok && !result.value?.blocked;saveAction=result?.value?.saveAction||'save';document.querySelectorAll('.znote-x-post-button').forEach(modeLabel);if(pageButton)modeLabel(pageButton); } catch { enabled = false; }
+    window.dispatchEvent(new CustomEvent('znote-x-video-enabled',{detail:Boolean(enabled)}));
     if (!enabled) {document.querySelectorAll('.znote-x-post-button').forEach(node=>node.remove());pageButton?.remove();pageButton=null;globalThis.ZNotePageTools?.clear('post');}
     else schedule();
   }
   chrome.runtime.onMessage.addListener((message,_sender,reply) => {
     if(message.type==='x-post-page'){
-      const browserPost=enabled?globalThis.ZNoteXPostReader?.read(message.url):null;
-      reply(browserPost?.error?{ok:false,error:browserPost.error}:{ok:true,browserPost});return;
+      Promise.resolve(enabled?globalThis.ZNoteXPostReader?.read(message.url):null).then(browserPost=>reply(browserPost?.error?{ok:false,error:browserPost.error}:{ok:true,browserPost}),()=>reply({ok:false,error:'读取推文播放数据失败，请刷新原帖重试'}));return true;
     }
     if (message.type === 'media-settings-changed') refresh();if(message.type==='media-page-changed')schedule();
   });

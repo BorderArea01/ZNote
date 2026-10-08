@@ -2,9 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {createCaptureManager} from '../server/captures.js';
-import {extractBrowserXPost} from '../server/capture-x.js';
+import {extractBrowserXPost,extractXPost} from '../server/capture-x.js';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
 const source='https://x.com/Tir_al_/status/2107765375521939865';
 const browserPost={id:'2107765375521939865',text:'作品正文 #画画',author:{name:'作者',screen_name:'Tir_al_'},images:[1,2,3,4].map(i=>`https://pbs.twimg.com/media/image${i}?format=jpg&name=small`),video:false};
+test('X playback records bind variants to the owning post, prefer high bitrate MP4 and exclude HLS/init/cross-host URLs',async()=>{
+  const context={URL};vm.createContext(context);vm.runInContext(await readFile('addons/browser/clipper/x-video-records.js','utf8'),context);
+  const variants=[{bitrate:1,url:'https://video.twimg.com/ext_tw_video/1/low.mp4'},{bitrate:100,url:'https://video.twimg.com/ext_tw_video/1/high.mp4'},{bitrate:200,url:'https://video.twimg.com/ext_tw_video/1/master.m3u8'},{url:'https://video.twimg.com/ext_tw_video/1/seg-init.mp4'},{url:'https://evil.test/a.mp4'}];
+  const rows=context.ZNoteXVideoRecords({tweet:{rest_id:browserPost.id,legacy:{extended_entities:{media:[{type:'video',video_info:{variants}}]}},quoted_status_result:{result:{rest_id:'123',legacy:{extended_entities:{media:[{type:'video',video_info:{variants:[{url:'https://video.twimg.com/quote.mp4'}]}}]}}}}}});
+  assert.equal(rows.length,2);const own=rows.find(row=>row.id===browserPost.id);assert.equal(own.video_urls.length,2);assert.match(own.video_urls[0],/high.mp4$/);assert.ok(!own.video_urls.includes('https://video.twimg.com/quote.mp4'));
+  const raw={...browserPost,images:[],video:true,video_urls:Array.from(own.video_urls)};
+  const plan=extractBrowserXPost(raw,source);assert.equal(plan.kind,'video');assert.deepEqual(plan.video_urls,raw.video_urls);
+  assert.throws(()=>extractBrowserXPost({...raw,video_urls:[]},source),/播放地址/);
+  assert.throws(()=>extractBrowserXPost({...raw,video_urls:['https://localhost/a.mp4']},source),/无效.*视频/);
+  const api=extractXPost({id_str:browserPost.id,text:'视频正文',video:{variants}},source);assert.equal(api.kind,'video');assert.match(api.video_urls[0],/high.mp4$/);
+});
 test('browser X data binds post identity and permits only own X media, with ordered originals and tags',()=>{
   const plan=extractBrowserXPost(browserPost,source);
   assert.equal(plan.images.length,4);assert.match(plan.images[0],/name=orig/);assert.deepEqual(plan.tags,['画画']);assert.equal(plan.author,'作者 @Tir_al_');

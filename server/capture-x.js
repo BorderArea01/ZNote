@@ -19,6 +19,9 @@ export function xImage(value, size = 'orig') {
     return url.href;
   } catch { return ''; }
 }
+export function xVideo(value){
+  try{const url=new URL(value);return url.protocol==='https:'&&url.hostname==='video.twimg.com'&&!url.username&&!url.password&&!url.port&&/\.mp4$/i.test(url.pathname)&&!/(?:^|[/_-])init(?:[._/-]|$)/i.test(url.pathname)?url.href:'';}catch{return '';}
+}
 export function extractXPost(data, source) {
   const post = xPost(source);
   if (!post || String(data?.id_str) !== post.id || data.__typename === 'TweetTombstone')
@@ -33,7 +36,11 @@ export function extractXPost(data, source) {
   for (const entity of data.entities?.media || []) if (entity.url) content = content.replaceAll(entity.url, '');
   const details = { url: post.url, title: (content.trim().split('\n').find(Boolean) || `X · ${author || post.id}`).slice(0, 200), content: content.trim(), author, tags: (data.entities?.hashtags || []).map(v => v.text).filter(Boolean) };
   if (images.length) return { ...details, kind: 'note', images, image_candidates: images.map(url => [url, xImage(url, 'large')]) };
-  if (data.video || data.mediaDetails?.some(m => ['video', 'animated_gif'].includes(m.type))) return { ...details, kind: 'video' };
+  if (data.video || data.mediaDetails?.some(m => ['video', 'animated_gif'].includes(m.type))) {
+    const variants=[...(data.video?.variants||[]),...(data.mediaDetails||[]).filter(m=>['video','animated_gif'].includes(m.type)).flatMap(m=>m.video_info?.variants||m.video?.variants||[])];
+    const video_urls=[...new Set(variants.sort((a,b)=>(Number(b.bitrate)||0)-(Number(a.bitrate)||0)).map(v=>xVideo(v.url||v.src)).filter(Boolean))].slice(0,16);
+    return { ...details, kind: 'video',...(video_urls.length?{video_urls}:{}) };
+  }
   if (details.content) return { ...details, kind: 'note', images: [] };
   throw fail('这条 X 推文没有可采集的正文或媒体');
 }
@@ -43,12 +50,15 @@ const browserPostSchema=z.object({
   images:z.array(z.string().max(2048)).max(4),
   author:z.object({name:z.string().max(200),screen_name:z.string().regex(/^\w{1,50}$/)}),
   video:z.boolean().default(false),
+  video_urls:z.array(z.string().max(2048)).max(16).optional(),
 }).strict();
 export function extractBrowserXPost(raw,source){
   const post=xPost(source),parsed=browserPostSchema.safeParse(raw);
   if(!post||!parsed.success||parsed.data.id!==post.id)throw fail('浏览器推文数据与当前链接不匹配，未采集');
   const data=parsed.data;
   if(data.images.some(url=>!xImage(url)))throw fail('浏览器推文包含无效的 X 图片地址，未采集');
+  if(data.video_urls?.some(url=>!xVideo(url)))throw fail('浏览器推文包含无效的 X 视频地址，未采集');
+  if(data.video&&!data.video_urls?.length)throw fail('浏览器未提供这条推文的播放地址，请在原帖播放视频后重试');
   // Reuse the same normalization and ordered-group parser as the public API.
-  return extractXPost({id_str:data.id,text:data.text,user:data.author,entities:{hashtags:[...data.text.matchAll(/(?:^|\s)#([\p{L}\p{N}_]+)/gu)].map(match=>({text:match[1]}))},mediaDetails:data.images.map(url=>({type:'photo',media_url_https:url})),...(data.video?{video:{}}:{})},post.url);
+  return extractXPost({id_str:data.id,text:data.text,user:data.author,entities:{hashtags:[...data.text.matchAll(/(?:^|\s)#([\p{L}\p{N}_]+)/gu)].map(match=>({text:match[1]}))},mediaDetails:data.images.map(url=>({type:'photo',media_url_https:url})),...(data.video?{video:{variants:(data.video_urls||[]).map(url=>({url}))}}:{})},post.url);
 }

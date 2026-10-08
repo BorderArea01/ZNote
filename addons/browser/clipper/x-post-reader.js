@@ -13,7 +13,12 @@
     }
     return true;
   };
-  function read(source) {
+  function videoUrls(id){return new Promise(resolve=>{
+    const nonce=crypto.randomUUID();const done=urls=>{clearTimeout(timer);window.removeEventListener('znote-x-video-response',listener);resolve(urls);};
+    const listener=event=>{if(event.detail?.id===id&&event.detail?.nonce===nonce)done(Array.isArray(event.detail.video_urls)?event.detail.video_urls.slice(0,16):[]);};
+    const timer=setTimeout(()=>done([]),500);window.addEventListener('znote-x-video-response',listener);window.dispatchEvent(new CustomEvent('znote-x-video-request',{detail:{id,nonce}}));
+  });}
+  async function read(source) {
     const target=post(source);if(!target)return null;
     for(const article of document.querySelectorAll('article[data-testid="tweet"]')){
       const links=[...article.querySelectorAll('time')].map(node=>node.closest('a[href]'));
@@ -39,15 +44,20 @@
           url.searchParams.set('name','orig');if(!images.includes(url.href))images.push(url.href);
         }}catch{}
       }
-      const video=[...article.querySelectorAll('video,[data-testid="videoPlayer"]')].some(node=>own(node,article));
+      const players=[...article.querySelectorAll('video,[data-testid="videoPlayer"]')].filter(node=>own(node,article));
+      let video=players.length>0;
       // Never archive just text while the post's gated media is unavailable.
-      const photoSlots=[...article.querySelectorAll('[data-testid="tweetPhoto"]')].filter(node=>own(node,article));
+      const photoSlots=[...article.querySelectorAll('[data-testid="tweetPhoto"]')].filter(node=>own(node,article)&&!node.closest('[data-testid="videoPlayer"]'));
       if(photoSlots.length>images.length||[...article.querySelectorAll('[data-testid="sensitiveMediaWarning"]')].some(node=>own(node,article)))return {error:'请先在原帖中显示全部媒体，再采集'};
-      if(!text&&!images.length&&!video)return null;
+      if(!images.length&&!video&&[...article.querySelectorAll('[data-testid="sensitiveMediaContainer"]')].some(node=>own(node,article)))return {error:'请先在原帖中显示媒体，再采集'};
       const user=[...article.querySelectorAll('[data-testid="User-Name"]')].find(node=>own(node,article));
       const lines=(user?.innerText||user?.textContent||'').split('\n').map(s=>s.trim()).filter(Boolean);
       const screen_name=lines.join(' ').match(/@([\w]+)/)?.[1]||new URL(target.url).pathname.split('/')[1];
-      return {id:target.id,text,images,author:{name:lines.find(s=>!s.startsWith('@'))||'',screen_name},video};
+      const video_urls=await videoUrls(target.id);video ||= video_urls.length>0;
+      if(!text&&!images.length&&!video)return null;
+      for(const player of players){const value=player.currentSrc||player.src;try{const u=new URL(value);if(u.protocol==='https:'&&u.hostname==='video.twimg.com'&&/\.mp4$/i.test(u.pathname)&&!video_urls.includes(u.href))video_urls.push(u.href);}catch{}}
+      if(video&&!video_urls.length)return {error:'尚未读取到这条推文的视频地址，请在原帖播放视频后重试采集'};
+      return {id:target.id,text,images,author:{name:lines.find(s=>!s.startsWith('@'))||'',screen_name},video,...(video_urls.length?{video_urls:video_urls.slice(0,16)}:{})};
     }
     return null;
   }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZNote · 网页采集",
-  "version": "0.9.36",
+  "version": "0.9.37",
   "description": "悬停高清大图、整帖图组与视频嗅探；设置选择下载到本机或保存知识库，页面只显示所选操作。",
   "permissions": [
     "activeTab",
@@ -17,6 +17,12 @@
     "<all_urls>"
   ],
   "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://www.x.com/*", "https://twitter.com/*", "https://www.twitter.com/*", "https://mobile.twitter.com/*"],
+      "js": ["x-video-records.js", "x-video-page.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
     {
       "matches": ["https://x.com/*", "https://www.x.com/*", "https://twitter.com/*", "https://www.twitter.com/*", "https://mobile.twitter.com/*"],
       "js": ["page-tools.js", "x-post-reader.js", "x-post.js"],
