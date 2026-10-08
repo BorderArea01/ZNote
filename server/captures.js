@@ -72,7 +72,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     // playable video directly and do not create a second still-image card.
     const galleryEntries=(plan.images||[]).map((url,sourceIndex)=>({url,sourceIndex})).filter(entry=>!liveIndices.has(entry.sourceIndex));
     const mediaCount=galleryEntries.length+liveVideos.length;
-    const imageMode=job.input.image_mode || (/(^|\.)(xiaohongshu|x|twitter)\.com$/.test(new URL(plan.url).hostname) ? 'group' : 'note');
+    const imageMode=job.input.image_mode || plan.default_image_mode || (/(^|\.)(xiaohongshu|x|twitter)\.com$/.test(new URL(plan.url).hostname) ? 'group' : 'note');
     const album=imageMode==='group'&&mediaCount>0;
     const liveOnly=liveVideos.length>0&&galleryEntries.length===0;
     const groupKey=liveOnly?(liveVideos.length>1?'capture:'+id:null):album?(mediaCount>1?'capture:'+id:null):'note:'+id;
@@ -85,7 +85,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     const missingGallery=galleryEntries.filter(({url})=>!contentImages.has(url));
     if(missingGallery.length)content += '\n\n'+missingGallery.map(({url,sourceIndex})=>`![配图 ${sourceIndex+1}](<${url}>)`).join('\n\n');
     const urls=[...new Set(markdownImages(content).map(v=>v.url))];
-    if(urls.length>100)throw fail(413,'单次正文配图最多 100 张');
+    if(urls.length>(album?200:100))throw fail(413,album?'单次图片组最多 200 张':'单次正文配图最多 100 张');
     const galleryIndex=new Map(galleryEntries.map(entry=>[entry.url,entry.sourceIndex]));
     const mapping=new Map(), imageErrors=[];let usedFallback=Boolean(job.image_fallback);
     for(const [index,url] of urls.entries()){

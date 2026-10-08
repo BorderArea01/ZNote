@@ -11,6 +11,7 @@ import { captureImageCandidates } from './capture-images.js';
 import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { proxyAgent } from './network-proxy.js';
 import { xPost, extractXPost } from './capture-x.js';
+import { extractComicChapter } from './capture-comic.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -439,6 +440,7 @@ function liveAddressUrls(value,base,depth=0){
     .flatMap(key=>liveAddressUrls(value[key],base,depth+1));
 }
 export function extractCapturePage(html, url) {
+  const chapter=extractComicChapter(html,url);if(chapter)return chapter;
   const { document } = parseHTML(html), u = new URL(url), host = u.hostname;
   const meta = name => document.querySelector(`meta[property="${name}"],meta[name="${name}"]`)?.getAttribute('content') || '';
   const xhs = /(^|\.)xiaohongshu\.com$/.test(host), dy = /(^|\.)(douyin|iesdouyin)\.com$/.test(host);
