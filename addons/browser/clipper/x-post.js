@@ -20,7 +20,7 @@
     candidates.push(...[...article.querySelectorAll('[data-testid="tweetPhoto"] img')].map(img=>img.closest('a[href]')));
     candidates.push(...article.querySelectorAll('a[href]'));
     for (const link of candidates) {
-      if (!link || link.closest('article') !== article || link.closest('[data-testid="quoteTweet"],[data-testid="card.wrapper"]')) continue;
+      if (!link || link.closest('article') !== article || link.closest('[data-testid="quoteTweet"],[data-testid="card.wrapper"]') || globalThis.ZNoteXPostReader&&!globalThis.ZNoteXPostReader.own(link,article)) continue;
       try {
         const url = new URL(link.href),match=url.pathname.match(/^\/([\w]+)\/status\/(\d+)(?:\/(?:photo|video)\/\d+)?\/?$/);
         if (/^(?:www\.|mobile\.)?(?:x|twitter)\.com$/.test(url.hostname)&&match) return `https://x.com/${match[1]}/status/${match[2]}`;
@@ -44,7 +44,9 @@
         try {
           const ready=await request('znote-post-ready');
           if(ready.protocol!==1)throw Error(reconnect);
-          const result = await request('x-post-capture',{url});
+          const browserPost=globalThis.ZNoteXPostReader?.read(url);
+          if(browserPost?.error)throw Error(browserPost.error);
+          const result = await request('x-post-capture',{url,...(browserPost?{browserPost}:{})});
           let job = result.job;
           if(!job?.id||!job.status)throw Error('扩展未返回采集任务，请重新加载扩展后重试');
           for (let i = 0; i < 150 && ['queued', 'running'].includes(job.status); i++) {
@@ -70,7 +72,7 @@
       const url = postUrl(article), existing = article.querySelector('.znote-x-post-button');
       if (url!==detail&&existing?.dataset.url === url) continue;
       existing?.remove();
-      const hasPhoto = [...article.querySelectorAll('[data-testid="tweetPhoto"] img')].some(img => img.closest('article') === article && !img.closest('[data-testid="quoteTweet"]') && /^https:\/\/pbs\.twimg\.com\/media\//.test(img.src));
+      const hasPhoto = [...article.querySelectorAll('[data-testid="tweetPhoto"] img')].some(img => img.closest('article') === article && !img.closest('[data-testid="quoteTweet"]') && (!globalThis.ZNoteXPostReader||globalThis.ZNoteXPostReader.own(img,article)) && /^https:\/\/pbs\.twimg\.com\/media\//.test(img.src));
       if (!url || !hasPhoto || url===detail) continue;
       const row = [...article.querySelectorAll('[role="group"]')].find(node=>node.closest('article')===article&&!node.closest('[data-testid="quoteTweet"]'));
       const button=createButton(url);
@@ -90,7 +92,13 @@
     if (!enabled) {document.querySelectorAll('.znote-x-post-button').forEach(node=>node.remove());pageButton?.remove();pageButton=null;globalThis.ZNotePageTools?.clear('post');}
     else schedule();
   }
-  chrome.runtime.onMessage.addListener(message => { if (message.type === 'media-settings-changed') refresh();if(message.type==='media-page-changed')schedule(); });
+  chrome.runtime.onMessage.addListener((message,_sender,reply) => {
+    if(message.type==='x-post-page'){
+      const browserPost=enabled?globalThis.ZNoteXPostReader?.read(message.url):null;
+      reply(browserPost?.error?{ok:false,error:browserPost.error}:{ok:true,browserPost});return;
+    }
+    if (message.type === 'media-settings-changed') refresh();if(message.type==='media-page-changed')schedule();
+  });
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
   refresh();
 })();

@@ -1,3 +1,4 @@
+import {z} from 'zod';
 const fail = message => Object.assign(Error(message), { status: 422 });
 export function xPost(value) {
   try {
@@ -10,7 +11,7 @@ export function xPost(value) {
 export function xImage(value, size = 'orig') {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:' || url.hostname !== 'pbs.twimg.com' || !url.pathname.startsWith('/media/')) return '';
+    if (url.protocol !== 'https:' || url.hostname !== 'pbs.twimg.com' || url.username || url.password || url.port&&url.port!=='443' || !url.pathname.startsWith('/media/')) return '';
     const ext = url.pathname.match(/\.(jpg|jpeg|png|webp)$/i)?.[1];
     if (ext) { url.pathname = url.pathname.slice(0, -ext.length - 1); url.searchParams.set('format', ext); }
     if (!/^(jpg|jpeg|png|webp)$/i.test(url.searchParams.get('format') || '')) return '';
@@ -21,7 +22,7 @@ export function xImage(value, size = 'orig') {
 export function extractXPost(data, source) {
   const post = xPost(source);
   if (!post || String(data?.id_str) !== post.id || data.__typename === 'TweetTombstone')
-    throw fail('X 未提供这条推文的完整数据，可能已删除或需要登录');
+    throw fail('X 公开接口未返回这条推文的内容；这不代表推文已删除。请打开原帖，显示正文和媒体后用网页内采集入口重试');
   const media = Array.isArray(data.mediaDetails) ? data.mediaDetails.filter(m => m.type === 'photo').map(m => m.media_url_https) : (data.photos || []).map(p => p.url);
   const images = [...new Set(media.map(value => xImage(value)).filter(Boolean))];
   const author = [data.user?.name, data.user?.screen_name ? `@${data.user.screen_name}` : ''].filter(Boolean).join(' ');
@@ -35,4 +36,19 @@ export function extractXPost(data, source) {
   if (data.video || data.mediaDetails?.some(m => ['video', 'animated_gif'].includes(m.type))) return { ...details, kind: 'video' };
   if (details.content) return { ...details, kind: 'note', images: [] };
   throw fail('这条 X 推文没有可采集的正文或媒体');
+}
+
+const browserPostSchema=z.object({
+  id:z.string().regex(/^\d{1,40}$/),text:z.string().max(100000),
+  images:z.array(z.string().max(2048)).max(4),
+  author:z.object({name:z.string().max(200),screen_name:z.string().regex(/^\w{1,50}$/)}),
+  video:z.boolean().default(false),
+}).strict();
+export function extractBrowserXPost(raw,source){
+  const post=xPost(source),parsed=browserPostSchema.safeParse(raw);
+  if(!post||!parsed.success||parsed.data.id!==post.id)throw fail('浏览器推文数据与当前链接不匹配，未采集');
+  const data=parsed.data;
+  if(data.images.some(url=>!xImage(url)))throw fail('浏览器推文包含无效的 X 图片地址，未采集');
+  // Reuse the same normalization and ordered-group parser as the public API.
+  return extractXPost({id_str:data.id,text:data.text,user:data.author,entities:{hashtags:[...data.text.matchAll(/(?:^|\s)#([\p{L}\p{N}_]+)/gu)].map(match=>({text:match[1]}))},mediaDetails:data.images.map(url=>({type:'photo',media_url_https:url})),...(data.video?{video:{}}:{})},post.url);
 }

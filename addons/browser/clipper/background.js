@@ -87,7 +87,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       reply({ ok: false, error: '浏览器作品数据过大' }); return;
     }
     const operation = message.type.endsWith('-capture')
-      ? collectGallery(sender.tab, source.href, { dedupe: true, browserHtml: message.pageHtml })
+      ? collectGallery(sender.tab, source.href, { dedupe: true, browserHtml: message.pageHtml, browserPost: isX ? message.browserPost : null })
       : captureJob(String(message.id||''),sender.tab.id);
     operation.then(job => reply({ ok: true, job }), error => reply({ ok: false, error: error.message })); return true;
   }

@@ -17,7 +17,7 @@ test('X post identity, original order, body, author, photo-only extraction and m
   assert.deepEqual(xPost(source+'/photo/2'),xPost(source));
   assert.equal(xPost(source.replace('x.com','x.com.evil.test')),null);
   assert.equal(xImage('https://pbs.twimg.com/profile_images/avatar.jpg'),'');
-  assert.throws(()=>extractXPost({},source),/完整数据/);
+  assert.throws(()=>extractXPost({},source),/公开接口未返回/);
   assert.equal(extractXPost({...tweet,mediaDetails:[{type:'video',media_url_https:'https://pbs.twimg.com/media/cover.jpg'}]},source).kind,'video');
 });
 

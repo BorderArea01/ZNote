@@ -5,7 +5,7 @@ import {imageFilename} from './gallery-download.js';
 export async function downloadWork(resource, config, download, progress, dependencies = {}) {
   const resolve=dependencies.resolve || (async()=> (await api('/api/captures/resolve',{
     method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(65000),
-    body:JSON.stringify({text:resource.text,...(resource.browserHtml?{browser_html:resource.browserHtml}:{})}),
+    body:JSON.stringify({text:resource.text,...(resource.browserHtml?{browser_html:resource.browserHtml}:{}),...(resource.browserPost?{browser_post:resource.browserPost}:{})}),
   },config)).plan);
   await progress('正在解析作品资源…');
   const plan=await resolve();

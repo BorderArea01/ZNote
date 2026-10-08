@@ -116,20 +116,25 @@ export async function collectVideo(tab, url = tab.url) {
     await chrome.action.setBadgeText({ text: '!' }); throw e;
   }
 }
-export async function collectGallery(tab, text = tab?.url, { dedupe = false, browserHtml = '' } = {}) {
+export async function collectGallery(tab, text = tab?.url, { dedupe = false, browserHtml = '', browserPost = null } = {}) {
   try {
     const config = await settings();
     const value = String(text || '').trim();
     if (!value) throw new Error('请粘贴作品链接或先打开作品页面');
     const source = value.match(/https?:\/\/[^\s<>"\u200b]+/i)?.[0] || value;
     assertSiteAllowed(source, config);
+    if(!browserPost&&tab?.id&&/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[\w]+\/status\/\d+(?:[/?#]|$)/i.test(source)){
+      const result=await chrome.tabs.sendMessage(tab.id,{type:'x-post-page',url:source},{frameId:0}).catch(()=>null);
+      if(result?.error)throw Error(result.error);
+      if(result?.ok)browserPost=result.browserPost||null;
+    }
     if (!browserHtml && tab?.id && /^https:\/\/www\.xiaohongshu\.com\/(?:explore|discovery\/item)\/[a-f\d]+(?:[/?#]|$)/i.test(source)) {
       // Reuse the logged-in page's complete work data for the popup and link
       // entry as well as the per-post button. Server-only HTML can be gated.
       const result = await chrome.tabs.sendMessage(tab.id, { type: 'post-capture-page', url: source }, { frameId: 0 }).catch(() => null);
       if (result?.ok) browserHtml = result.pageHtml || '';
     }
-    if(config.saveAction==='download')return downloadTask({id:source,kind:'work',text:value,browserHtml,title:tab.title||'网页作品',source_url:source},tab,config);
+    if(config.saveAction==='download')return downloadTask({id:source,kind:'work',text:value,browserHtml,browserPost,title:tab.title||'网页作品',source_url:source},tab,config);
     const requestId = dedupe
       ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?'x':/^https:\/\/www\.xiaohongshu\.com\//.test(source)?'xhs':'work'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
       : `clipper-gallery-${crypto.randomUUID()}`;
@@ -144,6 +149,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
         tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
         request_id: requestId,
         ...(browserHtml ? { browser_html: browserHtml } : {}),
+        ...(browserPost ? { browser_post: browserPost } : {}),
       }),
     });
     if (dedupe && job.status === 'failed') job = await api(`/api/captures/${job.id}/retry`, { method: 'POST' });

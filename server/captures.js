@@ -8,6 +8,7 @@ import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images
 import { videoDetails } from '../shared/video-details.js';
 import { fetchRemoteImage } from './remote-images.js';
 import { fetchCapturePage, extractCapturePage } from './capture-page.js';
+import {extractBrowserXPost} from './capture-x.js';
 import { downloadVideo } from './imports.js';
 import { downloadCaptureVideo } from './capture-video.js';
 import {douyinWork,renderDouyinCapture} from './capture-browser.js';
@@ -163,6 +164,10 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     async resolve(raw, signal = AbortSignal.timeout(60000)) {
       const input=captureInput.parse(raw),urls=sharedUrls(input.text);
       if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
+      if(raw.browser_post!==undefined){
+        if(raw.browser_html!==undefined)throw fail(400,'每次只可提供一种浏览器作品数据');
+        return extractBrowserXPost(raw.browser_post,urls[0]);
+      }
       if(raw.browser_html!==undefined){
         if(typeof raw.browser_html!=='string'||Buffer.byteLength(raw.browser_html)>1500000)throw fail(413,'浏览器作品数据过大');
         const source=new URL(urls[0]);
@@ -185,6 +190,10 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const input=captureInput.parse(raw);validateCollection(input.collection_id);
       const urls=sharedUrls(input.text);if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
       let browserPlan=null;
+      if(raw?.browser_post!==undefined){
+        if(raw.browser_html!==undefined)throw fail(400,'每次只可提供一种浏览器作品数据');
+        browserPlan=extractBrowserXPost(raw.browser_post,urls[0]);
+      }
       if(raw?.browser_html!==undefined){
         if(typeof raw.browser_html!=='string'||Buffer.byteLength(raw.browser_html)>1500000)throw fail(413,'浏览器作品数据过大');
         const source=new URL(urls[0]);
