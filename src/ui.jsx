@@ -20,6 +20,7 @@ export function Dialog({ title, onClose, children, className = "" }) {
   const ref = useRef();
   const backdropPress = useRef(false);
   useAppBack(()=>{
+    if(ref.current?.closest('[inert]'))return false;
     if([...document.querySelectorAll('[role="dialog"]')].at(-1)!==ref.current)return false;
     return Promise.resolve(onClose());
   },true,100);
@@ -62,6 +63,7 @@ export function Dialog({ title, onClose, children, className = "" }) {
     // A disabled or removed action button may return focus to the page body.
     // Escape must still dismiss only the topmost dialog in that case.
     const escape = e => {
+      if(ref.current?.closest('[inert]'))return;
       if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented || e.target.closest?.('[role="dialog"]')) return;
       const dialogs = document.querySelectorAll('.dialog[role="dialog"]');
       if (dialogs[dialogs.length - 1] !== ref.current) return;

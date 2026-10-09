@@ -1,6 +1,14 @@
+let authGeneration = 0;
+export const authenticated = () => { authGeneration++; };
+function requireAuthentication(path, status, generation, probe = false) {
+  if (status === 401 && !probe && !path.startsWith('/api/auth/') && generation === authGeneration)
+    window.dispatchEvent(new Event('znote:auth-required'));
+}
 export async function api(path, options = {}) {
+  const generation = authGeneration;
+  const { authProbe, ...requestOptions } = options;
   const response = await fetch(path, {
-    ...options,
+    ...requestOptions,
     headers: {
       ...(options.body && !(options.body instanceof FormData)
         ? { "Content-Type": "application/json" }
@@ -8,6 +16,7 @@ export async function api(path, options = {}) {
       ...options.headers,
     },
   });
+  requireAuthentication(path, response.status, generation, authProbe);
   if (response.status === 204) return null;
   const value = await response.json();
   if (!response.ok) {
@@ -28,6 +37,7 @@ export const bytes = (value) => {
       : `${(n / 1024 / 1024).toFixed(2)} MB`;
 };
 export function uploadFile(file, collection, tags = [], onProgress = () => {}, signal, grouping) {
+  const generation = authGeneration;
   return new Promise((resolve, reject) => {
     const data = new FormData();
     data.set("file", file);
@@ -48,10 +58,11 @@ export function uploadFile(file, collection, tags = [], onProgress = () => {}, s
     xhr.onerror = () =>
       reject(new Error("网络连接失败，可重试；重复文件会自动复用"));
     xhr.onload = () => {
+      requireAuthentication('/api/assets', xhr.status, generation);
       try {
         const value = JSON.parse(xhr.responseText);
         if (xhr.status < 200 || xhr.status >= 300)
-          reject(new Error(value.error || "上传失败"));
+          reject(Object.assign(new Error(value.error || "上传失败"), {status:xhr.status}));
         else resolve(value);
       } catch {
         reject(new Error("服务器返回格式错误"));

@@ -8,6 +8,7 @@ export function HelpHint({ label = '帮助', children }) {
   const [open, setOpen] = useState(false), [position, setPosition] = useState({ left: 8, top: 8 });
   const touch = useRef(null), touchHandled = useRef(false);
   const dismiss = () => { clearTimeout(timer.current); pinned.current=false; setOpen(false); };
+  useEffect(()=>{window.addEventListener('znote:auth-required',dismiss);return()=>window.removeEventListener('znote:auth-required',dismiss);},[]);
   const toggle = () => { clearTimeout(timer.current); if(pinned.current)dismiss();else{pinned.current=true;setOpen(true);} };
   useAppBack(dismiss,open,300);
   const show = () => { clearTimeout(timer.current); setOpen(true); };

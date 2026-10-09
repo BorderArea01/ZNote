@@ -9,6 +9,7 @@ const labels={image:'单张图片',group:'图片组',note:'图文笔记',video:'
 export function SortControl({sort,setSort,direction,setDirection,grouped,setGrouped,order,setOrder}){
   const [open,setOpen]=useState(false),dialog=useRef(null),trigger=useRef(null);
   const close=()=>setOpen(false);
+  useEffect(()=>{window.addEventListener('znote:auth-required',close);return()=>window.removeEventListener('znote:auth-required',close);},[]);
   useAppBack(close,open,210);
   useEffect(()=>{if(open){dialog.current.showModal();return()=>{dialog.current?.close();trigger.current?.focus();};}},[open]);
   const move=(at,step)=>{const next=order.split(',');[next[at],next[at+step]]=[next[at+step],next[at]];setOrder(next.join(','));};

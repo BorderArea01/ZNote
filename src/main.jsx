@@ -62,7 +62,7 @@ import "./features.css";
 import "./themes.css";
 import './video.css';
 import { AppearanceProvider } from './appearance.jsx';
-import { api, send, bytes } from "./api.js";
+import { api, send, bytes, authenticated } from "./api.js";
 import { HelpHint } from './HelpHint.jsx';
 import './polish.css';
 import './preview.css';
@@ -183,12 +183,12 @@ function Markdown({ content, onLink, onImage, preserveSpacing = false, headings 
     </ReactMarkdown></MarkdownImagesContext.Provider>
   );
 }
-function Auth({ configured, onDone }) {
+function Auth({ configured, onDone, reason }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <div className="auth-page">
+    <div className={`auth-page${reason?' auth-recovery':''}`}>
       <div className="auth-art">
         <div className="brand">
           <img src="/icon.svg" />
@@ -243,13 +243,14 @@ function Auth({ configured, onDone }) {
       >
         <img className="auth-logo" src="/icon.svg" />
         <h2>{configured ? "欢迎回到你的知识库" : "创建你的知识空间"}</h2>
+        {reason && <div role="status">{reason}</div>}
         <p>
           {configured
             ? "输入访问密码，继续收集与思考。"
             : "先设置一个访问密码，保护你的笔记和图片。"}
         </p>
         <label>
-          访问密码
+          访问密码 / PIN
           <input
             autoFocus
             type="password"
@@ -257,7 +258,7 @@ function Auth({ configured, onDone }) {
             minLength={configured ? 1 : 4}
             maxLength={200}
             required
-            placeholder={configured ? "输入密码" : "至少 4 位，可使用四位数字"}
+            placeholder={configured ? "输入原来的访问密码或 PIN" : "至少 4 位，可使用四位数字"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -288,6 +289,7 @@ function App() {
   const [auth, setAuth] = useState(null),
     [configured, setConfigured] = useState(true),
     [error, setError] = useState("");
+  const [hasWorkspace,setHasWorkspace]=useState(false),[authReason,setAuthReason]=useState('');
   const [theme, setTheme, resolvedTheme] = useTheme();
   const checkAuth = useCallback(async () => {
     setError("");
@@ -296,9 +298,13 @@ function App() {
       setConfigured(status.configured);
       if (!status.configured) return setAuth(false);
       try {
-        await api("/api/me");
+        await api("/api/me", {authProbe:true});
+        authenticated();
         setAuth(true);
+        setHasWorkspace(true);
+        setAuthReason('');
         window.ZNoteCapture?.authorize?.();
+        window.dispatchEvent(new Event('znote:refresh'));
       } catch (e) {
         if (e.status === 401) setAuth(false);
         else throw e;
@@ -310,6 +316,13 @@ function App() {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+  useEffect(()=>{
+    const required=()=>{setError('');setAuthReason('登录已失效，请输入原来的 PIN 或访问密码继续。');setAuth(false);};
+    const wake=()=>{if(auth&&!document.hidden)api('/api/me').catch(()=>{});};
+    window.addEventListener('znote:auth-required',required);
+    window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake);
+    return()=>{window.removeEventListener('znote:auth-required',required);window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake);};
+  },[auth]);
   if (error)
     return (
       <div className="center-screen">
@@ -324,8 +337,10 @@ function App() {
         正在连接知识库…
       </div>
     );
-  if (!auth) return <Auth configured={configured} onDone={checkAuth} />;
   return (
+    <>
+    {!auth && <Auth configured={configured} onDone={checkAuth} reason={authReason}/>}
+    {hasWorkspace && <div hidden={!auth} inert={!auth}>
     <TaskProvider><Workspace
       theme={theme}
       resolvedTheme={resolvedTheme}
@@ -335,9 +350,13 @@ function App() {
       CollectionDialog={CollectionDialog}
       onLogout={async () => {
         await send("/api/auth/logout", {});
+        setHasWorkspace(false);
+        setAuthReason('');
         setAuth(false);
       }}
     /></TaskProvider>
+    </div>}
+    </>
   );
 }
 

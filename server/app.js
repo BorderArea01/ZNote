@@ -249,12 +249,12 @@ export function createApp({
       expires_at: expires,
     };
   };
-  const session = (res, raw) =>
+  const session = (res, raw, maxAge = 7 * 86400000) =>
     res.cookie("znote_session", raw, {
       httpOnly: true,
       sameSite: "strict",
       secure: process.env.COOKIE_SECURE === "true",
-      maxAge: 7 * 86400000,
+      maxAge,
       path: "/",
     });
   app.get("/api/health", (req, res) =>
@@ -331,6 +331,17 @@ export function createApp({
       raw && db.prepare("SELECT * FROM tokens WHERE hash=?").get(hash(raw));
     if (!token || (token.expires_at && token.expires_at < now()))
       return next(fail(401, "请先登录"));
+    // Active browser cookies renew at most daily, with a thirty-day absolute
+    // limit. Expired/revoked sessions and API/mobile tokens are not renewed.
+    if(token.kind==='session' && !req.headers.authorization && cookie===raw){
+      const expires=Date.parse(token.expires_at),absolute=Date.parse(token.created_at)+30*86400000;
+      const renewed=Math.min(Date.now()+7*86400000,absolute);
+      if(expires-Date.now()<6*86400000 && renewed>expires+60000){
+        token.expires_at=new Date(renewed).toISOString();
+        db.prepare('UPDATE tokens SET expires_at=? WHERE id=?').run(token.expires_at,token.id);
+        session(res,raw,renewed-Date.now());
+      }
+    }
     req.auth = token;
     if(token.scope==='notify'){
       const path=req.originalUrl.split('?')[0];
