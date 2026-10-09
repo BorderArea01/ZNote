@@ -36,12 +36,17 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
       Accept: extra.accept || 'text/html,image/*',
       'Accept-Encoding': 'identity',
       ...(extra.referer ? { Referer: extra.referer } : {}),
+      ...(extra.ehSession?.origin===url.origin && extra.ehSession.cookie ? {Cookie:extra.ehSession.cookie} : {}),
     };
     const options = { signal, headers, ...(agent ? { agent } : { lookup: (_host, lookupOptions, cb) => lookupOptions.all ? cb(null, [target]) : cb(null, target.address, target.family) }) };
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, options, res => {
       if ([301,302,303,307,308].includes(res.statusCode)) {
         res.resume();
         if (redirects >= 5 || !res.headers.location) return reject(fail('分享链接跳转过多'));
+        if(EH_HOST.test(host)&&extra.ehSession?.origin===url.origin){
+          const cookie=(res.headers['set-cookie']||[]).map(value=>value.split(';')[0]).find(value=>/^nw=\d+$/.test(value));
+          if(cookie)extra.ehSession.cookie=cookie;
+        }
         fetchDocument(new URL(res.headers.location, url).href, signal, redirects + 1, extra).then(resolve, reject); return;
       }
       if (res.statusCode !== 200) { res.resume(); reject(fail(`页面无法读取（HTTP ${res.statusCode}），可能需要登录或验证`)); return; }
@@ -57,7 +62,7 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
   });
 }
 
-export async function fetchCapturePage(value, signal, redirects = 0) {
+export async function fetchCapturePage(value, signal, redirects = 0, options = {}) {
   const url = new URL(value);
   const post = xPost(value);
   if (post) {
@@ -70,7 +75,7 @@ export async function fetchCapturePage(value, signal, redirects = 0) {
   }
   if (PIXIV_HOST.test(url.hostname) && /^\/(?:[a-z]{2}\/)?artworks\/\d+\/?$/i.test(url.pathname)) return fetchPixivPlan(url, signal);
   const resource = await fetchDocument(value, signal, redirects);
-  if (EH_HOST.test(url.hostname) && /^\/g\/\d+\/[a-z0-9]+\/?$/i.test(url.pathname)) return expandEHentai(resource, signal);
+  if (EH_HOST.test(url.hostname) && /^\/g\/\d+\/[a-z0-9]+\/?$/i.test(url.pathname)) return expandEHentai(resource, signal, options);
   return resource;
 }
 
@@ -101,6 +106,28 @@ export function ehContentWarning(html){
   return Object.assign(Error('E-Hentai 返回内容警告页；请先在原网页点击 View Gallery，再采集确认后的链接'),{status:422,code:'EH_CONTENT_WARNING'});
 }
 
+// Follow only the requested gallery's session confirmation. Do not adopt
+// permanent warning preferences or forward cookies to another origin.
+export async function confirmEhGallery(resource,signal,read=fetchDocument,session={origin:new URL(resource.url).origin,cookie:''}){
+  const html=resource.buffer.toString('utf8'),warning=ehContentWarning(html);
+  if(!warning)return {resource,session};
+  const base=new URL(resource.url),{document}=parseHTML(html);
+  const confirmation=[...document.querySelectorAll('a[href]')].map(a=>{try{return new URL(a.getAttribute('href'),base);}catch{return null;}}).find(url=>url&&url.origin===base.origin&&EH_HOST.test(url.hostname)&&!url.username&&!url.password&&url.pathname.replace(/\/$/,'')===base.pathname.replace(/\/$/,'')&&url.searchParams.get('nw')==='session');
+  if(!confirmation)throw warning;
+  const confirmed=await read(confirmation.href,signal,0,{referer:base.href,ehSession:session});
+  if(new URL(confirmed.url).origin!==base.origin||new URL(confirmed.url).pathname.replace(/\/$/,'')!==base.pathname.replace(/\/$/,'')||ehContentWarning(confirmed.buffer.toString('utf8')))throw warning;
+  return {resource:confirmed,session};
+}
+
+export async function fetchEhImageCandidates(value,signal){
+  const url=pageUrl(value,value,/^\/s\/[a-z0-9]+\/\d+-\d+$/i);
+  if(!url)throw fail('E-Hentai 图片页地址无效');
+  const resource=await fetchDocument(url,signal,0,{referer:'https://'+new URL(url).hostname+'/'});
+  const candidates=ehImagePage(resource.buffer.toString('utf8'),resource.url).candidates;
+  if(!candidates.length)throw fail('E-Hentai 图片页没有返回有效地址');
+  return candidates;
+}
+
 function ehImagePage(html, url) {
   const { document } = parseHTML(html), image = document.querySelector('#img'), display = absolute(image?.getAttribute('src') || '', url);
   const original = [...document.querySelectorAll('#i6 a[href]')].map(node => absolute(node.getAttribute('href') || '', url)).find(value => /\/fullimg\/\d+\/\d+\//.test(value)) || '';
@@ -108,18 +135,22 @@ function ehImagePage(html, url) {
   return { index, candidates: [...new Set([display, original].filter(Boolean))] };
 }
 
-async function expandEHentai(resource, signal) {
-  const galleryUrl = resource.url, first = ehGalleryPage(resource.buffer.toString('utf8'), galleryUrl);
+async function expandEHentai(resource, signal, options = {}) {
+  const galleryUrl = resource.url;
+  const confirmed=await confirmEhGallery(resource,signal);resource=confirmed.resource;
+  const first = ehGalleryPage(resource.buffer.toString('utf8'), galleryUrl);
   if (!first.pageLinks.length) throw fail('E-Hentai 图集页面没有可读取的图片，可能需要登录或验证');
   if (first.total > 200) throw fail('E-Hentai 图集超过 200 张，请分段采集');
-  const total = Math.min(first.total || first.pageLinks.length, 200), pageCount = Math.max(1, Math.ceil(total / 20));
+  const total = Math.min(first.total || first.pageLinks.length, 200), pageCount = Math.max(1, Math.ceil(total / first.pageLinks.length));
   const galleryPages = [galleryUrl, ...Array.from({ length: pageCount - 1 }, (_, index) => {
     const next = new URL(galleryUrl); next.searchParams.set('p', String(index + 1)); return next.href;
   })];
   const pageResources = [resource];
   for (let index = 1; index < galleryPages.length; index++) {
     signal.throwIfAborted();
-    pageResources.push(await fetchDocument(galleryPages[index], signal, 0, { referer: galleryUrl }));
+    options.progress?.(`正在读取图集目录 ${index+1}/${galleryPages.length}`);
+    const page=await fetchDocument(galleryPages[index], signal, 0, { referer: galleryUrl,ehSession:confirmed.session });
+    pageResources.push((await confirmEhGallery(page,signal,fetchDocument,confirmed.session)).resource);
   }
   const pageLinks = new Map();
   for (const page of pageResources) for (const entry of ehGalleryPage(page.buffer.toString('utf8'), page.url).pageLinks) pageLinks.set(entry.index, entry.href);
@@ -127,22 +158,23 @@ async function expandEHentai(resource, signal) {
   const imagePages = [];
   // Limit page reads to two; a detected ban stops subsequent batches and
   // the shared policy also prevents queued tasks/retries hitting that exit.
-  for (let offset = 0; offset < ordered.length; offset += 2) {
+  for (let offset = 0; !options.deferImages && offset < ordered.length; offset += 2) {
     signal.throwIfAborted();
     const batch = await Promise.all(ordered.slice(offset, offset + 2).map(([, href]) => fetchDocument(href, signal, 0, { referer: galleryUrl })));
     imagePages.push(...batch.map((page, batchIndex) => ({ page, index: ordered[offset + batchIndex][0] })));
   }
-  const images = imagePages.sort((a, b) => a.index - b.index).map(({ page, index }) => {
+  const images = options.deferImages?ordered.map(([index,href])=>({index,candidates:[href]})):imagePages.sort((a, b) => a.index - b.index).map(({ page, index }) => {
     const parsed = ehImagePage(page.buffer.toString('utf8'), page.url);
     return { index, candidates: parsed.candidates };
   }).filter(entry => entry.candidates.length);
   if (!images.length) throw fail('E-Hentai 未返回可下载的图片地址，可能需要登录或验证');
   if (total && images.length < total) throw fail(`E-Hentai 只返回了 ${images.length}/${total} 张图片，请登录后重试`);
   const plan = {
-    kind: 'note', url: galleryUrl, title: first.title.slice(0, 200),
+    kind: 'note', default_image_mode:'group', url: galleryUrl, title: first.title.slice(0, 200),
     content: [first.uploader ? `上传者：${first.uploader}` : '', first.tags.length ? `标签：${first.tags.join(', ')}` : ''].filter(Boolean).join('\n\n'),
     images: images.map(entry => entry.candidates[0]),
     image_candidates: images.map(entry => entry.candidates),
+    ...(options.deferImages?{image_pages:images.map(entry=>entry.candidates[0])}:{}),
     author: first.uploader,
     tags: first.tags,
   };

@@ -7,7 +7,7 @@ import { sharedUrls } from '../shared/share-input.js';
 import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images.js';
 import { videoDetails } from '../shared/video-details.js';
 import { fetchRemoteImage } from './remote-images.js';
-import { fetchCapturePage, extractCapturePage } from './capture-page.js';
+import { fetchCapturePage, extractCapturePage, fetchEhImageCandidates } from './capture-page.js';
 import {extractBrowserXPost} from './capture-x.js';
 import {ehSite,ehPolicy} from './capture-eh-policy.js';
 import { downloadVideo } from './imports.js';
@@ -17,7 +17,7 @@ const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
 export const captureInput = z.object({ text: z.string().trim().min(1).max(16000), image_mode:z.enum(["group","note"]).optional(), image_size_mode:z.enum(['original','compress']).optional(), collection_id: z.string().nullable().default(null), tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]), request_id: z.string().regex(/^[a-zA-Z0-9:_-]{1,160}$/).optional() });
-export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, exists, page = fetchCapturePage, image = fetchRemoteImage, video = downloadVideo, captureVideo = downloadCaptureVideo }) {
+export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, exists, page = fetchCapturePage, image = fetchRemoteImage, imagePage = fetchEhImageCandidates, video = downloadVideo, captureVideo = downloadCaptureVideo }) {
   const read = () => JSON.parse(db.prepare('SELECT value FROM settings WHERE key=?').get(KEY)?.value || '[]');
   const write = jobs => {const text=JSON.stringify(jobs);if(text.length>16*1024*1024)throw fail(429,'采集记录已满，请清理完成或失败的任务');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,text);};
   const patch = (id, changes) => { const jobs=read(), job=jobs.find(j=>j.id===id); if(job){Object.assign(job,changes);if(job.status==='completed')delete job.plan;write(jobs);} return job; };
@@ -38,7 +38,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     if(before){patch(job.id,{status:'completed',message:'已入库',item_id:id});return;}
     let plan=job.plan;
     if(!plan){
-      const resource=await page(job.source_url,signal);signal.throwIfAborted();
+      const resource=await page(job.source_url,signal,0,{deferImages:true,progress:message=>patch(job.id,{message})});signal.throwIfAborted();
       if(resource.plan) plan=resource.plan;
       if(plan){
         if(plan.content?.length>450000)throw fail(413,'正文过长，未入库');
@@ -98,7 +98,12 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       let item=existing(imageId,job.input.collection_id);
       if(item && item.group_key!==groupKey)throw fail(409,'已保存的配图被重新分组，请恢复后重试');
       if(!item){
-        const candidates=plan.image_candidates?.find(values=>values[0]===url)||[url];let lastError;
+        const ehPage=ehSite(plan.url)&&plan.image_pages?.[sourceIndex];
+        let lastError;
+        // Read signed addresses only when this member is about to download.
+        // A retry never reads image pages for members already in the library.
+        for(let refresh=0;refresh<(ehPage?2:1)&&!item;refresh++){
+        const candidates=ehPage?await imagePage(ehPage,signal):plan.image_candidates?.find(values=>values[0]===url)||[url];
         for(const [attempt,candidate] of candidates.entries()){
           signal.throwIfAborted();
           let buffer;
@@ -116,6 +121,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
             if(e.status!==415)throw e;
             lastError=e;
           }
+        }
         }
         if(!item)throw lastError||fail(422,'配图无法下载');
       }

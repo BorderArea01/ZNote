@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {createEhPolicy,ehSite} from '../server/capture-eh-policy.js';
 import {createCaptureManager} from '../server/captures.js';
-import {ehContentWarning} from '../server/capture-page.js';
+import {ehContentWarning,confirmEhGallery} from '../server/capture-page.js';
 const source='https://e-hentai.org/g/123456/abcdef/';
 const banned=expiry=>Buffer.from('This IP address has been temporarily banned due to an excessive request rate. The ban expires in '+expiry);
 
@@ -11,6 +11,35 @@ test('content warnings are distinguished from login and unavailable galleries',(
   const error=ehContentWarning('<html><body><h1>Content Warning</h1><a href="?nw=session">View Gallery</a></body></html>');
   assert.equal(error.code,'EH_CONTENT_WARNING');assert.match(error.message,/View Gallery/);assert.doesNotMatch(error.message,/登录/);
   assert.equal(ehContentWarning('<html><body><h1>Normal gallery</h1></body></html>'),null);
+});
+
+test('gallery warning confirmation follows only same-gallery session links and stops repeated warnings',async()=>{
+  const signal=AbortSignal.timeout(5000),resource=html=>({url:source,buffer:Buffer.from(html)}),warning=href=>resource(`<h1>Content Warning</h1><a href="${href}">View Gallery</a>`);
+  let reads=0;
+  const normal=resource('<h1>Gallery</h1>');
+  const result=await confirmEhGallery(warning('?nw=session'),signal,async(url,_,redirects,extra)=>{
+    reads++;assert.equal(url,source+'?nw=session');assert.equal(redirects,0);assert.equal(extra.ehSession.origin,new URL(source).origin);assert.equal(extra.ehSession.cookie,'');extra.ehSession.cookie='nw=1';return normal;
+  });
+  assert.equal(reads,1);assert.equal(result.resource,normal);assert.equal(result.session.cookie,'nw=1');
+  for(const href of ['?nw=always','https://evil.test/?nw=session','/g/999/abcdef/?nw=session','https://user:pass@e-hentai.org/g/123456/abcdef/?nw=session']){
+    await assert.rejects(confirmEhGallery(warning(href),signal,()=>{throw Error('Must not request');}),e=>e.code==='EH_CONTENT_WARNING');
+  }
+  await assert.rejects(confirmEhGallery(warning('?nw=session'),signal,async()=>warning('?nw=session')),e=>e.code==='EH_CONTENT_WARNING');
+  assert.equal((await confirmEhGallery(normal,signal,()=>{throw Error('No request');})).resource,normal);
+});
+
+test('deferred gallery reads refresh a failed member once, skip saved members on retry and retain page order',async()=>{
+  const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
+  const saved=new Map(),reads=[],downloads=[];let allowSecond=false;
+  const pages=[1,2,3].map(i=>`https://e-hentai.org/s/abc/123456-${i}`);
+  const manager=createCaptureManager({db,dataDir:'unused',validateCollection:()=>{},work:fn=>fn(),exists:id=>saved.get(id),page:async(_,signal,redirects,options)=>{assert.equal(options.deferImages,true);return {plan:{kind:'note',default_image_mode:'group',url:source,title:'Gallery',images:pages,image_pages:pages}};},imagePage:async url=>{reads.push(url);return ['https://cdn.example/'+url.split('-').at(-1)+'.jpg'];},image:async url=>{downloads.push(url);if(url.endsWith('2.jpg')&&!allowSecond)throw Error('expired');return Buffer.from('image');},saveImage:async(buffer,row)=>{saved.set(row.id,row);return row;}});
+  try{
+    const job=manager.add({text:source});await assert.rejects(manager.wait(job.id,AbortSignal.timeout(5000)),/其他图片已继续处理/);
+    assert.deepEqual(reads,[pages[0],pages[1],pages[1],pages[2]]);assert.equal(saved.size,2);
+    allowSecond=true;manager.retry(job.id);await manager.wait(job.id,AbortSignal.timeout(5000));
+    assert.deepEqual(reads,[pages[0],pages[1],pages[1],pages[2],pages[1]]);assert.equal(saved.size,3);
+    assert.deepEqual([...saved.values()].map(v=>v.group_index).sort(),[0,1,2]);assert.equal(new Set([...saved.values()].map(v=>v.group_key)).size,1);
+  }finally{await manager.stop();db.close();}
 });
 
 test('E-Hentai HTTP 200 ban bodies produce bounded shared cooldowns, expire and exclude unrelated hosts',()=>{
