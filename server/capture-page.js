@@ -14,6 +14,7 @@ import { xPost, extractXPost } from './capture-x.js';
 import { extractComicChapter } from './capture-comic.js';
 import {ehPolicy} from './capture-eh-policy.js';
 import {captureMusic} from './capture-music.js';
+import {tiebaThread, fetchTiebaPlan} from './capture-tieba.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -33,17 +34,21 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
   return new Promise((resolve, reject) => {
     const agent = proxyAgent();
     const headers = {
-      'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36',
+      'User-Agent': extra.userAgent || 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36',
       Accept: extra.accept || 'text/html,image/*',
       'Accept-Encoding': 'identity',
+      ...(extra.body ? {'Content-Type':'application/x-www-form-urlencoded', 'Content-Length':Buffer.byteLength(extra.body)} : {}),
       ...(extra.referer ? { Referer: extra.referer } : {}),
       ...(extra.ehSession?.origin===url.origin && extra.ehSession.cookie ? {Cookie:extra.ehSession.cookie} : {}),
     };
-    const options = { signal, headers, ...(agent ? { agent } : { lookup: (_host, lookupOptions, cb) => lookupOptions.all ? cb(null, [target]) : cb(null, target.address, target.family) }) };
+    const options = { signal, headers, ...(extra.body ? {method:'POST'} : {}), ...(agent ? { agent } : { lookup: (_host, lookupOptions, cb) => lookupOptions.all ? cb(null, [target]) : cb(null, target.address, target.family) }) };
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, options, res => {
       if ([301,302,303,307,308].includes(res.statusCode)) {
         res.resume();
         if (redirects >= 5 || !res.headers.location) return reject(fail('分享链接跳转过多'));
+        // Client API responses must not become redirected HTML or forward a
+        // POST body to an unrelated service.
+        if (extra.body) return reject(fail('帖子数据接口发生跳转，可能需要平台验证；请重试'));
         if(EH_HOST.test(host)&&extra.ehSession?.origin===url.origin){
           const cookie=(res.headers['set-cookie']||[]).map(value=>value.split(';')[0]).find(value=>/^nw=\d+$/.test(value));
           if(cookie)extra.ehSession.cookie=cookie;
@@ -52,19 +57,20 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
       }
       if (res.statusCode !== 200) { res.resume(); reject(fail(`页面无法读取（HTTP ${res.statusCode}），可能需要登录或验证`)); return; }
       const type = res.headers['content-type'] || '', limit = type.startsWith('image/') ? MAX_IMAGE_BYTES : 8 * 1024 * 1024;
-      if (type && !(extra.json ? /^(application\/json|text\/json|text\/plain)/i.test(type) : /^(text\/html|application\/xhtml\+xml|image\/)/i.test(type))) { res.destroy(); reject(fail('链接没有返回网页或图片')); return; }
+      if (type && !(extra.json ? /^(application\/json|text\/json|text\/plain)/i.test(type) || extra.jsonJavascript && /^application\/x-javascript(?:;|$)/i.test(type) : /^(text\/html|application\/xhtml\+xml|image\/)/i.test(type))) { res.destroy(); reject(fail(extra.json ? '链接没有返回可读取的帖子数据' : '链接没有返回网页或图片')); return; }
       if (Number(res.headers['content-length']) > limit) { res.destroy(); reject(fail('页面或图片超过采集大小上限')); return; }
       const chunks = []; let size = 0;
       res.on('data', chunk => { size += chunk.length; if (size > limit) { res.destroy(); reject(fail('页面或图片超过采集大小上限')); } else chunks.push(chunk); });
       res.on('end', () => {const buffer=Buffer.concat(chunks),blocked=ehPolicy.response(url.href,buffer);if(blocked)reject(blocked);else resolve({ url: url.href, type, buffer });}); res.on('error', reject);
     });
     const timer = setTimeout(() => req.destroy(fail('网页读取超时，请重试')), 20000);
-    req.on('close', () => clearTimeout(timer)); req.on('error', reject); req.end();
+    req.on('close', () => clearTimeout(timer)); req.on('error', reject); req.end(extra.body);
   });
 }
 
 export async function fetchCapturePage(value, signal, redirects = 0, options = {}) {
   const url = new URL(value);
+  if (tiebaThread(value)) return fetchTiebaPlan(value, signal, fetchDocument, options);
   const post = xPost(value);
   if (post) {
     // X's own embed endpoint, also used by react-tweet. Keep IDs as strings;
