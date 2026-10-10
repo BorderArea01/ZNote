@@ -61,13 +61,24 @@ export function openDatabase(dir) {
     try { if(!db.prepare('PRAGMA table_info(items)').all().some(c=>c.name==='bgm'))db.exec('ALTER TABLE items ADD COLUMN bgm TEXT');db.exec('PRAGMA user_version=14; COMMIT'); }
     catch(e){db.exec('ROLLBACK');db.close();throw e;}
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 15) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`CREATE TABLE IF NOT EXISTS albums (id TEXT PRIMARY KEY, name TEXT NOT NULL, collection_id TEXT REFERENCES collections(id) ON DELETE CASCADE, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE UNIQUE INDEX IF NOT EXISTS albums_library_name ON albums(collection_id,name) WHERE collection_id IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS albums_unfiled_name ON albums(name) WHERE collection_id IS NULL;
+        CREATE TABLE IF NOT EXISTS album_items (album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, PRIMARY KEY(album_id,item_id));
+        CREATE INDEX IF NOT EXISTS album_items_item ON album_items(item_id,album_id);
+        PRAGMA user_version=15; COMMIT`);
+    } catch(e) { db.exec('ROLLBACK');db.close();throw e; }
+  }
   return db;
 }
 function openLegacyDatabase(dir) {
   mkdirSync(join(dir, "media"), { recursive: true });
   const db = new DatabaseSync(join(dir, "znote.sqlite"));
   const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
-  if (schemaVersion > 14) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
+  if (schemaVersion > 15) { db.close(); throw new Error('This data directory requires a newer ZNote version'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT UNIQUE NOT NULL, scope TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT);

@@ -26,7 +26,7 @@ export function SelectionBar({ count, loadedCount, allLoaded, someLoaded, total,
         {!trash && <div className="selection-content-actions">
           <button disabled={disabled} onClick={onTags}><Hash size={15}/>批量标签</button>
           <button disabled={disabled} onClick={onOrganize}><FolderInput size={15}/>移动 / 收藏</button>
-          <button disabled={disabled} onClick={onFavorite}><Star size={15}/>{allFavorite?'取消收藏':'收藏所选'}</button>
+          <button disabled={disabled} onClick={onFavorite}><Star size={15}/>收藏 / 相册</button>
           <button disabled={disabled||!resolvedGroupKind} onClick={onGroup}><Layers size={15}/>整理{resolvedGroupKind?mediaLabel:'媒体'}组</button>
         </div>}
         <div className={`selection-destructive-actions${trash?' is-leading':''}`}>

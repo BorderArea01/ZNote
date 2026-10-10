@@ -1,4 +1,5 @@
 import {useBgmPlayback} from './Bgm.jsx';
+import {useAlbums,AlbumNavigation,AlbumManager,FavoriteTargets} from './Albums.jsx';
 import {ContentActions} from './ContentActions.jsx';
 import {SortControl,DEFAULT_TYPE_ORDER} from './SortControl.jsx';
 import {isMediaGroup} from './media-group.js';
@@ -97,6 +98,7 @@ export default function Workspace({
     [collection, setCollection] = useState(null),
     [query, setQuery] = useState(""),
     [search, setSearch] = useState("");
+  const [albumId,setAlbumId]=useState(null),[albumManager,setAlbumManager]=useState(false),[favoriteTargets,setFavoriteTargets]=useState(null);
   const [items, setItems] = useState([]),
     [total, setTotal] = useState(0),
     [stats, setStats] = useState({}),
@@ -171,7 +173,7 @@ export default function Workspace({
   const saved = result => {
     if (result?.items) {
       const changed = new Map(result.items.map(row => [row.id, row]));
-      setSelectionRows(previous => ({...previous,...Object.fromEntries(changed)}));
+      setSelectionRows(previous => ({...previous,...Object.fromEntries([...changed].map(([id,row])=>[id,{...previous[id],...row}]))}));
       setItems(previous => previous.map(row => changed.has(row.id) ? {...row,...changed.get(row.id)} : row));
       setSelection(previous => previous.filter(id => {
         const row = changed.get(id);
@@ -197,8 +199,9 @@ export default function Workspace({
     if(collection===nextCollection&&view===nextView)return;
     routeTrail.current.push({collection,view});
   }
-  browsing.current = { library: collection, view, query, tags: selectedTags, mode: tagMode, sort, direction, type_group:typeGrouping, type_order:typeOrder, layout, loading, offset: pageOffset };
+  browsing.current = { library: collection, view, album:albumId, query, tags: selectedTags, mode: tagMode, sort, direction, type_group:typeGrouping, type_order:typeOrder, layout, loading, offset: pageOffset };
   function rememberBrowse() {
+    if(browsing.current?.album)return;
     const state = browsing.current;
     if (!state || state.loading) return;
     writeBrowse(state.library, state.view, { query: state.query, tags: state.tags, mode: state.mode, sort: state.sort, direction:state.direction, type_group:state.type_group, type_order:state.type_order, layout: state.layout, anchor: captureAnchor(), offset: state.offset, awayFromStart: state.offset > 0 || window.scrollY > 600 });
@@ -278,6 +281,8 @@ export default function Workspace({
   const refresh = () => { pendingBrowse.current = captureAnchor(); setUpdatesAvailable(false); setRevision((n) => n + 1); },
     notify = (message, receipt = null) => { setUndoReceipt(receipt); setToast(receipt && !selected ? '' : message); };
   const actualCollection = collection === "unfiled" ? null : collection;
+  const albumModel=useAlbums(actualCollection,ready&&view!=='home',revision);
+  const chooseAlbum=id=>{resetScope();setView('favorites');setAlbumId(id);if(!collection)setCollection('unfiled');};
   const reading = useReadingProgress(actualCollection, ready && view !== 'home', revision);
   const videoProgress = useReadingProgress(actualCollection, ready && view !== 'home', revision, 'video');
   async function resumeVideo(row) {
@@ -306,11 +311,12 @@ export default function Workspace({
   const savedViews = useSavedViews(actualCollection, ready && view !== 'home');
   const sidebarTags=useTagPage(actualCollection,{limit:30,revision,enabled:ready&&view!=='home'}),tags=sidebarTags.tags;
   const [savedViewEditor, setSavedViewEditor] = useState(null);
-  const currentViewConfig = { view, query, tags: selectedTags, mode: tagMode, sort, direction, type_group:typeGrouping, type_order:typeOrder, layout };
+  const currentViewConfig = { view, album_id:view==='favorites'?albumId:null, query, tags: selectedTags, mode: tagMode, sort, direction, type_group:typeGrouping, type_order:typeOrder, layout };
   const editSavedView = row => setSavedViewEditor({ row, current: currentViewConfig, library: actualCollection });
   const applySavedView = row => {
     if (row.collection_id !== actualCollection) return;
     resetScope(); const config = row.config;
+    setAlbumId(config.view==='favorites'&&albumModel.albums.some(album=>album.id===config.album_id)?config.album_id:null);
     setView(config.view); setQuery(config.query); setSearch(config.query); setSelectedTags(config.tags);
     setTagMode(config.mode); setSort(config.sort); setDirection(config.direction||'desc'); setTypeGrouping(config.type_group===true); setTypeOrder(config.type_order||DEFAULT_TYPE_ORDER); setLayout(config.layout);
   };
@@ -444,6 +450,7 @@ export default function Workspace({
     if (window.location.hash.startsWith('#item/')) history.replaceState(null, '', location.pathname + location.search);
   };
   const resetScope = () => {
+    setAlbumId(null);setFavoriteTargets(null);setAlbumManager(false);
     cancelSelectionRequest();setKnownGroups({});
     setReadingOpen(false);
     rememberBrowse(); selectionAnchor.current = null;
@@ -545,11 +552,11 @@ export default function Workspace({
       if (view === "images") p.set("kind", "image");
       if (view === 'videos') p.set('kind', 'video');
       if (view === "notes") p.set("kind", "note");
-      if (view === "favorites") p.set("favorite", "true");
+      if (view === "favorites") { if(albumId)p.set('album',albumId);else p.set("favorite", "true"); }
       if (view === "trash") p.set("trash", "true");
       return p.toString();
     },
-    [sort, direction, typeGrouping, typeOrder, search, collection, selectedTags, tagMode, view],
+    [sort, direction, typeGrouping, typeOrder, search, collection, selectedTags, tagMode, view,albumId],
   );
   async function openItem(item) {
     const current = ++detailGeneration.current;
@@ -866,19 +873,7 @@ export default function Workspace({
     return () => window.removeEventListener("keydown", hotkey);
   }, [view, selecting, selection, batchBusy, groupSelecting, selectionProgress, loading, query, search, params]);
   async function favorite(item) {
-    try {
-      if(isMediaGroup(item)) {
-        const result=await send('/api/item-groups/favorite',{group_key:item.group_key,collection_id:item.collection_id,favorite:!item.favorite,undo:true});saved(result);return;
-      }
-      const result = await send(
-        `/api/items/${item.id}`,
-        { favorite: !item.favorite, version: item.version, undo: true },
-        "PATCH",
-      );
-      saved(result);
-    } catch (e) {
-      notify(e.message);
-    }
+    setFavoriteTargets([{id:item.id,version:item.version,group:isMediaGroup(item)}]);
   }
   async function remove(item) {
     if(item.kind==='video')videoProgress.cancelItems([item.id]);
@@ -1033,7 +1028,7 @@ export default function Workspace({
                 <Icon size={18} />
                 {labels[v]}
                 <span className={v === 'images' ? 'image-nav-count' : undefined}>
-                  {stats[
+                  {v==='favorites'&&albumId ? (albumModel.albums.find(row=>row.id===albumId)?.card_count||0) : stats[
                     {
                       all: "total_cards",
                       images: "images",
@@ -1047,6 +1042,7 @@ export default function Workspace({
             );
           })}
         </nav>
+        {view!=='home'&&<AlbumNavigation model={albumModel} value={view==='favorites'?albumId:null} onChange={chooseAlbum} onManage={()=>setAlbumManager(true)}/>}
         <div className="nav-caption">
           知识库
           <IconButton label="新建知识库" onClick={() => setCollectionModal({})}>
@@ -1337,7 +1333,7 @@ export default function Workspace({
                 onLoaded={e=>selectCards(items,e.target.checked?'add':'remove')}
                 onAll={selectFiltered} onInvert={()=>selectCards(items,'invert')}
                 onClear={clearSelection} onExit={()=>toggleSelectionMode()} onCancel={cancelSelectionRequest}
-                onTags={()=>setBatchTags(true)} onOrganize={()=>setOrganizing(true)} onFavorite={batchFavorite}
+                onTags={()=>setBatchTags(true)} onOrganize={()=>setOrganizing(true)} onFavorite={()=>setFavoriteTargets(chosenItems.map(({id,version})=>({id,version})))}
                 onGroup={()=>{setToast('');setGroupOrganizing(true);}} onTrash={batchTrash} onPurge={()=>openPurge(selection)}
               />}
               {loadError ? (
@@ -1500,18 +1496,16 @@ export default function Workspace({
                         ) : null}
                       </div>
                       {view!=="trash" && (
-                          <IconButton className="icon-button card-favorite-button" aria-pressed={!!item.favorite}
+                          <IconButton className="icon-button card-favorite-button"
                             disabled={batchBusy||groupSelecting||!!selectionProgress}
                             label={
-                              item.favorite
-                                ? `取消收藏 ${item.title}`
-                                : `收藏 ${item.title}`
+                              `管理收藏 ${item.title}`
                             }
                             onClick={() => favorite(item)}
                           >
                             <Star
                               size={16}
-                              fill={item.favorite ? "currentColor" : "none"}
+                              fill={item.favorite||item.album_ids?.length ? "currentColor" : "none"}
                               color="currentColor"
                             />
                           </IconButton>
@@ -1523,7 +1517,7 @@ export default function Workspace({
               )}
               {!!items.length && !loading && <div className="browse-pagination" data-window-size={items.length} data-window-offset={pageOffset}>
                 <div className="browse-pagination-meta"><span>显示 {pageOffset + 1}–{pageOffset + items.length} / {total} 项</span><label><input type="checkbox" checked={autoPages} onChange={e => { setAutoPages(e.target.checked); saveAutoPages(e.target.checked); }}/>滚动自动加载</label><HelpHint label="连续浏览">列表只保留附近 300 项摘要，向前可加载之前的内容；已选内容保留。打开详情再读取完整正文。网络失败或内容更新时暂停加载。</HelpHint></div>
-                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen && !readingOpen && !tasksOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
+                {pageError ? <div className="browse-page-error" role="status"><span>{pageError.message}</span><button onClick={() => pageError.changed ? refresh() : loadPage(pageError.previous)}>{pageError.changed ? '刷新内容' : '重试加载'}</button></div> : pageOffset + items.length < total ? <PageLoader automatic={autoPages && !favoriteTargets && !albumManager && !selected && !settings && !collectionModal && !mobile && !uploadBatch && !exporting && !importing && !organizing && !groupOrganizing && !batchTags && !purging && !savedViewEditor && !draftsOpen && !undoOpen && !readingOpen && !tasksOpen} disabled={paging || query !== search} onLoad={automatic => loadPage(false, automatic)}>{paging ? '正在加载…' : '加载更多内容'}</PageLoader> : <span className="muted">已到末尾</span>}
               </div>}
             </>
           )}
@@ -1608,6 +1602,7 @@ export default function Workspace({
           suggestions={tags}
           onClose={()=>{setImageExpanded(false);closeDetail();}}
           onSaved={saved}
+          onFavoriteTargets={favorite}
           onTagSearch={tag=>{closeDetail();setImageExpanded(false);setView('all');setQuery('');setSearch('');setSelectedTags([tag]);setTagMode('all');setMobile(false);}}
           onDetachGroup={detachFromGroup}
           onGroupOrdered={result=>{if(['image','video'].includes(result.item.kind))setGallery(result.items);}}
@@ -1642,6 +1637,8 @@ export default function Workspace({
       {groupPicker&&<GroupSelectionDialog group={groupPicker} selected={selectedIds} onClose={()=>setGroupPicker(null)} onApply={ids=>{const next=changeSelection(changeSelection(selection,groupPicker.rows.map(row=>row.id),'remove'),ids,'add');setSelectionRows(previous=>({...previous,...Object.fromEntries(groupPicker.rows.map(row=>[row.id,row]))}));setSelection(next);setGroupPicker(null);}} onDetach={detachFromGroup} onDetached={()=>setGroupPicker(null)}/>}
       {organizing && <OrganizeDialog items={chosenItems} collections={collections} onClose={() => setOrganizing(false)} onDone={result => { saved(result); notify('已完成批量整理',result?.undo); }} />}
       {groupOrganizing && <React.Suspense fallback={null}><GroupOrganizeDialog items={chosenItems} kind={groupKind||'image'} library={actualCollection} onClose={() => setGroupOrganizing(false)} onDone={result => { const label=groupKind==='video'?'个视频':'张图片'; setSelecting(false); setSelection([]); setSelectionRows({}); saved(result); notify(`已整理 ${result.changed_count} ${label}${result.copied_count ? `，其中 ${result.copied_count} 张共享笔记原图` : ''}`,result.undo); }}/></React.Suspense>}
+      {albumManager&&<AlbumManager collection={actualCollection} onClose={()=>setAlbumManager(false)} onChanged={()=>{refresh();savedViews.reload();albumModel.reload().then(rows=>{if(rows&&browsing.current.library===collection&&albumId&&!rows.some(row=>row.id===albumId)){setAlbumId(null);closeDetail();clearSelection();}}).catch(e=>{if(browsing.current.library===collection)notify(e.message)});}}/>}
+      {favoriteTargets&&<FavoriteTargets items={favoriteTargets} collection={actualCollection} onClose={()=>setFavoriteTargets(null)} onDone={async result=>{setFavoriteTargets(null);saved(result);notify(result.changed_count?'收藏已更新':'收藏保持不变',result.undo);if(selected?.id){if(view==='favorites')closeDetail();else try{setSelected(await api('/api/items/'+selected.id));}catch(e){notify(e.message)}}}}/>}
       {settings && (
         <SettingsPanel
           onClose={() => setSettings(false)}

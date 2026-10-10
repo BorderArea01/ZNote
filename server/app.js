@@ -7,6 +7,7 @@ import { VERSION } from './version.js';
 import { createUndoManager } from './undo.js';
 import { createNoteHistory } from './note-history.js';
 import { registerSavedViews } from './saved-views.js';
+import { registerAlbums } from './albums.js';
 import { registerReadingProgress } from './reading-progress.js';
 import { registerVideoProgress } from './video-progress.js';
 import { registerGroupOrganize } from './group-organize.js';
@@ -187,6 +188,7 @@ export function createApp({
   // Media groups can contain images or videos. Keep the kind in the count so
   // an accidental shared key can never fold different media types together.
   const groupSize = db.prepare("SELECT count(*) n FROM items WHERE collection_id IS ? AND group_key=? AND kind=? AND (deleted_at IS NOT NULL)=?");
+  const itemAlbums=db.prepare('SELECT ai.album_id FROM album_items ai JOIN albums a ON a.id=ai.album_id WHERE ai.item_id=? AND a.collection_id IS ? ORDER BY ai.album_id');
   const noteCoverCache = new Map();
   const noteCover = row => {
     if(row.kind!=='note')return null;
@@ -209,6 +211,7 @@ export function createApp({
       group_size: ['image','video'].includes(row.kind)&&row.group_key ? groupSize.get(row.collection_id,row.group_key,row.kind,row.deleted_at?1:0).n : undefined,
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
+      album_ids:itemAlbums.all(row.id,row.collection_id).map(entry=>entry.album_id),
       url: row.file_key ? `/media/${row.id}/original` : null,
       preview_url: row.mime === PSD_MIME ? `/media/${row.id}/preview` : null,
       thumbnail_url: ['image','video'].includes(row.kind) ? `/media/${row.id}/thumbnail` : noteCover(row),
@@ -492,6 +495,7 @@ export function createApp({
         tags: z.string().max(3000).optional(),
         tag_mode: z.enum(["all", "any"]).default("all"),
         favorite: z.enum(["true", "false"]).optional(),
+        album: z.uuid().optional(),
         trash: z.enum(["true", "false"]).optional(),
         sort: z.enum(["updated", "created", "title"]).default("updated"),
         direction: z.enum(["asc", "desc"]).optional(),
@@ -556,6 +560,13 @@ export function createApp({
       }
     }
     if (q.favorite === "true") where.push("favorite=1");
+    if (q.album) {
+      const album=db.prepare('SELECT collection_id FROM albums WHERE id=?').get(q.album);
+      if(!album)throw fail(404,'相册已删除，请选择其他收藏');
+      if(q.collection && (q.collection==='unfiled'?null:q.collection)!==album.collection_id)throw fail(400,'相册属于其他知识库');
+      where.push('collection_id IS ? AND EXISTS (SELECT 1 FROM album_items WHERE album_id=? AND item_id=items.id)');
+      args.push(album.collection_id,q.album);
+    }
     if (q.group_key) { where.push('group_key=?'); args.push(q.group_key); }
     if (q.gallery === 'true' && q.gallery_scope === 'singles') where.push('group_key IS NULL');
     const clause = where.join(" AND ");
@@ -1346,6 +1357,7 @@ export function createApp({
   noteHistory=createNoteHistory({app,db});
   transaction(() => noteHistory.seed());
   registerSavedViews({app,db,transaction});
+  registerAlbums({app,db,transaction,event,undo,serialize});
   registerReadingProgress({app,db,transaction});
   registerVideoProgress({app,db,transaction});
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));

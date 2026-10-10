@@ -62,7 +62,12 @@ html[data-style] button.help-trigger:hover, html[data-style] button.help-trigger
 .page-heading { margin-bottom: 22px; }
 .page-heading h1 { margin: 5px 0; font-size: 28px; }
 .heading-actions { gap: 8px; }
-.toolbar { gap: 16px; }
+.toolbar { gap: 20px; margin-bottom:18px; flex-wrap:wrap; }
+.toolbar-options { gap:16px; }
+.toolbar .view-switch { gap:4px; padding:4px; border-radius:11px; }
+.toolbar .view-switch button { min-width:36px; min-height:36px; border-radius:8px; }
+.toolbar .search-box { flex:0 1 420px; min-width:220px; height:44px; }
+@media(max-width:760px) { .toolbar { gap:12px; margin-bottom:16px; } .toolbar .search-box { flex-basis:100%; width:100%; min-width:0; } .toolbar .view-switch button { min-width:38px; min-height:40px; } }
 .tag-browser { margin-top: 18px; padding: 14px 18px; }
 .tag-browser-tools { margin-top: 10px; }
 .tag-options { margin: 12px 0 0; }

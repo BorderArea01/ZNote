@@ -4,6 +4,7 @@ const fail = (status, message) => Object.assign(Error(message), { status });
 export const typeOrderSchema=z.string().default('image,group,note,video').refine(s=>{const values=s.split(',');return values.length===4&&new Set(values).size===4&&values.every(v=>['image','group','note','video'].includes(v));},'类型顺序必须包含四种类型且不重复');
 export const savedViewConfig = z.object({
   view: z.enum(['all', 'images', 'videos', 'notes', 'favorites', 'trash']),
+  album_id:z.uuid().nullable().default(null),
   query: z.string().max(200),
   tags: z.array(z.string().trim().min(1).max(40)).max(30).transform(tags => [...new Set(tags)].sort()),
   mode: z.enum(['all', 'any']), sort: z.enum(['updated', 'created', 'title']), direction: z.enum(['asc','desc']).optional(), type_group: z.boolean().default(false), type_order:typeOrderSchema, layout: z.enum(['grid', 'list', 'compact-grid', 'compact-list']),
@@ -24,6 +25,7 @@ export function registerSavedViews({ app, db, transaction }) {
   function unique(library, value, except = '') {
     if (db.prepare('SELECT 1 FROM saved_views WHERE collection_id IS ? AND name=? AND id!=?').get(library, value, except)) throw fail(409, '当前知识库已有同名筛选，请换个名称');
   }
+  function validateAlbum(library,config){if(config.album_id){const album=db.prepare('SELECT collection_id FROM albums WHERE id=?').get(config.album_id);if(config.view!=='favorites'||!album||album.collection_id!==library)throw fail(400,'收藏相册不存在或不属于当前知识库');}}
   app.get('/api/saved-views', (req, res) => {
     const library = scope(req.query.collection);
     res.json({ views: db.prepare('SELECT * FROM saved_views WHERE collection_id IS ? ORDER BY name,id').all(library).map(serialize) });
@@ -32,7 +34,7 @@ export function registerSavedViews({ app, db, transaction }) {
   app.post('/api/saved-views', (req, res) => {
     const value = input.parse(req.body);
     const result = transaction(() => {
-      scope(value.collection_id || 'unfiled'); unique(value.collection_id, value.name);
+      scope(value.collection_id || 'unfiled'); unique(value.collection_id, value.name);validateAlbum(value.collection_id,value.config);
       if (db.prepare('SELECT count(*) n FROM saved_views WHERE collection_id IS ?').get(value.collection_id).n >= 50) throw fail(409, '每个知识库最多保存 50 个筛选，请先整理已有筛选');
       const id = randomUUID(), time = new Date().toISOString();
       db.prepare('INSERT INTO saved_views(id,collection_id,name,config,version,created_at,updated_at) VALUES(?,?,?,?,1,?,?)').run(id, value.collection_id, value.name, JSON.stringify(value.config), time, time);
@@ -46,6 +48,7 @@ export function registerSavedViews({ app, db, transaction }) {
       const old = get(req.params.id);
       if (old.version !== value.version) throw fail(409, '这个筛选已在其他页面修改，请读取最新版本后重试');
       const title = value.name ?? old.name, config = value.config ? JSON.stringify(value.config) : old.config;
+      if(value.config)validateAlbum(old.collection_id,value.config);
       unique(old.collection_id, title, old.id);
       if (title !== old.name || config !== old.config) db.prepare('UPDATE saved_views SET name=?,config=?,version=version+1,updated_at=? WHERE id=?').run(title, config, new Date().toISOString(), old.id);
       return serialize(get(old.id));

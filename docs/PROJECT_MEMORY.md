@@ -2,6 +2,15 @@
 
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
+## 自定义收藏相册（2026-10-11，已部署与桌面/模拟触屏验收）
+
+- 用户要求：可持续增删改的自定义相册分区，入口与收藏放一起；搜索/排序/视图工具栏与更新提示不要挤在一起。相册属于当前知识库（含未分类）；同一资源可关联多个相册，不复制原文件，不改正文、来源或分组。删除相册只删除分类；移动到其他库后不跨库显示，移回恢复；回收站隐藏，恢复重新显示，永久删除清理关联。
+- schema 15 增量添加 albums、album_items 和索引。名称 1–80 字，不设相册数量上限；同库重名 409、重命名/删除检查 version，未分类有唯一索引。默认 favorite 独立、旧 API 保留。卡片、媒体/笔记预览、多选共用收藏菜单；整组按 kind+group_key+collection 展开，不拆组。仅单独变更默认收藏时保留撤销；相册分类/成员变动暂不进入撤销中心，可通过菜单反向操作恢复。
+- /api/favorite-targets/preview 返回当前成员/version/分组快照/选中数量；提交原子应用明确勾选或取消的目标，未操作的混合选中保持原样。内容或组变动、跨库目标拒绝并允许重新读取。/api/items?album= 继承分页、排序、类型分区、标签、组折叠和图库范围；常用筛选保存 album_id，删除相册清理筛选关联。完整备份/恢复包含两张表，旧 schema 14 及更早备份兼容；元数据导出带相册及关联。
+- 初始游戏运行时仅作轻量编辑/语法解析/小型接口测试，没有构建或浏览器；确认游戏退出、可用内存 5–7 GB 后才串行验收。scripts/run-resource-guarded.ps1 持续检查游戏/可用内存，停止自己启动的任务树且不自动重启。255 项已跟踪测试串行回归通过；随后批量收藏响应补充所有成员的最新摘要/version/album_ids，并合并选择缓存，6 项相册接口回归及真实页面连续批量标签验收通过。生产构建 GOMAXPROCS=1、384 MB old-space，约 2 秒。
+- 当前 3741 PID 360468、schema 15、0.0.0.0，实际加载 index-DM69VDHY.js / index-BN2mdJS6.css。桌面/模拟触屏覆盖创建、重命名、删除当前相册后回到默认收藏、多相册整组收藏、笔记与组混合批量收藏及随后打标签、缩略图跳转、取消/关闭、帮助触屏保持、503 失败后重试和更新通知；工具栏/通知间距 18px / 16px，无横向溢出。浅色首轮、深色最终截图已目视检查；临时库/资源/令牌清理，PIN 未变，Android 真机未直接验证。证据 artifacts/albums-live-Dn2OJN/result.json、artifacts/albums/full-regression-final.log、artifacts/albums/albums-final-response.log、artifacts/albums/build-final.log；tests/albums-ui.mjs --live 是显式当前实例验收。
+- 迁移前完整 schema 14 快照 data/backups/1791674451024-c9efbe5b-55aa-4614-9ea0-cfa2f92eb3a5.snapshot 仍保留，数据库 quick_check/外键检查通过，13576 个媒体文件（含配乐）存在并与 manifest 一致，PIN 相同。首次完整备份出现 Windows 原子 rename 的临时 EPERM；参考 graceful-fs 的重试策略新增 server/atomic-files.js，只对 Windows EPERM/EACCES/EBUSY 有界重试，不删除覆盖已有快照，不旁路永久拒绝；3 项故障测试与备份恢复集成测试通过。当前实例完整备份接口实际成功保存 schema 15 快照 1791675596311-8c2819d2-a2ba-4fd6-ade5-39174f0cdfac.snapshot，原 keep=2 策略未改、last_error=null，证据 artifacts/albums/actual-backup.log。OpenAPI 的 Item 是 allOf 组合，新增字段必须追加 allOf，不能假设顶层 properties 存在；已修复启动异常并确认服务健康。本项只迁移元数据，没有替换用户原文件。
+
 ## 百度贴吧图片组采集（2026-10-11，已部署与桌面/模拟触屏验收）
 
 - 用户要求贴吧帖子仍按“图片组＋备注”保存。默认范围是楼主首帖与楼主追加楼层，不混入其他回复、楼中楼、头像、表情图片或推荐内容；正文、作者、吧名和原帖地址进入备注。单图保持单图、无图保存文字笔记，明确选择 note 时保留图文笔记模式。

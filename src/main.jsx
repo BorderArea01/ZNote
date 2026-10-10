@@ -428,6 +428,7 @@ function Detail({
   suggestions,
   onClose,
   onSaved,
+  onFavoriteTargets,
   onGroupOrdered,
   onDetachGroup,
   onDelete,
@@ -451,6 +452,7 @@ function Detail({
   galleryIndex = -1,
 }) {
   const [item, setItem] = useState(initial);
+  useEffect(()=>{if(initial.version)setItem(previous=>({...previous,favorite:initial.favorite,album_ids:initial.album_ids,version:initial.version}));},[initial.favorite,initial.version]);
   const [videoError, setVideoError] = useState(false);
   const [title, setTitle] = useState(initial.title);
   const [content, setContent] = useState(initial.content);
@@ -592,6 +594,7 @@ function Detail({
   }
   async function toggleFavorite() {
     if (busy || item.deleted_at) return;
+    if(onFavoriteTargets){if(!dirty||await save())onFavoriteTargets(item);return;}
     setBusy(true);
     try {
       const result = await send(`/api/items/${item.id}`, { version: item.version, favorite: !item.favorite, undo: true }, 'PATCH');
@@ -679,10 +682,11 @@ function Detail({
           {item.kind !== 'note' && !item.deleted_at && <div className="gallery-controls">
             {isMediaGroup(item)&&<button onClick={openSorting} disabled={busy}>调整顺序</button>}
             {isImageGroup(item)&&!item.group_key?.startsWith('note:')&&onDetachGroup&&<button onClick={detachCurrent} disabled={busy}><Unlink size={14}/>移出图片组</button>}
-            <button onClick={toggleFavorite} disabled={busy}>{item.favorite ? '取消收藏' : item.kind === 'video' ? '收藏视频' : '收藏图片'}</button>
+            <button onClick={toggleFavorite} disabled={busy}>收藏 / 相册</button>
             <button onClick={async () => { if (!dirty || await save()) setCopying(true); }} disabled={busy}>复用到其他知识库</button>
           </div>}
           {sourceLinks(item).length > 0 && <div className="source-info">{sourceLinks(item).map(({url, site}, index) => <p key={url}><a href={url} target="_blank" rel="noreferrer" title={url}>查看采集来源 · {site}{index > 0 ? `（${index + 1}）` : ''}</a>{index === 0 && item.captured_at && ` · ${new Date(item.captured_at).toLocaleString()}`}</p>)}</div>}
+          {item.kind==='note'&&item.id&&!item.deleted_at&&<div className="gallery-controls"><button onClick={toggleFavorite} disabled={busy}><Star size={14}/>收藏 / 相册</button></div>}
           <label className="sr-only" htmlFor="item-title">
             标题
           </label>

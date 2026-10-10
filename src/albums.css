@@ -1,0 +1,30 @@
+.album-navigation { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:6px 0 8px; padding:4px 5px 4px 12px; }
+.album-select { display:flex; align-items:center; flex:1; min-width:0; gap:8px; color:var(--muted); padding:0 8px; border:1px solid var(--border); border-radius:9px; background:var(--surface); }
+.sidebar .album-navigation .album-select select { appearance:none; width:100%; min-width:0; padding:8px 0; border:0; border-radius:0; background:transparent; color:var(--ink); font-size:12px; }
+.album-select svg { flex:none; pointer-events:none; }
+.album-select select:focus-visible { outline:2px solid var(--green); border-radius:6px; }
+.album-dialog { width:min(500px,calc(100vw - 24px)); }
+.album-dialog-body { padding:22px; overflow-y:auto; min-height:0; }
+.album-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
+.album-create { display:flex; gap:10px; margin:14px 0; }
+.album-create input { min-width:0; flex:1; border:1px solid var(--border); border-radius:10px; padding:11px 12px; background:var(--surface); color:var(--ink); }
+.album-create button { display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; }
+.album-manager-list,.album-targets { max-height:42vh; overflow-y:auto; overscroll-behavior:contain; }
+.album-manager-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); }
+.album-manager-row>span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.album-manager-row small { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
+.album-manager-row form { display:flex; gap:8px; width:100%; }
+.album-manager-row input { width:100%; min-width:0; padding:10px; }
+.album-manager-row .icon-button { min-width:38px; min-height:38px; }
+.album-delete-confirm { display:flex; flex-wrap:wrap; align-items:center; gap:10px; width:100%; padding:12px; border-radius:10px; background:var(--surface-2); }
+.album-delete-confirm span { width:100%; font-size:13px; }
+.album-empty { padding:24px 0; color:var(--muted); text-align:center; font-size:13px; }
+.album-targets { border:0; margin:0; padding:0; }
+.album-target { display:flex; gap:12px; align-items:center; padding:14px 12px; border:1px solid var(--border); border-radius:11px; margin-bottom:9px; cursor:pointer; background:var(--surface); }
+.album-target:has(input:checked) { border-color:var(--green); background:var(--accent-soft); }
+.album-target input { width:18px; height:18px; flex:none; accent-color:var(--green); }
+.album-target>span { flex:1; overflow-wrap:anywhere; }
+.album-target small { color:var(--muted); white-space:nowrap; }
+.album-error { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px; color:var(--danger,#b95549); font-size:13px; width:100%; }
+.album-dialog .dialog-actions { gap:12px; padding:16px 22px; }
+@media(max-width:600px) { .album-dialog-body { padding:18px; } .album-target { min-height:50px; } .album-dialog .dialog-actions>button { min-height:44px; } }

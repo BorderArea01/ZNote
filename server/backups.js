@@ -1,7 +1,7 @@
 import { MAX_IMAGE_BYTES, MAX_PSD_BYTES } from './image-limits.js';
 import { backup, DatabaseSync } from 'node:sqlite';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, unlink, rename, rm, copyFile, link, open } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, unlink, rm, copyFile, link, open } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
@@ -13,6 +13,8 @@ import { exportContent } from './exports.js';
 import { originalBuffer, digest } from './storage.js';
 import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
 import { savedViewConfig } from './saved-views.js';
+import { albumSchema } from './albums.js';
+import {publishRename} from './atomic-files.js';
 import { readingEntries } from './reading-progress.js';
 import { videoEntries } from './video-progress.js';
 
@@ -21,7 +23,7 @@ const policySchema = z.object({ enabled: z.boolean(), interval_hours: z.number()
 const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(value) && !value.includes('..');
 const uuid = z.uuid();
 const requiredTables = ['settings', 'tokens', 'collections', 'items', 'events'];
-const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views', 'reading_progress', 'video_progress'];
+const tables = [...requiredTables, 'webhooks', 'webhook_deliveries', 'note_versions', 'saved_views', 'reading_progress', 'video_progress', 'albums', 'album_items'];
 const legacyPattern = /^\d{13}-[\da-f-]{36}\.zip$/;
 const snapshotPattern = /^\d{13}-[\da-f-]{36}\.snapshot$/;
 const restoreText = 'ZNote recovery snapshot exported as a portable migration ZIP. Upload it in Settings > Recovery snapshots to preview and restore it. Includes password/API token hashes and Webhook signing secrets. Keep this file private.\n';
@@ -75,7 +77,8 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    for(const table of ['albums','album_items'])if(version>=15&&!snapshot.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))throw fail(400,'备份缺少相册数据表');
     if(version>=13&&!snapshot.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='video_progress'").get())throw fail(400,'备份缺少视频播放记录表');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
@@ -84,6 +87,8 @@ async function inspectBackup(stage) {
       if (table?.type !== 'table' || /VIRTUAL\s+TABLE/i.test(table.sql || '')) throw fail(400, '备份缺少必要数据表');
     }
     const counts = Object.fromEntries(requiredTables.map(name => [name, snapshot.prepare(`SELECT count(*) n FROM ${name}`).get().n]));
+    if(snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='albums'").get())for(const album of snapshot.prepare('SELECT * FROM albums').iterate())albumSchema.parse(album);
+    if(snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='album_items'").get())for(const member of snapshot.prepare('SELECT * FROM album_items').iterate())z.object({album_id:uuid,item_id:uuid}).parse(member);
     const password = snapshot.prepare("SELECT value FROM settings WHERE key='password'").get()?.value;
     if (!/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(password || '')) throw fail(400, '备份的访问密码记录缺失或损坏');
     for (const collection of snapshot.prepare('SELECT * FROM collections').iterate()) {
@@ -186,7 +191,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       if (entry.isDirectory() && /^preview-[a-zA-Z0-9]{6}$/.test(entry.name)) await removeStage(staging, join(staging, entry.name));
   })();
   const config = async () => { await ready; try { return { ...defaults, ...JSON.parse(await readFile(configPath, 'utf8')) }; } catch (e) { if (e.code !== 'ENOENT') throw e; return { ...defaults }; } };
-  const saveConfig = async value => { await ready; const temp = join(directory, `${randomUUID()}.json.tmp`); await writeFile(temp, JSON.stringify(value, null, 2)); await rename(temp, configPath); };
+  const saveConfig = async value => { await ready; const temp = join(directory, `${randomUUID()}.json.tmp`); await writeFile(temp, JSON.stringify(value, null, 2)); await publishRename(temp, configPath,{replace:true}); };
   const list = async () => {
     await ready;
     const entries = await readdir(directory, { withFileTypes: true }), rows = [];
@@ -227,7 +232,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       manifest.stored_bytes += Buffer.byteLength(manifestText);
       await writeFile(join(temp, 'snapshot.json'), `${JSON.stringify(manifest, null, 2)}\n`);
       await writeFile(join(temp, 'RESTORE.txt'), restoreText);
-      await rename(temp, target);
+      await publishRename(temp, target);
       return id;
     } catch (e) { await removeStage(directory, temp).catch(() => {}); throw e; }
   };

@@ -111,6 +111,8 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
     mode: query.mode,
     exported_at: new Date().toISOString(),
     collections,
+    albums: query.mode==='backup' ? [] : db.prepare('SELECT * FROM albums').all().filter(album=>!query.collection||(album.collection_id||'unfiled')===query.collection),
+    album_items: query.mode==='backup' ? [] : db.prepare('SELECT ai.* FROM album_items ai JOIN albums a ON a.id=ai.album_id JOIN items i ON i.id=ai.item_id WHERE i.collection_id IS a.collection_id').all().filter(entry=>selectedIds.has(entry.item_id)),
     items: items.map(item => ({ ...exported(item), file: paths.get(item.id) })),
     attachment_ids: images
       .filter((i) => !selectedIds.has(i.id))
