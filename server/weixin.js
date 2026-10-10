@@ -6,6 +6,7 @@ import {sharedUrls} from '../shared/share-input.js';
 import {createWeixinGrouping,WEIXIN_MODES,WEIXIN_TIME_ZONE,weixinDay,weixinNewNoteCommand} from './weixin-grouping.js';
 const KEY='weixin_inbox_v1';
 const fault=message=>Object.assign(Error(message),{status:400});
+const imageFile=part=>part.type===4&&typeof part.file_item?.file_name==='string'&&/\.(?:jpe?g|png|webp|gif|avif)$/i.test(part.file_item.file_name);
 export function weixinItemId(job,index='note'){
   const hex=createHash('sha256').update(job+':'+index).digest('hex');
   return hex.slice(0,8)+'-'+hex.slice(8,12)+'-4'+hex.slice(13,16)+'-a'+hex.slice(17,20)+'-'+hex.slice(20,32);
@@ -39,10 +40,10 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
         const receipt=grouping.receipt(job.id);
         if(receipt){jobPatch(job.id,j=>{j.items=receipt.items;j.state='done';delete j.message});return;}
         const list=job.message.item_list||[];
-        if(!list.length||list.length>64||list.some(i=>![1,2].includes(i.type)))throw fault('此消息含暂不支持的内容；目前接收文字、图片和图文消息');
+        if(!list.length||list.length>64||list.some(i=>![1,2].includes(i.type)&&!imageFile(i)))throw fault('此消息含暂不支持的内容；目前接收文字、图片和 JPG、PNG、WebP、GIF、AVIF 图片文件附件');
         const text=list.filter(i=>i.type===1).map(i=>i.text_item?.text||'').join('\n\n');
         if(text.length>450000)throw fault('文字过长，请分开发送');
-        const images=list.filter(i=>i.type===2);if(images.length>32)throw fault('一条消息最多接收 32 张图片');
+        const images=list.filter(i=>i.type===2||imageFile(i));if(images.length>32)throw fault('一条消息最多接收 32 张图片');
         const note=!!job.target||!!text.trim(),noteId=job.target?.id||weixinItemId(job.id),ids=[];
         // Deterministic IDs make replay safe even after a crash between inserting
         // content and recording completion. Deleted/edited content is never recreated.
@@ -65,7 +66,7 @@ export function createWeixinInbox({db,saveImage,saveNote,appendNote,exists,trans
           const index=imageIndex++,id=weixinItemId(job.id,index);let item=exists(id);
           if(item?.deleted_at)throw fault('这条消息的配图已在回收站，请恢复后重试');
           if(item&&item.collection_id!==job.collection_id)throw fault('这条消息的配图已移动到其他知识库，未重复保存');
-          if(!item){const bytes=await client.image(part.image_item,signal);signal.throwIfAborted();item=await saveImage(bytes,{id,title:job.title+(images.length>1?' · '+(index+1):''),collection_id:job.collection_id,tags:job.tags,group_key:note?'note:'+noteId:'wechat:'+job.id,group_index:job.target?db.prepare('SELECT COALESCE(MAX(group_index),-1)+1 n FROM items WHERE group_key=? AND collection_id IS ?').get('note:'+noteId,job.collection_id).n:index,group_title:job.target?.title||job.title,captured_at:job.created_at});}
+          if(!item){const bytes=await (part.type===4?client.imageFile(part.file_item,signal):client.image(part.image_item,signal));signal.throwIfAborted();item=await saveImage(bytes,{id,title:job.title+(images.length>1?' · '+(index+1):''),collection_id:job.collection_id,tags:job.tags,image_size_mode:'original',group_key:note?'note:'+noteId:'wechat:'+job.id,group_index:job.target?db.prepare('SELECT COALESCE(MAX(group_index),-1)+1 n FROM items WHERE group_key=? AND collection_id IS ?').get('note:'+noteId,job.collection_id).n:index,group_title:job.target?.title||job.title,captured_at:job.created_at});}
           if(job.target&&item.group_key!=='note:'+noteId)throw fault('这条消息的配图已重新分组，未改变已有分组，请恢复后重试');
           ids.push(item.id);content.push(`![微信配图 ${index+1}](/media/${item.id}/original)`);
         }

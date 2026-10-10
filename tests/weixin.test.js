@@ -20,7 +20,7 @@ test('Weixin transport isolates credentials from CDN, bounds downloads and decod
  assert.equal(calls[0].options.headers.Authorization,'Bearer private');
  assert.deepEqual(await client.image({media:{encrypt_query_param:'abc',aes_key:key.toString('base64')}}),bytes);
  assert.equal(calls[1].options.headers,undefined);assert.ok(!JSON.stringify(calls[1]).includes('private'));
- const oversized=createWeixinClient({fetcher:async()=>new Response('x',{headers:{'content-length':String(26*1024*1024)}})});await assert.rejects(()=>oversized.image({media:{encrypt_query_param:'x'}}),/大小限制/);
+ const oversized=createWeixinClient({fetcher:async()=>new Response('x',{headers:{'content-length':String(101*1024*1024)}})});await assert.rejects(()=>oversized.image({media:{encrypt_query_param:'x'}}),/大小限制/);
  const largeIds=createWeixinClient({fetcher:async()=>new Response('{"ret":0,"msgs":[{"message_id":18446744073709551615}]}')});assert.equal((await largeIds.updates({base:'https://ilinkai.weixin.qq.com',token:'x'},'')).msgs[0].message_id,'18446744073709551615');
 });
 

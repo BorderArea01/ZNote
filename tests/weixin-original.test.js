@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {createCipheriv,createHash,randomBytes} from 'node:crypto';
+import sharp from 'sharp';
+import {createWeixinClient} from '../server/weixin-client.js';
+import {createApp} from '../server/app.js';
+import {originalBuffer} from '../server/storage.js';
+
+const encrypt=(bytes,key)=>{const cipher=createCipheriv('aes-128-ecb',key,null);return Buffer.concat([cipher.update(bytes),cipher.final()]);};
+const attachment=(bytes,key,name='原始照片.PNG')=>({file_name:name,len:String(bytes.length),md5:createHash('md5').update(bytes).digest('hex'),media:{encrypt_query_param:'original-file',aes_key:Buffer.from(key.toString('hex')).toString('base64')}});
+
+test('Weixin original attachment validates plaintext size/hash, bounds before downloading and keeps credentials off CDN',async()=>{
+ const bytes=Buffer.from('original attachment bytes'),key=randomBytes(16),calls=[];
+ const client=createWeixinClient({fetcher:async(url,options)=>{calls.push({url:String(url),options});return new Response(encrypt(bytes,key));}}),file=attachment(bytes,key);
+ assert.deepEqual(await client.imageFile(file),bytes);
+ assert.equal(calls[0].options.headers,undefined);assert.equal(calls[0].options.redirect,'error');
+ assert.ok(calls[0].url.includes('encrypted_query_param=original-file'));
+ await assert.rejects(()=>client.imageFile({...file,len:'1'}),/不完整/);
+ await assert.rejects(()=>client.imageFile({...file,md5:'0'.repeat(32)}),/不完整/);
+ const before=calls.length;
+ for(const len of ['104857601','18446744073709551615','-1','not-a-size',100])await assert.rejects(()=>client.imageFile({...file,len}));
+ await assert.rejects(()=>client.imageFile({...file,md5:'invalid'}),/校验信息/);
+ assert.equal(calls.length,before,'Invalid/oversized metadata must fail without downloading');
+ assert.deepEqual(await client.imageFile({media:file.media}),bytes,'Optional sender metadata is not required');
+ assert.deepEqual(await client.imageFile({media:file.media,len:'',md5:''}),bytes,'Empty optional protocol fields mean no integrity metadata');
+ await assert.rejects(()=>client.imageFile({...file,media:{full_url:'https://evil.test/image'}}));
+ const oversized=createWeixinClient({fetcher:async()=>new Response('x',{headers:{'content-length':String(100*1024*1024+17)}})});
+ await assert.rejects(()=>oversized.imageFile({media:file.media}),/大小限制/);
+ const cancelled=new AbortController();cancelled.abort();
+ const aborting=createWeixinClient({fetcher:async(_,options)=>{options.signal.throwIfAborted();return new Response('');}});
+ await assert.rejects(()=>aborting.imageFile(file,cancelled.signal),{name:'AbortError'});
+});
+
+test('Weixin mixed messages keep originals over 25 MB despite compress preference, retain ordering and recover attachment failure without duplication',async t=>{
+ const dir=await mkdtemp(resolve('artifacts/weixin-original-'));
+ const large=await sharp(randomBytes(3072*3072*3),{raw:{width:3072,height:3072,channels:3}}).png({compressionLevel:0}).toBuffer();
+ assert.ok(large.length>25*1024*1024);
+ const small=await sharp({create:{width:40,height:30,channels:3,background:'#5377bb'}}).png().toBuffer();
+ const key=randomBytes(16),file=attachment(large,key),downloads=[];let next=[],offline=false,spoof=false;
+ const transport=createWeixinClient({fetcher:async(url,options)=>{assert.equal(options.headers,undefined);downloads.push(String(url));if(offline)throw Error('offline');return new Response(encrypt(spoof?Buffer.from('not an image'):large,key));}});
+ const client={...transport,updates:async()=>({msgs:next.splice(0),get_updates_buf:'cursor'}),image:async()=>small};
+ const runtime=createApp({dataDir:dir,weixinClient:client});
+ t.after(async()=>{await Promise.all(['captures','weixin','trash','imports','backups','webhooks'].map(k=>runtime[k].stop()));runtime.db.close();});
+ const account={base:'https://ilinkai.weixin.qq.com',token:'PRIVATE-TOKEN',bot:'bot',user:'owner'};
+ const state=()=>JSON.parse(runtime.db.prepare("SELECT value FROM settings WHERE key='weixin_inbox_v1'").get().value);
+ const store=s=>runtime.db.prepare("INSERT INTO settings(key,value) VALUES('weixin_inbox_v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(s));
+ runtime.db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('capture_settings_v1',JSON.stringify({image_size_mode:'compress'}));
+ store({enabled:true,merge_mode:'daily',collection_id:null,tags:['微信'],account,cursor:'',jobs:[]});
+ const msg=(id,items)=>({message_type:1,message_state:2,message_id:id,from_user_id:'owner',item_list:items,create_time_ms:Date.now()});
+ const photo={type:2,image_item:{media:{}}},text={type:1,text_item:{text:'保留高清附件与配图顺序'}},part={type:4,file_item:file};
+ next=[msg(1,[photo,text,part])];const tick=()=>runtime.weixin.tick(new AbortController().signal);
+ await tick();await tick();assert.equal(state().jobs[0].state,'done');
+ const images=runtime.db.prepare("SELECT * FROM items WHERE kind='image' ORDER BY group_index").all(),note=runtime.db.prepare("SELECT * FROM items WHERE kind='note'").get();
+ assert.equal(images.length,2);assert.equal(images[1].width,3072);assert.equal(images[1].mime,'image/png');assert.equal(images[1].bytes,large.length);
+ assert.deepEqual(await originalBuffer(dir,images[0]),small);assert.deepEqual(await originalBuffer(dir,images[1]),large);
+ assert.ok(note.content.indexOf(images[0].id)<note.content.indexOf(text.text_item.text));assert.ok(note.content.indexOf(text.text_item.text)<note.content.indexOf(images[1].id));
+ const before=downloads.length;next=[msg(1,[photo,text,part])];await tick();await tick();assert.equal(downloads.length,before);assert.equal(runtime.db.prepare('SELECT count(*) n FROM items').get().n,3);
+ offline=true;next=[msg(2,[photo,part])];await tick();await tick();assert.equal(state().jobs.at(-1).state,'failed');
+ assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE kind='image'").get().n,3);
+ offline=false;const retry=state();retry.jobs.at(-1).state='pending';store(retry);await tick();assert.equal(state().jobs.at(-1).state,'done');
+ const appended=runtime.db.prepare("SELECT * FROM items WHERE kind='image' ORDER BY group_index").all();assert.deepEqual(appended.map(i=>i.group_index),[0,1,2,3]);assert.ok(appended.every(i=>i.group_key==='note:'+note.id));assert.deepEqual(await originalBuffer(dir,appended[3]),large);
+ const count=runtime.db.prepare('SELECT count(*) n FROM items').get().n;
+ next=[msg(3,[{type:4,file_item:{...file,file_name:'document.pdf'}}])];await tick();await tick();assert.equal(state().jobs.at(-1).state,'failed');assert.match(state().jobs.at(-1).error,/图片文件附件/);
+ runtime.weixin.skip(state().jobs.at(-1).id);
+ // A fake image extension must still pass the real image decoder before storage.
+ spoof=true;next=[msg(4,[{type:4,file_item:{file_name:'fake.png',media:file.media}}])];await tick();await tick();assert.equal(state().jobs.at(-1).state,'failed');assert.match(state().jobs.at(-1).error,/无法识别图片/);
+ assert.equal(runtime.db.prepare('SELECT count(*) n FROM items').get().n,count);
+ assert.ok(!JSON.stringify(runtime.weixin.status()).includes('PRIVATE'));assert.ok(!JSON.stringify(runtime.weixin.status()).includes(file.media.aes_key));
+});

@@ -1,9 +1,11 @@
-import {createDecipheriv,randomBytes} from 'node:crypto';
+import {createDecipheriv,createHash,randomBytes} from 'node:crypto';
+import {MAX_IMAGE_BYTES} from './image-limits.js';
 // Wire format and CDN key encodings follow Tencent/openclaw-weixin (MIT).
 // See addons/connectors/weixin/README.md for the pinned reference and attribution.
 export const API_BASE='https://ilinkai.weixin.qq.com';
 const CDN_BASE='https://novac2c.cdn.weixin.qq.com/c2c';
 const VERSION='2.4.9';
+const mediaFault=message=>Object.assign(Error(message),{status:400});
 export function weixinUrl(value,{cdn=false}={}){
   const u=new URL(value);
   const allowed=cdn ? (u.hostname.endsWith('.weixin.qq.com')||u.hostname.endsWith('.wx.qq.com')) : (u.hostname==='ilinkai.weixin.qq.com'||/^ilink[a-z0-9-]*\.weixin\.qq\.com$/.test(u.hostname));
@@ -36,6 +38,14 @@ export function createWeixinClient({fetcher=fetch}={}){
     if(code)throw Object.assign(Error(code===-14?'微信连接已过期，请重新扫码':'微信请求失败（'+String(code).slice(0,20)+'）'),{expired:code===-14,weixinCode:Number.isInteger(code)?code:null});
     return result;
   }
+  async function downloadImage(item,signal){
+    const media=item?.media;if(!media)throw mediaFault('这条图片消息缺少原文件，请重新发送');
+    const url=weixinUrl(media.full_url||(media.encrypt_query_param?CDN_BASE+'/download?encrypted_query_param='+encodeURIComponent(media.encrypt_query_param):''),{cdn:true});
+    const response=await fetcher(url,{redirect:'error',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(60000)])});
+    const bytes=decodeWeixinImage(await limited(response,MAX_IMAGE_BYTES+16),item);
+    if(bytes.length>MAX_IMAGE_BYTES)throw mediaFault('微信单张图片不能超过 100 MB');
+    return bytes;
+  }
   return {
     qr:signal=>request('/ilink/bot/get_bot_qrcode?bot_type=3',{body:{local_token_list:[]},metadata:false,signal,timeout:15000}),
     qrStatus:(qr,{base=API_BASE,code='',signal}={})=>request('/ilink/bot/get_qrcode_status?qrcode='+encodeURIComponent(qr)+(code?'&verify_code='+encodeURIComponent(code):''),{base,get:true,signal}),
@@ -47,11 +57,21 @@ export function createWeixinClient({fetcher=fetch}={}){
       if(result.ret!==0)throw Error('微信未返回明确的发送接受结果');
       return {accepted:true};
     },
-    async image(image,signal){
-      const media=image?.media;if(!media)throw Error('这条图片消息缺少原文件');
-      const url=weixinUrl(media.full_url||(media.encrypt_query_param?CDN_BASE+'/download?encrypted_query_param='+encodeURIComponent(media.encrypt_query_param):''),{cdn:true});
-      const response=await fetcher(url,{redirect:'error',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)])});
-      const bytes=decodeWeixinImage(await limited(response,25*1024*1024+16),image);if(bytes.length>25*1024*1024)throw Error('单张图片不能超过 25 MB');return bytes;
+    image:downloadImage,
+    async imageFile(file,signal){
+      // FILE (type 4) carries original attachment bytes rather than the
+      // separately encoded ImageItem/thumbnail representation.
+      let expectedSize;
+      if(file?.len!=null&&file.len!==''){
+        if(typeof file.len!=='string'||!/^\d{1,20}$/.test(file.len))throw mediaFault('微信图片附件的大小信息无效，请重新发送');
+        const size=BigInt(file.len);
+        if(size>BigInt(MAX_IMAGE_BYTES))throw mediaFault('微信单张图片不能超过 100 MB');
+        expectedSize=Number(size);
+      }
+      if(file?.md5!=null&&file.md5!==''&&(typeof file.md5!=='string'||!/^[\da-f]{32}$/i.test(file.md5)))throw mediaFault('微信图片附件的校验信息无效，请重新发送');
+      const bytes=await downloadImage(file,signal);
+      if((expectedSize!==undefined&&bytes.length!==expectedSize)||(file.md5&&createHash('md5').update(bytes).digest('hex')!==file.md5.toLowerCase()))throw mediaFault('微信图片附件不完整，未保存；请重试或重新发送');
+      return bytes;
     },
   };
 }
