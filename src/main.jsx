@@ -1,3 +1,4 @@
+import {BgmControls} from './Bgm.jsx';
 import {isImageGroup,isMediaGroup,isVideoGroup} from './media-group.js';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { sourceLinks } from '../shared/provenance.js';
@@ -420,6 +421,7 @@ function CollectionDialog({ value, onClose, onSave }) {
 
 function Detail({
   item: initial,
+  bgmPlayback,onBgmChanged,
   expandedImage = false,
   onExpandedImageChange,
   collections,
@@ -623,7 +625,7 @@ function Detail({
     >
       <div className="detail-content">
         {item.kind === 'video' && <div className="video-stage">
-          <VideoPlayer key={item.id} item={item} title={title} progress={videoProgress} onError={() => setVideoError(true)}/>
+          <VideoPlayer suppressAudio={bgmPlayback?.playing} key={item.id} item={item} title={title} progress={videoProgress} onError={() => setVideoError(true)}/>
           <p>{item.width} × {item.height} · {bytes(item.bytes)} · {item.video_codec}{item.duration ? ` · ${Math.round(item.duration)} 秒` : ''}</p>
           {videoError && <p role="alert">浏览器无法播放此编码或文件。原视频已保存，可下载后使用本地播放器打开。</p>}
           <a href={item.url} download={title}>下载原视频</a>
@@ -665,6 +667,7 @@ function Detail({
             <span>{new Set(externalImages.map(i=>i.url)).size} 张配图尚未归档到本地</span>
             <button disabled={busy} onClick={save}><Download size={15}/>{busy?'正在归档…':'归档外部配图'}</button>
           </div>}
+          <BgmControls item={item} playback={bgmPlayback} disabled={busy||dirty} onChanged={result=>{setItem(result.item);onBgmChanged(result);}}/>
           <div className="detail-title-row">
             <span className="eyebrow">
               {item.kind === "image"

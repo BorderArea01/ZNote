@@ -1,0 +1,45 @@
+// Opt-in live-instance verification. Uses existing groups, masks user media,
+// restores the temporary image-group soundtrack and preserves the real Douyin BGM.
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {randomBytes,randomUUID,createHash} from 'node:crypto';
+import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {chromium} from 'playwright';
+const base=process.env.ZNOTE_BASE||'http://127.0.0.1:3741',db=new DatabaseSync('data/znote.sqlite');db.exec('PRAGMA busy_timeout=5000');
+const id=randomUUID(),raw='zn_'+randomBytes(32).toString('hex'),dir=await mkdtemp(resolve('artifacts/bgm-live-')),headers={Authorization:'Bearer '+raw};
+db.prepare('INSERT INTO tokens VALUES(?,?,?,?,?,?,?)').run(id,'临时配乐实际页面验收',createHash('sha256').update(raw).digest('hex'),'admin','session',new Date().toISOString(),new Date(Date.now()+86400000).toISOString());
+const count=db.prepare('SELECT count(*) n FROM items').get().n,pin=db.prepare("SELECT value FROM settings WHERE key='password'").get().value,result={ui:[]};let browser,page,imageAnchor;
+const json=async(path,method='GET',body)=>{const res=await fetch(base+path,{method,headers:{...headers,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined});assert.ok(res.ok,await res.clone().text());return res.json();};
+const upload=async(item,buffer,name,title,author='')=>{const form=new FormData();form.set('file',new Blob([buffer]),name);form.set('version',item.version);form.set('title',title);form.set('author',author);return json('/api/items/'+item.id+'/bgm','POST',form);};
+function wave(){const n=16000*12,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(16000,24);b.writeUInt32LE(32000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(n*2,40);return b;}
+try{
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,14);result.health=await json('/api/health');
+  const photos=db.prepare("SELECT * FROM items WHERE source_url LIKE '%6ab5275c000000001501200e%' AND kind='image' AND deleted_at IS NULL ORDER BY group_index").all();assert.equal(photos.length,5);assert.ok(photos.every(r=>!r.bgm));imageAnchor=photos[0];
+  await upload(await json('/api/items/'+imageAnchor.id),wave(),'验收静音配乐.wav','验收静音配乐');
+  const videos=db.prepare("SELECT * FROM items WHERE source_url LIKE '%7684281228119844529%' AND kind='video' AND collection_id=? AND deleted_at IS NULL ORDER BY group_index").all(imageAnchor.collection_id);assert.equal(videos.length,2);
+  let video=await json('/api/items/'+videos[0].id);if(!video.bgm)await upload(video,await readFile('artifacts/bgm-real/bgm.bin'),'糯叽叽.m4a','糯叽叽','Mew');
+  const audioResponse=await fetch(base+'/media/'+videos[0].id+'/bgm',{headers});assert.equal(audioResponse.status,200);assert.deepEqual(Buffer.from(await audioResponse.arrayBuffer()),await readFile('artifacts/bgm-real/bgm.bin'));result.realDouyinMusic={duration:(await json('/api/items/'+videos[0].id)).bgm.duration,bytesPreserved:true};
+  browser=await chromium.launch({channel:'msedge',headless:true,args:['--mute-audio']});
+  for(const touch of [false,true]){
+    const c=await browser.newContext({hasTouch:touch,viewport:{width:touch?390:1280,height:touch?844:900}});c.setDefaultTimeout(15000);await c.addCookies([{name:'znote_session',value:raw,url:base,httpOnly:true,sameSite:'Strict'}]);page=await c.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const click=locator=>touch?locator.tap():locator.click();
+    for(const [kind,rows] of [['image',photos],['video',videos]]){
+      await page.goto(base+'/?item='+rows[0].id);const detail=page.getByRole('dialog',{name:kind==='image'?'图片详情':'视频详情',exact:true});await detail.waitFor();const controls=detail.getByRole('region',{name:'作品配乐'});await controls.waitFor();
+      const hint=controls.getByRole('button',{name:'作品配乐说明',exact:true});await hint.scrollIntoViewIfNeeded();await click(hint);const tooltip=page.getByRole('tooltip');await tooltip.waitFor();await page.waitForTimeout(120);assert.ok(await tooltip.isVisible());const bounds=await tooltip.boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=(touch?390:1280)+1);await page.keyboard.press('Escape');await tooltip.waitFor({state:'hidden'});await hint.focus();await page.keyboard.press('Enter');await tooltip.waitFor();await page.keyboard.press('Escape');
+      await click(controls.getByRole('button',{name:'播放配乐',exact:true}));await page.waitForFunction(()=>{const a=document.querySelector('[data-znote-bgm]');return !a.paused&&a.currentTime>.15;});
+      const initial=await page.evaluate(()=>{window.__bgm=document.querySelector('[data-znote-bgm]');return {src:window.__bgm.src,time:window.__bgm.currentTime};});
+      if(kind==='video')assert.ok(await detail.locator('video').evaluate(el=>el.muted));
+      const next=detail.getByRole('button',{name:kind==='image'?'下一张 →':'下一个 →',exact:true});await next.waitFor();await click(next);await page.waitForFunction(()=>document.querySelector('.gallery-position')?.textContent.includes('第 2'));
+      const after=await page.evaluate(()=>{const a=document.querySelector('[data-znote-bgm]');return {same:a===window.__bgm,src:a.src,time:a.currentTime,playing:!a.paused};});assert.ok(after.same&&after.playing);assert.equal(after.src,initial.src);assert.ok(after.time>=initial.time);
+      await click(controls.getByRole('button',{name:'暂停配乐',exact:true}));await page.waitForFunction(()=>document.querySelector('[data-znote-bgm]').paused);if(kind==='video')assert.equal(await detail.locator('video').evaluate(el=>el.muted),false);
+      const volume=controls.getByRole('slider',{name:'配乐音量'});await volume.focus();await volume.press('Home');assert.equal(await page.locator('[data-znote-bgm]').evaluate(el=>el.volume),0);await volume.press('ArrowRight');assert.ok(await page.locator('[data-znote-bgm]').evaluate(el=>el.volume>0));
+      const seek=controls.getByRole('slider',{name:'配乐进度'});await seek.focus();await seek.press('End');assert.ok(await page.locator('[data-znote-bgm]').evaluate(el=>el.currentTime<=el.duration));await seek.press('Home');assert.equal(await page.locator('[data-znote-bgm]').evaluate(el=>el.currentTime),0);
+      await click(controls.getByRole('button',{name:'播放配乐',exact:true}));await page.screenshot({path:join(dir,`${touch?'touch':'desktop'}-${kind}.png`),mask:[page.locator('img'),page.locator('video')]});await click(detail.getByRole('button',{name:'关闭窗口',exact:true}));await detail.waitFor({state:'hidden'});assert.ok(await page.locator('[data-znote-bgm]').evaluate(el=>el.paused&&!el.getAttribute('src')));
+      result.ui.push({touch,kind,members:rows.length,groupPageKeepsSameAudio:true,helpAndKeyboard:true,seekAndVolume:true,closeStops:true,videoOriginalAudioRestored:kind==='video'});
+    }
+    let failOnce=true;await page.route('**/media/'+videos[0].id+'/bgm',async route=>{if(failOnce){failOnce=false;await route.fulfill({status:503,body:'temporary audio failure'});}else await route.continue();});await page.goto(base+'/?item='+videos[0].id);const controls=page.getByRole('region',{name:'作品配乐'});await controls.waitFor();await click(controls.getByRole('button',{name:'播放配乐',exact:true}));await controls.getByRole('alert').waitFor();await click(controls.getByRole('button',{name:'播放配乐',exact:true}));await page.waitForFunction(()=>!document.querySelector('[data-znote-bgm]').paused);assert.deepEqual(errors,[]);result.ui.push({touch,audioFailureRetry:true,noPageErrors:true});await c.close();
+  }
+  assert.equal(db.prepare('SELECT count(*) n FROM items').get().n,count);assert.equal(db.prepare("SELECT value FROM settings WHERE key='password'").get().value,pin);result.cardCountAndPinUnchanged=true;
+  await writeFile(join(dir,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({evidence:dir,...result}));
+}catch(e){if(page&&!page.isClosed())console.log(JSON.stringify(await page.evaluate(()=>{const a=document.querySelector('[data-znote-bgm]');return a?{paused:a.paused,time:a.currentTime,duration:a.duration,ready:a.readyState,network:a.networkState,src:a.src,error:a.error?.message}:null;})));if(page&&!page.isClosed())await page.screenshot({path:join(dir,'failure.png'),mask:[page.locator('img'),page.locator('video')]}).catch(()=>{});throw e;}
+finally{await browser?.close();if(imageAnchor){const current=await json('/api/items/'+imageAnchor.id);if(current.bgm?.title==='验收静音配乐')await json('/api/items/'+imageAnchor.id+'/bgm','DELETE',{version:current.version});}db.prepare('DELETE FROM tokens WHERE id=?').run(id);db.close();}

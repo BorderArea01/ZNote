@@ -13,6 +13,7 @@ import { proxyAgent } from './network-proxy.js';
 import { xPost, extractXPost } from './capture-x.js';
 import { extractComicChapter } from './capture-comic.js';
 import {ehPolicy} from './capture-eh-policy.js';
+import {captureMusic} from './capture-music.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -493,19 +494,20 @@ export function extractCapturePage(html, url) {
       if (script.id === 'RENDER_DATA') { try { raw = decodeURIComponent(raw); } catch { continue; } }
       const record = id && scriptValues(raw).map(data=>findRecord(data, id, xhs ? 'xhs' : 'douyin')).find(Boolean);
       if (!record) continue;
+      const bgm=captureMusic(record,url);
       const galleryImages=galleryEntries(record, xhs ? 'xhs' : 'douyin');
       if (xhs && record.type === 'video' || dy && !galleryImages.length) {
         const variants=xhs?record.video?.media?.stream||{}:{};
         const streams=xhs?Object.entries(variants).flatMap(([codec,list])=>(Array.isArray(list)?list:[]).map(stream=>({...stream,_codec:codec}))):[];
         const candidates=xhs?streams.sort((a,b)=>Number(b._codec==='h264')-Number(a._codec==='h264')||(b.width*b.height-a.width*a.height)||(b.videoBitrate-a.videoBitrate)).flatMap(s=>[s.masterUrl,...(s.backupUrls||[])]):record.video?.play_addr?.url_list||[];
-        return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||record.authorInfo?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8) };
+        return { kind:'video',url,title:record.title||record.desc?.split('\n')[0]||'',author:record.user?.nickname||record.user?.nickName||record.author?.nickname||record.authorInfo?.nickname||'',description:record.desc||'',video_urls:[...new Set(candidates.map(v=>absolute(v,url)).filter(Boolean))].slice(0,8),...(bgm?{bgm}:{}) };
       }
       const images = galleryImages.map(i => captureImageCandidates(i, xhs ? 'xhs' : 'douyin', url));
       if (!images.length || images.length > 100) throw fail('未取得完整图集或图集超过 100 张');
       const urls = images.map(v => v[0]);
       if (urls.some(v => !v)) throw fail('图集中有无法解析的图片地址');
       const live_videos=galleryImages.map((image,index)=>({index,urls:xhs?xhsLiveVideoCandidates(image,url):liveVideoCandidates(image,url)})).filter(v=>v.urls.length);
-      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || record.authorInfo?.nickname || '' };
+      return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || record.authorInfo?.nickname || '',...(bgm?{bgm}:{}) };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.
     if (dy && !/\/note\//.test(u.pathname) || /video/i.test(meta('og:type'))) return { kind: 'video', url };

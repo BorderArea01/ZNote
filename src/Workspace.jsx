@@ -1,3 +1,4 @@
+import {useBgmPlayback} from './Bgm.jsx';
 import {ContentActions} from './ContentActions.jsx';
 import {SortControl,DEFAULT_TYPE_ORDER} from './SortControl.jsx';
 import {isMediaGroup} from './media-group.js';
@@ -126,6 +127,7 @@ export default function Workspace({
     [selecting, setSelecting] = useState(false),
     [selection, setSelection] = useState([]),
     [batchTags, setBatchTags] = useState(false);
+  const bgmPlayback=useBgmPlayback(selected);
   const [uploadKind, setUploadKind] = useState('image');
   const [importing, setImporting] = useState(false);
   const fileInput = useRef(),
@@ -1593,10 +1595,13 @@ export default function Workspace({
         if (note.collection_id !== actualCollection) chooseCollection(note.collection_id || 'unfiled');
         setDraftsOpen(false); setSelected({...note,_draft:draft});
       }}/>}
+      {bgmPlayback.element}
       {selected && (
         <Detail
           key={selected.id || "new"}
           item={selected}
+          bgmPlayback={bgmPlayback}
+          onBgmChanged={result=>{setSelected(result.item);setItems(rows=>rows.map(row=>result.items.find(i=>i.id===row.id)||row));setGallery(current=>current?current.map(row=>result.items.find(i=>i.id===row.id)||row):current);}}
           expandedImage={imageExpanded}
           onExpandedImageChange={setImageExpanded}
           collections={collections}

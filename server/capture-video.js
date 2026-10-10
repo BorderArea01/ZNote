@@ -14,28 +14,37 @@ const fail=message=>Object.assign(Error(message),{status:422});
 
 // Stream the exact playback resource advertised by the matching work, with the
 // same public-address validation and DNS pinning as page/image collection.
-async function transfer(value,path,source,signal,redirects=0){
+async function transfer(value,path,source,signal,redirects=0,{maxBytes=MAX_VIDEO_BYTES,label='视频'}={}){
   const url=new URL(value),host=url.hostname.replace(/^\[|\]$/g,'');
-  if(!/^https?:$/.test(url.protocol)||url.username||url.password||url.port&&!['80','443'].includes(url.port))throw fail('视频资源地址无效');
+  if(!/^https?:$/.test(url.protocol)||url.username||url.password||url.port&&!['80','443'].includes(url.port))throw fail(label+'资源地址无效');
   const addresses=isIP(host)?[{address:host,family:isIP(host)}]:await lookup(host,{all:true});
-  if(!addresses.length||addresses.some(v=>!publicAddress(v.address)))throw fail('不能采集本机或内网视频');
+  if(!addresses.length||addresses.some(v=>!publicAddress(v.address)))throw fail('不能采集本机或内网'+label);
   signal.throwIfAborted();const target=addresses[0];
   const response=await new Promise((resolve,reject)=>{
     const agent=proxyAgent();
     const options={signal,headers:{'User-Agent':'Mozilla/5.0','Accept-Encoding':'identity',Referer:source},...(agent?{agent}:{lookup:(_h,o,cb)=>o.all?cb(null,[target]):cb(null,target.address,target.family)})};
     const req=(url.protocol==='https:'?httpsRequest:httpRequest)(url,options,resolve);
-    req.setTimeout(20000,()=>req.destroy(fail('视频读取超时')));req.on('error',reject);req.end();
+    req.setTimeout(20000,()=>req.destroy(fail(label+'读取超时')));req.on('error',reject);req.end();
   });
   if([301,302,303,307,308].includes(response.statusCode)){
-    response.destroy();if(redirects>=5||!response.headers.location)throw fail('视频资源跳转过多');
-    return transfer(new URL(response.headers.location,url).href,path,source,signal,redirects+1);
+    response.destroy();if(redirects>=5||!response.headers.location)throw fail(label+'资源跳转过多');
+    return transfer(new URL(response.headers.location,url).href,path,source,signal,redirects+1,{maxBytes,label});
   }
-  if(response.statusCode!==200){response.destroy();throw fail(`视频资源无法读取（HTTP ${response.statusCode}）`);}
-  if(Number(response.headers['content-length'])>MAX_VIDEO_BYTES){response.destroy();throw fail('视频超过 500 MB');}
-  if(/text\/|application\/json/i.test(response.headers['content-type']||'')){response.destroy();throw fail('平台返回了验证页面，未取得视频文件');}
-  let size=0;const limit=new Transform({transform(chunk,_enc,done){size+=chunk.length;done(size>MAX_VIDEO_BYTES?fail('视频超过 500 MB'):null,chunk);}});
+  if(response.statusCode!==200){response.destroy();throw fail(`${label}资源无法读取（HTTP ${response.statusCode}）`);}
+  if(Number(response.headers['content-length'])>maxBytes){response.destroy();throw fail(label+`超过 ${maxBytes/1048576} MB`);}
+  if(/text\/|application\/json/i.test(response.headers['content-type']||'')){response.destroy();throw fail('平台返回了验证页面，未取得'+label+'文件');}
+  let size=0;const limit=new Transform({transform(chunk,_enc,done){size+=chunk.length;done(size>maxBytes?fail(label+`超过 ${maxBytes/1048576} MB`):null,chunk);}});
   await pipeline(response,limit,createWriteStream(path),{signal});
-  if(!size)throw fail('平台返回了空的视频文件');
+  if(!size)throw fail('平台返回了空的'+label+'文件');
+}
+export async function downloadCaptureBgm({plan,dir,signal,progress}){
+  const path=join(dir,'bgm.bin');let error;
+  for(const url of (plan.bgm?.urls||[]).slice(0,8)){
+    signal.throwIfAborted();progress?.('正在保存作品配乐');
+    try{await transfer(url,path,plan.url,signal,0,{maxBytes:50*1024*1024,label:'配乐'});return {path};}
+    catch(e){signal.throwIfAborted();error=e;await unlink(path).catch(()=>{});}
+  }
+  throw error||fail('作品没有提供可下载的配乐地址');
 }
 export async function downloadCaptureVideo({plan,dir,signal,progress}){
   const path=join(dir,'media.mp4');let error;

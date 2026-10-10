@@ -1,3 +1,4 @@
+import {bgmFiles,itemBgm} from './bgm.js';
 import archiver from "archiver";
 import { backup, DatabaseSync } from "node:sqlite";
 import { mkdtemp, unlink, rmdir } from "node:fs/promises";
@@ -28,6 +29,7 @@ const ext = (item) =>
     "image/avif": "avif",
     "image/vnd.adobe.photoshop": "psd",
     "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-matroska": "mkv",
+    "audio/mpeg":"mp3","audio/mp4":"m4a","audio/aac":"aac","audio/ogg":"ogg","audio/wav":"wav","audio/webm":"webm",
   })[item.mime] || "bin";
 const escape = (text) =>
   String(text).replace(
@@ -100,12 +102,16 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
     paths.set(item.id, path);
   }
   const imagePath = item => paths.get(item.id);
+  const music=[...new Map(items.map(itemBgm).filter(Boolean).map(track=>[track.file_key,track])).values()];
+  const musicPaths=new Map(music.map(track=>[track.file_key,'配乐/'+safeName(track.title)+'-'+track.hash.slice(0,16)+'.'+ext(track)]));
+  const musicPath=track=>musicPaths.get(track.file_key);
+  const exported=item=>{const value=serialize(item),track=itemBgm(item);return {...value,...(track?{bgm:{...value.bgm,file:musicPath(track)}}:{})};};
   const manifest = {
     version: 2,
     mode: query.mode,
     exported_at: new Date().toISOString(),
     collections,
-    items: items.map(item => ({ ...serialize(item), file: paths.get(item.id) })),
+    items: items.map(item => ({ ...exported(item), file: paths.get(item.id) })),
     attachment_ids: images
       .filter((i) => !selectedIds.has(i.id))
       .map((i) => i.id),
@@ -165,8 +171,8 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
     if (query.mode === "backup") {
       archive.file(join(temp, "znote.sqlite"), { name: "data/znote.sqlite" });
       const snapshot = new DatabaseSync(join(temp, "znote.sqlite"), { readOnly: true });
-      let snapshotImages;
-      try { snapshotImages = snapshot.prepare("SELECT * FROM items WHERE kind IN ('image','video')").all(); }
+      let snapshotImages,snapshotMusic;
+      try { snapshotImages = snapshot.prepare("SELECT * FROM items WHERE kind IN ('image','video')").all();snapshotMusic=bgmFiles(snapshot); }
       finally { snapshot.close(); }
       const archivedKeys = new Set();
       for (const item of snapshotImages) {
@@ -180,6 +186,7 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
             name: `data/media/${item.thumbnail_key}`,
           });
       }
+      for(const track of snapshotMusic)if(!archivedKeys.has(track.file_key)){archivedKeys.add(track.file_key);archive.file(join(dir,'media',track.file_key),{name:'data/media/'+track.file_key});}
       archive.append(
         "ZNote 0.4: Upload this ZIP in Settings > Backup and restore to preview and restore it. A pre-restore backup is created automatically. Alternatively stop the target service, extract data/ into a new directory, set DATA_DIR to that directory and start ZNote 0.4 or a compatible later version. Includes password/API token hashes and Webhook signing secrets. Keep this backup private.\n",
         { name: "RESTORE.txt" },
@@ -209,14 +216,15 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
               referencedIds.has(i.id),
             )
           : images;
+      for(const track of music)await appendMedia(readOriginal(dir,{...track,storage_codec:'identity'}),musicPath(track));
       for (const item of imageItems) {
         const stream = readOriginal(dir, item);
         await appendMedia(stream, imagePath(item));
-        if (query.layout === 'readable') archive.append(JSON.stringify({ ...serialize(item), file: imagePath(item) }, null, 2), { name: imagePath(item) + '.json' });
+        if (query.layout === 'readable') archive.append(JSON.stringify({ ...exported(item), file: imagePath(item) }, null, 2), { name: imagePath(item) + '.json' });
       }
       if (["portable", "markdown"].includes(query.mode))
         for (const note of notes)
-          archive.append(markdown(note.content, note), {
+          archive.append(markdown(note.content, note)+(itemBgm(note)?'\n\n[作品配乐](<'+urlPath(posix.relative(posix.dirname(paths.get(note.id)),musicPath(itemBgm(note))))+'>)':''), {
             name: paths.get(note.id),
           });
       if (query.mode === "images")
@@ -225,7 +233,7 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
             {
               version: 2,
               images: images.map((i) => ({
-                ...serialize(i),
+                ...exported(i),
                 file: imagePath(i),
               })),
             },
@@ -273,7 +281,7 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
               item.tags,
             )
               .map((t) => "# " + escape(t))
-              .join(" · ")}</p>${body}</article>`;
+              .join(" · ")}</p>${body}${itemBgm(item)?`<audio controls loop preload="none" src="${urlPath(musicPath(itemBgm(item)))}"></audio>`:''}</article>`;
           })
           .join("\n");
         archive.append(

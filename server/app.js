@@ -59,6 +59,7 @@ import { registerStreamRoutes } from './streams.js';
 import { registerGroupOrderRoutes } from './group-order.js';
 import { registerTags } from './tags.js';
 import {videoThumbnail} from './video-thumbnail.js';
+import {createBgmManager,publicBgm,itemBgm} from './bgm.js';
 
 const now = () => new Date().toISOString();
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -204,6 +205,7 @@ export function createApp({
   const serialize = (row) =>
     row && {
       ...row,
+      bgm:publicBgm(row),
       group_size: ['image','video'].includes(row.kind)&&row.group_key ? groupSize.get(row.collection_id,row.group_key,row.kind,row.deleted_at?1:0).n : undefined,
       tags: JSON.parse(row.tags),
       favorite: !!row.favorite,
@@ -652,6 +654,7 @@ export function createApp({
         if(ordered.ordered)db.prepare('UPDATE items SET group_order=? WHERE id=?').run(ordered.last+1,id);
       }
       if (image?.kind === 'video') db.prepare('UPDATE items SET duration=?,video_codec=? WHERE id=?').run(image.duration, image.codecName, id);
+      if (image?.bgm) db.prepare('UPDATE items SET bgm=? WHERE id=?').run(image.bgm,id);
       event("item.created", id);
       onCommit();
     });
@@ -743,7 +746,7 @@ export function createApp({
     validateCollection(input.collection_id);
     const existing = source.collection_id === input.collection_id ? source : mediaCollision(source,input.collection_id);
     if (existing) return res.json({ ...serialize(existing), duplicate: true });
-    res.status(201).json({ ...insert(input, {...imageReference(source),order:source.group_order,manual:source.group_manual,origin:source.group_origin_id}), shared: true });
+    res.status(201).json({ ...insert(input, {...imageReference(source),bgm:source.bgm,order:source.group_order,manual:source.group_manual,origin:source.group_origin_id}), shared: true });
   });
   app.post('/api/item-groups/favorite', (req,res) => {
     const input=z.object({group_key:z.string().min(1).max(200),collection_id:z.string().nullable(),favorite:z.boolean()}).parse(req.body);
@@ -1171,7 +1174,8 @@ export function createApp({
     if (snapshotting) throw fail(409, '正在导出完整备份，请稍后重新采集');
     return maintenance.work(() => saveVideo(file, { ...input, tags: JSON.stringify(input.tags) }));
   } });
-  const captures = createCaptureManager({db,dataDir,validateCollection,work:operation=>maintenance.work(operation),
+  const bgm=createBgmManager({app,db,dataDir,transaction,event,getItem,serialize,maintenance,queue:uploadQueue});
+  const captures = createCaptureManager({db,dataDir,validateCollection,work:operation=>maintenance.work(operation),saveBgm:bgm.saveCapture,
     exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
     saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:fields.title,size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),
     saveNote:({id,...fields})=>insert(itemInput.parse(fields),null,id),
@@ -1240,6 +1244,10 @@ export function createApp({
   });
   app.get("/media/:id/:variant", async (req, res) => {
     const item = getItem(req.params.id);
+    if(req.params.variant==='bgm'){
+      const track=itemBgm(item);if(!track)throw fail(404,'此内容没有配乐');
+      res.set('Cache-Control','private, no-cache');return serveVideo(req,res,dataDir,track);
+    }
     if (!item.file_key) throw fail(404, "图片不存在");
     if (!["original", "thumbnail", "preview"].includes(req.params.variant))
       throw fail(404, "图片版本不存在");
@@ -1404,7 +1412,7 @@ export function createApp({
       return res.status(400).json({
         error:
           err.code === "LIMIT_FILE_SIZE"
-            ? (req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单个 PSD 不能超过 200 MB；其他图片不能超过 100 MB')
+            ? (req.path.endsWith('/bgm') ? '配乐文件不能超过 50 MB' : req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单个 PSD 不能超过 200 MB；其他图片不能超过 100 MB')
             : "上传格式或数量超出限制",
       });
     if (String(err.message).includes("UNIQUE constraint"))

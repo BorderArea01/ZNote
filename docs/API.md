@@ -6,6 +6,17 @@
 
 列表 `GET /api/items` 可传 `summary=true`：笔记 content 只返回前 1000 个字符，图片/视频说明为空，同时返回 `summary:true` 和完整 `content_length`。搜索仍匹配完整正文。打开或编辑前须通过 `/api/items/:id` 读取完整内容，不能将列表摘要作为原文保存。省略参数时保留完整响应。
 
+## 作品配乐附件
+
+抖音、小红书采集计划可返回 bgm 音频候选，服务器在主要媒体保存后附加本地配乐。items.bgm 返回 url、title、author、duration、mime、bytes、hash、source_url，不产生音频卡片。平台未提供独立音频地址时 bgm 为 null。
+
+- POST /api/items/:id/bgm：multipart/form-data，file 为 50 MB 以内的 MP3/M4A/AAC/OGG/WAV/WebM 音频，version 为当前内容版本，title / author 可选。自动应用到当前知识库中同 group_key 的活动成员；单图或笔记只修改本身。响应为 {item,items}。不会上传或保留包含视频轨道的文件。
+- DELETE /api/items/:id/bgm：JSON {version}，移除当前组配乐。两个操作都需要 write；已删除、版本冲突或上传期间组成员变化返回 409。
+- GET /media/:id/bgm：需有效认证，支持 Range、HEAD 和 ETag，返回原音频字节。
+- 主要媒体保存成功、配乐失败时，采集仍为 completed，另有 bgm_status: failed、bgm_error、bgm_item_ids。POST /api/captures/:id/retry 可单独重试配乐，不重下图片和视频。配乐采集限制总等待时间，失败保留计划与结果。
+
+配乐随明确的素材复用、移动、恢复快照、迁移 ZIP 与便携导出保留。多个组共用同一文件时，便携导出中的 bgm.file 指向同一个音频条目；普通文件哈希去重不会把上一作品的配乐带入另一作品。
+
 ## 图片浏览位置
 
 - `GET /api/reading-progress?collection=知识库UUID`：省略 collection 或传 unfiled 表示未分类。返回 `{version,epoch,entries}`，每库最多 20 个图片组 / 单图，最近查看的在前；entries 含 item_id、group_key、title、item_title、thumbnail_url、viewed_at、position（从 1 开始）和 total。

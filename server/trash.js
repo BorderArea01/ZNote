@@ -3,6 +3,7 @@ import {unlink,lstat} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 import {z} from 'zod';
 import {localMediaReferences,replaceLocalMedia} from '../shared/local-media.js';
+import {itemBgm} from './bgm.js';
 const fail=(status,message)=>Object.assign(Error(message),{status});
 const selection=z.object({collection_id:z.string().nullable(),ids:z.array(z.string()).min(1).max(10000).optional()});
 
@@ -23,6 +24,7 @@ export function createTrashManager({app,db,dataDir,transaction,event,maintenance
       if(protectedKeys.has(item.file_key)||db.prepare('SELECT id FROM items WHERE file_key=?').all(item.file_key).some(r=>!ids.has(r.id))){shared++;continue}
       files.set(item.file_key,item.stored_bytes??item.bytes??0);
     }
+    for(const item of targets){const track=itemBgm(item);if(track&&!protectedIds.has(item.id)&&!db.prepare("SELECT id FROM items WHERE json_extract(bgm,'$.file_key')=?").all(track.file_key).some(r=>!ids.has(r.id)||protectedIds.has(r.id)))files.set(track.file_key,track.bytes);}
     const revision=createHash('sha256').update(JSON.stringify([input.collection_id,input.ids||null,targets.map(r=>[r.id,r.version,r.file_key]),notes.map(n=>[n.note.id,n.note.version,n.refs.map(r=>r.id)]),[...files]])).digest('hex');
     return {targets,notes,media,revision,count:targets.length,referenced:protectedIds.size,shared,reclaimable_bytes:[...files.values()].reduce((a,b)=>a+b,0)};
   }
@@ -55,7 +57,7 @@ export function createTrashManager({app,db,dataDir,transaction,event,maintenance
     let freed_bytes=0,freed_files=0;
     const root=resolve(dataDir,'media');
     for(const row of db.prepare('SELECT * FROM pending_file_deletions').all()){
-      if(db.prepare('SELECT 1 FROM items WHERE file_key=? OR thumbnail_key=?').get(row.file_key,row.file_key)){db.prepare('DELETE FROM pending_file_deletions WHERE file_key=?').run(row.file_key);continue}
+      if(db.prepare("SELECT 1 FROM items WHERE file_key=? OR thumbnail_key=? OR json_extract(bgm,'$.file_key')=?").get(row.file_key,row.file_key,row.file_key)){db.prepare('DELETE FROM pending_file_deletions WHERE file_key=?').run(row.file_key);continue}
       const path=resolve(root,row.file_key);
       if(dirname(path)!==root||! /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(row.file_key)||row.file_key.includes('..'))continue;
       try{const bytes=(await lstat(path)).size;await unlinkFile(path);freed_bytes+=bytes;freed_files++}catch(e){if(e.code!=='ENOENT')continue}
@@ -73,7 +75,7 @@ export function createTrashManager({app,db,dataDir,transaction,event,maintenance
         preserve(state.notes,state.media);
         for(const item of state.targets){
           if(item.kind==='note')for(const page of db.prepare('SELECT id FROM items WHERE group_key=?').all('note:'+item.id)){db.prepare('UPDATE items SET group_key=?,version=version+1,updated_at=? WHERE id=?').run('album:'+item.id,date,page.id);event('item.updated',page.id)}
-          for(const key of [item.file_key,item.thumbnail_key].filter(Boolean))db.prepare('INSERT OR IGNORE INTO pending_file_deletions(file_key) VALUES(?)').run(key);
+          for(const key of [item.file_key,item.thumbnail_key,itemBgm(item)?.file_key].filter(Boolean))db.prepare('INSERT OR IGNORE INTO pending_file_deletions(file_key) VALUES(?)').run(key);
           db.prepare('DELETE FROM items WHERE id=?').run(item.id);event('item.deleted',item.id);
         }
       });clearCache();

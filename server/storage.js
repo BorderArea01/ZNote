@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
 import { PSD_MIME, psdPreview } from './psd.js';
+import {bgmFiles} from './bgm.js';
 
 const compress = promisify(gzip),
   decompress = promisify(gunzip);
@@ -58,6 +59,8 @@ export async function storageStats(db, dir) {
       "SELECT coalesce(sum(bytes),0) source_bytes, coalesce(sum(stored_bytes),0) stored_bytes, coalesce(sum(kind='image'),0) images, coalesce(sum(kind='video'),0) videos FROM (SELECT kind,bytes,stored_bytes FROM items WHERE kind IN ('image','video') GROUP BY file_key)",
     )
     .get();
+  const tracks=[...new Map(bgmFiles(db).map(track=>[track.file_key,track])).values()],musicBytes=tracks.reduce((sum,track)=>sum+track.bytes,0);
+  items.source_bytes+=musicBytes;items.stored_bytes+=musicBytes;
   let mediaBytes = 0,
     databaseBytes = 0;
   for (const name of await readdir(join(dir, "media")))
@@ -72,6 +75,7 @@ export async function storageStats(db, dir) {
   const total = mediaBytes + databaseBytes;
   return {
     ...items,
+    bgm_files:tracks.length,bgm_bytes:musicBytes,
     image_entries: db.prepare("SELECT count(*) n FROM items WHERE kind='image'").get().n,
     video_entries: db.prepare("SELECT count(*) n FROM items WHERE kind='video'").get().n,
     media_bytes: mediaBytes,

@@ -1,0 +1,7 @@
+.bgm-control{margin:14px 0;padding:12px;border:1px solid var(--border,#3b4652);border-radius:12px;background:var(--surface,#20262f)}
+.bgm-heading,.bgm-playback{display:flex;align-items:center;gap:10px;min-width:0}
+.bgm-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.bgm-title small{display:block;opacity:.65;font-size:11px}
+.bgm-retry{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px}.bgm-retry span{flex:1}
+.bgm-control .bgm-icon{display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:34px;padding:7px;color:inherit;text-decoration:none;border-radius:8px}
+.bgm-playback{margin-top:10px}.bgm-playback>input:not(.bgm-volume){flex:1;min-width:30px}.bgm-playback span{font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}.bgm-volume{width:65px}.bgm-playback button{min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center}
+@media(max-width:600px){.bgm-volume{width:44px}.bgm-control .bgm-icon{min-width:44px;min-height:44px}.bgm-heading,.bgm-playback{gap:6px}.bgm-title{font-size:12px}}

@@ -82,6 +82,7 @@ export const spec = {
               kind: { type: "string", enum: ["image", "note", "video"] },
               duration: { type: 'number', nullable: true, description: '视频时长，秒；容器未提供时为 null' },
               video_codec: { type: 'string', nullable: true },
+              bgm: {type:'object',nullable:true,description:'本地作品配乐附件，同组复用文件，不产生额外卡片',properties:{url:str,title:str,author:str,mime:str,hash:str,bytes:{type:'integer'},duration:{type:'number'},source_url:{...str,nullable:true}}},
               url: { type: "string", nullable: true },
               thumbnail_url: { type: "string", nullable: true },
               version: { type: "integer" },
@@ -242,6 +243,10 @@ export const spec = {
         parameters: [id],
         responses: { 204: { description: "成功" }, ...errorResponses },
       },
+    },
+    "/api/items/{id}/bgm": {
+      post:operation('添加或替换当前组配乐（write，50 MB，完整音频）',{type:'object',properties:{item:ref('Item'),items:list(ref('Item'))}},{parameters:[id],requestBody:{required:true,content:{'multipart/form-data':{schema:{type:'object',required:['file','version'],properties:{file:{type:'string',format:'binary'},version:{type:'integer',minimum:1},title:str,author:str}}}}},description:'MP3/M4A/AAC/OGG/WAV/WebM 音频，不接受包含视频轨道的文件。当前组成员或版本改变返回 409。'}),
+      delete:operation('移除当前组配乐（write）',{type:'object',properties:{item:ref('Item'),items:list(ref('Item'))}},{parameters:[id],requestBody:body({type:'object',required:['version'],properties:{version:{type:'integer',minimum:1}}})}),
     },
     "/api/items/{id}/versions": {
       get: operation('笔记版本记录（最近 50 个，单篇压缩上限 8 MiB）', {

@@ -8,8 +8,9 @@ export function VideoSyncFeedback({progress}){
   if(!['error','conflict','pending'].includes(progress.status)&&!progress.localError)return null;
   return <div className="reading-feedback" role="status"><span>{progress.error||progress.localError||'有播放位置尚未同步'}</span><button onClick={progress.status==='conflict'?progress.replace:progress.retry}>{progress.status==='conflict'?(progress.clearing?'重新确认清除':'同步本页位置'):'重试同步'}</button>{progress.hasPending&&<button onClick={progress.discard}>放弃本次同步</button>}</div>;
 }
-export function VideoPlayer({item,title,progress,onError}) {
+export function VideoPlayer({item,title,progress,onError,suppressAudio=false}) {
   const video=useRef(),touched=useRef(false),last=useRef(null),lastTime=useRef(0),latest=useRef(),[ready,setReady]=useState(false);
+  useEffect(()=>{if(!suppressAudio)return;const el=video.current,prior=el.muted;el.muted=true;const mute=()=>{if(!el.muted)el.muted=true;};el.addEventListener('volumechange',mute);return()=>{el.removeEventListener('volumechange',mute);el.muted=prior;};},[suppressAudio]);
   latest.current={item,progress};
   useEffect(()=>{progress.allowItem(item.id);},[item.id]);
   const entry=progress.data?.entries.find(e=>e.item_id===item.id),[resume,setResume]=useState(null);

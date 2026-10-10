@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises';
 import yauzl from 'yauzl';
 import multer from 'multer';
 import { z } from 'zod';
+import {bgmFiles,mediaKeys,itemBgm} from './bgm.js';
 import { exportContent } from './exports.js';
 import { originalBuffer, digest } from './storage.js';
 import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
@@ -74,7 +75,7 @@ async function inspectBackup(stage) {
     snapshot = new DatabaseSync(join(root, 'znote.sqlite'), { readOnly: true });
     snapshot.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
     const version = snapshot.prepare('PRAGMA user_version').get().user_version;
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
+    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(version)) throw fail(400, '备份数据版本不兼容，需要受支持的 ZNote 完整备份');
     if(version>=13&&!snapshot.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='video_progress'").get())throw fail(400,'备份缺少视频播放记录表');
     if (snapshot.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || snapshot.prepare('PRAGMA foreign_key_check').all().length) throw fail(400, '备份数据库完整性检查失败');
     for (const name of tables) {
@@ -149,6 +150,14 @@ async function inspectBackup(stage) {
       const prior = verified.get(item.file_key);
       if (prior.hash !== item.hash || prior.bytes !== item.bytes || prior.codec !== (item.storage_codec || 'identity')) throw fail(400, '共享原图记录不一致');
     }
+    for(const track of bgmFiles(snapshot)){
+      const prior=verified.get(track.file_key);
+      if(prior){if(prior.hash!==track.hash||prior.bytes!==track.bytes||prior.codec!=='identity')throw fail(400,'共享配乐记录不一致');continue;}
+      const audioStat=await stat(join(root,'media',track.file_key));if(audioStat.size!==track.bytes)throw fail(400,'备份配乐大小校验失败');
+      const original=await fileDigest(join(root,'media',track.file_key));
+      if(original.hash!==track.hash||original.bytes!==track.bytes)throw fail(400,'备份配乐校验失败，文件可能损坏');
+      verified.set(track.file_key,{hash:track.hash,bytes:track.bytes,codec:'identity'});originalBytes+=track.bytes;
+    }
     return { version, counts, unique_images: snapshot.prepare("SELECT count(DISTINCT file_key) n FROM items WHERE kind='image'").get().n, unique_videos: snapshot.prepare("SELECT count(DISTINCT file_key) n FROM items WHERE kind='video'").get().n, original_bytes: originalBytes, collections: snapshot.prepare('SELECT name FROM collections ORDER BY created_at').all().map(c => c.name) };
   } catch (e) {
     if (e.status) throw e;
@@ -202,7 +211,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       await backup(db, databasePath);
       const snapshot = new DatabaseSync(databasePath, { readOnly: true });
       let items;
-      try { items = snapshot.prepare("SELECT DISTINCT file_key FROM items WHERE kind IN ('image','video') ORDER BY file_key").all(); }
+      try { items = mediaKeys(snapshot).sort().map(file_key=>({file_key})); }
       finally { snapshot.close(); }
       let logicalBytes = (await stat(databasePath)).size, storedBytes = logicalBytes, linkedFiles = 0, copiedFiles = 0;
       for (const { file_key } of items) {
@@ -273,7 +282,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
         const safety = await archive();
         const source = new DatabaseSync(join(candidate.stage, 'data', 'znote.sqlite'), { readOnly: true });
         source.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON');
-        const oldKeys = db.prepare("SELECT DISTINCT file_key FROM items WHERE kind IN ('image','video')").all().map(i => i.file_key);
+        const oldKeys = mediaKeys(db);
         const newKeys = new Map(); let committed = false;
         try {
           const sourceImages = source.prepare("SELECT * FROM items WHERE kind IN ('image','video')").iterate();
@@ -285,6 +294,12 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
             if (hash !== item.hash) throw new Error('Restored original verification failed');
             const handle = await open(join(dataDir, 'media', key), 'r+'); try { await handle.sync(); } finally { await handle.close(); }
           }
+          for(const track of bgmFiles(source))if(!newKeys.has(track.file_key)){
+            const key=randomUUID()+'.bin';
+            await linkOrCopy(join(candidate.stage,'data','media',track.file_key),join(dataDir,'media',key));newKeys.set(track.file_key,key);
+            const restored=await fileDigest(join(dataDir,'media',key));if(restored.hash!==track.hash||restored.bytes!==track.bytes)throw new Error('Restored BGM verification failed');
+            const handle=await open(join(dataDir,'media',key),'r+');try{await handle.sync();}finally{await handle.close();}
+          }
           db.exec('BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON');
           try {
             for (const table of [...tables].reverse()) db.exec(`DELETE FROM ${table}`);
@@ -295,6 +310,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
               const insert = db.prepare(`INSERT INTO ${table}(${columns.map(c => '"' + c + '"').join(',')}) VALUES(${columns.map(() => '?').join(',')})`);
               for (const row of source.prepare(`SELECT * FROM ${table}`).iterate()) {
                 if (table === 'items' && ['image', 'video'].includes(row.kind)) { row.file_key = newKeys.get(row.file_key); row.thumbnail_key = null; }
+                if(table==='items'&&row.bgm){const track=itemBgm(row);row.bgm=JSON.stringify({...track,file_key:newKeys.get(track.file_key)});}
                 insert.run(...columns.map(c => row[c]));
               }
             }
