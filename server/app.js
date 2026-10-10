@@ -1174,7 +1174,7 @@ export function createApp({
     if (snapshotting) throw fail(409, '正在导出完整备份，请稍后重新采集');
     return maintenance.work(() => saveVideo(file, { ...input, tags: JSON.stringify(input.tags) }));
   } });
-  const bgm=createBgmManager({app,db,dataDir,transaction,event,getItem,serialize,maintenance,queue:uploadQueue});
+  const bgm=createBgmManager({app,db,dataDir,transaction,event,getItem,serialize,maintenance,queue:uploadQueue,filenameText});
   const captures = createCaptureManager({db,dataDir,validateCollection,work:operation=>maintenance.work(operation),saveBgm:bgm.saveCapture,
     exists:id=>db.prepare('SELECT * FROM items WHERE id=?').get(id),
     saveImage:(buffer,{id,...fields})=>saveAsset({buffer,originalname:fields.title,size:buffer.length},{...fields,tags:JSON.stringify(fields.tags)},id),

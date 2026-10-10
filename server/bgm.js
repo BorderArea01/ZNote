@@ -21,7 +21,7 @@ export function probeAudio(path){return new Promise((resolve,reject)=>{
   worker.once('message',v=>finish(v.error?fail(415,'无法识别配乐，请使用包含完整音频的 MP3、M4A、AAC、OGG、WAV 或 WebM 文件'):null,v));
   worker.once('error',()=>finish(fail(415,'配乐分析失败，请重试')));worker.once('exit',()=>{if(!settled)finish(fail(415,'配乐分析未完成'));});
 });}
-export function createBgmManager({app,db,dataDir,transaction,event,getItem,serialize,maintenance,queue}){
+export function createBgmManager({app,db,dataDir,transaction,event,getItem,serialize,maintenance,queue,filenameText}){
   const targets=anchor=>anchor.group_key?db.prepare('SELECT * FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY id').all(anchor.group_key,anchor.collection_id):[anchor];
   const check=anchor=>{if(anchor.deleted_at||!['image','video','note'].includes(anchor.kind))throw fail(409,'不能修改已删除内容的配乐');};
   const fingerprint=rows=>JSON.stringify(rows.map(r=>[r.id,r.version,r.collection_id,r.group_key,r.bgm]));
@@ -56,7 +56,7 @@ export function createBgmManager({app,db,dataDir,transaction,event,getItem,seria
       const version=z.coerce.number().int().positive().parse(req.body.version);
       const result=await maintenance.work(()=>queue.run('upload-bgm:'+req.params.id,async()=>{
         const anchor=getItem(req.params.id);check(anchor);if(anchor.version!==version)throw fail(409,'内容已变化，请重新打开后再设置配乐');
-        const rows=targets(anchor),before=fingerprint(rows),track=await store(req.file,{title:req.body.title||req.file.originalname,author:req.body.author||'',source_url:anchor.source_url});
+        const rows=targets(anchor),before=fingerprint(rows),track=await store(req.file,{title:req.body.title||filenameText(req.file.originalname),author:req.body.author||'',source_url:anchor.source_url});
         try{if(fingerprint(targets(getItem(anchor.id)))!==before)throw fail(409,'组成员已变化，未修改配乐，请重新打开后重试');return attach(rows,track);}
         catch(e){queueUnused(track);throw e;}
       }));res.json({item:result.find(r=>r.id===req.params.id),items:result});
