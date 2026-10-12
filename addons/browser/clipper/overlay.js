@@ -5,7 +5,7 @@
         throw new Error(result?.error || "扩展连接已失效，请刷新页面");
       return result.value;
     });
-  let host,
+  let layer, host,
     root,
     inlineGallery,
     pawControls,
@@ -216,6 +216,7 @@
   async function open() {
     await refreshSettings();
     if(siteBlocked)return;
+    layer.raise();
     panel.classList.remove("hidden");
     for(const entry of performance.getEntriesByType('resource').slice(-300))rememberMedia(entry);
     preview.classList.add("hidden");
@@ -364,6 +365,7 @@
       previewImage.referrerPolicy = img.referrerPolicy;
       previewImage.src = c.url;
       previewLabel.textContent = groupLoading?'正在识别作品，稍后可下载完整原图…':`${img.naturalWidth} × ${img.naturalHeight} · ${shortcutHelp()}`;
+      layer.raise();
       preview.classList.remove("hidden");
       previewImage.onload = placePreview;
       placePreview();
@@ -472,8 +474,9 @@
     host.style.setProperty("pointer-events", "none", "important");
     document.documentElement.append(host);
     root = host.attachShadow({ mode: "open" });
+    layer=new globalThis.ZNoteOverlayLayer(host,{visible:()=>!!root.querySelector('.preview:not(.hidden),.panel:not(.hidden),.inline-save:not([hidden])')});
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(css + videoCss + "[hidden]{display:none!important}.actions{grid-template-columns:1fr 1.5fr}:host>div,:host>button{pointer-events:auto}");
+    sheet.replaceSync(css + videoCss + ":host::backdrop{display:none!important}[hidden]{display:none!important}.actions{grid-template-columns:1fr 1.5fr}:host>div,:host>button{pointer-events:auto}");
     root.adoptedStyleSheets = [sheet];
     dock = button("▶ 视频", () =>
       panel.classList.contains("hidden")
@@ -694,6 +697,9 @@
       "keydown",
       (e) => {
         const path=e.composedPath(),fromExtension=path.includes(host);
+        if(e.isTrusted&&!e.isComposing&&!e.repeat&&e.key==='Escape'&&(!preview.classList.contains('hidden')||!panel.classList.contains('hidden'))){
+          e.preventDefault();e.stopImmediatePropagation();hide();closePanel();return;
+        }
         if (
           !e.isTrusted ||
           e.repeat ||
