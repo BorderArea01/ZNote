@@ -49,18 +49,21 @@
 - 已安装 C:/Users/31093/Downloads/clipper 的 0.9.37 扩展在真实贴吧原帖网址（网页仍显示百度验证）通过“采集当前作品”成功保存，页面显示成功反馈。桌面和模拟触屏验收了缩略图数量/跳转、首尾边界、缩放/翻页、关闭、帮助、备注滚动阅读、503 图片加载失败后的重试；截图已目视检查。证据 artifacts/tieba-live-HWsOG3/result.json、artifacts/tieba/regression.log、artifacts/tieba/build.log。测试脚本 tests/tieba-capture-ui.mjs --live 为显式实际实例测试，ZNOTE_CLIPPER_DIR 可选指定安装目录。
 - 最终临时库、图片、任务和临时 session/API 令牌已按自己的 ID 清理，PIN 未改变，浏览器构建/验收进程已释放。Android 真机与用户现有浏览器标签页未直接操作；手机分享与网页扩展复用已验证的服务端接口，不能将模拟触屏说成 Android 真机验收。
 
-## 本机游戏与资源限制（2026-10-11）
+## 本机游戏与资源限制（2026-10-11，ZNote 轻量任务例外于 2026-10-13 更新）
 
 - NRC-Win64-Shipping 存在即视为洛克王国运行，同时核对其他标题包含“洛克王国”的进程。高内存工作前必须可靠核对游戏状态与可用内存；游戏运行或状态不明时禁止本机 Gradle、编译、打包、Lint、大规模测试、模拟器、内存密集容器等工作，只推进轻量任务。
 - 高内存任务运行中持续监测；游戏启动时只停止自己创建且归属可确认的任务和子进程，不得杀游戏、用户 IDE、其他项目或无归属 Java，不得全局 taskkill java.exe。不得自动重启被中断任务，重试重新检查。
 - 非游戏期间高内存任务也采用单任务、单 worker、串行、不保留 Gradle/Kotlin daemon；结束释放自己的构建进程。限制下报告未验证范围及原因，不声称测试通过，不反复要求用户关闭游戏，不将泛泛“继续”理解为豁免。
+- 2026-10-13 用户明确长期授权：“由于本项目构建基本不会占用太多内存，所以准许每次我在运行游戏的时候都放行。”ZNote 的轻量前端/浏览器扩展构建、相关小范围测试及单浏览器/单上下文验收无需每次确认；该例外优先于以上通用禁构建规则。全局 D:/CodexData/codex-home/AGENTS.md 与本仓库 AGENTS.md 均已记录，避免换会话后遗忘。其他项目和 Android/Gradle、桌面安装包、大规模测试、模拟器/容器继续受原规则限制。
+- scripts/run-resource-guarded.ps1 的 -Lightweight 明确识别此次长期许可：必须提供 1–384 MiB V8 heap，GOMAXPROCS=1，仍核对游戏与可用内存；游戏存在本身不阻断轻量任务，空闲内存低于 1536 MiB 则只停止自己创建的任务树，不自动重启。默认不带该参数仍遵守游戏禁高内存。避免任务已在资源查询期间成功退出，却将随后内存阈值误报为任务失败；完成时以实际退出状态为准。
 
-## 图片组配乐自动播放（2026-10-13，源码已实现，待构建与当前实例验收）
+## 图片组配乐自动播放（2026-10-13，已部署与桌面/模拟触屏验收）
 
 - 用户要求点开图片组时自动播放已有配乐。useBgmPlayback 仍由 Workspace 持有，同一知识库/组/hash 的 audio 与 URL 不变；只有打开或更换有配乐的图片组时尝试播放。同组翻页继续，手动暂停不因翻页恢复；关闭、换组、pagehide、认证失效停止。单图、视频和笔记保留手动播放方式。
 - play() 拒绝必须处理：自动播放被 NotAllowedError 拦截时明确提示点击播放；关闭/换组后的迟到拒绝和 AbortError 不污染下一首状态。网络/媒体失败保留重试入口，失败的音频再次播放先 reload。说明沿用 HelpHint，不能把播放失败冒充音频入库失败。
-- 4 项低内存播放失败/恢复/迟到结果测试通过，Babel 仅语法解析通过，未构建。当前 NRC-Win64-Shipping PID 87628 仍在运行；上一条图集的构建豁免只用于那次任务，本次没有启动构建、浏览器或 Android 打包。服务与 dist 保持原版，不能宣称当前实例已生效。
-- 已准备 tests/bgm-autoplay-ui.mjs --live，在当前实例选已有带配乐的图片组，覆盖桌面/模拟触屏卡片打开自动播放、未交互直达链接被拦截及手动恢复、翻页继续、手动暂停保持、关闭停止；只创建并清理临时 session，不上传/替换/删除用户配乐。该脚本尚未运行。后续必须资源检查后串行生产构建、部署、接口与实际 UI 验收，目视截图并推送验收记录。Android MainActivity 的 WebView 当前 mediaPlaybackRequiresUserGesture=true，不能承诺所有手机的异步打开都允许自动播放；不全局放开视频自动播放权限，手机真机仍需单独核对。
+- 用户追加长期轻量构建许可后，4 项播放失败/恢复/迟到结果与 4 项配乐解析、采集、备份回归共 8 项通过；生产 Vite 构建以 384 MiB heap / GOMAXPROCS=1 串行执行，2.39 秒完成。确认在途任务为 0 后重启 3741（PID 101228，0.0.0.0），当前页面实际加载 index-BJolZ3R-.js / index-6ffndSPN.css，health 为 ok。日志 artifacts/albums/bgm-autoplay-regression.log、bgm-autoplay-build.log、bgm-autoplay-ui-final.log。
+- tests/bgm-autoplay-ui.mjs --live 已在真实实例现有 7 张图的配乐组验收：桌面和模拟触屏卡片打开后真正播放且进度增长、同组翻页共用同一 audio / URL 且进度连续、手动暂停保持、关闭和 pagehide 停止、音频 503 后点击恢复。只创建并清理临时 session，PIN 与成员 title/bgm 未变，不上传/替换/删除配乐。证据 artifacts/bgm-autoplay-live-rpN3Ux/result.json 与截图，截图已目视检查。
+- 首轮测试错误假设静音的 headless Edge 必定拦截未交互直达播放，实际上播放已成功；改为只注入一次 NotAllowedError 来明确验收阻止提示与手动恢复，其余播放与 503 恢复均使用真实浏览器与已有音频。这是失败路径注入，不能说成所有真实浏览器策略均已验证。Android MainActivity 的 WebView 当前 mediaPlaybackRequiresUserGesture=true，未直接验证 Android 真机，也未全局放开视频自动播放权限。页面更新刷新即可，无需为本次前端改动重打 APK。
 
 ## 作品配乐（2026-10-11）
 

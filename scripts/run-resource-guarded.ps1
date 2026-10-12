@@ -1,6 +1,9 @@
 param(
   [Parameter(Mandatory=$true)][string[]]$NodeArguments,
-  [Parameter(Mandatory=$true)][string]$LogName
+  [Parameter(Mandatory=$true)][string]$LogName,
+  # Standing user authorization for bounded ZNote builds and small checks.
+  # Never use for Gradle, installers, broad suites, emulators or containers.
+  [switch]$Lightweight
 )
 $ErrorActionPreference='Stop'
 $workspacePath=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -9,11 +12,17 @@ New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 if($LogName -notmatch '^[a-zA-Z0-9_-]+$'){throw 'Invalid log name'}
 $stdoutPath=Join-Path $logDirectory ($LogName+'.log')
 $stderrPath=Join-Path $logDirectory ($LogName+'.errors.log')
+if($Lightweight){
+  $heapOptions=@($NodeArguments | Where-Object {$_ -match '^--max-old-space-size=([0-9]+)$'})
+  if($heapOptions.Count -ne 1 -or [int]($heapOptions[0].Split('=')[1]) -gt 384 -or [int]($heapOptions[0].Split('=')[1]) -lt 1){throw '轻量任务必须指定 1–384 MiB 的 V8 heap 上限。'}
+  $env:GOMAXPROCS='1'
+}
 function Assert-Resources {
   $gameProcesses=@(Get-Process -ErrorAction Stop | Where-Object {$_.ProcessName -eq 'NRC-Win64-Shipping' -or $_.MainWindowTitle -like '*洛克王国*'})
-  if($gameProcesses.Count){throw '洛克王国正在运行，禁止启动或继续本任务。'}
+  if($gameProcesses.Count -and -not $Lightweight){throw '洛克王国正在运行，禁止启动或继续高内存任务；已授权的 ZNote 轻量任务使用 -Lightweight。'}
   $availableMemory=(Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).FreePhysicalMemory/1024
-  if($availableMemory -lt 1024){throw '可用内存不足 1 GB，已停止本任务。'}
+  $minimumMemory=if($Lightweight){1536}else{1024}
+  if($availableMemory -lt $minimumMemory){throw ('可用内存不足 '+$minimumMemory+' MiB，已停止本任务。')}
 }
 Assert-Resources
 $nodePath=(Get-Command node -ErrorAction Stop).Source
@@ -36,7 +45,16 @@ function Stop-OwnedTree {
   }
 }
 try {
-  while(-not $taskProcess.HasExited){Assert-Resources;Start-Sleep -Milliseconds 400;$taskProcess.Refresh()}
+  while(-not $taskProcess.HasExited){
+    try { Assert-Resources } catch {
+      $taskProcess.Refresh()
+      # The task may finish during the resource query. A completed task needs
+      # no cancellation, and its actual exit status remains authoritative.
+      if($taskProcess.HasExited){break}
+      throw
+    }
+    Start-Sleep -Milliseconds 400;$taskProcess.Refresh()
+  }
   $taskProcess.WaitForExit()
   Get-Content -LiteralPath $stdoutPath -Tail 40
   Get-Content -LiteralPath $stderrPath -Tail 15

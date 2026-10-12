@@ -22,15 +22,26 @@ try{
     browser=await chromium.launch({channel:'msedge',headless:true,args:['--mute-audio','--disable-gpu','--renderer-process-limit=2']});
     const context=await browser.newContext({viewport:touch?{width:390,height:844}:{width:1440,height:940},hasTouch:touch,isMobile:touch});
     await context.addCookies([{name:'znote_session',value:token,url:base,httpOnly:true,sameSite:'Strict'}]);
+    // Headless Edge may permit localhost playback even without a gesture.
+    // Inject one policy rejection only; all recovery and normal playback use
+    // the real browser audio implementation and existing saved soundtrack.
+    await context.addInitScript(()=>{
+      const original=HTMLMediaElement.prototype.play;let denyOnce=true;
+      HTMLMediaElement.prototype.play=function(...args){
+        if(denyOnce&&this.matches('[data-znote-bgm]')){denyOnce=false;return Promise.reject(new DOMException('Policy rejection for acceptance','NotAllowedError'));}
+        return original.apply(this,args);
+      };
+    });
     page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     const click=loc=>touch?loc.tap():loc.click();
     await page.goto(base+'/#item/'+rows[0].id);
     const detail=page.getByRole('dialog',{name:'图片详情',exact:true}),controls=detail.getByRole('region',{name:'作品配乐'});
-    // A fresh document has not received a gesture yet. Blocking must be visible
-    // and clicking Play must recover, without treating the file as invalid.
+    // Policy rejection must be visible and clicking Play must recover,
+    // without treating the saved audio file as invalid.
     await controls.getByText('浏览器阻止了自动播放，点击播放配乐即可',{exact:true}).waitFor();
     await click(controls.getByRole('button',{name:'播放配乐',exact:true}));
     await page.waitForFunction(()=>{const a=document.querySelector('[data-znote-bgm]');return !a.paused&&a.currentTime>.1;});
+    console.log('PASS policy recovery '+(touch?'touch':'desktop'));
     await click(detail.getByRole('button',{name:'关闭窗口',exact:true}));await detail.waitFor({state:'hidden'});
     assert.ok(await page.locator('[data-znote-bgm]').evaluate(a=>a.paused&&!a.getAttribute('src')));
     await page.getByPlaceholder('搜索标题、正文或标签…',{exact:true}).fill(rows[0].title);
@@ -48,7 +59,17 @@ try{
     await page.screenshot({path:join(dir,(touch?'touch':'desktop')+'.png'),mask:[page.locator('img')],maskColor:'#27322f'});
     await click(detail.getByRole('button',{name:'关闭窗口',exact:true}));await detail.waitFor({state:'hidden'});
     assert.ok(await page.locator('[data-znote-bgm]').evaluate(a=>a.paused&&!a.getAttribute('src')));
-    assert.deepEqual(errors,[]);result.ui.push({touch,cardOpenAutoplays:true,blockedDeepLinkRecovers:true,sameGroupContinues:true,pauseSurvivesPaging:true,closeStops:true});
+    let failOnce=true;
+    await page.route('**/media/**/bgm',async route=>{if(failOnce){failOnce=false;await route.fulfill({status:503,body:'temporary audio failure'});}else await route.continue();});
+    await click(card);await controls.getByRole('alert').waitFor();
+    assert.equal(failOnce,false);
+    await click(controls.getByRole('button',{name:'播放配乐',exact:true}));
+    await page.waitForFunction(()=>{const a=document.querySelector('[data-znote-bgm]');return !a.paused&&a.currentTime>.1;});
+    await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));
+    assert.ok(await page.locator('[data-znote-bgm]').evaluate(a=>a.paused));
+    await click(detail.getByRole('button',{name:'关闭窗口',exact:true}));await detail.waitFor({state:'hidden'});
+    assert.deepEqual(errors,[]);result.ui.push({touch,cardOpenAutoplays:true,blockedAutoplayRecovers:'injected NotAllowedError',sameGroupContinues:true,pauseSurvivesPaging:true,closeStops:true,audio503Recovers:true,pageHideStops:true});
+    console.log('PASS playback lifecycle '+(touch?'touch':'desktop'));
     await browser.close();browser=null;page=null;
   }
 }catch(error){result.error=error.message;if(page&&!page.isClosed())await page.screenshot({path:join(dir,'failure.png'),mask:[page.locator('img')],maskColor:'#27322f'}).catch(()=>{});throw error;}
