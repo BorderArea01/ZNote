@@ -4,6 +4,7 @@
 
 ## 扩展预览遮挡与备份占用核查（2026-10-12）
 
+- 用户随后明确反对保留七个历史点；当前实例通过 /api/backups/policy 将 keep 降为 1，间隔 24 小时和自动启用状态不变，API 与 policy.json 均已核对。当前恰好只有一份，未删除额外快照或新建备份。后续方案不得自行恢复七份保留，自动复制整库的兜底与容量预算仍待实现；证据 artifacts/preview-layer/retention-one.json。
 - 用户明确是浏览器扩展预览被网站元素挡住，不是 ZNote 本体预览。普通 DOM 的最大 z-index 仍会被后插入的同级元素或原生 top layer 遮挡；已用真实 Edge 加载扩展复现，基线截图 artifacts/preview-layer-ui-vx9sG6/baseline-covered.png 已目视检查。
 - 网页采集 0.9.38 新增 overlay-layer.js，媒体预览宿主使用 manual popover 非模态顶层，避免锁住页面滚动/焦点。网站 modal 中须将宿主放入该 modal 再升层，否则预览虽可见但按钮 inert；不关闭或修改网站弹窗。捕获网站 toggle/fullscreenchange，仅预览可见时重新升层；直接观察宿主祖先的 childList，处理网站删掉弹窗连带移除扩展宿主，不全页面 subtree 观察。Esc 从预览按钮或输入框都只关闭扩展预览；iframe 内的预览仍受 frame 边界限制，不宣称跨 frame 顶层。
 - 10 项相关接口/打包/保存方式/缓存回归、扩展生产构建通过；鼠标悬停缩略图和预览中滚轮翻页、慢图连续输入、原图下载字节与预览外正常滚动验收通过。已更新 C:/Users/31093/Downloads/clipper 的四个相关文件，保持固定 ID/连接设置；该安装目录在独立 Edge 桌面和模拟触屏上下文覆盖后插入网页元素、原生 popover/modal、全屏、网站移除 modal 后恢复、翻页、输入框 Esc、网页点击/滚动，证据 artifacts/preview-layer-ui-x3ayiU/result.json，截图已目视检查。当前 3741 /api/clipper/download 返回 0.9.38，ZIP 的新 helper 与 overlay 字节和源码相同，PIN 未变；用户现有浏览器不是调试实例，未强行重启/关闭，要在扩展管理点重新加载并刷新原网页。未收到具体出问题的网站 URL，不能称其真实网页已逐一验证。
