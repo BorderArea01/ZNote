@@ -13,6 +13,8 @@ import {ehSite,ehPolicy} from './capture-eh-policy.js';
 import { downloadVideo } from './imports.js';
 import { downloadCaptureVideo,downloadCaptureBgm } from './capture-video.js';
 import {douyinWork,renderDouyinCapture} from './capture-browser.js';
+import {MAX_CAPTURE_GROUP_IMAGES,MAX_CAPTURE_NOTE_IMAGES} from '../shared/capture-limits.js';
+import {jlijiSet} from './capture-gallery.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
@@ -86,7 +88,10 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     // A motion-photo cover and its video contain the same moment. Store the
     // playable video directly and do not create a second still-image card.
     const galleryEntries=(plan.images||[]).map((url,sourceIndex)=>({url,sourceIndex})).filter(entry=>!liveIndices.has(entry.sourceIndex));
-    const mediaCount=galleryEntries.length+liveVideos.length;
+    // Generic articles keep images in Markdown rather than plan.images.
+    // Count both sources so a group request keeps its mode and group key.
+    const contentImages=new Set(markdownImages(plan.content||'').map(image=>image.url));
+    const mediaCount=new Set([...galleryEntries.map(entry=>entry.url),...contentImages]).size+liveVideos.length;
     const imageMode=job.input.image_mode || plan.default_image_mode || (/(^|\.)(xiaohongshu|x|twitter)\.com$/.test(new URL(plan.url).hostname) ? 'group' : 'note');
     const album=imageMode==='group'&&mediaCount>0;
     const liveOnly=liveVideos.length>0&&galleryEntries.length===0;
@@ -96,11 +101,10 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     // Some platform parsers (notably Bilibili opus) already place every
     // picture in the Markdown body. Add gallery-only pictures without
     // duplicating references that are already present in the note.
-    const contentImages=new Set(markdownImages(content).map(image=>image.url));
     const missingGallery=galleryEntries.filter(({url})=>!contentImages.has(url));
     if(missingGallery.length)content += '\n\n'+missingGallery.map(({url,sourceIndex})=>`![配图 ${sourceIndex+1}](<${url}>)`).join('\n\n');
     const urls=[...new Set(markdownImages(content).map(v=>v.url))];
-    if(urls.length>(album?200:100))throw fail(413,album?'单次图片组最多 200 张':'单次正文配图最多 100 张');
+    if(urls.length>(album?MAX_CAPTURE_GROUP_IMAGES:MAX_CAPTURE_NOTE_IMAGES))throw fail(413,album?`单次图片组最多 ${MAX_CAPTURE_GROUP_IMAGES} 张`:`单次正文配图最多 ${MAX_CAPTURE_NOTE_IMAGES} 张`);
     const galleryIndex=new Map(galleryEntries.map(entry=>[entry.url,entry.sourceIndex]));
     const mapping=new Map(), imageErrors=[],savedIds=[];let usedFallback=Boolean(job.image_fallback);
     for(const [index,url] of urls.entries()){
@@ -245,7 +249,12 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:browserPlan?.title||input.text.slice(0,100),...(browserPlan?{plan:browserPlan}:{}),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
       jobs.push(job);write(jobs);schedule();return exposed(job);
     },
-    retry(id){const job=this.get(id),previous=read().find(j=>j.id===id),musicOnly=previous.bgm_item_ids?.length&&previous.plan?.bgm;if(job.status!=='failed'&&!(job.status==='completed'&&job.bgm_status==='failed'))throw fail(409,'只有失败的采集或配乐可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);patch(id,{status:'queued',message:musicOnly?'等待重试配乐':'等待重新采集',bgm_only:Boolean(musicOnly),...(!musicOnly&&(previous.plan?.kind==='video'||ehSite(job.source_url))?{plan:null}:{})});schedule();return this.get(id);},
+    retry(id){const job=this.get(id),previous=read().find(j=>j.id===id),musicOnly=previous.bgm_item_ids?.length&&previous.plan?.bgm;if(job.status!=='failed'&&!(job.status==='completed'&&job.bgm_status==='failed'))throw fail(409,'只有失败的采集或配乐可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);
+      // Upgrade pre-parser tasks only before any media has been saved. Once
+      // saving starts, retain the plan so retry cannot shuffle stable IDs.
+      const oldGallery=jlijiSet(job.source_url)&&previous.plan?.parser!=='jliji-gallery-v1';
+      const legacyGallery=oldGallery&&![...(previous.plan?.images||[]),...markdownImages(previous.plan?.content||'')].some((_,index)=>exists(stableId(job.id+':image:'+index)));
+      patch(id,{status:'queued',message:musicOnly?'等待重试配乐':'等待重新采集',bgm_only:Boolean(musicOnly),...(!musicOnly&&(previous.plan?.kind==='video'||ehSite(job.source_url)||legacyGallery)?{plan:null}:{})});schedule();return this.get(id);},
     remove(id){const job=this.get(id);if(!['completed','failed'].includes(job.status))throw fail(409,'请等待任务结束后再移除记录');write(read().filter(j=>j.id!==id));return {removed:true};},
     async wait(id,signal){while(true){signal.throwIfAborted();const job=this.get(id);if(job.status==='completed')return job;if(job.status==='failed')throw fail(422,job.message);await sleep(200,undefined,{signal});}},
     async cancelAll(){for(const job of read())if(job.status==='queued')patch(job.id,{status:'failed',message:'采集已停止，可重试'});active?.controller.abort();await pending;},

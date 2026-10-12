@@ -12,6 +12,7 @@ import { MAX_IMAGE_BYTES } from './image-limits.js';
 import { proxyAgent } from './network-proxy.js';
 import { xPost, extractXPost } from './capture-x.js';
 import { extractComicChapter } from './capture-comic.js';
+import {extractJlijiGallery} from './capture-gallery.js';
 import {ehPolicy} from './capture-eh-policy.js';
 import {captureMusic} from './capture-music.js';
 import {tiebaThread, fetchTiebaPlan} from './capture-tieba.js';
@@ -488,6 +489,7 @@ function liveAddressUrls(value,base,depth=0){
     .flatMap(key=>liveAddressUrls(value[key],base,depth+1));
 }
 export function extractCapturePage(html, url) {
+  const gallery=extractJlijiGallery(html,url);if(gallery)return gallery;
   const chapter=extractComicChapter(html,url);if(chapter)return chapter;
   const { document } = parseHTML(html), u = new URL(url), host = u.hostname;
   const meta = name => document.querySelector(`meta[property="${name}"],meta[name="${name}"]`)?.getAttribute('content') || '';
