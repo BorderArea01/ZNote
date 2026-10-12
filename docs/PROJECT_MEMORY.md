@@ -57,6 +57,14 @@
 - 2026-10-13 用户明确长期授权：“由于本项目构建基本不会占用太多内存，所以准许每次我在运行游戏的时候都放行。”ZNote 的轻量前端/浏览器扩展构建、相关小范围测试及单浏览器/单上下文验收无需每次确认；该例外优先于以上通用禁构建规则。全局 D:/CodexData/codex-home/AGENTS.md 与本仓库 AGENTS.md 均已记录，避免换会话后遗忘。其他项目和 Android/Gradle、桌面安装包、大规模测试、模拟器/容器继续受原规则限制。
 - scripts/run-resource-guarded.ps1 的 -Lightweight 明确识别此次长期许可：必须提供 1–384 MiB V8 heap，GOMAXPROCS=1，仍核对游戏与可用内存；游戏存在本身不阻断轻量任务，空闲内存低于 1536 MiB 则只停止自己创建的任务树，不自动重启。默认不带该参数仍遵守游戏禁高内存。避免任务已在资源查询期间成功退出，却将随后内存阈值误报为任务失败；完成时以实际退出状态为准。
 
+## 配乐进度条两端拖动（2026-10-13，已部署与桌面/模拟触屏验收）
+
+- 用户反馈进度条前后各有一小段拖不到。当前真实配乐基线：原生 range 继承普通输入框的 padding:11px 12px，造成轨道两侧空白；step=0.1 使实际 duration=102.217125 秒的 End 和鼠标拖到右端只能得到 102.2 秒。不能把取值限制误认为原音频缺失。
+- bgm.css 单独重置配乐 range 的 padding/border/margin，保留 32px 操作高度、原生鼠标/触屏/键盘与 focus 样式，配乐音量一并清除普通输入框内边距。进度 step 改 any，允许精确 duration；onChange 立即更新界面与 currentTime，拖动时不让后台 timeupdate 覆盖指针值，松手/取消/失焦恢复更新；同时监听 durationchange、seeking、seeked，避免暂停时进度显示延迟。
+- 8 项配乐回归与 384 MiB / GOMAXPROCS=1 的生产构建通过；无在途任务时重启 3741 到 PID 88244、0.0.0.0，health=ok，实际页面加载 index-DSR6IMg-.js / index-Be0_EwDp.css。源码与运行资产均已核对。日志 artifacts/albums/bgm-seek-regression.log、bgm-seek-build.log。
+- tests/bgm-seek-ui.mjs --live 在真实已有配乐上验证键盘 Home/End、鼠标连续拖拽、模拟触屏原生点选与 CDP touchStart/touchMove/touchEnd 连续拖拽：两端严格到 0 与 102.217125 秒，滑块值等于实际时间。播放过程中拖到中段仍继续播放，松手后进度继续增长，关闭停止。证据 artifacts/bgm-seek-live-5uxwh3/result.json（最终）与 JtN8oD/result.json（端点）；截图已目视检查并遮蔽个人媒体。PIN 与原有配乐不变，临时 session 清理。
+- 已再验收上一条自动播放功能的桌面/模拟触屏打开播放、同组连续、暂停保持、关闭、pagehide、音频 503 后恢复；证据 artifacts/bgm-autoplay-live-Vmhr1a/result.json。Android 真机未直接验证，刷新网页即可加载，无需重打 APK。
+
 ## 图片组配乐自动播放（2026-10-13，已部署与桌面/模拟触屏验收）
 
 - 用户要求点开图片组时自动播放已有配乐。useBgmPlayback 仍由 Workspace 持有，同一知识库/组/hash 的 audio 与 URL 不变；只有打开或更换有配乐的图片组时尝试播放。同组翻页继续，手动暂停不因翻页恢复；关闭、换组、pagehide、认证失效停止。单图、视频和笔记保留手动播放方式。
