@@ -15,11 +15,12 @@ import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
 import { savedViewConfig } from './saved-views.js';
 import { albumSchema } from './albums.js';
 import {publishRename} from './atomic-files.js';
+import {measureBackupSpace,assertBackupBudget,assertBackupDisk,linkSnapshotMedia} from './backup-space.js';
 import { readingEntries } from './reading-progress.js';
 import { videoEntries } from './video-progress.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
-const policySchema = z.object({ enabled: z.boolean(), interval_hours: z.number().int().min(1).max(720), keep: z.number().int().min(1).max(100) });
+const policySchema = z.object({ enabled: z.boolean(), interval_hours: z.number().int().min(1).max(720), keep: z.number().int().min(1).max(100),max_extra_mb:z.number().int().min(64).max(102400).optional() });
 const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(value) && !value.includes('..');
 const uuid = z.uuid();
 const requiredTables = ['settings', 'tokens', 'collections', 'items', 'events'];
@@ -34,7 +35,7 @@ async function removeStage(root, path) {
   await rm(path, { recursive: true, force: true });
 }
 
-async function linkOrCopy(source, target) {
+async function restoreMedia(source, target) {
   try { await link(source, target); return 'linked'; }
   catch (error) {
     if (!['EXDEV', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP'].includes(error.code)) throw error;
@@ -170,12 +171,14 @@ async function inspectBackup(stage) {
   } finally { snapshot?.close(); }
 }
 
-export function createBackupManager({ db, dataDir, maintenance, clearCache = () => {}, beforeRestore = async () => {}, afterRestore = () => {}, now = () => Date.now(), maxRestoreBytes = 20 * 1024 ** 3 }) {
+export function createBackupManager({ db, dataDir, maintenance, clearCache = () => {}, beforeRestore = async () => {}, afterRestore = () => {}, now = () => Date.now(), maxRestoreBytes = 20 * 1024 ** 3,linkMedia=link,diskInspect }) {
   const directory = join(dataDir, 'backups'), staging = join(dataDir, 'restore-staging');
   let busy = false, stopped = false, timer;
   const previews = new Map();
   const configPath = join(directory, 'policy.json');
-  const defaults = { enabled: true, interval_hours: 24, keep: 7, last_attempt: null, last_success: null, last_error: null };
+  const defaults = { enabled: true, interval_hours: 24, keep: 1,max_extra_mb:1024, last_attempt: null, last_success: null, last_error: null };
+  let spaceCache,spacePending,spaceGeneration=0;
+  const invalidateSpace=()=>{spaceCache=null;spaceGeneration++;};
   const ready = (async () => {
     await mkdir(directory, { recursive: true }); await mkdir(staging, { recursive: true });
     // A .tmp entry is never a usable backup. It can only remain after a
@@ -209,9 +212,17 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
   };
   const archive = async () => {
     await ready;
+    const policy=await config(),entries=await list(),limit=policy.max_extra_mb*1024**2;
+    const existing=await measureBackupSpace(dataDir,entries),estimated=db.prepare('PRAGMA page_count').get().page_count*db.prepare('PRAGMA page_size').get().page_size+65536;
+    assertBackupBudget(existing.additional_bytes+estimated,limit);
+    await assertBackupDisk(directory,estimated,{inspect:diskInspect});
     const id = `${now()}-${randomUUID()}.snapshot`, temp = join(directory, id + '.tmp'), target = join(directory, id);
     try {
       await mkdir(join(temp, 'data', 'media'), { recursive: true });
+      // Probe before copying the database. Never silently duplicate the media
+      // library when the filesystem or permissions do not support hard links.
+      const first=mediaKeys(db)[0];
+      if(first){if(!safeKey(first))throw new Error('Invalid media key');const probe=join(temp,'link-probe');await linkSnapshotMedia(join(dataDir,'media',first),probe,{link:linkMedia});await unlink(probe);}
       const databasePath = join(temp, 'data', 'znote.sqlite');
       await backup(db, databasePath);
       const snapshot = new DatabaseSync(databasePath, { readOnly: true });
@@ -222,21 +233,25 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       for (const { file_key } of items) {
         if (!safeKey(file_key)) throw new Error('Invalid media key in recovery snapshot');
         const source = join(dataDir, 'media', file_key), size = (await stat(source)).size;
-        const mode = await linkOrCopy(source, join(temp, 'data', 'media', file_key));
+        await linkSnapshotMedia(source, join(temp, 'data', 'media', file_key),{link:linkMedia});
         logicalBytes += size;
-        if (mode === 'linked') linkedFiles++; else { copiedFiles++; storedBytes += size; }
+        linkedFiles++;
       }
       const handle = await open(databasePath, 'r+'); try { await handle.sync(); } finally { await handle.close(); }
       const manifest = { version: 1, id, created_at: new Date(Number(id.slice(0, 13))).toISOString(), logical_bytes: logicalBytes, stored_bytes: storedBytes, files: items.length, linked_files: linkedFiles, copied_files: copiedFiles };
-      const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
-      manifest.stored_bytes += Buffer.byteLength(manifestText);
-      await writeFile(join(temp, 'snapshot.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+      let manifestText;
+      for(let n=0;n<10;n++){manifestText=`${JSON.stringify(manifest,null,2)}\n`;const overhead=Buffer.byteLength(restoreText)+Buffer.byteLength(manifestText);if(manifest.stored_bytes===storedBytes+overhead&&manifest.logical_bytes===logicalBytes+overhead)break;manifest.stored_bytes=storedBytes+overhead;manifest.logical_bytes=logicalBytes+overhead;}
+      await writeFile(join(temp, 'snapshot.json'), manifestText);
       await writeFile(join(temp, 'RESTORE.txt'), restoreText);
+      const finalSpace=await measureBackupSpace(dataDir,[...entries,{id:id+'.tmp',format:'snapshot'}]);
+      assertBackupBudget(finalSpace.additional_bytes,limit);
+      await assertBackupDisk(directory,0,{inspect:diskInspect});
       await publishRename(temp, target);
+      invalidateSpace();
       return id;
     } catch (e) { await removeStage(directory, temp).catch(() => {}); throw e; }
   };
-  const removeBackup = async entry => entry.format === 'snapshot' ? removeStage(directory, join(directory, entry.id)) : unlink(join(directory, entry.id));
+  const removeBackup = async entry => {if(entry.format==='snapshot')await removeStage(directory,join(directory,entry.id));else await unlink(join(directory,entry.id));invalidateSpace();};
   const run = async () => {
     if (busy || maintenance.locked) throw fail(409, '备份或恢复任务正在进行');
     busy = true;
@@ -249,7 +264,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
       return { id };
     } catch (e) {
       const current = await config();
-      await saveConfig({ ...current, last_attempt: now(), last_error: '备份失败，请检查原图是否完整、磁盘空间与目录权限' });
+      await saveConfig({ ...current, last_attempt: now(), last_error: e.status===507?e.message:'备份失败，请检查原图是否完整、磁盘空间与目录权限' });
       throw e;
     } finally { busy = false; }
   };
@@ -293,7 +308,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
           const sourceImages = source.prepare("SELECT * FROM items WHERE kind IN ('image','video')").iterate();
           for (const item of sourceImages) if (!newKeys.has(item.file_key)) {
             const key = randomUUID() + (item.storage_codec === 'gzip' ? '.gz' : '.bin');
-            await linkOrCopy(join(candidate.stage, 'data', 'media', item.file_key), join(dataDir, 'media', key));
+            await restoreMedia(join(candidate.stage, 'data', 'media', item.file_key), join(dataDir, 'media', key));
             newKeys.set(item.file_key, key);
             const hash = item.kind === 'video' ? (await fileDigest(join(dataDir, 'media', key))).hash : digest(await originalBuffer(dataDir, { ...item, file_key: key }));
             if (hash !== item.hash) throw new Error('Restored original verification failed');
@@ -301,7 +316,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
           }
           for(const track of bgmFiles(source))if(!newKeys.has(track.file_key)){
             const key=randomUUID()+'.bin';
-            await linkOrCopy(join(candidate.stage,'data','media',track.file_key),join(dataDir,'media',key));newKeys.set(track.file_key,key);
+            await restoreMedia(join(candidate.stage,'data','media',track.file_key),join(dataDir,'media',key));newKeys.set(track.file_key,key);
             const restored=await fileDigest(join(dataDir,'media',key));if(restored.hash!==track.hash||restored.bytes!==track.bytes)throw new Error('Restored BGM verification failed');
             const handle=await open(join(dataDir,'media',key),'r+');try{await handle.sync();}finally{await handle.close();}
           }
@@ -342,7 +357,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
           if (!committed) for (const key of newKeys.values()) await unlink(join(dataDir, 'media', key)).catch(() => {});
         }
       });
-    } finally { busy = false; }
+    } finally { busy = false;invalidateSpace(); }
   };
   const tick = async () => {
     if (stopped || busy || maintenance.locked) return;
@@ -353,7 +368,15 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
   };
   return {
     list, run, preview, restore, tick,
-    async status() { const backups = await list(); return { ...await config(), busy, backups, stored_bytes: backups.reduce((sum, item) => sum + item.stored_bytes, 0), logical_bytes: backups.reduce((sum, item) => sum + item.logical_bytes, 0) }; },
+    async status({fresh=false}={}) {
+      const backups=await list(),policy=await config();
+      if(!spaceCache||fresh||Date.now()-spaceCache.at>60000){
+        if(!spacePending){const generation=spaceGeneration;spacePending=measureBackupSpace(dataDir,backups).then(value=>{if(generation===spaceGeneration)spaceCache={value,at:Date.now()};return value;}).finally(()=>{spacePending=null;});}
+        const measured=await spacePending;if(!spaceCache)spaceCache={value:measured,at:0};
+      }
+      const space=spaceCache.value,limit_bytes=policy.max_extra_mb*1024**2;
+      return {...policy,busy,backups,space,limit_bytes,over_budget:space.additional_bytes>limit_bytes,stored_bytes:space.additional_bytes,logical_bytes:backups.reduce((sum,item)=>sum+item.logical_bytes,0)};
+    },
     async configure(value) { if (busy) throw fail(409, '任务进行中，请稍后修改设置'); const policy = policySchema.parse(value); await saveConfig({ ...await config(), ...policy }); return this.status(); },
     async cancel(id) { const value = previews.get(id); if (!value) return; if (busy) throw fail(409, '任务正在进行'); previews.delete(id); if (value.owned) await removeStage(staging, value.stage); },
     file(id) { if (!legacyPattern.test(id) && !snapshotPattern.test(id)) throw fail(404, '备份不存在'); return resolve(directory, id); },
@@ -373,7 +396,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
 
 export function registerBackupRoutes(app, manager, admin, dataDir) {
   const upload = multer({ dest: join(dataDir, 'uploads'), limits: { files: 1, fileSize: 25 * 1024 ** 3, fields: 0 } });
-  app.get('/api/backups', admin, async (req, res) => res.json(await manager.status()));
+  app.get('/api/backups', admin, async (req, res) => res.json(await manager.status({fresh:req.query.refresh_space==='true'})));
   app.patch('/api/backups/policy', admin, async (req, res) => res.json(await manager.configure(req.body)));
   app.post('/api/backups', admin, async (req, res) => res.status(201).json(await manager.run()));
   app.get('/api/backups/:id/download', admin, async (req, res) => manager.download(req.params.id, res));

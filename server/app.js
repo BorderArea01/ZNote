@@ -1433,9 +1433,9 @@ export function createApp({
     if (status >= 500) console.error("Request failed:", err.code || err.name);
     res.status(status).json({
       error:
-        status >= 500
+        status >= 500 && !err.publicMessage
           ? "服务器处理失败，请检查服务日志和存储空间"
-          : err.message,
+          : err.publicMessage || err.message,
     });
   });
   transaction(()=>trash.repairReferences());

@@ -630,8 +630,9 @@ spec.paths['/api/items'].get.parameters.push(
 spec.paths['/api/events'].get.parameters.push({name:'latest',in:'query',schema:{type:'string',enum:['true','false']},description:'true 只返回最新 cursor 和空 events，用于轻量检查更新；默认沿用 after 增量读取。'});
 Object.assign(spec.components.schemas.Item.allOf[1].properties, {group_key:{...str,nullable:true},group_index:{type:'integer'},group_title:{...str,nullable:true},group_count:{type:'integer',description:'仅折叠查询返回当前过滤范围内的组页数'}});
 spec.paths['/api/item-groups/favorite']={post:operation('收藏或取消收藏当前知识库的整组图片',{type:'object',properties:{count:{type:'integer'}}},{requestBody:body({type:'object',required:['group_key','collection_id','favorite'],properties:{group_key:str,collection_id:{...str,nullable:true},favorite:{type:'boolean'}}})})};
-spec.paths['/api/backups/policy'] = { patch: operation('更新自动恢复快照策略（管理员）；默认每天一次保留 7 份', { type: 'object' }, { requestBody: body({ type: 'object', required: ['enabled', 'interval_hours', 'keep'], properties: {
+spec.paths['/api/backups/policy'] = { patch: operation('更新自动恢复快照策略（管理员）；默认每天一次保留 1 份，额外文件占用上限 1 GiB；共享失败或超限时保留已有恢复点并停止创建', { type: 'object' }, { requestBody: body({ type: 'object', required: ['enabled', 'interval_hours', 'keep'], properties: {
   enabled: { type: 'boolean' }, interval_hours: { type: 'integer', minimum: 1, maximum: 720 }, keep: { type: 'integer', minimum: 1, maximum: 100 },
+  max_extra_mb: {type:'integer',minimum:64,maximum:102400,default:1024,description:'MiB；包括新旧快照临时并存的额外文件字节数，不计与当前图库共享的媒体；旧客户端省略时保留当前值'},
 } }) }) };
 spec.paths['/api/backups/{id}/download'] = { get: { summary: '把恢复快照按需流式导出为迁移 ZIP（管理员；服务器不保留生成的整包）', parameters: [id], responses: { 200: { description: 'ZIP', content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } } }, ...errorResponses } } };
 spec.paths['/api/backups/{id}/preview'] = { post: operation('校验服务器恢复快照并创建一小时恢复预览（管理员）', { type: 'object' }, { parameters: [id] }) };
