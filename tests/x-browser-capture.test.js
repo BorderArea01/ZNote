@@ -23,6 +23,13 @@ test('browser X data binds post identity and permits only own X media, with orde
   assert.equal(plan.images.length,4);assert.match(plan.images[0],/name=orig/);assert.deepEqual(plan.tags,['画画']);assert.equal(plan.author,'作者 @Tir_al_');
   for(const [raw,url] of [[{...browserPost,id:'123'},source],[browserPost,'https://evil.test/user/status/2107765375521939865'],[{...browserPost,images:['http://127.0.0.1/1.jpg']},source],[{...browserPost,images:['https://pbs.twimg.com/profile_images/avatar.jpg']},source],[{...browserPost,text:'x'.repeat(100001)},source],[{...browserPost,images:[...browserPost.images,browserPost.images[0]]},source]])assert.throws(()=>extractBrowserXPost(raw,url));
 });
+
+test('X page records retain full ordered photos even without photo DOM and keep quoted media bound to its own id',async()=>{
+  const context={URL};vm.createContext(context);vm.runInContext(await readFile('addons/browser/clipper/x-video-records.js','utf8'),context);
+  const photo=i=>({type:'photo',media_url_https:`https://pbs.twimg.com/media/own${i}.jpg`});
+  const rows=context.ZNoteXVideoRecords({tweet:{rest_id:browserPost.id,legacy:{extended_entities:{media:[photo(1),photo(2),photo(3),photo(4),{type:'photo',media_url_https:'https://evil.test/private.jpg'}]}},quoted_status_result:{result:{rest_id:'123',legacy:{extended_entities:{media:[{type:'photo',media_url_https:'https://pbs.twimg.com/media/quote.jpg'}]}}}}}});
+  const own=rows.find(row=>row.id===browserPost.id);assert.deepEqual(Array.from(own.images),[1,2,3,4].map(i=>photo(i).media_url_https));assert.equal(rows.find(row=>row.id==='123').images.length,1);assert.equal(own.video_urls.length,0);
+});
 test('fresh browser data rescues a failed embed task, preserves grouping and dedupe; readonly resolution never writes',async()=>{
   const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)');
   const saved=new Map();let embeds=0;

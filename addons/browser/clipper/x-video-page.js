@@ -1,4 +1,4 @@
-// Page-world reader: expose only post-bound playback URLs, never session data.
+// Page-world reader: expose only post-bound media URLs, never session data.
 (() => {
   if(window.top!==window||globalThis.__znoteXVideoPage)return;globalThis.__znoteXVideoPage=true;
   let enabled=false;const cache=new Map(),limit=4_000_000;
@@ -18,7 +18,7 @@
       }
     }
     remember(roots);
-    const row=cache.get(id);window.dispatchEvent(new CustomEvent('znote-x-video-response',{detail:{id,nonce,video_urls:row?.video_urls||[]}}));
+    const row=cache.get(id);window.dispatchEvent(new CustomEvent('znote-x-video-response',{detail:{id,nonce,video_urls:row?.video_urls||[],images:row?.images||[]}}));
   });
   const originalFetch=window.fetch;
   window.fetch=function(...args){

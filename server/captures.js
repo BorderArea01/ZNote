@@ -27,6 +27,14 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
   let active, pending = Promise.resolve(), stopped=false;
   const prior = read(); let changed=false;
   for(const j of prior) if(['queued','running'].includes(j.status)){j.status='failed';j.message='服务曾重启，任务已保留，请重试';changed=true;}
+  // Older versions silently turned an empty group into a text-only note.
+  // Preserve that note, but make the missing-media task retryable again.
+  for(const j of prior) if(j.status==='completed'&&j.input.image_mode==='group'){
+    const note=j.item_id&&exists(j.item_id);
+    if(note?.kind==='note'&&(!note.storage_codec||note.storage_codec==='identity')&&!markdownImages(note.content||'',true).length){
+      j.status='failed';j.message='此前只保存了文字笔记，图片未保存，请重试采集';j.empty_group_note_id=note.id;changed=true;
+    }
+  }
   if(changed) write(prior);
   function existing(id, collection) {
     const item=exists(id);
@@ -49,7 +57,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     validateCollection(job.input.collection_id);
     if(job.bgm_only){const result=await music(job,job.plan,job.bgm_item_ids,signal);patch(job.id,{status:'completed',message:'内容已入库'+result});return;}
     const id=stableId('capture:'+job.id), before=existing(id,job.input.collection_id);
-    if(before){patch(job.id,{status:'completed',message:'已入库',item_id:id});return;}
+    if(job.empty_group_note_id&&!before)throw fail(409,'此前的文字笔记已删除，未重新创建采集内容');
+    if(before&&!(job.empty_group_note_id===before.id&&before.kind==='note')){patch(job.id,{status:'completed',message:'已入库',item_id:id});return;}
     let plan=job.plan;
     if(!plan){
       const resource=await page(job.source_url,signal,0,{deferImages:true,progress:message=>patch(job.id,{message})});signal.throwIfAborted();
@@ -93,6 +102,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     const contentImages=new Set(markdownImages(plan.content||'').map(image=>image.url));
     const mediaCount=new Set([...galleryEntries.map(entry=>entry.url),...contentImages]).size+liveVideos.length;
     const imageMode=job.input.image_mode || plan.default_image_mode || (/(^|\.)(xiaohongshu|x|twitter)\.com$/.test(new URL(plan.url).hostname) ? 'group' : 'note');
+    if(imageMode==='group'&&mediaCount===0&&(job.input.image_mode||/(^|\.)(x|twitter)\.com$/.test(new URL(plan.url).hostname)))throw fail(422,'未获取到这篇作品的图片或视频，未保存图片组；请显示原帖全部媒体后重试');
     const album=imageMode==='group'&&mediaCount>0;
     const liveOnly=liveVideos.length>0&&galleryEntries.length===0;
     const groupKey=liveOnly?(liveVideos.length>1?'capture:'+id:null):album?(mediaCount>1?'capture:'+id:null):'note:'+id;
@@ -167,9 +177,9 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     for(const [index,url] of urls.entries()){const sourceIndex=galleryIndex.get(url)??index;if(!existing(stableId(job.id+':image:'+sourceIndex),job.input.collection_id))throw fail(409,'配图已移除，请检查后重试');}
     if(album||liveOnly){const musicResult=await music(job,plan,savedIds,signal);const firstImage=urls.length?existing(stableId(job.id+':image:'+(galleryIndex.get(urls[0])??0)),job.input.collection_id):null;const first=firstImage||firstLiveItem;patch(job.id,{status:'completed',message:(liveVideos.length?`${liveVideos.length} 段实况视频已入库${galleryEntries.length?`，另有 ${galleryEntries.length} 张静态图片`:''}`:usedFallback?'图片组已入库，使用了备用图片版本':`${urls.length===1?'图片':'图片组'}已入库，正文已保存在备注`)+musicResult,item_id:first?.id,title:plan.title});return;}
     content=replaceMarkdownImages(content,markdownImages(content),mapping);
-    const item=saveNote({id,title:(plan.title||'网页采集').slice(0,200),content,source_url:plan.url,collection_id:job.input.collection_id,tags});
+    const item=await saveNote({id,title:(plan.title||'网页采集').slice(0,200),content,source_url:plan.url,collection_id:job.input.collection_id,tags});
     const musicResult=await music(job,plan,[item.id,...savedIds],signal);
-    patch(job.id,{status:'completed',message:(usedFallback?'图文已入库；部分首选图片不可用，已使用备用版本，可能含平台水印':'图文已入库，配图已保存到本地')+musicResult,item_id:item.id,title:item.title});
+    patch(job.id,{status:'completed',message:(urls.length?(usedFallback?'图文已入库；部分首选图片不可用，已使用备用版本，可能含平台水印':`图文已入库，${urls.length} 张配图已保存到本地`):'文字笔记已入库（无配图）')+musicResult,item_id:item.id,title:item.title});
   }
   async function pump(){
     if(active||stopped)return;
@@ -254,7 +264,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       // saving starts, retain the plan so retry cannot shuffle stable IDs.
       const oldGallery=jlijiSet(job.source_url)&&previous.plan?.parser!=='jliji-gallery-v1';
       const legacyGallery=oldGallery&&![...(previous.plan?.images||[]),...markdownImages(previous.plan?.content||'')].some((_,index)=>exists(stableId(job.id+':image:'+index)));
-      patch(id,{status:'queued',message:musicOnly?'等待重试配乐':'等待重新采集',bgm_only:Boolean(musicOnly),...(!musicOnly&&(previous.plan?.kind==='video'||ehSite(job.source_url)||legacyGallery)?{plan:null}:{})});schedule();return this.get(id);},
+      const emptyPlan=previous.plan&&previous.plan.kind!=='video'&&!previous.plan.images?.length&&!previous.plan.live_videos?.length&&!markdownImages(previous.plan.content||'').length;
+      patch(id,{status:'queued',message:musicOnly?'等待重试配乐':'等待重新采集',bgm_only:Boolean(musicOnly),...(!musicOnly&&(previous.plan?.kind==='video'||ehSite(job.source_url)||legacyGallery||emptyPlan)?{plan:null}:{})});schedule();return this.get(id);},
     remove(id){const job=this.get(id);if(!['completed','failed'].includes(job.status))throw fail(409,'请等待任务结束后再移除记录');write(read().filter(j=>j.id!==id));return {removed:true};},
     async wait(id,signal){while(true){signal.throwIfAborted();const job=this.get(id);if(job.status==='completed')return job;if(job.status==='failed')throw fail(422,job.message);await sleep(200,undefined,{signal});}},
     async cancelAll(){for(const job of read())if(job.status==='queued')patch(job.id,{status:'failed',message:'采集已停止，可重试'});active?.controller.abort();await pending;},

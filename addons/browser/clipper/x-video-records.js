@@ -10,7 +10,8 @@
         const variants=media.filter(m=>['video','animated_gif'].includes(m.type)).flatMap(m=>m.video_info?.variants||m.video?.variants||[]);
         if(entry.video?.variants)variants.push(...entry.video.variants);
         const urls=[...new Set(variants.map(v=>({url:valid(v.url||v.src),bitrate:Number(v.bitrate)||0})).filter(v=>v.url).sort((a,b)=>b.bitrate-a.bitrate).map(v=>v.url))].slice(0,16);
-        if(urls.length)records.set(id,{id,video_urls:urls});
+        const images=[...new Set(media.filter(m=>m.type==='photo').map(m=>m.media_url_https).filter(value=>{try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='pbs.twimg.com'&&!u.username&&!u.password&&!u.port&&u.pathname.startsWith('/media/');}catch{return false;}}))].slice(0,4);
+        if(urls.length||images.length){const previous=records.get(id);records.set(id,{id,video_urls:urls.length?urls:previous?.video_urls||[],images:images.length>=(previous?.images?.length||0)?images:previous.images});}
       }
       try{for(const child of Object.values(entry))if(child&&typeof child==='object')stack.push(child);}catch{}
     }
