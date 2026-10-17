@@ -6,7 +6,14 @@ import HttpsProxyAgent from 'https-proxy-agent';
 // Keep proxy discovery opt-in on non-Windows hosts, and on Windows mirror the
 // user-level WinINet proxy when it is explicitly enabled. The destination is
 // still DNS-validated by each caller before this agent is used.
-let cached;
+export function windowsProxyServer(value) {
+  const parts=value.split(';').map(part=>part.trim());
+  const selected=parts.find(part=>/^https=/i.test(part))?.replace(/^https=/i,'')
+    ||parts.find(part=>/^http=/i.test(part))?.replace(/^http=/i,'')
+    ||(!value.includes('=')?value.trim():'');
+  if(!selected||/^(?:auto|direct)$/i.test(selected))return '';
+  return /^https?:\/\//i.test(selected)?selected:`http://${selected}`;
+}
 
 function readWindowsProxy() {
   if (process.platform !== 'win32') return '';
@@ -28,20 +35,28 @@ function readWindowsProxy() {
     if (!value || /^(?:auto|direct)$/i.test(value)) return '';
     // WinINet accepts `http=host:port;https=host:port`. Use the HTTPS route
     // when present, otherwise the single proxy value used by Clash.
-    const selected = value.split(';').map(part => part.trim()).find(part => /^https?=/i.test(part))?.replace(/^https?=/i, '') || value;
-    if (!selected || /^(?:auto|direct)$/i.test(selected)) return '';
-    return /^https?:\/\//i.test(selected) ? selected : `http://${selected}`;
+    return windowsProxyServer(value);
   } catch {
     return '';
   }
 }
 
-export function proxyUrl() {
-  if (cached !== undefined) return cached;
-  const configured = process.env.ZNOTE_HTTP_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY || '';
-  cached = configured.trim() || readWindowsProxy();
-  return cached;
+export function createProxyResolver({env=process.env,readSystem=readWindowsProxy,now=Date.now,ttlMs=5000}={}) {
+  let cached,expires=0;
+  return {
+    url(){
+      // Explicit process configuration wins, and is checked on every call.
+      const configured=['ZNOTE_HTTP_PROXY','HTTPS_PROXY','HTTP_PROXY','ALL_PROXY'].map(key=>(env[key]||'').trim()).find(Boolean);
+      if(configured)return configured;
+      const time=now();
+      if(cached===undefined||time>=expires){cached=readSystem();expires=time+ttlMs;}
+      return cached;
+    },
+    reset(){cached=undefined;expires=0;},
+  };
 }
+const resolver=createProxyResolver();
+export const proxyUrl=()=>resolver.url();
 
 export function proxyAgent() {
   const value = proxyUrl();
@@ -49,5 +64,5 @@ export function proxyAgent() {
 }
 
 export function resetProxyCache() {
-  cached = undefined;
+  resolver.reset();
 }
