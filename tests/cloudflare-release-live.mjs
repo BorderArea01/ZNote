@@ -10,6 +10,7 @@ const download=(path,collect=false)=>new Promise((done,reject)=>{
 });
 const manifest=(await download('/downloads/latest.json',true)).value,result={origin,version:manifest.version,assets:[]};
 for(const key of ['apk','source']){assert.match(manifest[key],/^\/downloads\/ZNote-[0-9.]+(?:-beta\.[0-9]+)?-(android\.apk|source\.zip)$/);const actual=await download(manifest[key]);assert.equal(actual.size,manifest[key+'_size']);assert.equal(actual.sha256,manifest[key+'_sha256']);result.assets.push({kind:key,...actual});}
-const receipt=JSON.parse(await readFile('artifacts/android-beta21-release/ANDROID-BUILD-SOURCE.json','utf8'));assert.equal(manifest.version,receipt.version);
-const signed=await readFile('artifacts/android-beta21-release/ZNote-'+receipt.version+'-android.apk');assert.equal(result.assets.find(a=>a.kind==='apk').sha256,createHash('sha256').update(signed).digest('hex'));
+const releaseDirectory=resolve(process.argv.find(a=>a.startsWith('--release-dir='))?.slice('--release-dir='.length)||'artifacts/android-beta21-release');
+const receipt=JSON.parse(await readFile(join(releaseDirectory,'ANDROID-BUILD-SOURCE.json'),'utf8'));assert.equal(manifest.version,receipt.version);
+const signed=await readFile(join(releaseDirectory,'ZNote-'+receipt.version+'-android.apk'));assert.equal(result.assets.find(a=>a.kind==='apk').sha256,createHash('sha256').update(signed).digest('hex'));
 const dir=await mkdtemp(resolve('artifacts/cloudflare-release-live-'));await writeFile(join(dir,'result.json'),JSON.stringify(result,null,2));console.log('Public APK/source match signed release; evidence '+dir);

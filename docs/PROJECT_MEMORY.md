@@ -10,6 +10,7 @@
 - Android 0.10.0-beta.22 / versionCode10022，原证书SHA256 4e42f079d9ac5c4154a53eaa3ea6a82720ddc8be3ad3c9f84d0bea7abc62101b。受控离线单worker512MiB构建release/Lint/debug/test APK通过，0 Lint errors、26项warnings；没有调用GitHub Actions。签名APK摘要 a086d56859921ff43b79f56df713ad67c99eceae6cdab7b0c0868404ccdbb30c。
 - 隔离Android30模拟器覆盖实际窗口、触屏展开/关闭、拖动中完整形态、左右吸边、取消、记忆选库并传入提交、浮窗粘贴、后台排队/成功短提示收回、失败详情与下一次采集可用、前往知识库、大字体。证据 artifacts/android-overlay-local-Oz5gjU/result.txt，expanded/dragging/success/failure/large-font截图已目视。原签名beta.21→beta.22实际覆盖安装并保留既有安装app-op，证据 artifacts/android-overlay-local-Ij4gnN/release-upgrade.txt。
 - 测试工具修正Android30不支持InputStream.readAllBytes、API30不能授予POST_NOTIFICATIONS、按钮尚未连接就被测试提前点击的问题。只复用本轮新建的隔离AVD重试，未连接或修改已有USB/Wi-Fi设备，退出清理所属模拟器。模拟任务不是平台解析验收；荣耀Android15真机及系统后台调度未验证，不能声称这台手机所有延迟已解决。
+- beta.22 已发布 GitHub android-v0.10.0-beta.22，tag/source 对应 9ee74afaf8d8841ed8ddbcb258ae61b61ac9a1c9，上传四项资产摘要已核对。沿用 Pages 代发入口 https://znote-capture-inbox.pages.dev/downloads/ZNote-0.10.0-beta.22-android.apk ，latest.json 已升 beta.22，公网APK与原签名包以及源码ZIP逐字节摘要一致，证据 artifacts/cloudflare-release-live-sYFQ65/result.json。原3741与远程health正常，原前端资产不变，无需重启图库；未声称修复既有GitHub匿名目录/旧App检查更新访问问题。
 
 ## 手机仅优化采集浮窗（2026-10-21，四版交互模型待选）
 
