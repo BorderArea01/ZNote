@@ -15,6 +15,7 @@
 - [扩展总索引](../addons/README.md)：浏览器、连接器和 AI 工作流插件
 - [扩展设计](EXTENSION-DESIGN.md)：采集扩展的边界与实现约定
 - [浏览器插件维护](BROWSER-ADDONS.md)：统一登记、固定 ID 检查、构建与按需打包
+- [Cloudflare 远程采集](../addons/connectors/cloudflare/README.md)：免费域名、云端排队与开发机主动收件
 
 ## 开发与维护
 

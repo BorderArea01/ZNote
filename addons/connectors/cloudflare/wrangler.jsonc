@@ -1,0 +1,10 @@
+{
+  "name": "znote-capture-inbox",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-21",
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "znote-capture-inbox", "database_id": "REPLACE_WITH_D1_DATABASE_ID" }
+  ]
+}

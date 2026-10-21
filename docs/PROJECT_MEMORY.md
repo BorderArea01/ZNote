@@ -2,6 +2,18 @@
 
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
+## 免费跨网络浮窗采集收件箱（2026-10-21）
+
+- 用户没有域名、有 Cloudflare 账号，主要通过手机浮窗发送分享链接，不上传大视频；关注抖音、小红书、贴吧、B站、Pixiv、X、小黑盒等。跨网传输与平台解析是两件事，不能把任意站点/需登录作品说成已经兼容。小黑盒目前无专用解析器，手机拿到链接后由既有采集器处理，失败必须回传真实原因。
+- 启动 cloudflared 直接把本机 3741 暴露到公网曾被自动审批拒绝，仅返回 blocked by policy，未启动隧道。改用独立 Cloudflare Worker / Pages＋D1 收件箱，开发机主动 HTTPS 拉取；不提供公网本机反向代理，不转发任意本地路径，不上传原图/视频或本机 API 凭据。App 远程首页是采集任务页，完整图库仍用原局域网入口，不能误称整个知识库已远程可浏览。
+- 可选源码统一在 addons/connectors/cloudflare/，root README、addons/README、docs/README、CLIENTS 都有入口。worker.js 与 portal.js 提供 health、一次性码登录、设备令牌、目录、提交/进度/重试；对照现有 Android MainActivity / CaptureSessionProvider / ShareActivity / CaptureAssistService 接口实现，不需要重做 APK。24 小时有效的一次性码独立于原 PIN，浏览器会话 30 天、设备令牌 180 天；原 PIN 未修改。实际地址、D1/账号编号及凭据仅在 data/cloudflare-collector/，不得提交配置或把原本机 API key 作为云端密钥。
+- 实际 Worker 与 Pages 固定地址已经发布并绑定同一私有 D1，当前主地址读取 config.json.relay_origin，别手抄历史预览部署 URL。仅使用 Free 可用能力，未开通付费订阅或 R2。客户端仅上传链接/正文、选库信息，D1 保存目录与状态；成功云记录保留七天，失败可重试，未完成/失败总量上限 200。十秒轮询，清理扫描每小时才执行；个人使用应核对 Workers 100k 请求/日、D1 5m 读/100k 写/日额度，不称无限免费。
+- 本机 ZNote-Cloudflare-Collector 后台任务已安装运行，沿用无窗口 conhost / Windows Job Object、单实例锁与 128 MiB Node heap；实测收件进程工作集约 32 MiB。原 ZNote-Server / 3741 PID 102108 保持运行，前端原 index-DSR6IMg-.js 未变化。连接器状态/凭据与日志在 data/cloudflare-collector/；主动读本机受限接口，云输入不能指定本机路径、命令、令牌或其他 HTTP 目的地。
+- 云端租约 120 秒，持久状态保留云任务/租约/本机任务；本机 request_id=cf:<云任务UUID>，提交响应丢失后仍去重。终态回传失败时保留 outbox；只有用户明确云端重试代次才触发本机失败任务重试，旧租约不能覆盖新状态。关闭再启动任务需等原 Node 真正退出；曾只等 500ms 导致锁正确拒绝重复启动，随后分钟触发恢复，不可因此删锁或杀不明 Node。jsonClient 正确接收清理接口的空 204。
+- 7 项定向队列/配对/权限/租约/断线去重/重试与原手机长期授权测试通过；隔离实例桌面与模拟触屏端到端通过，证据 artifacts/cloudflare-inbox-ui-U0kqLo/。实际公网 HTTPS → D1 → 已运行本机 API → 原图落盘 → 云状态成功，网页会话和 Android 协议设备 token 分别保存一张 8090 字节公共测试 PNG，媒体接口/hash 核对、选库、触屏无横向溢出均验证；临时库、两条云记录、本机任务/媒体和临时授权已清理，证据 artifacts/cloudflare-inbox-live-v7Jjhu/result.json 及截图，已目视检查。另一次真实测试源站 404 正确回传 failed，没有伪报成功；一个在目录等待超时留下的测试会话已按 UUID/期限精确撤销，live 脚本 finally 已补充提前取 Cookie 清理。
+- 已执行受控 Worker/Pages 构建部署及原前端生产构建，当前入口与 3741 健康、原前端哈希、测试库清理、独立本机写入凭据、空收件状态已复核，证据 artifacts/remote-access/final-verified.json。Windows 有效 Cloudflare OAuth 经系统代理刷新复用，没有要求用户粘贴 CF 密钥。Wrangler 4.151.3 新 Pages 创建命令会默认委托 Workers 并自动改根 package/lock/Vite：本次已恢复三文件为原 HEAD，迁走生成的根配置和重定向缓存、重新构建；没有迁移主 ZNote 到云。以后只在独立目录明确选 Pages，用部署包装器的标准 wrangler.json，不能让上级 wrangler.json 抢先于子目录 jsonc，也不能将 account_id 放 Pages 配置；账号经环境传入。
+- 开发机实测 workers.dev、pages.dev 直连均超时（HTTP 000），经 Clash 代理的 HTTPS/API/UI 正常；不能把经代理通过说成国内手机可直连。已异步询问手机有无代理，手机真机网络及浮窗实操未代验；交付必须说明实际网络前提。最终一次性连接码通过 setup.mjs pair 写入私有 pairing.json，临近交付生成，不能从历史日志抄过期码。迁移连接器需单独安全迁移部署状态并核对本机令牌，不把云端收件箱当原图库备份。
+
 ## 扩展原生弹窗缩成细条（2026-10-21）
 
 - 用户截图为浏览器工具栏的网页采集 action 弹窗；安装目录 popup.css 与源码相同。旧 `.popup{width:384px;max-width:100vw}` 在弹窗自动计算尺寸时循环受自身初始小视口约束，真实 Edge 原生弹窗复现 innerWidth/bodyWidth=66px，截图 artifacts/popup-native-60fh4b/native.png。普通固定视口标签页无法发现本例，不能再只打开 popup.html 新标签当原生尺寸验收。

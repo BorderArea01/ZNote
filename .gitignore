@@ -1,4 +1,6 @@
 node_modules/
+.wrangler/
+/addons/connectors/cloudflare/artifacts/
 dist/
 data/
 .env
@@ -41,3 +43,6 @@ clients/android/local.properties
 *.keystore
 *.p12
 *.mobileprovision
+
+.dev.vars*
+!.dev.vars.example

@@ -15,6 +15,7 @@
 - [ZNote · 网页采集](browser/clipper/README.md)
 - [浏览器插件统一管理](browser/README.md)
 - [微信收件连接器](connectors/weixin/README.md)
+- [Cloudflare 远程采集收件箱](connectors/cloudflare/README.md)
 - [AI 对话学习笔记](ai/znote-conversation-notes/skills/znote-conversation-notes/SKILL.md)
 
 专用或私人插件在独立私有项目维护，不把源码、构建缓存或下载地址放进本仓库。新增公开扩展时，应放入对应分类，并同时更新本页、[文档索引](../docs/README.md)和根 README。

@@ -1,0 +1,8 @@
+{
+  "name": "znote-cloudflare-inbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "deploy": "wrangler deploy", "check": "wrangler deploy --dry-run" },
+  "devDependencies": { "wrangler": "4.151.3" }
+}
