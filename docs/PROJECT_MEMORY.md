@@ -11,6 +11,9 @@
 - 实际独立 Android30 模拟器已验证隐式链接解析、触屏确认/取消、原配置保留、503后同会话重试、网页直接已登录、provider 持久授权、已用邀请拒绝与无效链接，证据 artifacts/android-import-local-g8swMZ/result.txt / connection-import.png（已目视检查）。旧 WebView 不支持 replaceChildren，远程任务页改用兼容 DOM 更新，同时不依赖 crypto.randomUUID。测试触屏必须设置 SOURCE_TOUCHSCREEN，不能把未送达的注入事件当产品按钮失效；截图写私有文件并由 run-as 取回，避免外部文件提取静默失败。只使用新建测试模拟器，不接触用户设备，结束清理所属进程。
 - 实际 Pages 固定入口桌面/模拟触屏验证邀请、密钥不入请求、显式 Android Intent、浏览器备用登录、设备 token 与失效提示，授权用后撤销，证据 artifacts/cloudflare-import-ui-8zir5i/result.json；7项定向回归与原图组/选库/离线队列/重试UI回归通过（artifacts/cloudflare-inbox-ui-FxyXuA/）。Worker/Pages生产构建部署与原签名/versionCode核对通过。仍不能说荣耀真机已验证；此入口只远程采集，未改变平台解析兼容性或开放原图库。
 
+- beta.21 已发布为 android-v0.10.0-beta.21，原 APK / source 对应提交 6e0a7fc53507d9234331bde125d2acdf0d461c31，APK SHA256 e1014ed68df8fbe5cb081055fbec060d59c87b50288d6b0644a96636581ce35d。GitHub 已登录 API 可见 public 仓库/Release，但匿名 releases API 与 APK 下载均实测404（含 UA 与 cache-bust 重试）；不能因此说仓库是 private，具体账号原因未确认，也不能直接让用户在 App 检查更新来代替验证。
+- 此次由同一 Pages 主入口代发已签名 APK 和对应源码 ZIP（约193KB/5.5MB），邀请页自动展示同源下载。build-pages.mjs 只按被忽略的 client-release.json 白名单复制 artifacts 下两个公开产物，验证 SHA256 与24MiB文件预算；/downloads/* 静态路由不走鉴权，不暴露原图库或任何配置。公开下载实际摘要与已签名包/源码一致，证据 artifacts/cloudflare-release-live-xeGcgZ/result.json；带下载入口的实际桌面/触屏邀请复测及截图已检查，证据 artifacts/cloudflare-import-ui-L9TyCA/。旧 App 内仍使用原 GitHub 更新协议，本次需通过同源下载覆盖更新一次；不要声称修好了 GitHub 匿名访问或升级了旧 APK 的更新协议。
+
 ## 免费跨网络浮窗采集收件箱（2026-10-21）
 
 - 用户没有域名、有 Cloudflare 账号，主要通过手机浮窗发送分享链接，不上传大视频；关注抖音、小红书、贴吧、B站、Pixiv、X、小黑盒等。跨网传输与平台解析是两件事，不能把任意站点/需登录作品说成已经兼容。小黑盒目前无专用解析器，手机拿到链接后由既有采集器处理，失败必须回传真实原因。

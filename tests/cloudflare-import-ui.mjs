@@ -13,6 +13,7 @@ try{for(const touch of [false,true]){
  page.on('request',r=>requests.push(r.url()));
  let authenticated=false;try{
   await page.goto(origin+'/connect#code='+code);await page.getByRole('link',{name:'导入 ZNote App',exact:true}).waitFor();
+  if(process.argv.includes('--with-update'))await page.waitForFunction(()=>document.getElementById('update').getAttribute('href').startsWith('/downloads/'));
   assert.equal(new URL(page.url()).hash,'');assert.ok(requests.every(url=>!url.includes(code)),'invitation must not enter HTTP URLs');
   const href=await page.locator('#import').getAttribute('href');assert.ok(href.startsWith('intent://connect?'));assert.ok(href.endsWith('#Intent;scheme=znote;package=io.github.borderarea01.znote;end'));
   const query=new URLSearchParams(href.split('?')[1].split('#')[0]);assert.equal(query.get('server'),origin);assert.equal(query.get('code'),code);

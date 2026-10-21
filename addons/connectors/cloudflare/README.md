@@ -60,6 +60,8 @@ Android beta.21 起，手机打开 `import_url`，点「导入 ZNote App → 确
 
 与 Worker 使用同一 D1 和同一受限队列。`node addons/connectors/cloudflare/build-pages.mjs` 生成独立 `_worker.js` 和页面，再配置 Pages 项目的生产 `DB` 绑定与密钥。使用 `setup.mjs secret-pages` 和 `deploy-pages.mjs`，它们保持部署工作目录独立。
 
+可选代发公开的已签名 Android 发布包：在被忽略的 `data/cloudflare-collector/client-release.json` 设置 `version`、`apk`、`source`（仅限 `artifacts/` 内对应 APK / 源码 ZIP）及两者的 `apk_sha256`、`source_sha256`。构建时验证摘要和每文件 24 MiB 预算，只复制这两个明确指定的公开产物，生成 `/downloads/latest.json`；该静态目录不进入收件鉴权。邀请页自动提供同源下载，适用于 GitHub 匿名访问不可达的情况。它不会替换旧 App 内的 GitHub 更新协议；首次可直接覆盖安装。禁止把数据目录、令牌或用户素材作为发布包。
+
 Wrangler 4.151.3 的新 Pages 命令可能自动委托 Workers，并试图迁移当前项目的 Vite/依赖。首次明确选择旧 Pages 时，使用官方命令的 `pages project create ... --force` 选择 Pages；已有 Pages 项目不要反复传 `--force`。不得在根项目盲目重试框架自动迁移。Pages 不接受任意配置文件路径；部署工具会生成自己的标准 `wrangler.json`，通过环境指定账号，避免上级配置覆盖或不支持的 `account_id` 字段。
 
 ### Windows 后台运行
