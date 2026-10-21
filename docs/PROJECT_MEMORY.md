@@ -2,6 +2,15 @@
 
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
+## 手机浮窗选定 A 展开＋B 页签（2026-10-21，Android beta.22）
+
+- 用户明确选型：「展开版选用A，收起和小图标版选用B」。只落地展开小卡片、贴边短页签与拖离后的折角圆角Z方钮；不改App主界面，不再等待整套主题选择。
+- CaptureAssistService沿用既有独立capture进程、授权、分享/剪贴板及任务轮询。同一原生窗口/面板复用；拖动中完整方钮48dp触区，松手180ms近侧吸边，贴边视觉15×38dp、触区24×48dp。异步选库/任务回调在拖动中不重设位置；取消拖动不误开。展开276dp宽，选库置顶，主采集居中，下方保留粘贴与前往知识库，菜单和小屏面板可滚动。
+- CaptureVisuals使用原手写Z与统一矢量图标，不以字体/emoji替换结果。采集中自动收起，后台队列也显示细线状态，约21fps仅刷新小图形、空闲停止。成功短提示2300ms，失败4500ms后留标记；系统结果通知保留，不强行展开。结果状态统一切回主线程；取消只移除所属回调，不再误清除知识库加载回调。旧分享编辑页保留。
+- Android 0.10.0-beta.22 / versionCode10022，原证书SHA256 4e42f079d9ac5c4154a53eaa3ea6a82720ddc8be3ad3c9f84d0bea7abc62101b。受控离线单worker512MiB构建release/Lint/debug/test APK通过，0 Lint errors、26项warnings；没有调用GitHub Actions。签名APK摘要 a086d56859921ff43b79f56df713ad67c99eceae6cdab7b0c0868404ccdbb30c。
+- 隔离Android30模拟器覆盖实际窗口、触屏展开/关闭、拖动中完整形态、左右吸边、取消、记忆选库并传入提交、浮窗粘贴、后台排队/成功短提示收回、失败详情与下一次采集可用、前往知识库、大字体。证据 artifacts/android-overlay-local-Oz5gjU/result.txt，expanded/dragging/success/failure/large-font截图已目视。原签名beta.21→beta.22实际覆盖安装并保留既有安装app-op，证据 artifacts/android-overlay-local-Ij4gnN/release-upgrade.txt。
+- 测试工具修正Android30不支持InputStream.readAllBytes、API30不能授予POST_NOTIFICATIONS、按钮尚未连接就被测试提前点击的问题。只复用本轮新建的隔离AVD重试，未连接或修改已有USB/Wi-Fi设备，退出清理所属模拟器。模拟任务不是平台解析验收；荣耀Android15真机及系统后台调度未验证，不能声称这台手机所有延迟已解决。
+
 ## 手机仅优化采集浮窗（2026-10-21，四版交互模型待选）
 
 - 最新用户决定暂不大改App，只优化展开/收起浮窗，要求修改原生实现前先给四版选择。此决定收窄上轮整套手机主题提案；未收到选型前不能改原生浮窗或发布外观更新。历史主题目录保留但已注明暂缓。

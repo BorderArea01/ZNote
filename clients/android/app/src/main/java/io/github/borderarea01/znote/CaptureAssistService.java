@@ -27,6 +27,16 @@ public class CaptureAssistService extends AccessibilityService {
     private LinearLayout bubble;
     private TextView status,handle;
     private LinearLayout panel;
+    private ScrollView panelScroll;
+    private TextView captureAction,cancelAction;
+    private CaptureVisuals.Bookmark handleArtwork;
+    private android.animation.ValueAnimator dockAnimation;
+    private boolean dragging,tickScheduled;
+    private float handleReveal;
+    private int savingJobs;
+    private TextView resultNotice;
+    private final Runnable hideNotice=this::dismissNotice;
+    private final Runnable progressTick=new Runnable(){public void run(){tickScheduled=false;if(bubble!=null&&working()){if(handleArtwork!=null)handleArtwork.invalidateSelf();tickScheduled=true;handler.postDelayed(this,48);}}};
     private TextView libraryPicker;
     private LinearLayout libraryList;
     private ScrollView libraryScroll;
@@ -45,6 +55,7 @@ public class CaptureAssistService extends AccessibilityService {
     private boolean expanded=false,busy=false;
     private volatile int generation=0;
     private Future<?> operation;
+    private Runnable captureTimeout;
     private final java.util.concurrent.atomic.AtomicBoolean reading=new java.util.concurrent.atomic.AtomicBoolean();
     private String lastMessage="";
     private long tapAt;
@@ -60,7 +71,7 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);}
+    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
     @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();catalogue.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
@@ -90,46 +101,80 @@ public class CaptureAssistService extends AccessibilityService {
         if(bubble==null){bubble=new LinearLayout(this);bubble.setOrientation(LinearLayout.VERTICAL);bubble.setElevation(dp(6));layout=new WindowManager.LayoutParams(dp(48),-2,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,PixelFormat.TRANSLUCENT);layout.gravity=Gravity.TOP|Gravity.LEFT;layout.windowAnimations=0;try{manager.addView(bubble,layout);}catch(RuntimeException e){bubble=null;record("attach_failed",e.getClass().getSimpleName());Toast.makeText(this,"悬浮窗未能显示，请重新开启采集辅助",Toast.LENGTH_LONG).show();return;}}
         render();
     }
-    public void hideBubble(){cancel();if(bubble!=null){try{manager.removeView(bubble);}catch(IllegalArgumentException ignored){}bubble=null;}panel=null;handle=null;libraryPicker=null;libraryList=null;libraryScroll=null;panelMessage=null;libraryMenuExpanded=false;expanded=false;}
+    public void hideBubble(){cancel();if(bubble!=null){try{manager.removeView(bubble);}catch(IllegalArgumentException ignored){}bubble=null;}panel=null;panelScroll=null;handle=null;handleArtwork=null;libraryPicker=null;libraryList=null;libraryScroll=null;panelMessage=null;libraryMenuExpanded=false;expanded=false;}
     // addView registers the window before the first View attachment callback.
     // Updating here must also position that first frame, not wait for a tap.
     private void updateWindow(){if(bubble!=null)try{manager.updateViewLayout(bubble,layout);}catch(RuntimeException e){bubble=null;record("detached",e.getClass().getSimpleName());}}
-    private void cancel(){generation++;if(operation!=null)operation.cancel(true);operation=null;busy=false;handler.removeCallbacksAndMessages(null);if(bubble!=null){layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;updateWindow();}}
+    private void cancel(){generation++;if(operation!=null)operation.cancel(true);operation=null;busy=false;dragging=false;stopDockAnimation();dismissNotice();if(captureTimeout!=null)handler.removeCallbacks(captureTimeout);captureTimeout=null;handler.removeCallbacks(progressTick);tickScheduled=false;if(bubble!=null){layout.flags=windowFlags();updateWindow();}}
+    private int windowFlags(){return WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;}
+    private boolean working(){return busy||savingJobs>0;}
+    private int artworkState(){return working()?1:resultPending?(resultFailed?3:2):0;}
+    private void stopDockAnimation(){android.animation.ValueAnimator old=dockAnimation;dockAnimation=null;if(old!=null)old.cancel();}
     private void dock(){
-        if(bubble==null)return;int w=expanded?Math.min(dp(340),Math.max(dp(220),width()-dp(24))):dp(36);layout.width=w;
-        layout.x=prefs().getBoolean("capture_right",true)?Math.max(0,width()-w):0;
+        if(bubble==null||dragging||dockAnimation!=null)return;
+        int w=expanded?Math.min(dp(276),Math.max(dp(180),width()-dp(24))):dp(24);layout.width=w;layout.height=-2;
+        boolean right=prefs().getBoolean("capture_right",true);layout.x=right?Math.max(0,width()-w-(expanded?dp(12):0)):(expanded?dp(12):0);
+        int safeHeight=Math.max(dp(100),height()-dp(80));
+        if(panelScroll!=null&&expanded){
+            panel.measure(View.MeasureSpec.makeMeasureSpec(Math.max(dp(100),w-dp(30)),View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+            ViewGroup.LayoutParams lp=panelScroll.getLayoutParams();lp.height=Math.min(panel.getMeasuredHeight(),Math.max(dp(48),safeHeight-dp(58)));panelScroll.setLayoutParams(lp);
+        }
         int anchor=Math.round(prefs().getFloat("capture_y",.32f)*Math.max(dp(32),height()-dp(96)));
-        bubble.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(Math.max(dp(48),height()-dp(64)),View.MeasureSpec.AT_MOST));
+        bubble.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(safeHeight,View.MeasureSpec.AT_MOST));
         layout.y=Math.max(dp(24),Math.min(height()-bubble.getMeasuredHeight()-dp(32),anchor));updateWindow();
+    }
+    private void togglePanel(){
+        stopDockAnimation();dismissNotice();long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;libraryMenuExpanded=false;
+        if(expanded)resultPending=false;record("toggle",expanded?"open":"collapse");render();if(expanded){loadLibraries(false);measureFrame(started);}
     }
     private void render(){
         if(bubble==null)return;
-        bubble.setPadding(expanded?dp(10):0,expanded?dp(4):0,expanded?dp(10):0,expanded?dp(10):0);
-        GradientDrawable bg;
-        if(expanded){bg=shape(0xff171c29,22);bg.setStroke(dp(1),0xff414d6c);}
-        else{bg=new GradientDrawable();bg.setColor(0xff252e46);float radius=dp(40);if(prefs().getBoolean("capture_right",true))bg.setCornerRadii(new float[]{radius,radius,0,0,0,0,radius,radius});else bg.setCornerRadii(new float[]{0,0,radius,radius,radius,radius,0,0});bg.setStroke(dp(1),0xff58698f);}
-        bubble.setBackground(bg);layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-        if(handle==null||handle.getParent()!=bubble){
-            bubble.removeAllViews();handle=control("","ZNote 悬浮采集，拖动换位置",()->{long started=tapAt==0?SystemClock.uptimeMillis():tapAt;tapAt=0;expanded=!expanded;libraryMenuExpanded=false;record("toggle",expanded?"open":"collapse");render();if(expanded){loadLibraries(false);measureFrame(started);}});handle.setTypeface(null,android.graphics.Typeface.BOLD);bubble.addView(handle);drag(handle);panel=null;
+        boolean right=prefs().getBoolean("capture_right",true);
+        bubble.setPadding(expanded?dp(15):0,expanded?dp(8):0,expanded?dp(15):0,expanded?dp(10):0);
+        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),0xff424e63);bubble.setBackground(bg);}else bubble.setBackground(null);
+        bubble.setElevation(expanded?dp(6):0);layout.flags=windowFlags();
+        bubble.setOnTouchListener((v,e)->{if(e.getActionMasked()==MotionEvent.ACTION_OUTSIDE&&expanded){expanded=false;libraryMenuExpanded=false;render();return true;}return false;});
+        if(handle==null){
+            handle=control("","ZNote 采集浮窗",this::togglePanel);handle.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);handle.setMinHeight(0);handle.setMinimumHeight(0);bubble.addView(handle);drag(handle);handleArtwork=new CaptureVisuals.Bookmark(this);
         }
-        handle.setText(expanded?"⠿  ZNote  ⌄":busy?"…":resultPending?(resultFailed?"!":"✓"):"Z");handle.setTextSize(expanded?15:16);
-        handle.setTextColor(resultPending?(resultFailed?0xffff8c83:0xff8de0b1):0xffecedf5);
-        handle.setContentDescription(expanded?"ZNote 采集面板；点击标题收起，拖动标题可移动":resultPending?"ZNote 采集结果："+lastMessage:"ZNote 收起的半圆采集把手，点击展开，拖动换位置");
-        handle.setPadding(0,dp(8),0,dp(8));handle.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x336f82ff),shape(0x00202020,expanded?18:40),shape(0xffffffff,expanded?18:40)));
-        ViewGroup.LayoutParams handleParams=handle.getLayoutParams();if(handleParams!=null){handleParams.width=-1;handleParams.height=dp(expanded?48:58);handle.setLayoutParams(handleParams);}
-        // Prepare once when the service connects; simple open/close reuses the
-        // existing views instead of inflating and measuring a fresh control tree.
-        if(panel==null||panelBusy!=busy||!java.util.Objects.equals(panelMessage,lastMessage)){
-            if(panel!=null)bubble.removeView(panel);panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(0,dp(6),0,0);panelBusy=busy;panelMessage=lastMessage;libraryPicker=null;libraryList=null;libraryScroll=null;
-            TextView capture=control(busy?"正在识别…":"采集当前作品","获取当前页面作品并保存到所选知识库",this::capture);capture.setTextSize(14);capture.setPadding(dp(12),dp(8),dp(12),dp(8));capture.setBackground(shape(0xff586bd3,14));capture.setEnabled(!busy);LinearLayout.LayoutParams captureParams=new LinearLayout.LayoutParams(-1,dp(50));captureParams.setMargins(0,dp(2),0,0);panel.addView(capture,captureParams);
-            TextView targetLabel=new TextView(this);targetLabel.setText("目标知识库");targetLabel.setTextSize(11);targetLabel.setTextColor(0xff9faac4);targetLabel.setPadding(dp(3),dp(10),dp(3),dp(4));panel.addView(targetLabel,new LinearLayout.LayoutParams(-1,dp(28)));
-            libraryPicker=control("","选择采集目标知识库",this::toggleLibraryMenu);libraryPicker.setTextSize(13);libraryPicker.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);libraryPicker.setPadding(dp(12),dp(6),dp(10),dp(6));libraryPicker.setBackground(shape(0xff28324a,14));panel.addView(libraryPicker,new LinearLayout.LayoutParams(-1,dp(46)));
-            libraryList=new LinearLayout(this);libraryList.setOrientation(LinearLayout.VERTICAL);libraryList.setPadding(dp(4),dp(4),dp(4),dp(4));libraryList.setBackground(shape(0xff202638,14));libraryScroll=new ScrollView(this);libraryScroll.setFillViewport(false);libraryScroll.addView(libraryList);libraryScroll.setVisibility(libraryMenuExpanded?View.VISIBLE:View.GONE);LinearLayout.LayoutParams libraryParams=new LinearLayout.LayoutParams(-1,dp(176));libraryParams.setMargins(0,dp(6),0,dp(2));panel.addView(libraryScroll,libraryParams);buildLibraryList();updateLibraryPicker();
-            if(busy)panel.addView(control("取消识别","取消识别",()->{cancel();message("已取消，可重新采集");}));
-            LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER_VERTICAL);TextView paste=control("粘贴链接","读取剪贴板中的链接",()->open(""));paste.setTextSize(13);paste.setBackground(shape(0xff242a39,13));LinearLayout.LayoutParams pasteParams=new LinearLayout.LayoutParams(0,dp(46),1);pasteParams.setMargins(0,dp(8),dp(4),0);actions.addView(paste,pasteParams);TextView browse=control("前往知识库浏览","打开 ZNote 知识库浏览页面",this::openLibrary);browse.setTextSize(13);browse.setBackground(shape(0xff242a39,13));LinearLayout.LayoutParams browseParams=new LinearLayout.LayoutParams(0,dp(46),1);browseParams.setMargins(dp(4),dp(8),0,0);actions.addView(browse,browseParams);panel.addView(actions,new LinearLayout.LayoutParams(-1,dp(54)));
-            status=new TextView(this);status.setTextColor(0xffbcc3db);status.setTextSize(12);status.setPadding(dp(6),dp(8),dp(6),dp(2));status.setText(lastMessage);status.setVisibility(lastMessage.isEmpty()?View.GONE:View.VISIBLE);status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);panel.addView(status);bubble.addView(panel);
+        handle.setText(expanded?"ZNote":"");handle.setTextSize(12);handle.setTypeface(null,android.graphics.Typeface.BOLD);
+        handle.setContentDescription(expanded?"ZNote 采集面板；点击标题收起，拖动标题可移动":dragging?"ZNote 完整页签按钮，正在移动":working()?"ZNote 正在后台采集，点击查看":resultPending?"ZNote 采集结果："+lastMessage:"ZNote 贴边页签，点击展开，拖动换位置");
+        handle.setPadding(expanded?dp(2):0,0,expanded?dp(2):0,0);
+        if(expanded){handle.setBackground(null);handle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",0xffa3b6a8,20),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,15),null);handle.setCompoundDrawablePadding(dp(8));}
+        else{handle.setCompoundDrawables(null,null,null,null);handleArtwork.state(right,dragging?1:handleReveal,artworkState());handle.setBackground(handleArtwork);}
+        handle.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(expanded?36:48)));
+        if(panel==null){
+            panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(0,dp(2),0,0);
+            libraryPicker=control("","选择采集目标知识库",this::toggleLibraryMenu);libraryPicker.setTextSize(12);libraryPicker.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);libraryPicker.setPadding(dp(10),0,dp(8),0);libraryPicker.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"folder",CaptureVisuals.MUTED,16),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,14),null);libraryPicker.setCompoundDrawablePadding(dp(8));libraryPicker.setBackground(shape(0xff2a3446,10));panel.addView(libraryPicker,new LinearLayout.LayoutParams(-1,dp(42)));
+            libraryList=new LinearLayout(this);libraryList.setOrientation(LinearLayout.VERTICAL);libraryList.setPadding(dp(4),dp(4),dp(4),dp(4));libraryList.setBackground(shape(0xff202638,10));libraryScroll=new ScrollView(this);libraryScroll.addView(libraryList);libraryScroll.setVisibility(View.GONE);LinearLayout.LayoutParams options=new LinearLayout.LayoutParams(-1,dp(176));options.setMargins(0,dp(6),0,dp(2));panel.addView(libraryScroll,options);buildLibraryList();
+            captureAction=control("采集当前作品","获取当前页面作品并保存到所选知识库",this::capture);captureAction.setTextSize(13);captureAction.setPadding(dp(16),0,dp(16),0);captureAction.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"capture",CaptureVisuals.INK,17),null,null,null);captureAction.setBackground(shape(0xff7689d8,11));LinearLayout.LayoutParams captureParams=new LinearLayout.LayoutParams(-1,dp(48));captureParams.setMargins(0,dp(12),0,dp(3));panel.addView(captureAction,captureParams);
+            cancelAction=control("取消识别","取消读取当前页面",()->{cancel();message("已取消，可重新采集");});cancelAction.setTextSize(12);panel.addView(cancelAction,new LinearLayout.LayoutParams(-1,dp(44)));
+            LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER_VERTICAL);
+            TextView paste=control("粘贴链接","在浮窗内粘贴分享链接",()->open(""));paste.setTextSize(11);paste.setPadding(dp(8),0,dp(5),0);paste.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"paste",CaptureVisuals.MUTED,14),null,null,null);paste.setCompoundDrawablePadding(dp(4));actions.addView(paste,new LinearLayout.LayoutParams(0,dp(44),1));
+            View divider=new View(this);divider.setBackgroundColor(0xff3b465a);actions.addView(divider,new LinearLayout.LayoutParams(dp(1),dp(20)));
+            TextView browse=control("前往知识库","打开 ZNote 知识库浏览页面",this::openLibrary);browse.setTextSize(11);browse.setPadding(dp(7),0,dp(4),0);browse.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"folder",CaptureVisuals.MUTED,14),null,null,null);browse.setCompoundDrawablePadding(dp(4));actions.addView(browse,new LinearLayout.LayoutParams(0,dp(44),1));panel.addView(actions,new LinearLayout.LayoutParams(-1,dp(48)));
+            status=new TextView(this);status.setTextSize(11);status.setPadding(dp(2),dp(7),dp(2),dp(2));status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);panel.addView(status);
+            panelScroll=new ScrollView(this);panelScroll.setFillViewport(false);panelScroll.addView(panel);bubble.addView(panelScroll,new LinearLayout.LayoutParams(-1,-2));
         }
-        panel.setVisibility(expanded?View.VISIBLE:View.GONE);updateLibraryPicker();dock();
+        captureAction.setEnabled(!busy);captureAction.setAlpha(busy?.6f:1);captureAction.setText(busy?"正在识别作品…":"采集当前作品");cancelAction.setVisibility(busy?View.VISIBLE:View.GONE);
+        status.setTextColor(resultFailed?CaptureVisuals.WARNING:CaptureVisuals.MUTED);status.setText(busy?"正在读取当前作品，可继续浏览":lastMessage);status.setVisibility(status.getText().length()==0?View.GONE:View.VISIBLE);
+        panelScroll.setVisibility(expanded?View.VISIBLE:View.GONE);libraryScroll.setVisibility(expanded&&libraryMenuExpanded?View.VISIBLE:View.GONE);updateLibraryPicker();
+        if(dragging){layout.width=dp(48);layout.height=dp(48);updateWindow();}else dock();
+        if(working()&&!tickScheduled){tickScheduled=true;handler.post(progressTick);}else if(!working()){handler.removeCallbacks(progressTick);tickScheduled=false;}
+    }
+    private void dismissNotice(){handler.removeCallbacks(hideNotice);if(resultNotice!=null){try{manager.removeView(resultNotice);}catch(IllegalArgumentException ignored){}resultNotice=null;}}
+    private void showResultNotice(boolean success){
+        dismissNotice();if(bubble==null||expanded||dragging)return;
+        resultNotice=control(success?"已保存到 ZNote":"未保存 · 点击查看","采集结果："+lastMessage,()->{dismissNotice();expanded=true;resultPending=false;render();});resultNotice.setTextSize(12);resultNotice.setGravity(Gravity.CENTER_VERTICAL);resultNotice.setPadding(dp(12),0,dp(12),0);resultNotice.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,success?"check":"alert",success?CaptureVisuals.SUCCESS:CaptureVisuals.WARNING,16),null,null,null);resultNotice.setCompoundDrawablePadding(dp(8));GradientDrawable bg=shape(CaptureVisuals.SURFACE,12);bg.setStroke(dp(1),0xff536070);resultNotice.setBackground(bg);
+        int w=Math.min(dp(success?190:206),width()-dp(60));WindowManager.LayoutParams noticeLayout=new WindowManager.LayoutParams(w,dp(44),WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,windowFlags(),PixelFormat.TRANSLUCENT);noticeLayout.gravity=Gravity.TOP|Gravity.LEFT;noticeLayout.x=prefs().getBoolean("capture_right",true)?width()-w-dp(34):dp(34);noticeLayout.y=Math.max(dp(24),Math.min(height()-dp(80),layout.y+dp(2)));
+        try{manager.addView(resultNotice,noticeLayout);handler.postDelayed(hideNotice,success?2300:4500);}catch(RuntimeException e){resultNotice=null;record("result_hint_failed",e.getClass().getSimpleName());}
+    }
+    private void snapAfterDrag(){
+        boolean right=layout.x+layout.width/2>width()/2;prefs().edit().putBoolean("capture_right",right).putFloat("capture_y",Math.max(0,Math.min(1,layout.y/(float)Math.max(1,height()-dp(96))))).apply();dragging=false;
+        if(!android.animation.ValueAnimator.areAnimatorsEnabled()){handleReveal=0;render();return;}
+        final int startX=layout.x,startW=layout.width,targetX=right?width()-dp(24):0;final android.animation.ValueAnimator animation=android.animation.ValueAnimator.ofFloat(0,1);dockAnimation=animation;
+        animation.setDuration(180);animation.setInterpolator(new android.view.animation.DecelerateInterpolator());animation.addUpdateListener(v->{if(bubble==null||dockAnimation!=animation)return;float f=(float)v.getAnimatedValue();handleReveal=1-f;layout.width=Math.round(startW+(dp(24)-startW)*f);layout.x=Math.round(startX+(targetX-startX)*f);handleArtwork.state(right,handleReveal,artworkState());updateWindow();});
+        animation.addListener(new android.animation.AnimatorListenerAdapter(){@Override public void onAnimationEnd(android.animation.Animator a){if(dockAnimation!=animation)return;dockAnimation=null;handleReveal=0;render();}});animation.start();
     }
     private void toggleLibraryMenu(){
         if(libraryScroll==null)return;
@@ -145,7 +190,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private void updateLibraryPicker(){
         if(libraryPicker==null)return;
-        String name=selectedLibraryName();libraryPicker.setText(name+"  ▾");libraryPicker.setContentDescription("当前知识库："+name+"。点击选择其他知识库");
+        String name=selectedLibraryName();libraryPicker.setText(name);libraryPicker.setContentDescription("当前知识库："+name+"。点击选择其他知识库");
     }
     private void buildLibraryList(){
         if(libraryList==null)return;
@@ -186,16 +231,16 @@ public class CaptureAssistService extends AccessibilityService {
             });
         });}catch(RejectedExecutionException e){librariesLoading=false;libraryError="知识库列表读取任务未能启动";buildLibraryList();}
     }
-    private void drag(View handle){handle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;boolean moved;final int slop=ViewConfiguration.get(CaptureAssistService.this).getScaledTouchSlop();public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
-        case MotionEvent.ACTION_DOWN:recordEnvironment();record("touch_dispatch","delay_ms="+Math.max(0,SystemClock.uptimeMillis()-e.getEventTime()));x=e.getRawX();y=e.getRawY();ox=layout.x;oy=layout.y;moved=false;v.setPressed(true);return true;
-        case MotionEvent.ACTION_MOVE:float dx=e.getRawX()-x,dy=e.getRawY()-y;if(Math.hypot(dx,dy)>slop)moved=true;if(moved){v.setPressed(false);layout.x=Math.max(0,Math.min(width()-layout.width,ox+(int)dx));layout.y=Math.max(dp(24),Math.min(height()-bubble.getHeight()-dp(32),oy+(int)dy));updateWindow();}return true;
-        case MotionEvent.ACTION_UP:v.setPressed(false);if(!moved){tapAt=e.getEventTime();v.performClick();}else{prefs().edit().putBoolean("capture_right",layout.x+layout.width/2>width()/2).putFloat("capture_y",Math.max(0,Math.min(1,layout.y/(float)Math.max(1,height()-dp(96))))).apply();expanded=false;libraryMenuExpanded=false;render();}return true;
-        case MotionEvent.ACTION_CANCEL:v.setPressed(false);dock();return true;default:return false;}}});}
+    private void drag(View handle){handle.setOnTouchListener(new View.OnTouchListener(){float x,y;boolean moved;final int slop=ViewConfiguration.get(CaptureAssistService.this).getScaledTouchSlop();public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
+        case MotionEvent.ACTION_DOWN:stopDockAnimation();dismissNotice();recordEnvironment();record("touch_dispatch","delay_ms="+Math.max(0,SystemClock.uptimeMillis()-e.getEventTime()));x=e.getRawX();y=e.getRawY();moved=false;v.setPressed(true);return true;
+        case MotionEvent.ACTION_MOVE:if(Math.hypot(e.getRawX()-x,e.getRawY()-y)>slop)moved=true;if(moved){v.setPressed(false);if(!dragging){dragging=true;expanded=false;libraryMenuExpanded=false;handleReveal=1;render();}layout.x=Math.max(0,Math.min(width()-dp(48),Math.round(e.getRawX())-dp(24)));layout.y=Math.max(dp(24),Math.min(height()-dp(80),Math.round(e.getRawY())-dp(24)));updateWindow();}return true;
+        case MotionEvent.ACTION_UP:v.setPressed(false);if(!moved){tapAt=e.getEventTime();v.performClick();}else snapAfterDrag();return true;
+        case MotionEvent.ACTION_CANCEL:v.setPressed(false);if(moved)snapAfterDrag();else{handleReveal=0;render();}return true;default:return false;}}});}
     private void measureFrame(long started){
         final View view=bubble;if(view==null)return;
         view.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener(){boolean done;public void onDraw(){if(done)return;done=true;record("panel_frame","ms="+Math.max(0,SystemClock.uptimeMillis()-started));view.post(()->{if(view.getViewTreeObserver().isAlive())view.getViewTreeObserver().removeOnDrawListener(this);});}});view.invalidate();
     }
-    private void message(String text){lastMessage=text;busy=false;expanded=true;libraryMenuExpanded=false;render();if(status!=null){status.setText(text);status.setVisibility(View.VISIBLE);}}
+    private void message(String text){lastMessage=text;busy=false;libraryMenuExpanded=false;resultFailed=!text.startsWith("已取消");resultPending=resultFailed;render();if(!expanded&&resultFailed)showResultNotice(false);}
     private static boolean social(String pkg){return pkg.equals("com.xingin.xhs")||pkg.equals("com.ss.android.ugc.aweme")||pkg.equals("com.ss.android.ugc.aweme.lite")||bilibili(pkg);}
     private static boolean bilibili(String pkg){return Arrays.asList("tv.danmaku.bili","com.bilibili.app.in","com.bilibili.app.blue").contains(pkg);}
     private static boolean browser(String pkg){return Arrays.asList("com.android.chrome","com.chrome.beta","com.microsoft.emmx","org.mozilla.firefox","org.mozilla.fenix","com.sec.android.app.sbrowser","com.heytap.browser","com.vivo.browser","com.UCMobile","com.android.browser","com.huawei.browser","com.mi.globalbrowser","com.brave.browser").contains(pkg);}
@@ -266,8 +311,8 @@ public class CaptureAssistService extends AccessibilityService {
     }
     static String link(String text){Matcher m=Pattern.compile("https?://[^\\s<>\"\\u200b，。；！、）】》]+").matcher(text);if(!m.find())return "";String value=m.group().replaceAll("[,;!]+$","");try{Uri u=Uri.parse(value);return u.getHost()!=null&&u.getUserInfo()==null&&value.length()<=8192?value:"";}catch(Exception e){return "";}}
     private void capture(){
-        if(busy)return;if(reading.get()){message("上一页面尚未响应，请稍后重试");return;}cancel();busy=true;lastMessage="";expanded=false;libraryMenuExpanded=false;final int token=generation;final long started=SystemClock.uptimeMillis();render();
-        handler.postDelayed(()->{if(token==generation&&busy){cancel();record("timeout","page");message("页面读取超时，可收起或重试采集");}},12000);
+        if(busy)return;if(reading.get()){message("上一页面尚未响应，请稍后重试");return;}cancel();busy=true;resultPending=false;resultFailed=false;lastMessage="";expanded=false;libraryMenuExpanded=false;handleReveal=0;final int token=generation;final long started=SystemClock.uptimeMillis();render();
+        captureTimeout=()->{if(token==generation&&busy){cancel();record("timeout","page");message("页面读取超时，可收起或重试采集");}};handler.postDelayed(captureTimeout,12000);
         operation=reader.submit(()->{reading.set(true);try{check(token);
             AccessibilityNodeInfo root=page(null);if(root==null)throw new Exception("当前页面不可读取，请重新打开作品再试");String owner=pkg(root);root.recycle();
             record("capture_start",owner);if(getPackageName().equals(owner))throw new Exception("请回到要采集的作品页；也可从任意 App 的分享菜单把链接、图片或视频发送给 ZNote");
@@ -325,11 +370,11 @@ public class CaptureAssistService extends AccessibilityService {
         catch(RuntimeException e){record("open_library_failed",e.getClass().getSimpleName());Toast.makeText(this,"无法打开知识库，请先检查连接",Toast.LENGTH_LONG).show();}
     }
     private void openPanel(String value,String owner,long after,boolean clipboard,boolean quick){
-        lastMessage="";cancel();expanded=false;render();
+        lastMessage="";cancel();resultPending=false;resultFailed=false;handleReveal=0;expanded=false;render();
         record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick).putExtra("selected_collection",sharingPrefs().getString("share_collection","")));}
         catch(Exception e){message("无法打开采集面板，请重试");}
     }
-    void backgroundQueued(String id){lastMessage="正在后台采集…";resultPending=false;busy=false;expanded=false;record("capture_queued",id);rememberJob(id);render();notifyReady();scheduleTracking(0);}
+    void backgroundQueued(String id){lastMessage="正在后台采集…";resultPending=false;resultFailed=false;busy=false;expanded=false;record("capture_queued",id);rememberJob(id);savingJobs=trackedJobs().size();render();notifyReady();scheduleTracking(0);}
     private synchronized Set<String> trackedJobs(){return new HashSet<>(prefs().getStringSet("capture_jobs",Collections.emptySet()));}
     private synchronized void rememberJob(String id){Set<String> jobs=trackedJobs();jobs.add(id);prefs().edit().putStringSet("capture_jobs",jobs).putLong("capture_job_"+id,System.currentTimeMillis()).apply();}
     private synchronized void forgetJob(String id){Set<String> jobs=trackedJobs();jobs.remove(id);prefs().edit().putStringSet("capture_jobs",jobs).remove("capture_job_"+id).apply();}
@@ -348,7 +393,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private byte[] readSmall(java.io.InputStream stream)throws java.io.IOException{if(stream==null)return new byte[0];java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] block=new byte[4096];int n;while((n=stream.read(block))!=-1){if(out.size()+n>1024*1024)throw new java.io.IOException("response too large");out.write(block,0,n);}return out.toByteArray();}
     private void notifyResult(String id,boolean success,String message){
-        lastMessage=success?"已保存到 ZNote":"采集失败："+message;resultPending=true;resultFailed=!success;record("capture_result",(success?"completed ":"failed ")+id);handler.post(()->{if(bubble!=null){render();notifyReady();}Toast.makeText(getApplicationContext(),success?"已保存到 ZNote":"采集失败："+message,Toast.LENGTH_LONG).show();});
+        record("capture_result",(success?"completed ":"failed ")+id);handler.post(()->{lastMessage=success?"已保存到 ZNote":"采集失败："+message;resultPending=true;resultFailed=!success;savingJobs=trackedJobs().size();if(bubble!=null){render();notifyReady();showResultNotice(success);}else Toast.makeText(getApplicationContext(),lastMessage,Toast.LENGTH_LONG).show();});
         android.app.NotificationManager manager=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);android.app.NotificationChannel channel=new android.app.NotificationChannel("capture_results","采集结果",android.app.NotificationManager.IMPORTANCE_DEFAULT);channel.setDescription("后台采集成功或失败通知");manager.createNotificationChannel(channel);
         android.app.PendingIntent open=android.app.PendingIntent.getActivity(this,300,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
         android.app.Notification n=new android.app.Notification.Builder(this,"capture_results").setSmallIcon(R.drawable.ic_capture_notification).setContentTitle(success?"已保存到 ZNote":"ZNote 采集失败").setContentText(message).setStyle(new android.app.Notification.BigTextStyle().bigText(message)).setAutoCancel(true).setContentIntent(open).build();manager.notify(5000+Math.floorMod(id.hashCode(),10000),n);
