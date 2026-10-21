@@ -48,7 +48,13 @@ node addons/connectors/cloudflare/setup.mjs init ACCOUNT_ID DATABASE_ID
 2. `wrangler deploy --config <wrangler.json绝对路径>`。先确认同名 Worker 不属于其他项目，不能覆盖已有应用。
 3. `node addons/connectors/cloudflare/setup.mjs secret`，通过标准输入配置独立的 `CONNECTOR_SECRET`。
 4. `node addons/connectors/cloudflare/setup.mjs set-url https://你的固定地址`，实际验证健康接口后保存地址。
-5. `node addons/connectors/cloudflare/setup.mjs pair`。连接码写到 `data/cloudflare-collector/pairing.json`，不输出到常规日志；临近手机连接时再生成。
+5. `node addons/connectors/cloudflare/setup.mjs pair`。连接邀请 `import_url` 和兼容旧版的连接码写到 `data/cloudflare-collector/pairing.json`，不输出到常规日志；临近手机连接时再生成。邀请有效 24 小时、仅可用一次，持有者可以授权设备，不要公开分享。
+
+### 一键导入手机
+
+Android beta.21 起，手机打开 `import_url`，点「导入 ZNote App → 确认连接」即可自动配置地址与浮窗授权，不需要手动抄写两个字段。网页使用 Android 的显式包名 Intent 唤起 App；拦截外部应用的浏览器也可复制完整邀请，在 App 连接页「导入连接邀请」粘贴。旧版本先在应用内覆盖更新。原局域网连接保留，可从连接页「使用上次连接」切回。
+
+邀请密钥位于 URL fragment，浏览器不会把它作为页面请求发往服务器，页面读取后立即从地址栏移除；只在用户点击后兑换。链接预览不会消耗授权，网页不加载第三方脚本。App 显示目标地址并由用户确认，验证健康接口，再兑换独立设备令牌；不跟随重定向，不保存一次性码。失败/取消不会替换原配置；设备令牌失败可用同一会话重试。
 
 ### 可选 Pages 地址
 

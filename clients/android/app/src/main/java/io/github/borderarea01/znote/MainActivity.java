@@ -33,7 +33,36 @@ public class MainActivity extends Activity {
     private float pullStartY;
     private boolean pullArmed;
     private static final int PICK=20,SAVE=21;
-    @Override public void onCreate(Bundle state){super.onCreate(state);if(Build.VERSION.SDK_INT>=33){backCallback=this::handleBack;getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}showConnect("");AppUpdates.backgroundCheck(this);}
+    @Override public void onCreate(Bundle state){super.onCreate(state);if(Build.VERSION.SDK_INT>=33){backCallback=this::handleBack;getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}showConnect("");if(!importIntent(getIntent()))AppUpdates.backgroundCheck(this);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);importIntent(intent);}
+    private boolean importIntent(Intent intent){
+        if(!Intent.ACTION_VIEW.equals(intent.getAction())||intent.getData()==null)return false;
+        String value=intent.getData().toString();intent.setData(null);confirmImport(value);return true;
+    }
+    private void importInput(){
+        EditText value=new EditText(this);value.setHint("粘贴 ZNote 连接邀请链接");value.setMaxLines(4);value.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("导入连接").setView(value).setNegativeButton("取消",null).setPositiveButton("继续",null).create();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{ConnectionImport.parse(value.getText().toString());String link=value.getText().toString();value.setText("");dialog.dismiss();confirmImport(link);}catch(Exception e){value.setError(e.getMessage());}}));dialog.show();
+    }
+    private void confirmImport(String link){
+        final ConnectionImport invitation;try{invitation=ConnectionImport.parse(link);}catch(Exception e){Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();return;}
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("连接远程采集").setMessage(invitation.origin+"\n\n将自动配置地址并授权浮窗采集，原局域网地址会保留。请确认这是你的采集入口。").setNegativeButton("取消",null).setPositiveButton("确认连接",null).create();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);dialog.setCancelable(false);dialog.setMessage("正在连接并授权…");
+            network.execute(()->{try{
+                ConnectionImport.Authorization auth=invitation.authorize();
+                runOnUiThread(()->{if(isFinishing()||isDestroyed())return;
+                    String cookie=auth.cookie.split(";",2)[0],key=Uri.encode(invitation.origin),fingerprint;
+                    try{fingerprint=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(cookie.getBytes(StandardCharsets.UTF_8)),android.util.Base64.NO_WRAP);}catch(Exception e){throw new IllegalStateException(e);}
+                    getSharedPreferences("CaptureAuthorization",0).edit().putString(key,auth.token).putString(key+".session",fingerprint).apply();
+                    android.content.SharedPreferences prefs=getPreferences(0);String previous=prefs.getString("origin","");android.content.SharedPreferences.Editor edit=prefs.edit();
+                    if(!previous.isEmpty()&&!previous.equals(invitation.origin)&&!previous.equals(prefs.getString("remote_capture_origin","")))edit.putString("previous_origin",previous);
+                    edit.putString("origin",invitation.origin).putString("remote_capture_origin",invitation.origin).remove("share_collection").apply();
+                    CookieManager.getInstance().setCookie(invitation.origin,auth.cookie,accepted->{CookieManager.getInstance().flush();dialog.dismiss();showConnect("");open(invitation.origin);Toast.makeText(this,"已导入，浮窗可以直接采集",Toast.LENGTH_LONG).show();});
+                });
+            }catch(Exception e){runOnUiThread(()->{if(isFinishing()||isDestroyed())return;dialog.setMessage(invitation.origin+"\n\n"+(e instanceof java.net.SocketTimeoutException?"连接超时，请保持代理开启后重试":e instanceof IOException?e.getMessage():"连接失败，请检查网络后重试"));dialog.setCancelable(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);});}});
+        }));dialog.show();
+    }
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private TextView text(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setPadding(0,dp(8),0,dp(8));return v;}
     private Button button(String title,Runnable run){return NativeUi.button(this,title,run);}
@@ -53,6 +82,8 @@ public class MainActivity extends Activity {
         Button connect=button("连接并打开",()->{});NativeUi.primary(connect);LinearLayout.LayoutParams connectSpace=new LinearLayout.LayoutParams(-1,dp(50));connectSpace.setMargins(0,dp(12),0,0);card.addView(connect,connectSpace);connect.setOnClickListener(v->{final String target;try{target=normalize(address.getText().toString());}catch(Exception e){status.setText(e.getMessage());return;}connect.setEnabled(false);status.setText("正在连接…");int current=++attempt;network.execute(()->{String failure=null;try{HttpURLConnection c=(HttpURLConnection)new URL(target+"/api/health").openConnection();c.setConnectTimeout(6000);c.setReadTimeout(6000);c.setInstanceFollowRedirects(false);try{if(c.getResponseCode()!=200)throw new IOException();ByteArrayOutputStream buffer=new ByteArrayOutputStream();try(InputStream in=c.getInputStream()){byte[] block=new byte[512];int n;while(buffer.size()<=2048&&(n=in.read(block))!=-1)buffer.write(block,0,n);}byte[] bytes=buffer.toByteArray();if(bytes.length>2048)throw new IOException();JSONObject data=new JSONObject(new String(bytes,StandardCharsets.UTF_8));if(!"ok".equals(data.optString("status"))||data.optString("version").isEmpty())throw new IOException();}finally{c.disconnect();}}catch(Exception e){failure="连接失败：请检查地址、Wi‑Fi、服务器运行状态和防火墙。";}String result=failure;runOnUiThread(()->{if(current!=attempt||isFinishing())return;connect.setEnabled(true);if(result!=null)status.setText(result);else{getPreferences(0).edit().putString("origin",target).apply();open(target);}});});});
         LinearLayout secondary=new LinearLayout(this);secondary.setGravity(Gravity.CENTER);Button help=button("? 连接说明",()->new AlertDialog.Builder(this).setTitle("连接知识库").setMessage("输入电脑或 NAS 上的 ZNote 地址，访问密码在连接后填写。手机上的 localhost 不代表电脑；手机和服务器需要网络可达。客户端不包含整库离线副本。") .setPositiveButton("知道了",null).show());NativeUi.quiet(help);secondary.addView(help);Button update=button("检查更新",()->startActivity(new Intent(this,UpdateActivity.class)));NativeUi.quiet(update);secondary.addView(update);LinearLayout.LayoutParams secondarySpace=new LinearLayout.LayoutParams(-1,dp(48));secondarySpace.setMargins(0,dp(4),0,dp(8));panel.addView(secondary,secondarySpace);
         TextView footer=text("本地优先 · 内容保存在你自己的知识库",12,0xff78839b);footer.setGravity(Gravity.CENTER);panel.addView(footer,new LinearLayout.LayoutParams(-1,-2));
+        Button importConnection=button("导入连接邀请",this::importInput);NativeUi.quiet(importConnection);panel.addView(importConnection,new LinearLayout.LayoutParams(-1,dp(48)));
+        String previous=getPreferences(0).getString("previous_origin","");if(!previous.isEmpty()){Button restore=button("使用上次连接",()->{address.setText(previous);connect.performClick();});NativeUi.quiet(restore);panel.addView(restore,new LinearLayout.LayoutParams(-1,dp(48)));}
     }
     static String normalize(String input) throws Exception {
         String value=input.trim();URI u=new URI(value.contains("://")?value:"http://"+value);String scheme=u.getScheme(),host=u.getHost();

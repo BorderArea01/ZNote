@@ -1,4 +1,5 @@
 import {portalHtml,portalScript,portalCss} from './portal.js';
+import {connectHtml,connectScript,connectCss} from './connect.js';
 import {sharedUrls} from '../../../shared/share-input.js';
 const json=(value,status=200,headers={})=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
@@ -40,9 +41,10 @@ async function connectorAuth(request,env){
 async function route(request,env){
  const db=env.DB,url=new URL(request.url),path=url.pathname,now=Date.now();
  if(!['GET','HEAD','OPTIONS'].includes(request.method)&&request.headers.has('Origin')&&request.headers.get('Origin')!==url.origin)fail(403,'不允许跨站提交');
- if(request.method==='GET'&&path==='/')return new Response(portalHtml,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'}});
+ if(request.method==='GET'&&['/','/connect'].includes(path))return new Response(path==='/connect'?connectHtml:portalHtml,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'}});
+ if(request.method==='GET'&&path==='/connect.js')return new Response(connectScript,{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'}});
  if(request.method==='GET'&&path==='/portal.js')return new Response(portalScript,{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'}});
- if(request.method==='GET'&&path==='/portal.css')return new Response(portalCss,{headers:{'Content-Type':'text/css; charset=utf-8','Cache-Control':'no-store'}});
+ if(request.method==='GET'&&path==='/portal.css')return new Response(portalCss+connectCss,{headers:{'Content-Type':'text/css; charset=utf-8','Cache-Control':'no-store'}});
  if(request.method==='GET'&&path==='/api/health')return json({status:'ok',version:'0.1.0',mode:'remote-capture'});
  if(request.method==='GET'&&path==='/api/auth/status')return json({configured:true});
  if(path.startsWith('/connector/')){

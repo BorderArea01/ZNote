@@ -27,6 +27,15 @@ adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/capture-setting
 adb logcat -d -v threadtime -s ZNoteCapture:I AndroidRuntime:E > artifacts/android-emulator/capture-log.txt
 grep -q ZNOTE_ANDROID_SMOKE_PASS artifacts/android-emulator/result.txt
 
+# Import uses the same Worker routes in a disposable inbox, never user credentials.
+node --max-old-space-size=128 tests/android-connection-import-fixture.mjs > artifacts/android-emulator/import-server.log 2>&1 &
+IMPORT_PID=$!
+trap 'kill "$EMULATOR_PID" "$SERVER_PID" "$IMPORT_PID" 2>/dev/null || true' EXIT
+timeout 100 adb shell am instrument -w -e connection_import true io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner > artifacts/android-emulator/import-result.txt
+adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/connection-import.png artifacts/android-emulator/ || true
+grep -q ZNOTE_CONNECTION_IMPORT_PASS artifacts/android-emulator/import-result.txt
+kill "$IMPORT_PID" 2>/dev/null || true
+
 # Exercise a real in-app self update after the normal client smoke test. The
 # debug-signed next-version fixture remains local to this disposable emulator.
 (cd clients/android && bash gradlew --no-daemon -I ../../tests/android-update-fixture.gradle :app:assembleDebug)

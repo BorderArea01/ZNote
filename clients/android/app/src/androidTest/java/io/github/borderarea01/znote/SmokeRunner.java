@@ -11,13 +11,14 @@ import java.util.concurrent.*;
 public class SmokeRunner extends Instrumentation {
     private MainActivity activity;
     private boolean updateUpgrade;
+    private boolean connectionImport;
     private boolean interactiveWindows;
     private UiAutomation automation(){UiAutomation ui=getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);if(!interactiveWindows){android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();if(info!=null){info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;ui.setServiceInfo(info);}interactiveWindows=true;}return ui;}
     private void checkpoint(String text){Bundle update=new Bundle();update.putString("stream","\n"+text+"\n");sendStatus(0,update);}
     private String nativeText(View v){String result=v instanceof TextView?((TextView)v).getText().toString()+" | ":"";if(v instanceof ViewGroup){ViewGroup group=(ViewGroup)v;for(int i=0;i<group.getChildCount();i++)result+=nativeText(group.getChildAt(i));}return result;}
     private void singleLineControls(View v){if(v instanceof TextView&&v.isClickable()&&((TextView)v).getLineCount()>1)throw new AssertionError("Floating control wraps: "+((TextView)v).getText());if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)singleLineControls(g.getChildAt(i));}}
     private void screenshot(){try{android.graphics.Bitmap shot=automation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}}
-    @Override public void onCreate(Bundle args){super.onCreate(args);updateUpgrade=args!=null&&"true".equals(args.getString("update_upgrade"));start();}
+    @Override public void onCreate(Bundle args){super.onCreate(args);updateUpgrade=args!=null&&"true".equals(args.getString("update_upgrade"));connectionImport=args!=null&&"true".equals(args.getString("connection_import"));start();}
     private View find(View v,Class<?> type){if(type.isInstance(v))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=find(g.getChildAt(i),type);if(r!=null)return r;}}return null;}
     private Button button(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return(Button)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){Button b=button(g.getChildAt(i),text);if(b!=null)return b;}}return null;}
     private String js(String source)throws Exception{CompletableFuture<String> result=new CompletableFuture<>();runOnMainSync(()->{WebView web=(WebView)find(activity.getWindow().getDecorView(),WebView.class);if(web==null)result.complete("null");else web.evaluateJavascript(source,result::complete);});return result.get(8,TimeUnit.SECONDS);}
@@ -173,7 +174,30 @@ public class SmokeRunner extends Instrumentation {
         checkpoint("Repeated window interactions retain one process and persistent startup/frame diagnostics");
         shell("settings put secure enabled_accessibility_services null");shell("settings put secure accessibility_enabled 0");
     }
+    private void connectionImportTests()throws Exception {
+        String local="http://10.0.2.2:3742",remote="http://10.0.2.2:3745",code="android-import-fixture-1234";
+        android.content.SharedPreferences prefs=getTargetContext().getSharedPreferences("MainActivity",0);prefs.edit().putString("origin",local).putString("share_collection","local-library").commit();
+        for(String invalid:new String[]{"https://evil.test/path#code="+code,"http://public.example/connect#code="+code,"https://user:pass@example.com/connect#code="+code,"https://example.com/connect#code=x","znote://connect?server=https%3A%2F%2Fexample.com&code="+code+"&code="+code}){
+            boolean rejected=false;try{ConnectionImport.parse(invalid);}catch(Exception expected){rejected=true;}if(!rejected)throw new Exception("Unsafe import accepted");
+        }
+        String deep="znote://connect?server="+android.net.Uri.encode(remote)+"&code="+code;
+        Intent intent=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep)).setPackage(getTargetContext().getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        activity=(MainActivity)startActivitySync(intent);nativeUntil(null,"连接远程采集");touchText("取消");if(!local.equals(prefs.getString("origin","")))throw new Exception("Cancel replaced the original connection");
+        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep))));nativeUntil(null,"确认连接");touchText("确认连接");nativeUntil(null,"授权暂不可用，请重试");
+        if(!local.equals(prefs.getString("origin","")))throw new Exception("Failed import replaced original connection");touchText("确认连接");
+        long deadline=System.currentTimeMillis()+20000;while(!remote.equals(prefs.getString("origin",""))&&System.currentTimeMillis()<deadline)Thread.sleep(200);
+        if(!remote.equals(prefs.getString("origin",""))||!local.equals(prefs.getString("previous_origin",""))||!prefs.getString("share_collection","").isEmpty())throw new Exception("Import did not preserve old connection/reset incompatible collection");
+        until("!!document.querySelector('#workspace')&&!document.querySelector('#workspace').hidden");
+        Bundle session=getTargetContext().getContentResolver().call(android.net.Uri.parse("content://"+getTargetContext().getPackageName()+".capture-session"),"session",null,null);
+        if(!session.getString("token","").matches("zn_[0-9a-f]{64}")||!remote.equals(session.getString("origin")))throw new Exception("Floating capture did not receive imported authorization");
+        automation().takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG,90,new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"connection-import.png")));
+        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep))));nativeUntil(null,"确认连接");touchText("确认连接");nativeUntil(null,"连接码无效或已使用");touchText("取消");
+        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("znote://connect?server=https://example.com&code=bad"))));
+        if(!remote.equals(prefs.getString("origin","")))throw new Exception("Invalid import changed connection");
+        prefs.edit().putString("origin",local).remove("previous_origin").commit();checkpoint("ZNOTE_CONNECTION_IMPORT_PASS");
+    }
     @Override public void onStart(){Bundle report=new Bundle();try{
+        if(connectionImport){connectionImportTests();finish(Activity.RESULT_OK,report);return;}
         if(updateUpgrade){new UpdateSmoke(this).run();return;}
         UpdateSmoke.catalog();
         long serverDeadline=SystemClock.uptimeMillis()+30000;boolean reachable=false;
