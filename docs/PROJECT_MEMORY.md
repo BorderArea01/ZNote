@@ -2,6 +2,15 @@
 
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
+## 扩展原生弹窗缩成细条（2026-10-21）
+
+- 用户截图为浏览器工具栏的网页采集 action 弹窗；安装目录 popup.css 与源码相同。旧 `.popup{width:384px;max-width:100vw}` 在弹窗自动计算尺寸时循环受自身初始小视口约束，真实 Edge 原生弹窗复现 innerWidth/bodyWidth=66px，截图 artifacts/popup-native-60fh4b/native.png。普通固定视口标签页无法发现本例，不能再只打开 popup.html 新标签当原生尺寸验收。
+- 0.9.40 去除弹窗主体的 vw 最大宽度，html 和 body 明确 384px 内容宽度及最小/最大宽度，保留原有纵向滚动、页面布局和连接设置。不同标签有无纵向滚动条会让外壳视口在 384/399px 切换，内容始终 384px；不把滚动条宽度变化误当内容又缩窄。
+- 现在可以在无头 Edge 中让扩展 service worker 调用 chrome.action.openPopup，再通过 Target.getTargets 找到未被 Playwright context.pages() 暴露的原生 popup target；使用 Target.attachToTarget（flatten=false）和 Target.sendMessageToTarget 检查尺寸、发送真实鼠标/触屏/键盘输入、截图。关闭使用页面 window.close 后等 target 消失，不能仅 Target.closeTarget 留下原生弹窗外壳而导致下一次 openPopup 失败。测试方法见 tests/clipper-popup-layout-ui.mjs --live。
+- 源码和本机安装目录 C:/Users/31093/Downloads/clipper 的独立 Edge 原生弹窗分别完成鼠标及模拟触屏验收：三标签、键盘 Home、帮助开启/关闭、展开链接、长失败文本、网络阻断后重连、关闭再打开，内容恒为 384px，主内容没有横向溢出。已目视检查截图，证据 artifacts/popup-layout-cA7x7v/result.json、popup-layout-riygZ0/result.json。测试临时写入授权仅供当前 3741 读取知识库列表，结束清理，没有创建媒体或改写用户连接设置/PIN。
+- 6 项扩展打包/认证/保存方式相关回归通过；受控轻量扩展构建和前端生产构建通过，日志 artifacts/albums/popup-layout-regression.log、popup-layout-extension-build.log、popup-layout-build.log。首轮外层 PowerShell 对旧 LASTEXITCODE 的判断误报扩展构建失败，实际受控 Node 任务成功、两个输出日志为空；没有资源守卫中断，不把这个误报说成构建工具故障。
+- 已只替换安装目录 popup.css 和版本号，扩展 ID key、授权及配置保留；当前 3741 下载包为 0.9.40，CSS 与源码/安装目录字节一致，证据 artifacts/popup-package-verified.json。纯扩展 CSS 修改，无需重启正在运行的知识库服务，health=ok，前端生产资产未变化。用户现有普通浏览器未被调试或强制重启，仍需在扩展管理点重新加载后再次打开；原生弹窗验收使用独立测试配置，模拟触屏不等于 Android 真机。
+
 ## 空图组误报成功与 X 原图补采（2026-10-17）
 
 - 用户反馈最近显示“图文已保存”却没有图片。实际任务 9f76deef-0379-42c2-a5e1-30f3e402e11d（X status 2040040106850189633，目标建模学习）明确 image_mode=group，但只创建一条 note、零图片。captures.js 在 mediaCount=0 时降为笔记，并无条件提示“配图已保存到本地”；不是上一轮代理连接修复已覆盖的问题。原浏览器 DOM/提交计划已不保留，不能声称已直接看到当时页面媒体结构。
