@@ -35,6 +35,7 @@ public class SmokeRunner extends Instrumentation {
             if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text))if(text.contentEquals(node.getText()==null?"":node.getText())){
                 android.graphics.Rect bounds=new android.graphics.Rect();node.getBoundsInScreen(bounds);long time=SystemClock.uptimeMillis();
                 MotionEvent down=MotionEvent.obtain(time,time,MotionEvent.ACTION_DOWN,bounds.centerX(),bounds.centerY(),0),up=MotionEvent.obtain(time,time+80,MotionEvent.ACTION_UP,bounds.centerX(),bounds.centerY(),0);
+                down.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);up.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
                 automation().injectInputEvent(down,true);automation().injectInputEvent(up,true);down.recycle();up.recycle();Thread.sleep(300);return;
             }Thread.sleep(100);
         }throw new Exception("Touchable control not found: "+text);
@@ -182,16 +183,16 @@ public class SmokeRunner extends Instrumentation {
         }
         String deep="znote://connect?server="+android.net.Uri.encode(remote)+"&code="+code;
         Intent intent=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep)).setPackage(getTargetContext().getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        activity=(MainActivity)startActivitySync(intent);nativeUntil(null,"连接远程采集");touchText("取消");if(!local.equals(prefs.getString("origin","")))throw new Exception("Cancel replaced the original connection");
-        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep))));nativeUntil(null,"确认连接");touchText("确认连接");nativeUntil(null,"授权暂不可用，请重试");
-        if(!local.equals(prefs.getString("origin","")))throw new Exception("Failed import replaced original connection");touchText("确认连接");
+        activity=(MainActivity)startActivitySync(intent);nativeUntil(null,"连接远程采集");Thread.sleep(600);touchText("取消");if(!local.equals(prefs.getString("origin","")))throw new Exception("Cancel replaced the original connection");
+        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep))));nativeUntil(null,"确认连接");Thread.sleep(600);touchText("确认连接");nativeUntil(null,"授权暂不可用，请重试");
+        if(!local.equals(prefs.getString("origin","")))throw new Exception("Failed import replaced original connection");Thread.sleep(600);touchText("确认连接");
         long deadline=System.currentTimeMillis()+20000;while(!remote.equals(prefs.getString("origin",""))&&System.currentTimeMillis()<deadline)Thread.sleep(200);
         if(!remote.equals(prefs.getString("origin",""))||!local.equals(prefs.getString("previous_origin",""))||!prefs.getString("share_collection","").isEmpty())throw new Exception("Import did not preserve old connection/reset incompatible collection");
         until("!!document.querySelector('#workspace')&&!document.querySelector('#workspace').hidden");
         Bundle session=getTargetContext().getContentResolver().call(android.net.Uri.parse("content://"+getTargetContext().getPackageName()+".capture-session"),"session",null,null);
         if(!session.getString("token","").matches("zn_[0-9a-f]{64}")||!remote.equals(session.getString("origin")))throw new Exception("Floating capture did not receive imported authorization");
-        automation().takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG,90,new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"connection-import.png")));
-        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep))));nativeUntil(null,"确认连接");touchText("确认连接");nativeUntil(null,"连接码无效或已使用");touchText("取消");
+        try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getFilesDir(),"connection-import.png"))){if(!automation().takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG,90,out))throw new Exception("Import screenshot failed");out.flush();}
+        runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(deep))));nativeUntil(null,"确认连接");Thread.sleep(600);touchText("确认连接");nativeUntil(null,"连接码无效或已使用");Thread.sleep(600);touchText("取消");
         runOnMainSync(()->activity.onNewIntent(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("znote://connect?server=https://example.com&code=bad"))));
         if(!remote.equals(prefs.getString("origin","")))throw new Exception("Invalid import changed connection");
         prefs.edit().putString("origin",local).remove("previous_origin").commit();checkpoint("ZNOTE_CONNECTION_IMPORT_PASS");

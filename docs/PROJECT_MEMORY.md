@@ -2,6 +2,15 @@
 
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
+## 手机远程采集一键导入（2026-10-21）
+
+- 用户认为分别填写服务器地址和连接码太复杂，要求一键导入。Android 0.10.0-beta.21 / versionCode 10021 支持连接邀请；setup.mjs pair 的私有 pairing.json 提供 import_url。手机打开邀请，点「导入 ZNote App → 确认连接」自动带入地址并兑换浮窗独立授权，不能再交付两个字段让用户抄写。旧版先在应用内覆盖更新一次。
+- HTTPS /connect#code=… 的密钥只在 fragment，页面立即移除地址栏片段，不发送到页面请求或第三方、不因链接预览自动兑换；Android 使用带固定包名的 Intent 唤起 znote://connect，App 显示目标地址再由用户确认。浏览器拦截唤起时，App 连接页可粘贴完整邀请；邀请24小时单次有效，不提交或公开真实邀请。
+- ConnectionImport 复用原地址规范化，拒绝公网 HTTP、用户信息、重复参数及异常路径，不跟随跳转；健康接口必须为 remote-capture，登录后单独兑换设备 token。token 兑换失败保留本轮会话重试；成功存入原按 origin 隔离的 CaptureAuthorization/CookieManager，provider 可直接供浮窗使用。成功前不改原连接；原地址保留 previous_origin，清掉不适用于新服务器的上次选库。连续邀请只保留一个确认框，连接中不重复提交。
+- GitHub Actions 本次返回 “Actions has been disabled for this user”，没有创建运行；不要反复触发失败构建。已有本机 JDK21 / SDK36 / Gradle8.13 缓存完整，scripts/build-android-controlled.ps1 -PrioritizeBuildWhenNoGame 可离线构建 release/Lint/debug/test APK，512MiB heap、单 worker、无持久 daemon。scripts/run-android-guarded.mjs 按真实 NRC-Win64-Shipping 与1.5GiB内存门槛持续监测、只清理自己进程树，无自动重启；Android 仍无游戏期间长期例外。发布继续沿用 LOCALAPPDATA/ZNote/signing 原 keystore/DPAPI，证书 SHA256 4e42f079d9ac5c4154a53eaa3ea6a82720ddc8be3ad3c9f84d0bea7abc62101b，版本序号必须高于10020。
+- 实际独立 Android30 模拟器已验证隐式链接解析、触屏确认/取消、原配置保留、503后同会话重试、网页直接已登录、provider 持久授权、已用邀请拒绝与无效链接，证据 artifacts/android-import-local-g8swMZ/result.txt / connection-import.png（已目视检查）。旧 WebView 不支持 replaceChildren，远程任务页改用兼容 DOM 更新，同时不依赖 crypto.randomUUID。测试触屏必须设置 SOURCE_TOUCHSCREEN，不能把未送达的注入事件当产品按钮失效；截图写私有文件并由 run-as 取回，避免外部文件提取静默失败。只使用新建测试模拟器，不接触用户设备，结束清理所属进程。
+- 实际 Pages 固定入口桌面/模拟触屏验证邀请、密钥不入请求、显式 Android Intent、浏览器备用登录、设备 token 与失效提示，授权用后撤销，证据 artifacts/cloudflare-import-ui-8zir5i/result.json；7项定向回归与原图组/选库/离线队列/重试UI回归通过（artifacts/cloudflare-inbox-ui-FxyXuA/）。Worker/Pages生产构建部署与原签名/versionCode核对通过。仍不能说荣耀真机已验证；此入口只远程采集，未改变平台解析兼容性或开放原图库。
+
 ## 免费跨网络浮窗采集收件箱（2026-10-21）
 
 - 用户没有域名、有 Cloudflare 账号，主要通过手机浮窗发送分享链接，不上传大视频；关注抖音、小红书、贴吧、B站、Pixiv、X、小黑盒等。跨网传输与平台解析是两件事，不能把任意站点/需登录作品说成已经兼容。小黑盒目前无专用解析器，手机拿到链接后由既有采集器处理，失败必须回传真实原因。

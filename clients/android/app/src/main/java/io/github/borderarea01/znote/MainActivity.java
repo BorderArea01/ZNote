@@ -33,6 +33,8 @@ public class MainActivity extends Activity {
     private float pullStartY;
     private boolean pullArmed;
     private static final int PICK=20,SAVE=21;
+    private AlertDialog connectionDialog;
+    private boolean connectionBusy;
     @Override public void onCreate(Bundle state){super.onCreate(state);if(Build.VERSION.SDK_INT>=33){backCallback=this::handleBack;getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}showConnect("");if(!importIntent(getIntent()))AppUpdates.backgroundCheck(this);}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);importIntent(intent);}
     private boolean importIntent(Intent intent){
@@ -46,21 +48,31 @@ public class MainActivity extends Activity {
     }
     private void confirmImport(String link){
         final ConnectionImport invitation;try{invitation=ConnectionImport.parse(link);}catch(Exception e){Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();return;}
+        if(connectionBusy){Toast.makeText(this,"正在连接，请稍候",Toast.LENGTH_SHORT).show();return;}
+        if(connectionDialog!=null)connectionDialog.dismiss();
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("连接远程采集").setMessage(invitation.origin+"\n\n将自动配置地址并授权浮窗采集，原局域网地址会保留。请确认这是你的采集入口。").setNegativeButton("取消",null).setPositiveButton("确认连接",null).create();
+        connectionDialog=dialog;dialog.setOnDismissListener(d->{if(connectionDialog==dialog)connectionDialog=null;});
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            connectionBusy=true;
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);dialog.setCancelable(false);dialog.setMessage("正在连接并授权…");
             network.execute(()->{try{
                 ConnectionImport.Authorization auth=invitation.authorize();
                 runOnUiThread(()->{if(isFinishing()||isDestroyed())return;
                     String cookie=auth.cookie.split(";",2)[0],key=Uri.encode(invitation.origin),fingerprint;
                     try{fingerprint=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(cookie.getBytes(StandardCharsets.UTF_8)),android.util.Base64.NO_WRAP);}catch(Exception e){throw new IllegalStateException(e);}
-                    getSharedPreferences("CaptureAuthorization",0).edit().putString(key,auth.token).putString(key+".session",fingerprint).apply();
-                    android.content.SharedPreferences prefs=getPreferences(0);String previous=prefs.getString("origin","");android.content.SharedPreferences.Editor edit=prefs.edit();
-                    if(!previous.isEmpty()&&!previous.equals(invitation.origin)&&!previous.equals(prefs.getString("remote_capture_origin","")))edit.putString("previous_origin",previous);
-                    edit.putString("origin",invitation.origin).putString("remote_capture_origin",invitation.origin).remove("share_collection").apply();
-                    CookieManager.getInstance().setCookie(invitation.origin,auth.cookie,accepted->{CookieManager.getInstance().flush();dialog.dismiss();showConnect("");open(invitation.origin);Toast.makeText(this,"已导入，浮窗可以直接采集",Toast.LENGTH_LONG).show();});
+                    CookieManager.getInstance().setCookie(invitation.origin,auth.cookie,accepted->{
+                        if(isFinishing()||isDestroyed())return;
+                        connectionBusy=false;
+                        if(!accepted){dialog.setMessage("浏览器授权未保存，请重试连接");dialog.setCancelable(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);return;}
+                        CookieManager.getInstance().flush();
+                        getSharedPreferences("CaptureAuthorization",0).edit().putString(key,auth.token).putString(key+".session",fingerprint).apply();
+                        android.content.SharedPreferences prefs=getPreferences(0);String previous=prefs.getString("origin","");android.content.SharedPreferences.Editor edit=prefs.edit();
+                        if(!previous.isEmpty()&&!previous.equals(invitation.origin)&&!previous.equals(prefs.getString("remote_capture_origin","")))edit.putString("previous_origin",previous);
+                        edit.putString("origin",invitation.origin).putString("remote_capture_origin",invitation.origin).remove("share_collection").apply();
+                        dialog.dismiss();showConnect("");open(invitation.origin);Toast.makeText(this,"已导入，浮窗可以直接采集",Toast.LENGTH_LONG).show();
+                    });
                 });
-            }catch(Exception e){runOnUiThread(()->{if(isFinishing()||isDestroyed())return;dialog.setMessage(invitation.origin+"\n\n"+(e instanceof java.net.SocketTimeoutException?"连接超时，请保持代理开启后重试":e instanceof IOException?e.getMessage():"连接失败，请检查网络后重试"));dialog.setCancelable(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);});}});
+            }catch(Exception e){runOnUiThread(()->{if(isFinishing()||isDestroyed())return;connectionBusy=false;dialog.setMessage(invitation.origin+"\n\n"+(e instanceof java.net.SocketTimeoutException?"连接超时，请保持代理开启后重试":e instanceof IOException?e.getMessage():"连接失败，请检查网络后重试"));dialog.setCancelable(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);});}});
         }));dialog.show();
     }
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}

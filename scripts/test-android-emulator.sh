@@ -32,7 +32,7 @@ node --max-old-space-size=128 tests/android-connection-import-fixture.mjs > arti
 IMPORT_PID=$!
 trap 'kill "$EMULATOR_PID" "$SERVER_PID" "$IMPORT_PID" 2>/dev/null || true' EXIT
 timeout 100 adb shell am instrument -w -e connection_import true io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner > artifacts/android-emulator/import-result.txt
-adb pull /sdcard/Android/data/io.github.borderarea01.znote/files/connection-import.png artifacts/android-emulator/ || true
+adb exec-out run-as io.github.borderarea01.znote cat files/connection-import.png > artifacts/android-emulator/connection-import.png
 grep -q ZNOTE_CONNECTION_IMPORT_PASS artifacts/android-emulator/import-result.txt
 kill "$IMPORT_PID" 2>/dev/null || true
 

@@ -6,6 +6,7 @@ await fixture.connector('sync',{collections:[{id:'fixture-library',name:'导入�
 let failTokenOnce=true;
 http.createServer(async(req,res)=>{
  try{
+  console.log(req.method,req.url);
   const chunks=[];for await(const chunk of req)chunks.push(chunk);
   let response;
   if(req.url==='/api/tokens'&&failTokenOnce){failTokenOnce=false;response=Response.json({error:'授权暂不可用，请重试'},{status:503});}

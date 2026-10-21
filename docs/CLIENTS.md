@@ -143,6 +143,8 @@ cd clients/android
 
 未设置签名环境变量时生成 unsigned APK，**不能将它当成可安装发行版**。可用 `ZNOTE_ANDROID_KEYSTORE`、`ZNOTE_ANDROID_STORE_PASSWORD`、`ZNOTE_ANDROID_KEY_ALIAS`、`ZNOTE_ANDROID_KEY_PASSWORD` 签名；或用 Android SDK `apksigner` 对受控构建产物签名。不要提交密钥；请保留同一签名密钥并独立备份，保证未来可覆盖升级。
 
+Windows 本机维护使用 `scripts/build-android-controlled.ps1 -PrioritizeBuildWhenNoGame`（先设置 `JAVA_HOME`、`ANDROID_HOME`，依赖需已缓存）：离线构建 release、Lint 与测试 APK，单 worker、512 MiB Gradle heap、无持久 daemon；持续检测真实游戏进程和至少 1.5 GiB 可用内存，只停止本任务进程树、不自动重试。独立模拟器导入验收见 `tests/android-import-local.mjs`，必须由 `scripts/run-android-guarded.mjs` 同样保护，不能部署到用户现有设备代替隔离验收。
+
 仓库的 `Build clients` 工作流分别在 Windows、Apple 芯片 Mac、Intel Mac 与 Linux Android 构建机运行。发布前检查测试和签名，把安装包、对应版本源码及 SHA-256 校验清单一起附上。构建成功不能代替所有设备的实机验收。
 
 ## 反馈与维护
