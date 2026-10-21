@@ -1,4 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{inboxFixture}from'./helpers/cloudflare-inbox-fixture.js';
+test('invitation GET and preview remain reusable until an explicit authorization POST',async()=>{
+ const f=await inboxFixture();try{
+  const code=crypto.randomUUID();await f.connector('pair',{code});
+  for(let i=0;i<3;i++){const response=await f.call('/connect/'+code);assert.equal(response.status,200);assert.match(await response.text(),/导入 ZNote App/);assert.equal(response.headers.get('Referrer-Policy'),'no-referrer');assert.equal(response.headers.get('Cache-Control'),'no-store');}
+  assert.equal(f.sql.prepare('SELECT count(*) n FROM relay_tokens').get().n,0);assert.equal((await f.call('/api/auth/login','POST',{password:code})).status,200);assert.equal((await f.call('/api/auth/login','POST',{password:code})).status,401);
+ }finally{f.sql.close();}
+});
 test('inbox pairs once, issues an Android-compatible cookie/device token and rejects unauthorized/cross-origin requests',async()=>{
  const f=await inboxFixture();try{
   assert.equal((await f.call('/api/health')).status,200);assert.equal((await f.call('/api/collections')).status,401);

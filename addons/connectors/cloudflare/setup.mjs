@@ -29,5 +29,5 @@ if(command==='init'){
 }else if(command==='pair'){
  const config=JSON.parse(await readFile(configPath,'utf8')),client=jsonClient(config.relay_origin,config.connector_secret,{remote:true});
  const code=randomBytes(12).toString('base64url'),result=await client('/connector/pair','POST',{code});
- await write(join(dir,'pairing.json'),{url:config.relay_origin,code,import_url:config.relay_origin+'/connect#code='+encodeURIComponent(code),...result});console.log('A 24-hour one-use connection invitation was saved to data/cloudflare-collector/pairing.json.');
+ await write(join(dir,'pairing.json'),{url:config.relay_origin,code,import_url:config.relay_origin+'/connect/'+encodeURIComponent(code),...result});console.log('A 24-hour one-use connection invitation was saved to data/cloudflare-collector/pairing.json.');
 }else throw Error('Use init, secret, secret-pages, set-url or pair');

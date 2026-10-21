@@ -2,10 +2,18 @@
 
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
+## 手机邀请链接丢授权修复（2026-10-21）
+
+- 用户实际打开邀请显示「邀请不完整」。此前授权在 #code fragment，connect.js 随后把唯一授权从地址栏清掉；刷新、复制清理后的地址或某些打开链路丢 fragment 都会失效。之前只验证首次打开和清空片段，没有覆盖刷新/重开，是验收遗漏，不能归因于用户操作。
+- setup.mjs pair 改为完整 /connect/<一次性码>，Worker/Pages 直接支持这个路径，网页保留完整地址；旧 #code 链接首次打开会升级为新路径。裸 /connect 提供完整邀请粘贴恢复，拒绝跳到其他域名，不再叫手机用户到开发机重新生成。交付必须给完整邀请链接，不能只给裸域名。此变更没有更新 APK；beta.21 的原 znote://connect 导入协议保持兼容。
+- 主按钮仍通过显式包名 Intent 导入。浏览器拦截时点「复制备用配置」，复制已发布 App 能解析的 znote:// 配置再粘贴；不要再让用户把新版 HTTPS 路径直接粘进只识别旧 HTTPS fragment 的 beta.21 解析器。复制失败有明确反馈可重试，网页采集是另一个备用入口。
+- 码随完整邀请页请求送达自己的 Cloudflare，不再宣称它从所有 HTTP 请求隐藏；继续使用24小时单次码、no-store、no-referrer、无第三方脚本。GET预览、刷新和重新打开不兑换授权，只有用户操作才登录；不能用裸域名自动取最新私有码或绕开配对。
+- 8项定向API回归通过；桌面和模拟触屏覆盖旧链接升级、新路径直接打开、刷新/新标签重开、预览不兑换、原生参数/复制失败恢复、错误域名粘贴拒绝、缺码恢复、浏览器授权与已用码提示。隔离证据 artifacts/cloudflare-import-ui-gkepeC/；实际公网证据 artifacts/cloudflare-import-ui-38pwMV/（截图已目视检查）。Pages/Worker受控生产构建已部署，原图库/后台收件/已签名APK保持原状；未操作荣耀真机，不能把上述检查说成手机真机已通过。
+
 ## 手机远程采集一键导入（2026-10-21）
 
 - 用户认为分别填写服务器地址和连接码太复杂，要求一键导入。Android 0.10.0-beta.21 / versionCode 10021 支持连接邀请；setup.mjs pair 的私有 pairing.json 提供 import_url。手机打开邀请，点「导入 ZNote App → 确认连接」自动带入地址并兑换浮窗独立授权，不能再交付两个字段让用户抄写。旧版先在应用内覆盖更新一次。
-- HTTPS /connect#code=… 的密钥只在 fragment，页面立即移除地址栏片段，不发送到页面请求或第三方、不因链接预览自动兑换；Android 使用带固定包名的 Intent 唤起 znote://connect，App 显示目标地址再由用户确认。浏览器拦截唤起时，App 连接页可粘贴完整邀请；邀请24小时单次有效，不提交或公开真实邀请。
+- 历史实现（已被上文完整邀请修复替换）：HTTPS /connect#code=… 的密钥只在 fragment，页面立即移除地址栏片段，不发送到页面请求或第三方、不因链接预览自动兑换；Android 使用带固定包名的 Intent 唤起 znote://connect，App 显示目标地址再由用户确认。浏览器拦截唤起时，App 连接页可粘贴完整邀请；邀请24小时单次有效，不提交或公开真实邀请。
 - ConnectionImport 复用原地址规范化，拒绝公网 HTTP、用户信息、重复参数及异常路径，不跟随跳转；健康接口必须为 remote-capture，登录后单独兑换设备 token。token 兑换失败保留本轮会话重试；成功存入原按 origin 隔离的 CaptureAuthorization/CookieManager，provider 可直接供浮窗使用。成功前不改原连接；原地址保留 previous_origin，清掉不适用于新服务器的上次选库。连续邀请只保留一个确认框，连接中不重复提交。
 - GitHub Actions 本次返回 “Actions has been disabled for this user”，没有创建运行；不要反复触发失败构建。已有本机 JDK21 / SDK36 / Gradle8.13 缓存完整，scripts/build-android-controlled.ps1 -PrioritizeBuildWhenNoGame 可离线构建 release/Lint/debug/test APK，512MiB heap、单 worker、无持久 daemon。scripts/run-android-guarded.mjs 按真实 NRC-Win64-Shipping 与1.5GiB内存门槛持续监测、只清理自己进程树，无自动重启；Android 仍无游戏期间长期例外。发布继续沿用 LOCALAPPDATA/ZNote/signing 原 keystore/DPAPI，证书 SHA256 4e42f079d9ac5c4154a53eaa3ea6a82720ddc8be3ad3c9f84d0bea7abc62101b，版本序号必须高于10020。
 - 实际独立 Android30 模拟器已验证隐式链接解析、触屏确认/取消、原配置保留、503后同会话重试、网页直接已登录、provider 持久授权、已用邀请拒绝与无效链接，证据 artifacts/android-import-local-g8swMZ/result.txt / connection-import.png（已目视检查）。旧 WebView 不支持 replaceChildren，远程任务页改用兼容 DOM 更新，同时不依赖 crypto.randomUUID。测试触屏必须设置 SOURCE_TOUCHSCREEN，不能把未送达的注入事件当产品按钮失效；截图写私有文件并由 run-as 取回，避免外部文件提取静默失败。只使用新建测试模拟器，不接触用户设备，结束清理所属进程。
