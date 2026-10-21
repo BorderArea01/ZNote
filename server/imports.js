@@ -79,11 +79,21 @@ function friendlyError(text) {
   return '平台未返回可用视频，采集未完成。请检查原页面或下载后上传文件。';
 }
 export { run as runMediaCommand };
+export function importVideoFormat(value) {
+  const fallback = 'bv[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b[ext=webm]/b';
+  const host = new URL(value).hostname;
+  // Bilibili commonly ranks HEVC above AVC at the same resolution. Prefer
+  // its native H.264 stream so the saved video also plays in browser WebViews;
+  // keep the original fallback when the platform offers no AVC stream.
+  return /(^|\.)bilibili\.com$/i.test(host)
+    ? 'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]/' + fallback
+    : fallback;
+}
 export async function downloadVideo({ url, dir, signal, progress }) {
   const { downloader, ffmpeg } = mediaTools();
   url = await resolveShareLink(url, signal);
   await run(ffmpeg, ['-version'], { signal, timeout: 10000 });
-  const args = ['--ignore-config', '--no-playlist', '--playlist-items', '1', '--no-cache-dir', '--no-warnings', '--newline', '--socket-timeout', '20', '--retries', '1', '--fragment-retries', '1', '--concurrent-fragments', '1', '--max-filesize', String(MAX_VIDEO_BYTES), '--max-downloads', '1', '--no-write-thumbnail', '--write-info-json', '--no-write-playlist-metafiles', '--ffmpeg-location', ffmpeg === 'ffmpeg' ? ffmpeg : dirname(ffmpeg), '-f', 'bv[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b[ext=webm]/b', '--merge-output-format', 'mp4', '-o', join(dir, 'media.%(ext)s'), '--', url];
+  const args = ['--ignore-config', '--no-playlist', '--playlist-items', '1', '--no-cache-dir', '--no-warnings', '--newline', '--socket-timeout', '20', '--retries', '1', '--fragment-retries', '1', '--concurrent-fragments', '1', '--max-filesize', String(MAX_VIDEO_BYTES), '--max-downloads', '1', '--no-write-thumbnail', '--write-info-json', '--no-write-playlist-metafiles', '--ffmpeg-location', ffmpeg === 'ffmpeg' ? ffmpeg : dirname(ffmpeg), '-f', importVideoFormat(url), '--merge-output-format', 'mp4', '-o', join(dir, 'media.%(ext)s'), '--', url];
   args.splice(1, 0, '--use-extractors', 'BiliBili,Douyin,XiaoHongShu,Twitter');
   const controller = new AbortController();
   const abort = () => controller.abort(); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
