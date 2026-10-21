@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>ZNote · 悬浮采集的四种方式</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main>
+    <header class="masthead"><a href="#" class="brand"><span data-logo></span>ZNote <small>交互提案 / 02</small></a><span>只调整采集浮窗</span></header>
+    <section class="intro"><p class="eyebrow">LESS IN THE WAY. MORE IN THE FLOW.</p><h1>小一点，顺一点。</h1><p>收起来不抢眼，拖出来像个按钮。保存之后，轻轻告诉你。</p></section>
+    <nav id="plans" aria-label="选择悬浮窗方案"></nav>
+    <section class="workbench" aria-label="当前方案交互演示">
+      <div class="live-column"><div class="stage-label"><span id="plan-label"></span><span>拖动边缘把手试试</span></div><div id="live"></div></div>
+      <aside class="inspector"><p class="eyebrow">ONE HANDLE, EVERY STATE</p><h2 id="plan-title"></h2><p id="plan-description"></p><div id="state-picker" class="states" aria-label="模拟采集状态"><button data-status="idle" aria-pressed="true">待采集</button><button data-status="working" aria-pressed="false">采集中</button><button data-status="success" aria-pressed="false">成功</button><button data-status="error" aria-pressed="false">失败</button></div><div class="position-controls"><button id="show-docked">看贴边状态</button><button id="show-free">看拖离状态</button><button id="show-panel">看展开面板</button></div><ol class="rules"><li><b>离开边缘，就恢复完整形状</b><span>松手再吸回近侧，左右两边都能停。</span></li><li><b>保存时不展开，不挡住作品</b><span>示意环线表示处理中，不伪装下载百分比。</span></li><li><b>结果用线条图标与短文字</b><span>成功提示随后收回；失败留标记，点开可重试。</span></li></ol><button id="choose" class="choose"></button><p id="selection" role="status" aria-live="polite"></p><p class="simulation">这是交互模型：采集与结果为模拟，不会读剪贴板或提交任务。</p></aside>
+    </section>
+    <section class="overview"><header><div><p class="eyebrow">FOUR WAYS TO STAY OUT OF YOUR WAY</p><h2>四版放在一起看</h2></div><span>同一配色，比较形态与交互</span></header><div id="comparison"></div></section>
+    <footer>先选方案，再落地原生浮窗。手机 App 主界面保持现状。</footer>
+  </main>
+  <svg class="definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="z" viewBox="0 0 64 64"><path d="M16 23C23 14 35 24 46 18C49 16.5 49 20.5 43 25.5L20 42.5C16 46 18 49 22 46.5C30 41.5 42 51 49 42"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v6m0 4h.01"/></symbol>
+    <symbol id="capture" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3M8 12h8m-4-4v8"/></symbol>
+    <symbol id="folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="paste" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+    <symbol id="down" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="star" viewBox="0 0 24 24"><path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1Z"/></symbol>
+    <symbol id="share" viewBox="0 0 24 24"><path d="M4 18c1-7 5-8 9-8V5l8 7-8 7v-5c-4 0-7 1-9 4Z"/></symbol>
+    <symbol id="scene" viewBox="0 0 360 400"><rect width="360" height="400" fill="#c8c1b5"/><path d="M0 0h135v400H0" fill="#b3b1a5"/><path d="M135 0h225v400H135" fill="#d5c7b2"/><path d="M180 400V126a66 66 0 0 1 132 0v274" fill="#8a8d7c"/><path d="M205 400V130a41 41 0 0 1 82 0v270" fill="#c5beaa"/><path d="M205 258h82m-41-170v312" stroke="#777d6d" stroke-width="5"/><path d="m0 300 360-135v110L0 400Z" fill="#f2e1c4" opacity=".7"/><path d="M50 0v400M115 0v400" stroke="#dfd8c8" stroke-width="9"/><path d="M0 377h360v23H0" fill="#a79e8b"/><path d="m0 390 360-100" stroke="#efe3cf" stroke-width="3"/></symbol>
+  </defs></svg>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

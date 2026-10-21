@@ -16,10 +16,13 @@ if(release){
  }
  await writeFile(join(downloads,'latest.json'),JSON.stringify(manifest));
 }
-const mobilePreview=join(dir,'design/mobile-ui');await mkdir(mobilePreview,{recursive:true});
-for(const name of ['index.html','styles.css','app.js'])await copyFile(join(root,'docs/design/mobile-ui',name),join(mobilePreview,name));
-await writeFile(join(dir,'_routes.json'),JSON.stringify({version:1,include:['/*'],exclude:['/downloads/*','/design/mobile-ui','/design/mobile-ui/*']}));
-await writeFile(join(dir,'_headers'),'/downloads/*\n  Cache-Control: no-store\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n/design/mobile-ui/*\n  Cache-Control: no-store\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n');
+const designPreviews=['mobile-ui','overlay-ui'];
+for(const preview of designPreviews){
+ const target=join(dir,'design',preview);await mkdir(target,{recursive:true});
+ for(const name of ['index.html','styles.css','app.js'])await copyFile(join(root,'docs/design',preview,name),join(target,name));
+}
+await writeFile(join(dir,'_routes.json'),JSON.stringify({version:1,include:['/*'],exclude:['/downloads/*',...designPreviews.flatMap(name=>['/design/'+name,'/design/'+name+'/*'])]}));
+await writeFile(join(dir,'_headers'),['/downloads/*',...designPreviews.map(name=>'/design/'+name+'/*')].map(path=>path+'\n  Cache-Control: no-store\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n').join(''));
 const worker=JSON.parse(await readFile(join(root,'data/cloudflare-collector/wrangler.json'),'utf8'));
 await writeFile(join(root,'data/cloudflare-collector/pages.json'),JSON.stringify({name:worker.name,account_id:worker.account_id,pages_build_output_dir:dir,compatibility_date:worker.compatibility_date,d1_databases:worker.d1_databases},null,2));
 console.log('Built Pages inbox with the same D1 queue and compatible capture API.');
