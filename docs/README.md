@@ -21,6 +21,7 @@
 
 - [开发指南](DEVELOPMENT.md)：源码目录、构建、测试与提交规则
 - [体验优化路线](EXPERIENCE-ROADMAP.md)：已落地能力和后续方向
+- [手机界面风格提案](design/mobile-ui/README.md)：App 与采集浮窗的 A / B / C / D 交互预览，选定后实施
 - [第三方组件与许可证](../THIRD_PARTY_NOTICES.md)
 
 组件自己的安装和故障处理文档放在对应 `addons/<分类>/<组件>/` 附近；本目录负责提供集中入口和跨组件说明。

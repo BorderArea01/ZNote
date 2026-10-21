@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>ZNote · 手机界面风格提案</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-theme="paper">
+  <main>
+    <header class="page-head"><a class="wordmark" href="#"><span class="brand-mark" data-logo></span>ZNote <span class="preview-tag">风格预览</span></a><span class="scope">手机 App / 采集浮窗</span></header>
+    <section class="intro"><p class="eyebrow">A LITTLE CHANGE, A NEW FEELING</p><h1>给 ZNote，换个气质。</h1><p>四种外观，同一套采集与整理习惯。</p></section>
+    <nav id="themes" class="theme-picker" aria-label="选择界面风格"></nav>
+    <div class="stage-bar"><div><span id="theme-index">A</span><h2 id="theme-title">纸白</h2><p id="theme-description"></p></div><button id="compare-toggle" class="page-button" aria-pressed="false">四版一起看</button></div>
+    <section id="focus" class="focus-stage" aria-label="当前方案的手机预览"></section>
+    <section id="comparison" class="comparison" aria-label="四种方案对比" hidden></section>
+    <div class="preview-controls"><fieldset><legend>演示采集状态</legend><div id="states" class="state-switch"><button data-state="idle" aria-pressed="true">待采集</button><button data-state="working" aria-pressed="false">处理中</button><button data-state="success" aria-pressed="false">已保存</button><button data-state="error" aria-pressed="false">失败</button></div></fieldset><button id="choose" class="choose-button">我喜欢 A · 纸白</button></div>
+    <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+    <footer>界面提案 · 使用演示内容，不会提交采集任务。选定风格后，再应用到 App。</footer>
+  </main>
+  <svg class="svg-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="logo" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="currentColor"/><path d="M16 23C23 14 35 24 46 18C49 16.5 49 20.5 43 25.5L20 42.5C16 46 18 49 22 46.5C30 41.5 42 51 49 42" fill="none" stroke="#FBF8ED" stroke-width="6.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.9 6.5.9-4.7 4.6 1.1 6.5-5.7-3-5.7 3 1.1-6.5-4.7-4.6 6.5-.9Z"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+    <symbol id="link" viewBox="0 0 24 24"><path d="m10 13 4-4m-6 8-1 1a4.2 4.2 0 0 1-6-6l4-4a4.2 4.2 0 0 1 6 0m2-1 1-1a4.2 4.2 0 0 1 6 6l-4 4a4.2 4.2 0 0 1-6 0" transform="translate(1 1)"/></symbol>
+    <symbol id="capture" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3M8 12h8m-4-4v8"/></symbol>
+    <symbol id="settings" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
+    <symbol id="back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 9 3 8 3 10H3c0-2 3-1 3-10m6 13h.01"/></symbol>
+    <symbol id="bookmark" viewBox="0 0 24 24"><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-4Z"/></symbol>
+    <symbol id="mountain" viewBox="0 0 360 300"><rect width="360" height="300" fill="#c4cdd0"/><circle cx="270" cy="68" r="34" fill="#f9ead1"/><path d="m-20 230 118-154 100 116 79-91 110 128v90H-20" fill="#738f8d"/><path d="m-20 275 140-118 124 100 92-80 60 77v66H-20" fill="#436b66"/><path d="m95 107 23-31 24 28-12 4-13-11-9 13" fill="#ece9db"/><path d="M0 267c100-32 187 25 360-9v50H0" fill="#b2c2af"/></symbol>
+    <symbol id="architecture" viewBox="0 0 360 300"><rect width="360" height="300" fill="#d7c7b6"/><path d="M68 300V73h187v227" fill="#a57b61"/><path d="M84 300V89h153v211" fill="#d9b18c"/><path d="M126 300V166a42 42 0 0 1 84 0v134" fill="#5e6458"/><path d="M152 300V167a16 16 0 0 1 32 0v133" fill="#919482"/><path d="M0 255h112v45H0m237-73h123v73H237" fill="#c9b19a"/><path d="M48 0v300m235-300v300" stroke="#ede4d8" stroke-width="28"/></symbol>
+    <symbol id="water" viewBox="0 0 360 300"><rect width="360" height="300" fill="#a5bbce"/><path d="M0 130h360v170H0" fill="#658ba8"/><path d="M-20 190c70-30 90 40 170 8s120 20 230-6m-400 60c70-30 90 40 170 8s120 20 230-6" fill="none" stroke="#bfd2db" stroke-width="12"/><circle cx="270" cy="64" r="26" fill="#ede3c9"/><path d="M83 190 150 75v115Z" fill="#f0e9dc"/><path d="m155 110 43 80h-43" fill="#d9d2c5"/><path d="m85 196 126-2-21 20h-87" fill="#3c585f"/></symbol>
+  </defs></svg>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
