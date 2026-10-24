@@ -62,3 +62,13 @@ test('a long-lived downloader switches from a cached direct route to the new pro
   try{assert.equal((await fetch('http://images.example/image')).toString(),'png!');assert.equal(direct,1);assert.equal(tunnels,1);}
   finally{origin.closeAllConnections();proxy.closeAllConnections();await Promise.all([new Promise(resolve=>origin.close(resolve)),new Promise(resolve=>proxy.close(resolve))]);}
 });
+
+test('Mangapill CDN gets its public hotlink referer only on the exact image host, including redirects',async()=>{
+  const received=[];
+  await fixture((req,res)=>{received.push(req.headers.referer);if(req.url==='/start'){res.writeHead(302,{Location:'https://other.example/end'});res.end();}else{res.writeHead(200,{'Content-Type':'image/jpeg'});res.end('image');}},async fetch=>{
+    await fetch('https://cdn.readdetectiveconan.com/image');
+    await fetch('https://cdn.readdetectiveconan.com.evil.test/image');
+    await fetch('https://cdn.readdetectiveconan.com/start');
+    assert.deepEqual(received,['https://mangapill.com/',undefined,'https://mangapill.com/',undefined]);
+  });
+});

@@ -33,6 +33,7 @@ async function once(value, redirects) {
     const finish=(error,buffer)=>{if(settled)return;settled=true;clearTimeout(timer);if(error){response?.destroy();req?.destroy();reject(error);}else resolve(buffer);};
     const headers={Accept:'image/*', 'Accept-Encoding':'identity'};
     if(/(^|\.)pximg\.net$/.test(host)) headers.Referer='https://www.pixiv.net/';
+    if(host==='cdn.readdetectiveconan.com') headers.Referer='https://mangapill.com/';
     const agent = getAgent();
     const options = {headers, ...(agent ? {agent} : {lookup:(_host,options,callback)=>options.all?callback(null,[target]):callback(null,target.address,target.family)})};
     req=(requestOverride||(url.protocol==='https:'?httpsRequest:httpRequest))(url,options,res=>{
