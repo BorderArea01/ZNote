@@ -5,27 +5,12 @@
 .tag-filter-toggle>svg.expanded{transform:rotate(180deg)}
 .tag-filter-count{font-size:11px;min-width:22px;padding:2px 5px;border-radius:5px;background:var(--surface-3,#343941)}
 .tag-filter-heading>button:last-child:not(.tag-filter-toggle){margin-left:auto;font-size:12px;flex-shrink:0}
-.tag-filter .tag-filter-summary,.sidebar-tag-filter .tag-filter-summary{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted);padding-top:8px}
-.tag-filter .tag-filter-summary button,.sidebar-tag-filter .tag-filter-summary button{font-size:11px;padding:4px;white-space:nowrap}
-.tag-filter .tag-options,.sidebar-tag-filter .tag-options{max-height:172px;overscroll-behavior:contain;scrollbar-width:thin;align-content:flex-start}
-.tag-filter .tag-options button>span,.sidebar-tag-filter .tag-options button>span,.tag-selection button>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tag-filter .tag-filter-summary{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted);padding-top:8px}
+.tag-filter .tag-filter-summary button{font-size:11px;padding:4px;white-space:nowrap}
+.tag-filter .tag-options{max-height:172px;overscroll-behavior:contain;scrollbar-width:thin;align-content:flex-start}
+.tag-filter .tag-options button>span,.tag-selection button>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .tag-filter .tag-options button{max-width:260px}
-.tag-filter .tag-selection,.sidebar-tag-filter .tag-selection{max-height:100px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.tag-filter .tag-selection{max-height:100px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
 .tag-selection button{display:inline-flex;align-items:center;gap:5px;max-width:200px}
 .tag-selection button svg{flex-shrink:0}
-.sidebar-tag-filter{margin:12px 6px 20px;padding:0 6px;min-width:0}
-.sidebar-tag-filter .tag-filter-toggle{width:100%;min-height:40px}
-.sidebar-tag-filter .tag-filter-toggle>svg:last-child{margin-left:auto}
-.sidebar-tag-filter .tag-browser-tools{flex-direction:column;align-items:stretch;gap:8px;margin-top:8px}
-.sidebar-tag-filter .tag-search{width:100%;min-width:0}
-.sidebar-tag-filter .tag-search input{width:100%;min-width:0;font-size:12px}
-.sidebar-tag-filter .tag-browser-tools select{width:100%;font-size:12px;padding:8px}
-.sidebar-tag-filter .tag-options{gap:6px;padding:10px 0;margin:0;max-height:164px}
-.sidebar-tag-filter .tag-options button{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:7px 8px;font-size:11px}
-.sidebar-tag-filter .tag-options small{font-size:10px;flex-shrink:0;color:var(--muted)}
-.sidebar-tag-filter .tag-pages{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:10px;flex-wrap:wrap;padding:6px 0}
-.sidebar-tag-filter .tag-pages button{width:auto;min-height:32px;padding:6px;font-size:11px}
-.sidebar-tag-filter .tag-selection{margin-top:8px;padding-top:10px;gap:6px}
-.sidebar-tag-filter .tag-selection>span{font-size:10px}
-.sidebar-tag-filter .tag-selection button{font-size:11px;padding:6px;max-width:100%}
 @media(max-width:600px){.tag-filter-heading{gap:6px}.tag-filter-heading>.tag-filter-toggle{gap:5px}.tag-filter-heading>button:last-child:not(.tag-filter-toggle){font-size:11px;padding:8px}.tag-filter-toggle strong{font-size:12px}}

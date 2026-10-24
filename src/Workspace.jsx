@@ -766,7 +766,7 @@ export default function Workspace({
     if(view!=='home'){resetScope();setView('home');setCollection(null);return true;}
     return false;
   },ready);
-  const toggleTag = (t, keepNavigation = false) => {
+  const toggleTag = (t) => {
     if (!selectedTags.includes(t) && selectedTags.length >= 30) {
       notify('最多同时筛选 30 个标签'); return;
     }
@@ -774,7 +774,7 @@ export default function Workspace({
     setSelectedTags((previous) =>
       previous.includes(t) ? previous.filter((v) => v !== t) : [...previous, t],
     );
-    if(!keepNavigation)setMobile(false);
+    setMobile(false);
   };
   async function loadPage(previous = false, automatic = false) {
     if (pagingRequest.current || loading || query !== search || (previous ? !pageOffset : pageOffset + items.length >= total)) return;
@@ -1084,7 +1084,6 @@ export default function Workspace({
           </button>
         </nav>
         {view !== 'home' && <SavedViewList model={savedViews} config={currentViewConfig} onApply={applySavedView} onEdit={editSavedView} onCreate={() => editSavedView(null)}/>}
-        {view!=='home'&&<TagFilter key={'sidebar:'+(actualCollection||'unfiled')} variant="sidebar" collection={actualCollection} revision={revision} selected={selectedTags} mode={tagMode} onToggle={tag=>toggleTag(tag,true)} onMode={setTagMode} onClear={()=>setSelectedTags([])}/>}
         <div className="sidebar-bottom">
           <button
             className={view === "trash" ? "active" : ""}
