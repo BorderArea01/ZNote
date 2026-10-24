@@ -22,6 +22,8 @@ tools/windows-server/
 # Private browser extensions are maintained locally in a nested private repo.
 # Keep source code, build output, packages and connection state out of ZNote.
 /addons/browser/private/
+# Local optional in-app plugins (source and built assets stay on this machine).
+/plugins/
 # Compatibility junction for an existing Edge unpacked-extension path.
 /integrations/
 

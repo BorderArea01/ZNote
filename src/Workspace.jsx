@@ -1,4 +1,5 @@
 import {useBgmPlayback} from './Bgm.jsx';
+import {LocalPlugins} from './LocalPlugins.jsx';
 import {useAlbums,AlbumNavigation,AlbumManager,FavoriteTargets} from './Albums.jsx';
 import {ContentActions} from './ContentActions.jsx';
 import {SortControl,DEFAULT_TYPE_ORDER} from './SortControl.jsx';
@@ -1093,6 +1094,7 @@ export default function Workspace({
           ))}
           {sidebarTags.error?<button onClick={refresh}>重新加载标签</button>:sidebarTags.loading?<small>正在加载标签…</small>:!tags.length&&<small>为内容加上多个标签，轻松找回灵感</small>}
         </div>
+        <LocalPlugins onNavigate={()=>setMobile(false)} previewing={!!selected} onOpenItem={async id=>{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('原素材已移至回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');await openItem(item);}}/>
         <div className="sidebar-bottom">
           <button
             className={view === "trash" ? "active" : ""}

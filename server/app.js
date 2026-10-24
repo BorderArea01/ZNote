@@ -8,6 +8,7 @@ import { createUndoManager } from './undo.js';
 import { createNoteHistory } from './note-history.js';
 import { registerSavedViews } from './saved-views.js';
 import { registerAlbums } from './albums.js';
+import {registerLocalPlugins} from './local-plugins.js';
 import { registerReadingProgress } from './reading-progress.js';
 import { registerVideoProgress } from './video-progress.js';
 import { registerGroupOrganize } from './group-organize.js';
@@ -119,6 +120,7 @@ export function createApp({
   importOptions = {},
   captureOptions = {},
   imageDownload = fetchRemoteImage,
+  pluginsDir = resolve('plugins'),
 } = {}) {
   const db = openDatabase(dataDir);
   const uploadQueue = new WorkQueue(1, 32);
@@ -519,9 +521,10 @@ export function createApp({
     ];
     const args = [];
     if (q.q) {
+      const groupSearch=q.grouped==='true'?"group_title LIKE ?":"group_manual=1 AND group_key NOT LIKE 'note:%' AND group_title LIKE ?";
       where.push([...q.q].length >= 3
-        ? "(rowid IN (SELECT rowid FROM items_search WHERE title LIKE ? UNION SELECT rowid FROM items_search WHERE content LIKE ? UNION SELECT rowid FROM items_search WHERE tags LIKE ?) OR (group_manual=1 AND group_key NOT LIKE 'note:%' AND group_title LIKE ?))"
-        : "(title LIKE ? OR content LIKE ? OR tags LIKE ? OR (group_manual=1 AND group_key NOT LIKE 'note:%' AND group_title LIKE ?))");
+        ? `(rowid IN (SELECT rowid FROM items_search WHERE title LIKE ? UNION SELECT rowid FROM items_search WHERE content LIKE ? UNION SELECT rowid FROM items_search WHERE tags LIKE ?) OR (${groupSearch}))`
+        : `(title LIKE ? OR content LIKE ? OR tags LIKE ? OR (${groupSearch}))`);
       args.push(...Array(4).fill(`%${q.q}%`));
     }
     if (q.kind) {
@@ -1358,6 +1361,7 @@ export function createApp({
   transaction(() => noteHistory.seed());
   registerSavedViews({app,db,transaction});
   registerAlbums({app,db,transaction,event,undo,serialize});
+  registerLocalPlugins({app,db,admin,authenticate,dataDir,pluginsDir,serialize,filenameText});
   registerReadingProgress({app,db,transaction});
   registerVideoProgress({app,db,transaction});
   app.use("/docs", express.static(swagger.getAbsoluteFSPath()));
@@ -1424,7 +1428,7 @@ export function createApp({
       return res.status(400).json({
         error:
           err.code === "LIMIT_FILE_SIZE"
-            ? (req.path.endsWith('/bgm') ? '配乐文件不能超过 50 MB' : req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单个 PSD 不能超过 200 MB；其他图片不能超过 100 MB')
+            ? (req.path.startsWith('/api/plugins/') ? '单个插件附件不能超过 200 MB' : req.path.endsWith('/bgm') ? '配乐文件不能超过 50 MB' : req.path === '/api/videos' ? '单个视频不能超过 500 MB' : req.path === '/api/backups/preview' ? '迁移备份不能超过 25 GiB' : '单个 PSD 不能超过 200 MB；其他图片不能超过 100 MB')
             : "上传格式或数量超出限制",
       });
     if (String(err.message).includes("UNIQUE constraint"))

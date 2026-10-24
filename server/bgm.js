@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {z} from 'zod';
 import multer from 'multer';
 import {fileDigest} from './videos.js';
+import {allPluginFiles} from './plugin-assets.js';
 export const MAX_BGM_BYTES=50*1024*1024;
 const fail=(status,message)=>Object.assign(Error(message),{status});
 export const bgmSchema=z.object({file_key:z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/).refine(v=>!v.includes('..')),hash:z.string().regex(/^[a-f0-9]{64}$/),bytes:z.number().int().min(1).max(MAX_BGM_BYTES),mime:z.enum(['audio/mpeg','audio/mp4','audio/aac','audio/ogg','audio/wav','audio/webm']),duration:z.number().positive().finite(),title:z.string().min(1).max(200),author:z.string().max(200),source_url:z.url().max(4096).refine(v=>/^https?:\/\//i.test(v)&&!new URL(v).username&&!new URL(v).password).nullable()});
@@ -13,7 +14,7 @@ export function bgmFiles(db){
   if(!db.prepare('PRAGMA table_info(items)').all().some(c=>c.name==='bgm'))return [];
   return db.prepare('SELECT DISTINCT bgm FROM items WHERE bgm IS NOT NULL').all().map(itemBgm);
 }
-export function mediaKeys(db){return [...new Set([...db.prepare('SELECT file_key FROM items WHERE file_key IS NOT NULL').all().map(r=>r.file_key),...bgmFiles(db).map(r=>r.file_key)])];}
+export function mediaKeys(db){return [...new Set([...db.prepare('SELECT file_key FROM items WHERE file_key IS NOT NULL').all().map(r=>r.file_key),...bgmFiles(db).map(r=>r.file_key),...allPluginFiles(db).map(r=>r.file_key)])];}
 export function probeAudio(path){return new Promise((resolve,reject)=>{
   const worker=new Worker(new URL('./audio-probe-worker.js',import.meta.url),{workerData:{path},resourceLimits:{maxOldGenerationSizeMb:128}});let settled=false;
   const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);worker.terminate();error?reject(error):resolve(value);};

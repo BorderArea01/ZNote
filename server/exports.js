@@ -174,7 +174,7 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
       archive.file(join(temp, "znote.sqlite"), { name: "data/znote.sqlite" });
       const snapshot = new DatabaseSync(join(temp, "znote.sqlite"), { readOnly: true });
       let snapshotImages,snapshotMusic;
-      try { snapshotImages = snapshot.prepare("SELECT * FROM items WHERE kind IN ('image','video')").all();snapshotMusic=bgmFiles(snapshot); }
+      try { snapshotImages = snapshot.prepare("SELECT * FROM items WHERE kind IN ('image','video')").all();snapshotMusic=[...bgmFiles(snapshot),...allPluginFiles(snapshot)]; }
       finally { snapshot.close(); }
       const archivedKeys = new Set();
       for (const item of snapshotImages) {
@@ -304,3 +304,4 @@ export async function exportContent({ db, dir, req, res, serialize, progress = (
     }
   }
 }
+import {allPluginFiles} from './plugin-assets.js';

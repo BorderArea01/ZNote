@@ -14,6 +14,7 @@ import { originalBuffer, digest } from './storage.js';
 import { fileDigest, MAX_VIDEO_BYTES } from './videos.js';
 import { savedViewConfig } from './saved-views.js';
 import { albumSchema } from './albums.js';
+import {allPluginFiles,pluginFileList} from './plugin-assets.js';
 import {publishRename} from './atomic-files.js';
 import {measureBackupSpace,assertBackupBudget,assertBackupDisk,linkSnapshotMedia} from './backup-space.js';
 import { readingEntries } from './reading-progress.js';
@@ -156,7 +157,7 @@ async function inspectBackup(stage) {
       const prior = verified.get(item.file_key);
       if (prior.hash !== item.hash || prior.bytes !== item.bytes || prior.codec !== (item.storage_codec || 'identity')) throw fail(400, '共享原图记录不一致');
     }
-    for(const track of bgmFiles(snapshot)){
+    for(const track of [...bgmFiles(snapshot),...allPluginFiles(snapshot)]){
       const prior=verified.get(track.file_key);
       if(prior){if(prior.hash!==track.hash||prior.bytes!==track.bytes||prior.codec!=='identity')throw fail(400,'共享配乐记录不一致');continue;}
       const audioStat=await stat(join(root,'media',track.file_key));if(audioStat.size!==track.bytes)throw fail(400,'备份配乐大小校验失败');
@@ -314,7 +315,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
             if (hash !== item.hash) throw new Error('Restored original verification failed');
             const handle = await open(join(dataDir, 'media', key), 'r+'); try { await handle.sync(); } finally { await handle.close(); }
           }
-          for(const track of bgmFiles(source))if(!newKeys.has(track.file_key)){
+          for(const track of [...bgmFiles(source),...allPluginFiles(source)])if(!newKeys.has(track.file_key)){
             const key=randomUUID()+'.bin';
             await restoreMedia(join(candidate.stage,'data','media',track.file_key),join(dataDir,'media',key));newKeys.set(track.file_key,key);
             const restored=await fileDigest(join(dataDir,'media',key));if(restored.hash!==track.hash||restored.bytes!==track.bytes)throw new Error('Restored BGM verification failed');
@@ -331,6 +332,7 @@ export function createBackupManager({ db, dataDir, maintenance, clearCache = () 
               for (const row of source.prepare(`SELECT * FROM ${table}`).iterate()) {
                 if (table === 'items' && ['image', 'video'].includes(row.kind)) { row.file_key = newKeys.get(row.file_key); row.thumbnail_key = null; }
                 if(table==='items'&&row.bgm){const track=itemBgm(row);row.bgm=JSON.stringify({...track,file_key:newKeys.get(track.file_key)});}
+                if(table==='settings'&&row.key.startsWith('plugin.files:'))row.value=JSON.stringify(pluginFileList.parse(JSON.parse(row.value)).map(file=>({...file,file_key:newKeys.get(file.file_key)})));
                 insert.run(...columns.map(c => row[c]));
               }
             }
