@@ -18,7 +18,7 @@ if($Lightweight){
   $env:GOMAXPROCS='1'
 }
 function Assert-Resources {
-  $gameProcesses=@(Get-Process -ErrorAction Stop | Where-Object {$_.ProcessName -eq 'NRC-Win64-Shipping' -or $_.MainWindowTitle -like '*洛克王国*'})
+  $gameProcesses=@(Get-Process -ErrorAction Stop | Where-Object {$_.ProcessName -eq 'NRC-Win64-Shipping'})
   if($gameProcesses.Count -and -not $Lightweight){throw '洛克王国正在运行，禁止启动或继续高内存任务；已授权的 ZNote 轻量任务使用 -Lightweight。'}
   $availableMemory=(Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).FreePhysicalMemory/1024
   $minimumMemory=if($Lightweight){1536}else{1024}

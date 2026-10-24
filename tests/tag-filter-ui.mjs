@@ -58,7 +58,7 @@ try {
   await page.getByText('第 1 / 64 张', { exact: true }).waitFor();
   await page.getByRole('button', { name: '关闭窗口' }).click();
   console.log('PASS: multiple tags use all/any semantics for both grid and continuous gallery');
-  await page.getByRole('button', { name: '清除筛选', exact: true }).click();
+  await page.getByRole('region', {name:'按标签筛选',exact:true}).getByRole('button', { name: '清除筛选', exact: true }).click();
   await page.getByLabel('搜索筛选标签').fill('冷门');
   await toggle('龘-冷门标签'); await count(1);
   assert.equal(await page.locator('.sidebar-tags').getByRole('button', { name: '# 龘-冷门标签', exact: true }).count(), 1);
