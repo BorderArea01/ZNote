@@ -11,6 +11,8 @@
 - 隔离 Android30 实际触屏、HTTP 入库、断开/恢复/401/错误服务/超时/凭据隔离验收通过，LAN 阶段零远程请求，真实临时库新增一张测试图片；beta.22 → beta.23 原签名覆盖升级保留 installer app-op。证据 artifacts/android-route-local-OEHybf/。无荣耀真机实测，不能说真机通过。
 - 验收曾发现旧 WebView 解析 Vite 默认现代语法报 Unexpected token '=' 而白屏；vite.config.js 指定 chrome80 编译目标后，实际原生 WebView 已显示局域网登录页。该选项转换语法，不代表所有现代浏览器 API 均有 polyfill。测试必须检查实际页面显示，不能只检查顶部线路标签或 URL。
 
+- beta.23 已发布到 GitHub android-v0.10.0-beta.23 与固定 Pages 下载入口，源码提交 f885d126ef4a194edc2439fe55614d4ed3b245bd。公开 APK/source 重新下载并与签名产物校验一致，证据 artifacts/cloudflare-release-live-khfEPJ/result.json；APK SHA-256 155fa0f65cb31292dc33a499a0c7dfc06fb009fa8a9908439d6dd82685cfef21。GitHub 草稿按标签 REST 查询可能暂时404，先用 GraphQL 读取 databaseId，再按ID操作和核对 releaseAssets.digest，不重复创建。Wrangler Pages 禁止 --config 自定义路径；从 data/cloudflare-collector/pages-deploy/ 工作目录执行、自动读取 wrangler.json，通过环境提供 account_id，不使用含 account_id 的旧 jsonc，不修改根 package/Vite 文件。
+
 ## 默认收藏与侧栏插件入口（2026-10-25，覆盖自定义相册旧需求）
 
 - 用户撤销自定义收藏项功能，只保留默认收藏：移除相册选择、管理、目标弹窗及 album 筛选。卡片/预览直接切换星标，多选恢复收藏所选/取消收藏。完整组通过服务器版本与成员快照原子更新，不拆组；详情正文不被摘要响应覆盖。数据库历史结构和备份恢复兼容保留，不清除素材。
