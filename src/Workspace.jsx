@@ -1047,7 +1047,7 @@ export default function Workspace({
             );
           })}
         </nav>
-        <LocalPlugins onNavigate={()=>setMobile(false)} previewing={!!selected} onOpenItem={async id=>{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('原素材已移至回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');await openItem(item);}}/>
+        {view!=='home'&&<LocalPlugins key={actualCollection||'unfiled'} collection={actualCollection} libraryName={activeCollection?.name||'未分类'} onNavigate={()=>setMobile(false)} previewing={!!selected} onOpenItem={async id=>{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('原素材已移至回收站');if(item.collection_id!==actualCollection&&!isMediaGroup(item)){++detailGeneration.current;setGallery([item]);setGalleryBusy(false);setGalleryError('');setSelected(item);}else await openItem(item);}}/>}
         <div className="nav-caption">
           知识库
           <IconButton label="新建知识库" onClick={() => setCollectionModal({})}>

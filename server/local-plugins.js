@@ -23,6 +23,19 @@ export function registerLocalPlugins({app,db,admin,authenticate,dataDir,pluginsD
   const setting=key=>db.prepare('SELECT value FROM settings WHERE key=?').get(key)?.value;
   const put=(key,value)=>db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,value);
   const enabled=id=>setting('plugin.enabled:'+id)==='true';
+  const scope=req=>{
+    if(req.query.collection===undefined)return undefined; // Legacy integrations retain their own old state.
+    if(req.query.collection==='unfiled')return 'unfiled';
+    const id=z.uuid().parse(req.query.collection);
+    if(!db.prepare('SELECT 1 FROM collections WHERE id=?').get(id))throw fail(404,'知识库不存在，请重新选择');
+    return id;
+  };
+  const libraryKey=(id,library)=>'plugin.library:'+id+':'+library;
+  const libraryState=(id,library)=>JSON.parse(setting(libraryKey(id,library))||'{"enabled":false,"version":0,"data":null}');
+  const legacy=id=>JSON.parse(setting('plugin.state:'+id)||'{"version":0,"data":null}');
+  const available=(id,library)=>enabled(id)&&(library===undefined||libraryState(id,library).enabled===true);
+  const scopedFiles=(id,library)=>pluginFiles(db,id).filter(f=>library===undefined?f.collection_id===undefined:f.collection_id===(library==='unfiled'?null:library));
+  const visibleState=(id,library)=>library===undefined?legacy(id):{...libraryState(id,library),collection_id:library==='unfiled'?null:library,collection_name:library==='unfiled'?'未分类':db.prepare('SELECT name FROM collections WHERE id=?').get(library).name};
   async function scan(){
     const next=new Map(),issues=[];
     let entries;try{entries=await readdir(pluginsDir,{withFileTypes:true});}catch(e){if(e.code!=='ENOENT')throw e;entries=[];}
@@ -42,38 +55,61 @@ export function registerLocalPlugins({app,db,admin,authenticate,dataDir,pluginsD
     catalog=next;errors=issues;
   }
   const ready=scan();
-  const list=()=>({plugins:[...catalog.values()].map(({folder,...p})=>({...p,enabled:enabled(p.id)})),errors});
-  const installed=async(req,res,next)=>{try{await ready;const id=pluginId.parse(req.params.id);if(!catalog.has(id))throw fail(404,'插件未安装，请重新扫描');req.plugin=catalog.get(id);next();}catch(e){next(e);}};
-  const active=(req,res,next)=>enabled(req.plugin.id)?next():next(fail(409,'插件已停用；数据和附件已保留'));
-  app.get('/api/plugins',async(req,res)=>{await ready;res.json(list());});
-  app.post('/api/plugins/rescan',admin,async(req,res)=>{await ready;await scan();res.json(list());});
+  const list=library=>({plugins:[...catalog.values()].map(({folder,...p})=>({...p,enabled:available(p.id,library),mounted:library===undefined?false:libraryState(p.id,library).enabled===true,legacy_available:legacy(p.id).data!==null,legacy_version:legacy(p.id).version})),errors});
+  const installed=async(req,res,next)=>{try{await ready;const id=pluginId.parse(req.params.id);if(!catalog.has(id))throw fail(404,'插件未安装，请重新扫描');req.plugin=catalog.get(id);req.pluginScope=scope(req);next();}catch(e){next(e);}};
+  const active=(req,res,next)=>available(req.plugin.id,req.pluginScope)?next():next(fail(409,req.pluginScope===undefined?'插件已停用；数据和附件已保留':'此知识库尚未启用该插件；资料已保留'));
+  app.get('/api/plugins',async(req,res)=>{await ready;res.json(list(scope(req)));});
+  app.post('/api/plugins/rescan',admin,async(req,res)=>{await ready;const library=scope(req);await scan();res.json(list(library));});
   app.patch('/api/plugins/:id',admin,installed,(req,res)=>{
-    const input=z.object({enabled:z.boolean()}).strict().parse(req.body);put('plugin.enabled:'+req.plugin.id,JSON.stringify(input.enabled));res.json(list());
+    const input=z.object({enabled:z.boolean()}).strict().parse(req.body),library=req.pluginScope;
+    if(library===undefined)put('plugin.enabled:'+req.plugin.id,JSON.stringify(input.enabled));
+    else {
+      const prior=libraryState(req.plugin.id,library);
+      put(libraryKey(req.plugin.id,library),JSON.stringify({...prior,enabled:input.enabled,version:prior.version+1,updated_at:new Date().toISOString()}));
+      if(input.enabled)put('plugin.enabled:'+req.plugin.id,'true');
+    }
+    res.json(list(library));
   });
-  app.get('/api/plugins/:id/state',installed,active,(req,res)=>res.json(JSON.parse(setting('plugin.state:'+req.plugin.id)||'{"version":0,"data":null}')));
+  app.post('/api/plugins/:id/legacy/claim',admin,installed,(req,res)=>{
+    const library=req.pluginScope;if(library===undefined)throw fail(400,'请选择接收旧资料的知识库');
+    const input=z.object({version:z.number().int().nonnegative()}).strict().parse(req.body);
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const before=legacy(req.plugin.id),target=libraryState(req.plugin.id,library);
+      if(before.version!==input.version||before.data===null)throw fail(409,'旧资料已关联或发生变化，请重新加载');
+      if(target.data!==null)throw fail(409,'当前知识库已有插件资料，不能覆盖，请选择空知识库');
+      const now=new Date().toISOString();
+      put(libraryKey(req.plugin.id,library),JSON.stringify({enabled:true,version:target.version+1,data:before.data,updated_at:now}));
+      put('plugin.state:'+req.plugin.id,JSON.stringify({version:before.version+1,data:null,updated_at:now}));
+      const files=pluginFiles(db,req.plugin.id).map(file=>file.collection_id===undefined?{...file,collection_id:library==='unfiled'?null:library}:file);
+      put('plugin.files:'+req.plugin.id,JSON.stringify(files));put('plugin.enabled:'+req.plugin.id,'true');
+      db.exec('COMMIT');res.json(list(library));
+    }catch(e){db.exec('ROLLBACK');throw e;}
+  });
+  app.get('/api/plugins/:id/state',installed,active,(req,res)=>res.json(visibleState(req.plugin.id,req.pluginScope)));
   app.patch('/api/plugins/:id/state',installed,active,(req,res)=>{
     if(req.auth.scope==='read')throw fail(403,'此令牌只有读取权限');
     const input=z.object({version:z.number().int().nonnegative(),data:z.unknown()}).strict().parse(req.body);
-    const key='plugin.state:'+req.plugin.id,previous=setting(key),before=JSON.parse(previous||'{"version":0}');
-    if(input.version!==before.version)throw fail(409,'角色资料已在其他窗口更新，请先导出当前编辑，再重新加载');
-    const value=JSON.stringify({version:before.version+1,data:input.data,updated_at:new Date().toISOString()});
+    const key=req.pluginScope===undefined?'plugin.state:'+req.plugin.id:libraryKey(req.plugin.id,req.pluginScope),previous=setting(key),before=JSON.parse(previous||'{"version":0}');
+    if(input.version!==before.version)throw fail(409,'资料已在其他窗口更新，请重新加载后重试，当前编辑已保留');
+    const value=JSON.stringify({...before,version:before.version+1,data:input.data,updated_at:new Date().toISOString()});
     if(Buffer.byteLength(value)>1500000)throw fail(413,'插件资料超过 1.5 MB，请拆分作品或清理不需要的文字');
     const changes=previous===undefined?db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(key,value).changes:db.prepare('UPDATE settings SET value=? WHERE key=? AND value=?').run(value,key,previous).changes;
     if(!changes)throw fail(409,'资料已在其他窗口更新，未覆盖，请重新加载');
-    res.json(JSON.parse(value));
+    res.json(visibleState(req.plugin.id,req.pluginScope));
   });
   // Resolve references at read time: deleted/moved resources never turn into
   // silent copies, and a group always reflects its current ordered members.
   app.post('/api/plugins/:id/resolve',installed,active,(req,res)=>{
-    const refs=z.array(reference).max(200).parse(req.body.references),files=pluginFiles(db,req.plugin.id);
+    const refs=z.array(reference).max(200).parse(req.body.references),files=scopedFiles(req.plugin.id,req.pluginScope);
     res.json({resources:refs.map(ref=>{
-      if(ref.type==='file'){const row=files.find(f=>f.id===ref.id);return {ref,available:!!row,...(row?{file:{...row,file_key:undefined,url:`/api/plugins/${req.plugin.id}/files/${row.id}`}}:{})};}
+      if(ref.type==='file'){const row=files.find(f=>f.id===ref.id);return {ref,available:!!row,...(row?{file:{...row,file_key:undefined,url:`/api/plugins/${req.plugin.id}/files/${row.id}${req.pluginScope===undefined?'':'?collection='+encodeURIComponent(req.pluginScope)}`}}:{})};}
       const rows=ref.type==='item'?db.prepare('SELECT * FROM items WHERE id=? AND deleted_at IS NULL').all(ref.id):db.prepare('SELECT * FROM items WHERE group_key=? AND kind=? AND collection_id IS ? AND deleted_at IS NULL ORDER BY COALESCE(group_order,group_index),group_index,id').all(ref.group_key,ref.kind,ref.collection_id);
       return {ref,available:!!rows.length,count:rows.length,item:rows[0]?serialize({...rows[0],content:rows[0].content.slice(0,1000)}):null};
     })});
   });
   const upload=multer({dest:join(dataDir,'uploads'),limits:{fileSize:200*1024*1024,files:1,fields:0}});
-  app.get('/api/plugins/:id/files',installed,active,(req,res)=>res.json({files:pluginFiles(db,req.plugin.id).map(({file_key,...f})=>f)}));
+  app.get('/api/plugins/:id/files',installed,active,(req,res)=>res.json({files:scopedFiles(req.plugin.id,req.pluginScope).map(({file_key,...f})=>f)}));
   app.post('/api/plugins/:id/files',installed,active,upload.single('file'),async(req,res)=>{
     let target,committed=false;
     try{
@@ -81,15 +117,15 @@ export function registerLocalPlugins({app,db,admin,authenticate,dataDir,pluginsD
       const digest=await fileDigest(req.file.path);if(!digest.bytes)throw fail(400,'不能挂载空附件');
       const id=randomUUID(),file_key='plugin-'+id;target=join(dataDir,'media',file_key);
       await mkdir(join(dataDir,'media'),{recursive:true});await rename(req.file.path,target);
-      if(!enabled(req.plugin.id))throw fail(409,'插件已停用，未添加附件');
+      if(!available(req.plugin.id,req.pluginScope))throw fail(409,'插件已停用，未添加附件');
       const files=pluginFiles(db,req.plugin.id);if(files.length>=10000)throw fail(413,'插件附件数量已达上限');
-      const row={id,file_key,name:filenameText(req.file.originalname).slice(0,240),...digest,created_at:new Date().toISOString()};
+      const row={id,file_key,name:filenameText(req.file.originalname).slice(0,240),...digest,...(req.pluginScope===undefined?{}:{collection_id:req.pluginScope==='unfiled'?null:req.pluginScope}),created_at:new Date().toISOString()};
       files.push(row);put('plugin.files:'+req.plugin.id,JSON.stringify(files));committed=true;
       res.status(201).json({...row,file_key:undefined});
     }finally{if(req.file)await unlink(req.file.path).catch(()=>{});if(target&&!committed)await unlink(target).catch(()=>{});}
   });
   app.get('/api/plugins/:id/files/:file',installed,active,(req,res)=>{
-    const row=pluginFiles(db,req.plugin.id).find(f=>f.id===req.params.file);if(!row)throw fail(404,'附件不存在');
+    const row=scopedFiles(req.plugin.id,req.pluginScope).find(f=>f.id===req.params.file);if(!row)throw fail(404,'附件不存在');
     res.type('application/octet-stream').attachment(row.name).sendFile(resolve(dataDir,'media',row.file_key));
   });
   app.use('/local-plugins',authenticate);

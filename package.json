@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
+    "@radix-ui/react-select": "2.4.1",
     "ag-psd": "31.0.2",
     "archiver": "^7.0.1",
     "express": "^5.1.0",

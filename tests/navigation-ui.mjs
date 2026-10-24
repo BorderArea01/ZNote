@@ -29,7 +29,7 @@ try{
   const click=l=>touch?l.tap():l.click();const openNav=async()=>{if(touch&&!await page.locator('.sidebar-shade').isVisible())await click(page.getByRole('button',{name:'打开导航',exact:true}));};const closeNav=async()=>{if(touch&&await page.locator('.sidebar-shade').isVisible())await page.locator('.sidebar-shade').tap({position:{x:370,y:420}});};
   await page.goto(base);await openNav();await click(page.locator('.collections-nav').getByRole('button',{name:new RegExp('^'+library.name)}));await page.locator('.item-card').first().waitFor();await openNav();
   assert.equal(await page.getByRole('button',{name:'管理自定义相册',exact:true}).count(),0);assert.equal(await page.getByRole('combobox',{name:'选择收藏分区',exact:true}).count(),0);
-  const plugin=page.locator('.local-plugin-nav').getByRole('button').first();
+  assert.equal(await page.locator('.local-plugin-nav').count(),0);const plugin=page.getByRole('button',{name:'管理知识库插件',exact:true});
   assert.equal(await page.getByRole('region',{name:'侧栏多标签筛选',exact:true}).count(),0);
   const entry=await plugin.boundingBox();assert.ok(entry.y+entry.height<(touch?844:1000));
   await page.screenshot({path:join(dir,(touch?'touch':'desktop')+'-sidebar.png')});await closeNav();
