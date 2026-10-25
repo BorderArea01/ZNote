@@ -22,18 +22,22 @@ try{
   await worker.evaluate(config=>chrome.storage.local.set(config),{server:base,token:token.token});
   await context.route('https://gallery.example/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html style="background:#123456"><body style="margin:0;height:100vh;background:#123456;color:white"><main style="padding:30px">继续浏览 · 普通网站作品</main></body></html>'}));
   const page=await context.newPage();await page.goto(source);const tools=page.locator('[data-znote-page-tools]'),click=locator=>touch?locator.tap():locator.click(),more=tools.getByRole('button',{name:'更多采集方式'});
-  await tools.getByRole('button',{name:'采集当前作品',exact:true}).waitFor();await click(more);
+  const expandTools=async()=>{const tab=tools.getByRole('button',{name:/^展开 ZNote 采集工具/});if(await tab.isVisible())await click(tab)};
+  const waitSavedFeedback=async()=>{await page.waitForFunction(()=>document.querySelector('[data-znote-page-tools]')?.shadowRoot.querySelector('.feedback span')?.textContent.includes('图片组已入库'));await expandTools();await tools.getByRole('status').filter({hasText:'图片组已入库'}).waitFor()};
+  await tools.getByRole('button',{name:/^展开 ZNote 采集工具/}).waitFor();await expandTools();await tools.getByRole('button',{name:'采集当前作品',exact:true}).waitFor();await click(more);
   await tools.getByRole('combobox',{name:'目标知识库'}).selectOption(collection.id);await page.waitForFunction(id=>{const s=document.querySelector('[data-znote-page-tools]')?.shadowRoot.querySelector('select');return s&&!s.disabled&&s.value===id;},collection.id);assert.equal((await worker.evaluate(()=>chrome.storage.local.get('collection_id'))).collection_id,collection.id);
   for(const label of ['框选截图','可见页面截图','保存页面正文','解析作品视频','前往知识库','扩展设置'])await tools.getByRole('button',{name:label,exact:true}).waitFor();
   const hint=tools.getByRole('button',{name:'页面采集说明'});await click(hint);await page.waitForTimeout(180);assert.equal(await hint.getAttribute('aria-expanded'),'true');await page.screenshot({path:join(dir,`menu-${touch?'touch':'desktop'}.png`)});
-  await page.keyboard.press('Escape');assert.equal(await more.getAttribute('aria-expanded'),'false');
+  await page.keyboard.press('Escape');assert.equal(await tools.locator('.more').getAttribute('aria-expanded'),'false');
+  await expandTools();
   await tools.getByRole('button',{name:'采集当前作品',exact:true}).evaluate(button=>button.click());await page.waitForTimeout(150);assert.equal((await worker.evaluate(()=>chrome.storage.local.get('lastCapture'))).lastCapture,undefined,'website synthetic clicks cannot start collection');
   const drag=tools.getByRole('button',{name:'拖动采集工具栏'}),before=await tools.boundingBox();
   if(touch){const cd=await context.newCDPSession(page),a=await drag.boundingBox();await cd.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:a.x+a.width/2,y:a.y+a.height/2}]});await cd.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:20,y:160}]});await cd.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cd.detach();}
   else{const a=await drag.boundingBox();await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(20,160);await page.mouse.up();}
   assert.ok((await tools.boundingBox()).y<before.y-100);await page.waitForTimeout(120);assert.ok((await worker.evaluate(()=>chrome.storage.local.get('pageToolsPosition'))).pageToolsPosition);
+  await expandTools();
   const anchor=await tools.boundingBox();await click(more);await page.waitForTimeout(60);await click(more);await page.waitForTimeout(60);const collapsed=await tools.boundingBox();assert.ok(Math.abs(anchor.x-collapsed.x)<1&&Math.abs(anchor.y-collapsed.y)<1,'menu growth cannot permanently move the chosen position');
-  await page.reload();await tools.getByRole('button',{name:'采集当前作品',exact:true}).waitFor();assert.ok((await tools.boundingBox()).y<250,'position survives refresh');
+  await page.reload();await tools.getByRole('button',{name:/^展开 ZNote 采集工具/}).waitFor();await expandTools();await tools.getByRole('button',{name:'采集当前作品',exact:true}).waitFor();assert.ok((await tools.boundingBox()).y<250,'position survives refresh');
   await click(more);await tools.getByRole('combobox',{name:'目标知识库'}).selectOption(collection.id);await click(tools.getByRole('button',{name:'框选截图',exact:true}));
   const region=page.locator('#znote-region-capture');await region.waitFor();assert.equal(await tools.locator('.tools').isHidden(),true);
   await page.mouse.move(100,180);await page.mouse.down();await page.mouse.move(260,300);await page.mouse.up();await click(region.getByRole('button',{name:'保存截图',exact:true}));
@@ -46,8 +50,8 @@ try{
   await click(popup.locator('#capture-region'));await region.waitFor();await popup.waitForFunction(()=>globalThis.__popupClosed===true);await popup.close();await page.bringToFront();await click(region.getByRole('button',{name:'取消',exact:true}));await region.waitFor({state:'hidden'});
   await click(tools.getByRole('button',{name:'采集当前作品',exact:true}));await tools.getByRole('status').filter({hasText:/正在读取分享内容|正在保存配图/}).waitFor();await tools.locator('progress:visible').waitFor();
   await tools.getByRole('status').filter({hasText:'正在保存配图 2/2'}).waitFor();await page.screenshot({path:join(dir,`progress-${touch?'touch':'desktop'}.png`)});
-  await tools.getByRole('status').filter({hasText:'图片组已入库'}).waitFor();assert.equal(page.url(),source);assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE collection_id=? AND group_key IS NOT NULL").get(collection.id).n,2);
-  await click(more);await click(tools.getByRole('button',{name:'粘贴作品链接',exact:true}));await tools.getByRole('textbox',{name:'作品链接或分享文字'}).fill(source);await click(tools.getByRole('button',{name:'采集链接中的作品',exact:true}));await tools.getByRole('status').filter({hasText:'图片组已入库'}).waitFor();assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE collection_id=? AND group_key IS NOT NULL").get(collection.id).n,2,'pasted link deduplicates against current work');
+  await waitSavedFeedback();assert.equal(page.url(),source);assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE collection_id=? AND group_key IS NOT NULL").get(collection.id).n,2);
+  await click(more);await click(tools.getByRole('button',{name:'粘贴作品链接',exact:true}));await tools.getByRole('textbox',{name:'作品链接或分享文字'}).fill(source);await click(tools.getByRole('button',{name:'采集链接中的作品',exact:true}));await waitSavedFeedback();assert.equal(runtime.db.prepare("SELECT count(*) n FROM items WHERE collection_id=? AND group_key IS NOT NULL").get(collection.id).n,2,'pasted link deduplicates against current work');
   await click(tools.getByRole('button',{name:'关闭采集提示'}));assert.equal(await tools.getByRole('status').isHidden(),true);
   await worker.evaluate(()=>chrome.storage.local.set({blockedSites:['gallery.example']}));await tools.locator('.tools').waitFor({state:'hidden'});await worker.evaluate(()=>chrome.storage.local.set({blockedSites:[]}));await tools.locator('.tools').waitFor();
   await worker.evaluate(()=>chrome.storage.local.set({token:''}));await click(more);await click(tools.getByRole('button',{name:'可见页面截图'}));await tools.getByRole('status').filter({hasText:'令牌'}).waitFor();assert.equal(await tools.locator('.tools').isVisible(),true);

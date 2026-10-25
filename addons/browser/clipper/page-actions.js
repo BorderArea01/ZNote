@@ -11,8 +11,8 @@ export async function pageAction(message, sender) {
   if (message.type === 'page-tools-position') {
     if (message.position !== undefined) {
       const p=message.position;
-      if(!p || ![p.x,p.y].every(n=>Number.isFinite(n)&&n>=0&&n<=100000))throw Error('工具栏位置无效');
-      await chrome.storage.local.set({pageToolsPosition:{x:p.x,y:p.y}});
+      if(!p || ![p.x,p.y].every(n=>Number.isFinite(n)&&n>=0&&n<=100000)||p.edge!=null&&!['left','right'].includes(p.edge))throw Error('工具栏位置无效');
+      await chrome.storage.local.set({pageToolsPosition:{x:p.x,y:p.y,edge:p.edge??null}});
     }
     return {position:(await chrome.storage.local.get('pageToolsPosition')).pageToolsPosition};
   }
