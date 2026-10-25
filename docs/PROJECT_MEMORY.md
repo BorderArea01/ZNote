@@ -3,6 +3,14 @@
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
 
+## 角色设定集 A＋B 双视图（2026-10-25，用户已选定并部署）
+
+- 用户看过四版方案后明确选择“第一第二种都不错，可以都采纳，然后可切换”。正式私人插件1.2.0采用 A 分区画廊与 B 角色档案；顶部切换，不能重新退回仅演示/待选状态，也不能擅自替换成C/D。A按分栏纵向分区、响应式卡片网格；B桌面为分栏目录＋角色列表＋就地档案，手机列表→档案→返回。公开虚构资料演示保留在 https://znote-capture-inbox.pages.dev/design/character-layouts/ ，选型说明 docs/design/character-layouts/README.md。
+- 两种视图共用原作品/角色/分栏/排序/素材/附件与保存逻辑，不复制或重新导入；保留原知识库启停归属。切换保留当前作品、搜索、分栏筛选与角色；localStorage按知识库记忆视图，按知识库＋作品记忆角色焦点。筛选排除当前档案时显示提示及清除筛选，不能静默跳角色。档案列表自动滚到当前角色，上传或关系编辑期间锁定视图/列表切换，提供取消恢复。
+- 私人源码、构建、样式、验收继续全部集中被Git忽略的 plugins/character-studio/，不强制提交。CharacterViews.jsx与views.css复用原CharacterDetail；原HelpHint/Select/草稿/CAS保留。画廊滚动区域及卡片同时设scroll-padding/scroll-margin，键盘焦点滚动后仍保留外框；仅fine指针轻微悬停抬升，减少动态效果时停用。
+- 192MiB受控私人生产构建通过，当前3741扫描为1.2.0；所有白名单文件与实际响应逐字节一致，主资产仍index-BttyyFfS.js/index-DvAVnJAr.css，无后端重启或APK更新。真实实例双视图桌面/390触屏覆盖共享保存、筛选/焦点、重开记忆、图组引用/原件返回、附件、关系、草稿、409保留并重试、503重新加载、320边界和减少动画，证据 artifacts/character-studio/dual-1792916459670/result.json。原完整画廊工作流（桌面拖放/手机上下排序、分栏、自定义字段、封面、启停等）回归通过，证据 artifacts/character-studio/live-verified.json。
+- 已对用户现有12张生肖卡只读检查两种真实布局、末卡打开/返回、键盘外框、短窗口与320/390触屏边界，禁止写请求并逐字比对角色状态与PIN未变；截图已目视。证据 artifacts/character-studio/existing-views-1792916447956/result.json。最终只保留用户一个scope、12卡，其他知识库/未分类默认关闭，无临时附件和测试库；部署核对 artifacts/character-studio/deployed-final.json。没有荣耀真机实测，不把触屏模拟称作真机通过。关闭重开角色插件加载新界面即可。
+
 ## Mangapill 漫画章节采集（2026-10-25）
 
 - 用户提供的 Mangapill /chapters/9552-10001000/...-chapter-1 真实有74页；原通用Readability遗漏data-src懒加载图片，不能把无配图文字保存当作整章成功。server/capture-comic.js扩展现有章节解析，只取chapter-page内picture img.js-page，优先data-src，保留DOM阅读顺序和完整URL，核对每页page i/N计数、缺图/重图/地址协议，单章最高200页；缺页明确失败，不跟随下一章、不收广告/目录封面。默认图片组，章节名、页数和出处进入备注。
