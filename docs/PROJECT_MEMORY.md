@@ -3,6 +3,16 @@
 这份文件记录跨会话仍然有效的产品要求、用户偏好和容易回归的问题。它不是临时任务清单；完成具体任务后仍要回到真实运行实例验证。
 
 
+## 手机公网采集第一次失败的 DNS 修复（2026-10-27，已部署）
+
+- 用户反馈采用Cloudflare后，手机首采常失败、再次才成功。已核对真实云队列、本机mobile_captures_v1和server.stderr.log：近期四条抖音/小红书/B站失败都正常入云并被开发机领取，实际错误分别是getaddrinfo ENOTFOUND www.iesdouyin.com、b23.tv、xhslink.cn、www.bilibili.com。连接器日志另有ECONNRESET，下一轮恢复且保留任务，不能把它当作这些平台任务失败的直接原因；也不能无证据声称手机提交失败或Cloudflare丢单。
+- 新server/capture-dns.js统一网页、图片、视频及配乐解析。仅对ENOTFOUND/EAI_AGAIN/解析超时等DNS错误最多尝试三次，间隔300/900ms，每次等待最多4秒；取消立即结束等待并忽略迟到结果。原任务继续运行，不新建分享、不重新投递写请求、不重复入库；私网地址检查、全部地址验证和每次跳转的直连固定地址保留。持续失败返回明确DNS错误，认证、404、平台验证、封禁和文件大小不靠无差别重试掩盖。没有更改系统DNS、代理、网络连接或EasyTier。
+- 53项不重复的DNS/图片传输/代理/采集平台/云队列/租约与漫画边界检查通过（DNS本身11项，含首次失败恢复、持续失败有界、取消、迟到拒绝、私网拒绝、403不重试、原任务单次入库）。日志artifacts/albums/capture-dns-regression.log、capture-dns-platform-regression.log、capture-dns-final-regression.log。384MiB受控生产构建通过，主前端资产仍index-BttyyFfS.js/index-DvAVnJAr.css。
+- 确认无采集/导出/导入/备份在途后，经原ZNote-Server计划任务重启3741至PID306732，监听0.0.0.0；原Cloudflare连接器仍运行。未改Android或云协议，既有beta.23直接使用服务端修复，无需重装APK或重新配对。
+- tests/cloudflare-inbox-live.mjs --live --source-job=274e82b8-6853-4e21-a4f8-7da81b55ea50仅复制这条原DNS失败分享链接到自身临时库，真实Pages→原连接器→当前3741完成网页提交与Android设备令牌协议提交，共2张真实图片，并核对首张原文件hash一致；桌面/390触屏看到本轮自己的completed结果，截图已目视。证据artifacts/cloudflare-inbox-live-2gYTP3/result.json。当前真实DNS在测试时可达，首次故障恢复由显式单测注入；无荣耀手机现场操作，不能把协议/触屏验证称作真机验收。
+- 临时本地/云任务、库、媒体、授权全部精确清理；原四库、PIN与12角色资料哈希保持。用户在修复期间另提交了一条真实小红书视频，云任务51da15ff-5361-49f4-ac15-9796e233f7bf已completed，新增3762904字节原件完整保留，所以最终资源数17200而非更新前17199，不能为让计数相等删除这条用户内容。历史失败记录未擅自重投，避免与用户后来的成功采集重复。最终核对artifacts/capture-dns-deployed.json，收件器空闲、两端health正常。
+- 真实云验收必须等待自己POST /api/captures的202响应，记录自己任务ID/目标库，并等待本轮对应行完成；已有用户任务时，“页面出现任意job/任意completed”会产生竞态与虚假通过。失败清理需按自己目标库查漏云记录，不能只依赖尚未收到的提交响应；首轮脚本遗留的唯一测试失败云记录已按确切ID/临时库/时间核对后清理。源码在tests/cloudflare-inbox-live.mjs保留修正。
+
 ## 浏览器采集入口靠边缩小（2026-10-25，扩展0.9.41）
 
 - 用户要求浏览器页面上的常驻采集入口平时靠边缩小，减少遮挡。复用page-tools.js统一入口，不增加第二个浮窗：默认左右边缘24×48px的Z页签，点击展开；拖动页签或把手、靠边松手吸附收起，展开时可自由移动。缩小后也可沿边上下拖动；离边拖动中用完整圆角，取消拖动恢复原锚点。原pageToolsPosition扩展可选edge，兼容旧x/y并校验合法方向，不新开权限或重置设置。

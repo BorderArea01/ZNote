@@ -1,4 +1,4 @@
-import {lookup} from 'node:dns/promises';
+import {resolveCaptureHost} from './capture-dns.js';
 import {isIP} from 'node:net';
 import {request as httpRequest} from 'node:http';
 import {request as httpsRequest} from 'node:https';
@@ -17,7 +17,7 @@ const fail=message=>Object.assign(Error(message),{status:422});
 async function transfer(value,path,source,signal,redirects=0,{maxBytes=MAX_VIDEO_BYTES,label='视频'}={}){
   const url=new URL(value),host=url.hostname.replace(/^\[|\]$/g,'');
   if(!/^https?:$/.test(url.protocol)||url.username||url.password||url.port&&!['80','443'].includes(url.port))throw fail(label+'资源地址无效');
-  const addresses=isIP(host)?[{address:host,family:isIP(host)}]:await lookup(host,{all:true});
+  const addresses=isIP(host)?[{address:host,family:isIP(host)}]:await resolveCaptureHost(host,{signal});
   if(!addresses.length||addresses.some(v=>!publicAddress(v.address)))throw fail('不能采集本机或内网'+label);
   signal.throwIfAborted();const target=addresses[0];
   const response=await new Promise((resolve,reject)=>{

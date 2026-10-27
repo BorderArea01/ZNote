@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises';
+import {createCaptureHostResolver} from './capture-dns.js';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
@@ -16,6 +17,7 @@ export function publicAddress(address) {
 }
 const transient=error=>['ETIMEDOUT','ECONNREFUSED','ECONNRESET','EAI_AGAIN','ENETUNREACH','EHOSTUNREACH','IMAGE_DOWNLOAD_TIMEOUT','IMAGE_BODY_INCOMPLETE','IMAGE_HTTP_502','IMAGE_HTTP_503','IMAGE_HTTP_504'].includes(error?.code);
 export function createRemoteImageFetcher({lookup:resolveAddresses=lookup,request:requestOverride,proxyAgent:getAgent=proxyAgent,resetProxyCache:refreshProxy=resetProxyCache,timeoutMs=15000}={}) {
+const resolveHost=createCaptureHostResolver({lookup:resolveAddresses});
 async function once(value, redirects) {
   if(value.startsWith('data:image/')) {
     const m=/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(value);
@@ -25,7 +27,7 @@ async function once(value, redirects) {
   const url=new URL(value);
   ehPolicy.check(value);
   if(!['http:','https:'].includes(url.protocol)||url.username||url.password) throw Error('图片地址无效');
-  const host=url.hostname.replace(/^\[|\]$/g,''), addresses=isIP(host)?[{address:host,family:isIP(host)}]:await resolveAddresses(host,{all:true});
+  const host=url.hostname.replace(/^\[|\]$/g,''), addresses=isIP(host)?[{address:host,family:isIP(host)}]:await resolveHost(host);
   if(!addresses.length || addresses.some(v=>!publicAddress(v.address))) throw Error('服务器不能采集本机或内网图片地址，请通过上传归档');
   const target=addresses[0];
   return new Promise((resolve,reject)=>{

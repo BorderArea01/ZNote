@@ -1,4 +1,4 @@
-import { lookup } from 'node:dns/promises';
+import { resolveCaptureHost } from './capture-dns.js';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
@@ -23,17 +23,18 @@ const PIXIV_HOST = /^(?:www\.)?pixiv\.net$/i;
 const BILIBILI_HOST = /(?:^|\.)bilibili\.com$|(?:^|\.)b23\.tv$/i;
 const BILIBILI_IMAGE_HOST = /(?:^|\.)hdslb\.com$|(?:^|\.)bilivideo\.com$|(?:^|\.)bilibili\.com$/i;
 
+export function createCaptureDocumentFetcher({resolveHost=resolveCaptureHost,request:requestOverride,proxyAgent:getAgent=proxyAgent,timeoutMs=20000}={}){
 async function fetchDocument(value, signal, redirects = 0, extra = {}) {
   const url = new URL(value), host = url.hostname.replace(/^\[|\]$/g, '');
   ehPolicy.check(value);
   if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.port && !['80','443'].includes(url.port)) throw fail('仅支持公开网页的 HTTP(S) 链接');
   signal.throwIfAborted();
-  const addresses = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true });
+  const addresses = isIP(host) ? [{ address: host, family: isIP(host) }] : await resolveHost(host,{signal});
   if (!addresses.length || addresses.some(v => !publicAddress(v.address))) throw fail('不能采集本机或内网地址');
   signal.throwIfAborted();
   const target = addresses[0];
   return new Promise((resolve, reject) => {
-    const agent = proxyAgent();
+    const agent = getAgent();
     const headers = {
       'User-Agent': extra.userAgent || 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36',
       Accept: extra.accept || 'text/html,image/*',
@@ -43,7 +44,7 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
       ...(extra.ehSession?.origin===url.origin && extra.ehSession.cookie ? {Cookie:extra.ehSession.cookie} : {}),
     };
     const options = { signal, headers, ...(extra.body ? {method:'POST'} : {}), ...(agent ? { agent } : { lookup: (_host, lookupOptions, cb) => lookupOptions.all ? cb(null, [target]) : cb(null, target.address, target.family) }) };
-    const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, options, res => {
+    const req = (requestOverride || (url.protocol === 'https:' ? httpsRequest : httpRequest))(url, options, res => {
       if ([301,302,303,307,308].includes(res.statusCode)) {
         res.resume();
         if (redirects >= 5 || !res.headers.location) return reject(fail('分享链接跳转过多'));
@@ -64,10 +65,13 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
       res.on('data', chunk => { size += chunk.length; if (size > limit) { res.destroy(); reject(fail('页面或图片超过采集大小上限')); } else chunks.push(chunk); });
       res.on('end', () => {const buffer=Buffer.concat(chunks),blocked=ehPolicy.response(url.href,buffer);if(blocked)reject(blocked);else resolve({ url: url.href, type, buffer });}); res.on('error', reject);
     });
-    const timer = setTimeout(() => req.destroy(fail('网页读取超时，请重试')), 20000);
+    const timer = setTimeout(() => req.destroy(fail('网页读取超时，请重试')), timeoutMs);
     req.on('close', () => clearTimeout(timer)); req.on('error', reject); req.end(extra.body);
   });
 }
+return fetchDocument;
+}
+const fetchDocument=createCaptureDocumentFetcher();
 
 export async function fetchCapturePage(value, signal, redirects = 0, options = {}) {
   const url = new URL(value);
