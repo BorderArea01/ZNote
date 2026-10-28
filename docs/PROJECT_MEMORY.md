@@ -13,6 +13,7 @@
 - 本地受控离线构建release/debug/测试APK与lint通过（512MiB堆/单worker/无持久daemon），原签名与10024核对；隔离Android30原签名beta.23→beta.24覆盖升级保留安装权限。原生触屏覆盖6dp启动/2dp点击、拖动取消/左右吸附、选库/关闭/帮助/空输入、后台成功失败与浏览入口、1.3字体、真实IME窗口与横屏固定操作区，截图逐张目视。最终拖动MOVE到绘制24/16/51ms；不等于荣耀真机输入延迟。证据 artifacts/android-overlay-local-YrkDXm/。
 - 局域网/远程分享采集回归通过：各提交一次、真实隔离服务落盘一张、LAN阶段零云请求、超时/授权失效/恢复和凭据隔离；证据 artifacts/android-route-local-qQtmPS/，credentialLeaks=0。Android30首次包替换广播可能在启用测试无障碍后又解绑服务；验收夹具先等待am wait-for-broadcast-idle，保留系统事件诊断，不为测试竞态修改产品权限。
 - 当前3741服务仍为原PID306732、health正常，无需重启知识库/连接器；没有操作真实手机或任何网络/EasyTier。发布继续使用本机原签名APK、递增版本、GitHub Release与Pages固定下载入口，交付前核对远端提交和公开APK哈希。荣耀Android15真机手感/系统键盘仍未代验。
+- beta.24已发布：原签名versionCode10024，源码提交1ca9404，GitHub手机更新REST目录已可见；Pages正式域名APK与源码ZIP逐字节核对通过（artifacts/cloudflare-release-live-4v7EnB/），APK SHA256 a680a6a1ab9a29be11c9f3f6c1145d5563d2d57cffb52f44e854772f398f3a7e。Pages Worker哈希与更新前一致，原D1采集队列/连接器仍运行。
 
 ## 手机公网采集第一次失败的 DNS 修复（2026-10-27，已部署）
 
