@@ -30,19 +30,43 @@ public class ShareActivity extends Activity {
     private TextView status;
     private Button save;
     private Button login;
+    private View modeSection,linkHeading;
+    private boolean keyboardOpen;
     private boolean busy=false,visible=false,ready=false,completed=false,quickSave=false,autoShare=false;
     private boolean clipboardPending,clipboardFeedback;
     private int clipboardAttempts;
     private final ClipboardManager.OnPrimaryClipChangedListener clipboardListener=()->{if(clipboardPending&&hasWindowFocus())handler.post(this::readClipboard);};
     private void timing(String event){String detail="launch_ms="+Math.max(0,SystemClock.elapsedRealtime()-getIntent().getLongExtra("panel_requested_at",SystemClock.elapsedRealtime()));if(CaptureAssistService.current!=null)CaptureAssistService.current.record(event,detail);else android.util.Log.i("ZNoteCapture",event+" "+detail);}
     private boolean floating(){return this instanceof FloatingShareActivity;}
-    private void resizePanel(){if(floating()){WindowManager.LayoutParams p=getWindow().getAttributes();p.width=Math.min(dp(350),getResources().getDisplayMetrics().widthPixels-dp(24));p.height=Math.min(dp(quickSave?210:560),getResources().getDisplayMetrics().heightPixels-dp(100));p.x=0;p.y=0;getWindow().setAttributes(p);}}
+    private void resizePanel(){if(floating()){WindowManager.LayoutParams p=getWindow().getAttributes();p.width=Math.min(dp(316),getResources().getDisplayMetrics().widthPixels-dp(24));p.height=WindowManager.LayoutParams.WRAP_CONTENT;p.x=0;p.y=0;getWindow().setAttributes(p);}}
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);resizePanel();}
     private int uploaded=0;
     private SharedPreferences preferences(){return getSharedPreferences("CaptureSharing",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private TextView label(String value,int size){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(0xffe7ebf5);v.setPadding(0,dp(floating()?6:12),0,dp(floating()?6:10));return v;}
     private Button button(String value,Runnable click){return NativeUi.button(this,value,click);}
+    private ArrayAdapter<String> choices(List<String> values){
+        return new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,values){
+            @Override public View getView(int p,View v,ViewGroup parent){TextView t=(TextView)super.getView(p,v,parent);t.setTextColor(CaptureVisuals.INK);t.setTextSize(13);t.setSingleLine(true);t.setEllipsize(android.text.TextUtils.TruncateAt.END);t.setPadding(0,0,dp(6),0);return t;}
+            @Override public View getDropDownView(int p,View v,ViewGroup parent){TextView t=(TextView)super.getDropDownView(p,v,parent);t.setTextColor(CaptureVisuals.INK);t.setTextSize(14);t.setPadding(dp(16),dp(12),dp(16),dp(12));t.setMinHeight(dp(48));t.setBackgroundColor(CaptureVisuals.FIELD);return t;}
+        };
+    }
+    private View picker(LinearLayout root,String title,Spinner spinner){
+        LinearLayout section=new LinearLayout(this);section.setOrientation(LinearLayout.VERTICAL);root.addView(section);
+        TextView heading=label(title,12);heading.setTextColor(CaptureVisuals.MUTED);heading.setPadding(dp(2),dp(14),0,dp(6));section.addView(heading);
+        LinearLayout field=new LinearLayout(this);field.setGravity(Gravity.CENTER_VERTICAL);field.setPadding(dp(12),0,dp(12),0);field.setBackground(NativeUi.shape(this,CaptureVisuals.FIELD,10));
+        spinner.setBackground(null);spinner.setPopupBackgroundDrawable(NativeUi.shape(this,CaptureVisuals.FIELD,10));field.addView(spinner,new LinearLayout.LayoutParams(0,dp(44),1));
+        View arrow=new View(this);arrow.setBackground(CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,14));arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);arrow.setOnClickListener(v->spinner.performClick());field.addView(arrow,new LinearLayout.LayoutParams(dp(14),dp(14)));section.addView(field);
+        spinner.setContentDescription(title);
+        return section;
+    }
+    private void keyboard(boolean open){
+        if(!floating()||text==null||keyboardOpen==open)return;keyboardOpen=open;
+        if(modeSection!=null)modeSection.setVisibility(open?View.GONE:View.VISIBLE);
+        if(linkHeading!=null)linkHeading.setVisibility(open?View.GONE:View.VISIBLE);
+        text.setMinLines(open?1:2);text.setMaxLines(open?2:4);
+        if(status!=null){status.setMaxLines(open?2:3);status.setEllipsize(open?android.text.TextUtils.TruncateAt.END:null);}
+    }
     @Override public void onCreate(Bundle state){
         if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);timing("panel_create");
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");submissionOrigin=state.getString("submissionOrigin","");uploaded=state.getInt("uploaded",0);}
@@ -53,40 +77,53 @@ public class ShareActivity extends Activity {
         }catch(Exception ignored){files.clear();}
         autoShare=state==null&&CaptureAssistService.current!=null&&CaptureAssistService.current.consumeDirectShare(intent,shared,!files.isEmpty());
         quickSave=(floating()&&intent.getBooleanExtra("quick_save",false))||autoShare;clipboardPending=floating()&&intent.getBooleanExtra("read_clipboard",false)&&state==null;
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff161b28);root.setPadding(dp(24),dp(24),dp(24),dp(20));
-        root.setOnApplyWindowInsetsListener((v,i)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets s=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(24)+s.left,dp(24)+s.top,dp(24)+s.right,dp(20)+s.bottom);}return i;});
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
+        LinearLayout chrome=new LinearLayout(this){@Override protected void onMeasure(int w,int h){if(floating()){int available=getResources().getDisplayMetrics().heightPixels-dp(72);if(View.MeasureSpec.getMode(h)!=View.MeasureSpec.UNSPECIFIED)available=Math.min(available,View.MeasureSpec.getSize(h));h=View.MeasureSpec.makeMeasureSpec(Math.max(1,available),View.MeasureSpec.AT_MOST);}super.onMeasure(w,h);}};
+        chrome.setOrientation(LinearLayout.VERTICAL);chrome.setBackgroundColor(0xff161b28);chrome.setPadding(dp(24),dp(24),dp(24),dp(20));
+        chrome.setOnApplyWindowInsetsListener((v,i)->{if(Build.VERSION.SDK_INT>=30&&!floating()){android.graphics.Insets s=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(24)+s.left,dp(24)+s.top,dp(24)+s.right,dp(20)+s.bottom);}return i;});
+        // Only the form scrolls. Window resizing for the IME must keep the
+        // header and footer outside that scroll area, with save always visible.
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);scroll.addView(root);setContentView(chrome);
         if(floating()){
-            root.setPadding(dp(20),dp(16),dp(20),dp(16));root.setOnApplyWindowInsetsListener(null);
-            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xff191c27);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),0xff424b66);root.setBackground(bg);
+            chrome.setPadding(dp(15),dp(8),dp(15),dp(10));
+            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(CaptureVisuals.SURFACE);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),CaptureVisuals.BORDER);chrome.setBackground(bg);chrome.setClipToOutline(true);
             resizePanel();
             getWindow().setGravity(Gravity.CENTER);setFinishOnTouchOutside(false);
         }
-        TextView panelTitle=label(floating()?"保存到 ZNote":"保存到 ZNote",floating()?19:26);
+        TextView panelTitle=label("保存到 ZNote",floating()?14:26);panelTitle.setTypeface(null,android.graphics.Typeface.BOLD);panelTitle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",0xffa3b6a8,20),null,null,null);panelTitle.setCompoundDrawablePadding(dp(8));
         LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);titleRow.addView(panelTitle,new LinearLayout.LayoutParams(0,-2,1));
-        if(floating()){Button browse=button("去浏览",this::openLibrary);NativeUi.quiet(browse);browse.setTextSize(13);browse.setContentDescription("打开 ZNote 浏览知识库");LinearLayout.LayoutParams browseSpace=new LinearLayout.LayoutParams(dp(76),dp(48));browseSpace.setMargins(dp(6),0,dp(4),0);titleRow.addView(browse,browseSpace);}
-        {Button close=button("×",this::finish);NativeUi.quiet(close);close.setContentDescription("收起采集面板");titleRow.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));}root.addView(titleRow);
-        if(floating())panelTitle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;public boolean onTouch(View v,android.view.MotionEvent e){WindowManager.LayoutParams p=getWindow().getAttributes();if(e.getActionMasked()==MotionEvent.ACTION_DOWN){x=e.getRawX();y=e.getRawY();ox=p.x;oy=p.y;return true;}if(e.getActionMasked()==MotionEvent.ACTION_MOVE){int maxX=Math.max(0,(getResources().getDisplayMetrics().widthPixels-p.width)/2),maxY=Math.max(0,(getResources().getDisplayMetrics().heightPixels-p.height)/2);p.x=Math.max(-maxX,Math.min(maxX,ox+(int)(e.getRawX()-x)));p.y=Math.max(-maxY,Math.min(maxY,oy+(int)(e.getRawY()-y)));getWindow().setAttributes(p);return true;}return true;}});
+        {Button close=button("",this::finish);CaptureVisuals.action(close,"close",false);close.setPadding(dp(14),0,dp(14),0);close.setContentDescription("收起采集面板");titleRow.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));}chrome.addView(titleRow);chrome.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        if(floating())panelTitle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;public boolean onTouch(View v,android.view.MotionEvent e){WindowManager.LayoutParams p=getWindow().getAttributes();if(e.getActionMasked()==MotionEvent.ACTION_DOWN){x=e.getRawX();y=e.getRawY();ox=p.x;oy=p.y;return true;}if(e.getActionMasked()==MotionEvent.ACTION_MOVE){int maxX=Math.max(0,(getResources().getDisplayMetrics().widthPixels-getWindow().getDecorView().getWidth())/2-dp(12)),maxY=Math.max(0,(getResources().getDisplayMetrics().heightPixels-getWindow().getDecorView().getHeight())/2-dp(24));p.x=Math.max(-maxX,Math.min(maxX,ox+(int)(e.getRawX()-x)));p.y=Math.max(-maxY,Math.min(maxY,oy+(int)(e.getRawY()-y)));getWindow().setAttributes(p);return true;}return true;}});
         LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);LinearLayout.LayoutParams headingSpace=new LinearLayout.LayoutParams(-1,-2);headingSpace.setMargins(0,dp(8),0,dp(4));
-        if(floating()){Button clipboard=button(quickSave?"正在读取当前作品…":"读取剪贴板",()->{if(completed)nextCapture();getIntent().removeExtra("copied_after");getIntent().removeExtra("source_package");clipboardAttempts=0;clipboardPending=true;clipboardFeedback=false;status.setText("正在读取剪贴板…");readClipboard();});NativeUi.quiet(clipboard);LinearLayout.LayoutParams clipboardSpace=new LinearLayout.LayoutParams(0,dp(48),1);clipboardSpace.setMargins(0,0,dp(8),0);heading.addView(clipboard,clipboardSpace);}
-        else heading.addView(label(files.isEmpty()?"分享链接":"已接收 "+files.size()+" 个媒体文件",15),new LinearLayout.LayoutParams(0,-2,1));
-        Button help=button("?",()->new AlertDialog.Builder(this).setTitle("手机采集").setMessage("在任意 App 可用系统分享菜单，把链接、图片或视频直接发给 ZNote；悬浮入口也会尝试读取当前作品的分享链接。服务器负责下载正文、图片或视频。B 站图文动态（b23.tv 或 /opus/ 链接）会保存标题、正文、话题和配图。\n\n局域网保存需要手机能连接服务器。外出时可将链接发给微信 ClawBot，并在微信收件设置开启链接采集。平台要求登录或验证时，任务会保留失败原因。") .setPositiveButton("知道了",null).show());NativeUi.quiet(help);help.setContentDescription("手机采集说明");heading.addView(help,new LinearLayout.LayoutParams(dp(48),dp(48)));root.addView(heading,headingSpace);
-        if(floating()&&shared.trim().isEmpty()&&files.isEmpty()&&!quickSave){
+        heading.addView(label(files.isEmpty()?"作品链接":"已接收 "+files.size()+" 个媒体文件",12),new LinearLayout.LayoutParams(0,-2,1));
+        Button help=button("",()->new AlertDialog.Builder(this).setTitle("手机采集").setMessage("在任意 App 可用系统分享菜单，把链接、图片或视频直接发给 ZNote；悬浮入口也会尝试读取当前作品的分享链接。服务器负责下载正文、图片或视频。B 站图文动态（b23.tv 或 /opus/ 链接）会保存标题、正文、话题和配图。\n\n局域网保存需要手机能连接服务器。外出时可将链接发给微信 ClawBot，并在微信收件设置开启链接采集。平台要求登录或验证时，任务会保留失败原因。") .setPositiveButton("知道了",null).show());CaptureVisuals.action(help,"help",false);help.setPadding(dp(14),0,dp(14),0);help.setContentDescription("手机采集说明");heading.addView(help,new LinearLayout.LayoutParams(dp(44),dp(44)));root.addView(heading,headingSpace);linkHeading=heading;
+        if(!floating()&&shared.trim().isEmpty()&&files.isEmpty()&&!quickSave){
             LinearLayout empty=new LinearLayout(this);empty.setGravity(Gravity.CENTER_VERTICAL);empty.setPadding(dp(12),dp(10),dp(12),dp(10));empty.setBackground(NativeUi.shape(this,0xff20283a,16));
             TextView icon=label("↗",20);icon.setGravity(Gravity.CENTER);icon.setTextColor(0xffaebcff);icon.setBackground(NativeUi.shape(this,0xff303c5c,13));LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(40),dp(40));iconParams.setMargins(0,0,dp(12),0);empty.addView(icon,iconParams);
             LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);TextView title=label("链接还没带进来",14);title.setTypeface(null,android.graphics.Typeface.BOLD);TextView hint=label("也可从任意 App 的分享菜单直接发送",12);hint.setTextColor(0xffaab4ca);copy.addView(title);copy.addView(hint);empty.addView(copy,new LinearLayout.LayoutParams(0,-2,1));LinearLayout.LayoutParams emptyParams=new LinearLayout.LayoutParams(-1,-2);emptyParams.setMargins(0,dp(6),0,dp(8));root.addView(empty,emptyParams);emptyState=empty;
         }
-        text=new EditText(this);text.setTextColor(0xffe7ebf5);text.setHintTextColor(0xff929db5);text.setHint(files.isEmpty()?"作品链接或分享文案":"备注（可选）");text.setMinLines(floating()?2:3);text.setMaxLines(floating()?4:7);text.setPadding(dp(14),dp(12),dp(14),dp(12));text.setBackground(NativeUi.shape(this,0xff202532,14));text.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(16000)});text.setTextIsSelectable(true);text.setLongClickable(true);text.setText(shared);root.addView(text);
+        text=new EditText(this);text.setTextSize(14);text.setTextColor(CaptureVisuals.INK);text.setHintTextColor(CaptureVisuals.MUTED);text.setHint(files.isEmpty()?"作品链接或分享文案":"备注（可选）");text.setMinLines(floating()?2:3);text.setMaxLines(floating()?4:7);text.setGravity(Gravity.TOP|Gravity.START);text.setPadding(dp(12),dp(12),dp(12),dp(12));text.setBackgroundTintList(null);text.setBackground(NativeUi.shape(this,CaptureVisuals.FIELD,10));text.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(16000)});text.setTextIsSelectable(true);text.setLongClickable(true);text.setText(shared);root.addView(text);
         if(emptyState!=null)text.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){emptyState.setVisibility(s.toString().trim().isEmpty()?View.VISIBLE:View.GONE);}public void afterTextChanged(android.text.Editable e){}});
-        root.addView(label("目标知识库",15));collection=new Spinner(this);root.addView(collection,new LinearLayout.LayoutParams(-1,dp(52)));
+        collection=new Spinner(this,Spinner.MODE_DROPDOWN);collection.setAdapter(choices(Collections.singletonList("正在读取知识库…")));collection.setEnabled(false);picker(root,"目标知识库",collection);
         if(files.isEmpty()){
-            root.addView(label("图集保存方式",15));imageMode=new Spinner(this);
-            ArrayAdapter<String> modes=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,new String[]{"图片组 · 正文存备注","图文笔记 · 配图成组"}){@Override public View getView(int p,View v,ViewGroup parent){TextView label=(TextView)super.getView(p,v,parent);label.setTextColor(0xffe7ebf5);return label;}};modes.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);imageMode.setAdapter(modes);imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);root.addView(imageMode,new LinearLayout.LayoutParams(-1,dp(48)));
+            imageMode=new Spinner(this,Spinner.MODE_DROPDOWN);
+            ArrayAdapter<String> modes=choices(Arrays.asList("图片组 · 正文存备注","图文笔记 · 配图成组"));modes.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);imageMode.setAdapter(modes);imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);modeSection=picker(root,"图集保存方式",imageMode);
         }
-        save=button("保存到知识库",this::submit);NativeUi.primary(save);save.setEnabled(false);LinearLayout.LayoutParams saveSpace=new LinearLayout.LayoutParams(-1,dp(48));saveSpace.setMargins(0,dp(18),0,dp(6));root.addView(save,saveSpace);
-        status=label(clipboardPending?"正在读取刚复制的分享链接…":floating()&&shared.trim().isEmpty()&&files.isEmpty()?"添加作品链接后即可保存":"正在连接知识库…",14);status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);root.addView(status);
+        save=button("保存到知识库",this::submit);CaptureVisuals.action(save,"capture",true);save.setEnabled(false);LinearLayout.LayoutParams saveSpace=new LinearLayout.LayoutParams(-1,dp(48));saveSpace.setMargins(0,dp(16),0,dp(4));chrome.addView(save,saveSpace);
+        LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER_VERTICAL);
+        Button clipboard=button("读取剪贴板",()->{if(completed)nextCapture();getIntent().removeExtra("copied_after");getIntent().removeExtra("source_package");clipboardAttempts=0;clipboardPending=true;clipboardFeedback=false;status.setText("正在读取剪贴板…");readClipboard();});CaptureVisuals.action(clipboard,"paste",false);clipboard.setTextSize(11);clipboard.setPadding(dp(6),0,dp(4),0);actions.addView(clipboard,new LinearLayout.LayoutParams(0,dp(48),1));
+        View divider=new View(this);divider.setBackgroundColor(0xff3b465a);actions.addView(divider,new LinearLayout.LayoutParams(dp(1),dp(20)));
+        Button browse=button("前往知识库",this::openLibrary);CaptureVisuals.action(browse,"folder",false);browse.setTextSize(11);browse.setPadding(dp(6),0,dp(4),0);browse.setContentDescription("打开 ZNote 浏览知识库");actions.addView(browse,new LinearLayout.LayoutParams(0,dp(48),1));chrome.addView(actions);
+        status=label(clipboardPending?"正在读取刚复制的分享链接…":floating()&&shared.trim().isEmpty()&&files.isEmpty()?"添加作品链接后即可保存":"正在连接知识库…",12);status.setTextColor(CaptureVisuals.MUTED);status.setMaxLines(3);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);chrome.addView(status);
 
-        login=button("打开知识库 / 登录",()->startActivity(new Intent(this,MainActivity.class)));root.addView(login);login.setVisibility(View.GONE);
+        login=button("打开知识库 / 登录",()->startActivity(new Intent(this,MainActivity.class)));CaptureVisuals.action(login,"folder",false);chrome.addView(login);login.setVisibility(View.GONE);
+        if(floating())chrome.getViewTreeObserver().addOnGlobalLayoutListener(()->{
+            // Legacy floating Dialog windows may resize without reporting
+            // Type.ime visibility, even on API 30+. Use their visible frame too.
+            android.graphics.Rect available=new android.graphics.Rect();View decor=getWindow().getDecorView();decor.getWindowVisibleDisplayFrame(available);
+            WindowInsets insets=decor.getRootWindowInsets();boolean ime=Build.VERSION.SDK_INT>=30&&insets!=null&&insets.isVisible(WindowInsets.Type.ime());
+            keyboard(ime||getResources().getDisplayMetrics().heightPixels-available.bottom>dp(180));
+        });
     }
     private void openLibrary(){startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));}
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused)timing("panel_focus");if(focused&&clipboardPending)handler.post(this::readClipboard);}
@@ -133,7 +170,7 @@ public class ShareActivity extends Activity {
             JSONObject result=request("GET","/api/collections",null);JSONArray rows=result.optJSONArray("collections");
             if(rows==null)throw new IOException("知识库列表格式不正确，请更新服务器");
             ArrayList<String> names=new ArrayList<>(),ids=new ArrayList<>();names.add("未分类");ids.add("");for(int i=0;i<rows.length();i++){JSONObject c=rows.getJSONObject(i);names.add(c.getString("name"));ids.add(c.getString("id"));}
-            ui(()->{login.setVisibility(View.GONE);collectionIds.clear();collectionIds.addAll(ids);ArrayAdapter<String> adapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,names){@Override public View getView(int p,View view,android.view.ViewGroup parent){TextView v=(TextView)super.getView(p,view,parent);v.setTextColor(0xffe7ebf5);return v;}};adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);collection.setAdapter(adapter);String requested=getIntent().hasExtra("selected_collection")?getIntent().getStringExtra("selected_collection"):preferences().getString("share_collection","");int at=ids.indexOf(requested==null?"":requested);collection.setSelection(Math.max(0,at));if(at<0)quickSave=false;if(imageMode!=null)imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);ready=true;if(!jobId.isEmpty()){busy=true;save.setEnabled(false);poll();}else{save.setEnabled(true);if(!clipboardFeedback)status.setText(clipboardPending?"正在读取刚复制的分享链接…":at<0?"上次的知识库已不存在，请重新选择":quickSave?"已连接，正在准备后台保存…":"已连接 · "+routeLabel+"，保存后由服务器处理");maybeQuickSave();}});
+            ui(()->{login.setVisibility(View.GONE);collectionIds.clear();collectionIds.addAll(ids);ArrayAdapter<String> adapter=choices(names);adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);collection.setAdapter(adapter);collection.setEnabled(!busy);String requested=getIntent().hasExtra("selected_collection")?getIntent().getStringExtra("selected_collection"):preferences().getString("share_collection","");int at=ids.indexOf(requested==null?"":requested);collection.setSelection(Math.max(0,at));if(at<0)quickSave=false;if(imageMode!=null)imageMode.setSelection(preferences().getBoolean("capture_as_note",false)?1:0);ready=true;if(!jobId.isEmpty()){busy=true;save.setEnabled(false);poll();}else{save.setEnabled(true);if(!clipboardFeedback)status.setText(clipboardPending?"正在读取刚复制的分享链接…":at<0?"上次的知识库已不存在，请重新选择":quickSave?"已连接，正在准备后台保存…":"已连接 · "+routeLabel+"，保存后由服务器处理");maybeQuickSave();}});
         }catch(Exception e){ui(()->{login.setVisibility(View.VISIBLE);status.setText(e.getMessage());});}});
     }
     private void submit(){
@@ -160,7 +197,7 @@ public class ShareActivity extends Activity {
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}
                 ui(()->{String message="已保存 "+files.size()+" 个媒体文件";if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(true,message);Toast.makeText(this,message,Toast.LENGTH_SHORT).show();finish();}else saved(message+"，可返回原 App");});
             }
-        }catch(Exception e){ui(()->{if(e instanceof CaptureLoginRequired)login.setVisibility(View.VISIBLE);String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);status.setText(message);});}});
+        }catch(Exception e){ui(()->{if(e instanceof CaptureLoginRequired)login.setVisibility(View.VISIBLE);String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);if(imageMode!=null)imageMode.setEnabled(uploaded==0);status.setText(message);});}});
     }
     private void poll(){
         if(!visible||jobId.isEmpty()||isDestroyed())return;

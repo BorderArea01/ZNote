@@ -1,5 +1,5 @@
 // Isolated emulator only. Never installs on a USB, Wi-Fi, or pre-existing device.
-import {spawn,execFile} from 'node:child_process';import {promisify} from 'node:util';import {mkdir,mkdtemp,writeFile,rm,access} from 'node:fs/promises';import {resolve,join,relative,isAbsolute} from 'node:path';import assert from 'node:assert/strict';
+import {spawn,execFile} from 'node:child_process';import {promisify} from 'node:util';import {mkdir,mkdtemp,writeFile,readFile,rm,access} from 'node:fs/promises';import {resolve,join,relative,isAbsolute} from 'node:path';import assert from 'node:assert/strict';
 const routes=process.argv.includes('--routes'),overlay=process.argv.includes('--overlay'),exec=promisify(execFile),sdk=process.env.ANDROID_HOME,dir=await mkdtemp(resolve(routes?'artifacts/android-route-local-':overlay?'artifacts/android-overlay-local-':'artifacts/android-import-local-')),serial='emulator-5584';assert.ok(sdk);console.log('Emulator evidence '+dir);
 await mkdir(dir,{recursive:true});const adb=join(sdk,'platform-tools/adb.exe'),environment={...process.env,ANDROID_AVD_HOME:join(dir,'avd'),JAVA_OPTS:'-Xmx128m'};await mkdir(environment.ANDROID_AVD_HOME,{recursive:true});
 const run=async(command,args,options={})=>(await exec(command,args,{windowsHide:true,env:environment,timeout:60000,maxBuffer:2e6,...options})).stdout;
@@ -15,16 +15,23 @@ try{
  const deadline=Date.now()+210000;let booted=false;while(Date.now()<deadline){if(emulator.exitCode!==null)throw Error('Emulator exited: '+emuLog.slice(-3000));try{if((await run(adb,['-s',serial,'shell','getprop','sys.boot_completed'],{timeout:5000})).trim()==='1'){booted=true;break;}}catch{}await new Promise(r=>setTimeout(r,2000));}
  await writeFile(join(dir,'emulator.log'),emuLog);assert.ok(booted,'Emulator did not boot');
  await run(adb,['-s',serial,'shell','input','keyevent','82']);
- const signedRoutes=routes&&await access('artifacts/android-beta23-release/ZNote-0.10.0-beta.23-android.apk').then(()=>true,()=>false);
- if(overlay||signedRoutes){
-  await run(adb,['-s',serial,'install',signedRoutes?'artifacts/android-beta22-release/ZNote-0.10.0-beta.22-android.apk':'artifacts/android-beta21-release/ZNote-0.10.0-beta.21-android.apk']);
+ const gradle=await readFile('clients/android/app/build.gradle','utf8'),version=/versionName '([^']+)'/.exec(gradle)[1],code=Number(/versionCode (\d+)/.exec(gradle)[1]);
+ const beta=Number(/-beta\.(\d+)$/.exec(version)[1]),previous=version.replace(/\d+$/,String(beta-1));
+ const signed='artifacts/android-beta'+beta+'-release/ZNote-'+version+'-android.apk',oldSigned='artifacts/android-beta'+(beta-1)+'-release/ZNote-'+previous+'-android.apk';
+ const signedRelease=(routes||overlay)&&await access(signed).then(()=>true,()=>false);
+ if(overlay)assert.ok(signedRelease,'Overlay verification requires the current original-signed release APK');
+ if(signedRelease){
+  await run(adb,['-s',serial,'install',oldSigned]);
   await run(adb,['-s',serial,'shell','appops','set','io.github.borderarea01.znote','REQUEST_INSTALL_PACKAGES','allow']);
-  await run(adb,['-s',serial,'install','-r',signedRoutes?'artifacts/android-beta23-release/ZNote-0.10.0-beta.23-android.apk':'artifacts/android-beta22-release/ZNote-0.10.0-beta.22-android.apk']);
-  const installed=await run(adb,['-s',serial,'shell','dumpsys','package','io.github.borderarea01.znote']);assert.match(installed,signedRoutes?/versionCode=10023/:/versionCode=10022/);const permission=await run(adb,['-s',serial,'shell','appops','get','io.github.borderarea01.znote','REQUEST_INSTALL_PACKAGES']);assert.match(permission,/allow/);await writeFile(join(dir,'release-upgrade.txt'),signedRoutes?'beta.22 → beta.23 installed in place; original signing identity, versionCode 10023 and installer app-op retained.':'beta.21 → beta.22 installed in place; versionCode 10022 and existing installer app-op retained.');
+  await run(adb,['-s',serial,'install','-r',signed]);
+  const installed=await run(adb,['-s',serial,'shell','dumpsys','package','io.github.borderarea01.znote']);assert.ok(installed.includes('versionCode='+code));const permission=await run(adb,['-s',serial,'shell','appops','get','io.github.borderarea01.znote','REQUEST_INSTALL_PACKAGES']);assert.match(permission,/allow/);await writeFile(join(dir,'release-upgrade.txt'),previous+' → '+version+' installed in place; original signing identity, versionCode '+code+' and existing installer app-op retained.');
   await run(adb,['-s',serial,'uninstall','io.github.borderarea01.znote']);
  }
  await run(adb,['-s',serial,'install','clients/android/app/build/outputs/apk/debug/app-debug.apk']);
  await run(adb,['-s',serial,'install','clients/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk']);
+ // Package remove/add broadcasts from the signing-upgrade check must finish
+ // before enabling the freshly installed accessibility service.
+ await writeFile(join(dir,'package-broadcast-idle.txt'),await run(adb,['-s',serial,'shell','am','wait-for-broadcast-idle'],{timeout:30000}));
  fixture=spawn(process.execPath,['--max-old-space-size=128',routes?'tests/android-route-fixture.mjs':overlay?'tests/android-overlay-fixture.mjs':'tests/android-connection-import-fixture.mjs'],{windowsHide:true,stdio:['ignore','pipe','pipe']});let fixtureLog='';fixture.stdout.on('data',v=>fixtureLog+=v);fixture.stderr.on('data',v=>fixtureLog+=v);
  await new Promise(r=>setTimeout(r,500));
  const result=await run(adb,['-s',serial,'shell','am','instrument','-w','-e',routes?'connection_routes':overlay?'overlay_design':'connection_import','true','io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner'],{timeout:150000});
@@ -32,9 +39,13 @@ try{
  const logs=await run(adb,['-s',serial,'logcat','-d','-v','threadtime','-s','AndroidRuntime:E']);await writeFile(join(dir,'android-runtime.log'),logs);
  if(routes)await writeFile(join(dir,'webview-console.log'),await run(adb,['-s',serial,'logcat','-d','-v','threadtime','-s','chromium:I','cr_WebView:I','ZNoteWeb:E']));
  if(overlay){
+  const captureLog=await run(adb,['-s',serial,'logcat','-d','-v','threadtime','-s','ZNoteCapture:I']);await writeFile(join(dir,'capture-timing.log'),captureLog);
+  await writeFile(join(dir,'accessibility-state.txt'),await run(adb,['-s',serial,'shell','dumpsys','accessibility']));
+  await writeFile(join(dir,'system-events.log'),await run(adb,['-s',serial,'logcat','-d','-v','brief','-t','2000']));
   const names=await run(adb,['-s',serial,'shell','run-as','io.github.borderarea01.znote','ls','files']);
   for(const name of names.trim().split(/\s+/).filter(n=>/^overlay-[\w-]+\.png$/.test(n))){const png=await run(adb,['-s',serial,'exec-out','run-as','io.github.borderarea01.znote','cat','files/'+name],{encoding:'buffer'});await writeFile(join(dir,name),png);}
-  assert.ok(result.includes('ZNOTE_OVERLAY_SMOKE_PASS'),result);console.log('ZNOTE_OVERLAY_SMOKE_PASS; evidence '+dir);
+  assert.ok(result.includes('ZNOTE_OVERLAY_SMOKE_PASS'),result);
+  const dragFrames=[...captureLog.matchAll(/drag_frame ms=(\d+)/g)].map(m=>Number(m[1]));assert.ok(dragFrames.length>=3,'Missing real drag frame timings');assert.ok(Math.max(...dragFrames)<250,'Drag render exceeded 250 ms: '+dragFrames.join(','));await writeFile(join(dir,'drag-timing.json'),JSON.stringify({drag_frame_ms:dragFrames,note:'App MOVE-to-draw in isolated Android30; not Honor physical input latency'},null,2));console.log('ZNOTE_OVERLAY_SMOKE_PASS; evidence '+dir);
  }
  if(routes){
  assert.ok(result.includes('ZNOTE_ANDROID_ROUTE_PASS'),result);
@@ -48,9 +59,9 @@ try{
  }
 }finally{
  fixture?.kill();if(emulator){await run(adb,['-s',serial,'emu','kill'],{timeout:5000}).catch(()=>{});await new Promise(r=>setTimeout(r,1000));if(emulator.exitCode===null)emulator.kill();}
- if(routes){
+ if(routes||overlay){
    const root=resolve('artifacts'),target=resolve(dir,'device'),rel=relative(root,target);
-   assert.ok(rel.startsWith('android-route-local-')&&!rel.startsWith('..')&&!isAbsolute(rel)&&target.endsWith('device'),'Unsafe emulator cleanup');
+   assert.ok(/^android-(route|overlay)-local-/.test(rel)&&!rel.startsWith('..')&&!isAbsolute(rel)&&target.endsWith('device'),'Unsafe emulator cleanup');
    await rm(target,{recursive:true,force:true,maxRetries:10,retryDelay:300}).catch(e=>console.log('Test device cleanup pending: '+e.code));
  }
 }

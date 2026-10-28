@@ -1,15 +1,27 @@
 package io.github.borderarea01.znote;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.*;
-import android.graphics.drawable.Drawable;
+import android.graphics.drawable.*;
 import android.os.SystemClock;
+import android.widget.Button;
 
 /** Small vector artwork shared by the floating card, bookmark and result hint. */
 final class CaptureVisuals {
     static final int INK=0xffe7ebf5, MUTED=0xffabb7ce, ACCENT=0xff8da0ed,
-        SUCCESS=0xff9bbcae, WARNING=0xffd3b185, SURFACE=0xff212938;
+        SUCCESS=0xff9bbcae, WARNING=0xffd3b185, SURFACE=0xff212938,
+        FIELD=0xff2a3446, PRIMARY=0xff7689d8, BORDER=0xff424e63;
     private CaptureVisuals(){}
+
+    static void action(Button button,String icon,boolean primary){
+        Context c=button.getContext();int pad=NativeUi.dp(c,12);
+        button.setTextSize(13);button.setMinHeight(NativeUi.dp(c,44));button.setMinimumHeight(NativeUi.dp(c,44));
+        button.setPadding(pad,0,pad,0);button.setBackgroundTintList(null);
+        button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},new int[]{MUTED,INK}));
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),NativeUi.shape(c,primary?PRIMARY:0x00000000,11),null));
+        button.setCompoundDrawablesWithIntrinsicBounds(icon(c,icon,primary?INK:MUTED,16),null,null,null);button.setCompoundDrawablePadding(NativeUi.dp(c,8));
+    }
 
     static Drawable icon(Context context,String name,int color,int size){
         return new Icon(name,color,Math.round(size*context.getResources().getDisplayMetrics().density));
@@ -33,6 +45,8 @@ final class CaptureVisuals {
             switch(name){
                 case "folder":p.moveTo(3,7);p.lineTo(3,5);p.quadTo(3,3,5,3);p.lineTo(9,3);p.lineTo(12,6);p.lineTo(19,6);p.quadTo(21,6,21,8);p.lineTo(21,19);p.quadTo(21,21,19,21);p.lineTo(5,21);p.quadTo(3,21,3,19);p.close();break;
                 case "down":p.moveTo(7,10);p.lineTo(12,15);p.lineTo(17,10);break;
+                case "close":p.moveTo(6,6);p.lineTo(18,18);p.moveTo(18,6);p.lineTo(6,18);break;
+                case "help":c.drawCircle(12,12,9,paint);p.moveTo(9,9);p.cubicTo(9,5,17,6,15,10);p.lineTo(12,13);p.lineTo(12,14);p.moveTo(12,18);p.lineTo(12.01f,18);break;
                 case "capture":p.moveTo(8,3);p.lineTo(3,3);p.lineTo(3,8);p.moveTo(16,3);p.lineTo(21,3);p.lineTo(21,8);p.moveTo(3,16);p.lineTo(3,21);p.lineTo(8,21);p.moveTo(21,16);p.lineTo(21,21);p.lineTo(16,21);p.moveTo(8,12);p.lineTo(16,12);p.moveTo(12,8);p.lineTo(12,16);break;
                 case "paste":c.drawRoundRect(8,8,20,21,2,2,paint);p.moveTo(15,8);p.lineTo(15,5);p.quadTo(15,3,13,3);p.lineTo(5,3);p.quadTo(3,3,3,5);p.lineTo(3,15);p.quadTo(3,17,5,17);p.lineTo(8,17);break;
                 case "check":p.moveTo(5,12);p.lineTo(9,16);p.lineTo(19,6);break;
@@ -55,8 +69,10 @@ final class CaptureVisuals {
         @Override public void draw(Canvas c){
             Rect bounds=getBounds();float w=(15+25*free)*density,h=(38+2*free)*density,r=(4+8*free)*density;
             float x=free>0?(bounds.width()-w)/2f:right?bounds.width()-w:0,y=(bounds.height()-h)/2f;
-            c.save();c.translate(bounds.left+x,bounds.top+y);float cut=4*density*(1-free);
-            path.reset();path.moveTo(r,0);path.lineTo(w-r,0);path.quadTo(w,0,w,r);path.lineTo(w,h-r);path.quadTo(w,h,w-r,h);path.lineTo(w*.66f,h);path.lineTo(w*.5f,h-cut);path.lineTo(w*.34f,h);path.lineTo(r,h);path.quadTo(0,h,0,h-r);path.lineTo(0,r);path.quadTo(0,0,r,0);path.close();
+            c.save();c.translate(bounds.left+x,bounds.top+y);float cut=9*density*(1-free),bottomRadius=r*free;
+            // A full-width V leaves two crisp bookmark tips; only the detached
+            // square rounds its bottom corners. The hit area stays 24 x 48 dp.
+            path.reset();path.moveTo(r,0);path.lineTo(w-r,0);path.quadTo(w,0,w,r);path.lineTo(w,h-bottomRadius);path.quadTo(w,h,w-bottomRadius,h);path.lineTo(w*.5f,h-cut);path.lineTo(bottomRadius,h);path.quadTo(0,h,0,h-bottomRadius);path.lineTo(0,r);path.quadTo(0,0,r,0);path.close();
             paint.setStyle(Paint.Style.FILL);paint.setColor(SURFACE);paint.setAlpha(Math.round(220+35*free));c.drawPath(path,paint);
             paint.setStyle(Paint.Style.STROKE);paint.setColor(0xff596780);paint.setAlpha(255);paint.setStrokeWidth(density);c.drawPath(path,paint);
             if(free>.05f){
@@ -69,7 +85,7 @@ final class CaptureVisuals {
                 float phase=(SystemClock.uptimeMillis()%1400)/1400f;paint.setColor(ACCENT);paint.setStrokeWidth(1.7f*density);paint.setStyle(Paint.Style.STROKE);paint.setAlpha(255);
                 if(free>.5f)c.drawArc(-2*density,-2*density,w+2*density,h+2*density,phase*360,105,false,paint);
                 else{paint.setAlpha(100+(int)(155*Math.abs(Math.sin(phase*Math.PI))));c.drawLine(w/2,8*density,w/2,24*density,paint);}
-            }else if(state==2||state==3){paint.setStyle(Paint.Style.FILL);paint.setColor(state==2?SUCCESS:WARNING);paint.setAlpha(255);c.drawCircle(w/2,h-7*density,2*density,paint);}
+            }else if(state==2||state==3){paint.setStyle(Paint.Style.FILL);paint.setColor(state==2?SUCCESS:WARNING);paint.setAlpha(255);c.drawCircle(w/2,h-(7+6*(1-free))*density,2*density,paint);}
             c.restore();
         }
         @Override public void setAlpha(int alpha){}

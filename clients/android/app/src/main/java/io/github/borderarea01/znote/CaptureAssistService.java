@@ -131,7 +131,7 @@ public class CaptureAssistService extends AccessibilityService {
         if(bubble==null)return;
         boolean right=prefs().getBoolean("capture_right",true);
         bubble.setPadding(expanded?dp(15):0,expanded?dp(8):0,expanded?dp(15):0,expanded?dp(10):0);
-        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),0xff424e63);bubble.setBackground(bg);}else bubble.setBackground(null);
+        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),CaptureVisuals.BORDER);bubble.setBackground(bg);}else bubble.setBackground(null);
         bubble.setElevation(expanded?dp(6):0);layout.flags=windowFlags();
         bubble.setOnTouchListener((v,e)->{if(e.getActionMasked()==MotionEvent.ACTION_OUTSIDE&&expanded){expanded=false;libraryMenuExpanded=false;render();return true;}return false;});
         if(handle==null){
@@ -173,7 +173,7 @@ public class CaptureAssistService extends AccessibilityService {
         boolean right=layout.x+layout.width/2>width()/2;prefs().edit().putBoolean("capture_right",right).putFloat("capture_y",Math.max(0,Math.min(1,layout.y/(float)Math.max(1,height()-dp(96))))).apply();dragging=false;
         if(!android.animation.ValueAnimator.areAnimatorsEnabled()){handleReveal=0;render();return;}
         final int startX=layout.x,startW=layout.width,targetX=right?width()-dp(24):0;final android.animation.ValueAnimator animation=android.animation.ValueAnimator.ofFloat(0,1);dockAnimation=animation;
-        animation.setDuration(180);animation.setInterpolator(new android.view.animation.DecelerateInterpolator());animation.addUpdateListener(v->{if(bubble==null||dockAnimation!=animation)return;float f=(float)v.getAnimatedValue();handleReveal=1-f;layout.width=Math.round(startW+(dp(24)-startW)*f);layout.x=Math.round(startX+(targetX-startX)*f);handleArtwork.state(right,handleReveal,artworkState());updateWindow();});
+        animation.setDuration(140);animation.setInterpolator(new android.view.animation.DecelerateInterpolator());animation.addUpdateListener(v->{if(bubble==null||dockAnimation!=animation)return;float f=(float)v.getAnimatedValue();handleReveal=1-f;layout.width=Math.round(startW+(dp(24)-startW)*f);layout.x=Math.round(startX+(targetX-startX)*f);handleArtwork.state(right,handleReveal,artworkState());updateWindow();});
         animation.addListener(new android.animation.AnimatorListenerAdapter(){@Override public void onAnimationEnd(android.animation.Animator a){if(dockAnimation!=animation)return;dockAnimation=null;handleReveal=0;render();}});animation.start();
     }
     private void toggleLibraryMenu(){
@@ -231,14 +231,29 @@ public class CaptureAssistService extends AccessibilityService {
             });
         });}catch(RejectedExecutionException e){librariesLoading=false;libraryError="知识库列表读取任务未能启动";buildLibraryList();}
     }
-    private void drag(View handle){handle.setOnTouchListener(new View.OnTouchListener(){float x,y;boolean moved;final int slop=ViewConfiguration.get(CaptureAssistService.this).getScaledTouchSlop();public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
-        case MotionEvent.ACTION_DOWN:stopDockAnimation();dismissNotice();recordEnvironment();record("touch_dispatch","delay_ms="+Math.max(0,SystemClock.uptimeMillis()-e.getEventTime()));x=e.getRawX();y=e.getRawY();moved=false;v.setPressed(true);return true;
-        case MotionEvent.ACTION_MOVE:if(Math.hypot(e.getRawX()-x,e.getRawY()-y)>slop)moved=true;if(moved){v.setPressed(false);if(!dragging){dragging=true;expanded=false;libraryMenuExpanded=false;handleReveal=1;render();}layout.x=Math.max(0,Math.min(width()-dp(48),Math.round(e.getRawX())-dp(24)));layout.y=Math.max(dp(24),Math.min(height()-dp(80),Math.round(e.getRawY())-dp(24)));updateWindow();}return true;
-        case MotionEvent.ACTION_UP:v.setPressed(false);if(!moved){tapAt=e.getEventTime();v.performClick();}else snapAfterDrag();return true;
-        case MotionEvent.ACTION_CANCEL:v.setPressed(false);if(moved)snapAfterDrag();else{handleReveal=0;render();}return true;default:return false;}}});}
+    private void beginDrag(long eventTime){
+        dragging=true;expanded=false;libraryMenuExpanded=false;handleReveal=1;
+        // Do not rebuild or measure the capture panel in the first MOVE event.
+        bubble.setPadding(0,0,0,0);bubble.setBackground(null);bubble.setElevation(0);
+        panelScroll.setVisibility(View.GONE);libraryScroll.setVisibility(View.GONE);
+        handle.setText("");handle.setPadding(0,0,0,0);handle.setCompoundDrawables(null,null,null,null);
+        handle.setContentDescription("ZNote 完整页签按钮，正在移动");handle.setBackground(handleArtwork);
+        handle.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(48)));
+        handleArtwork.state(prefs().getBoolean("capture_right",true),1,artworkState());
+        layout.width=dp(48);layout.height=dp(48);measureFrame(eventTime,"drag_frame");
+    }
+    private void drag(View handle){handle.setOnTouchListener(new View.OnTouchListener(){float x,y,grabX,grabY;boolean moved;int pointer=-1;final int slop=Math.min(ViewConfiguration.get(CaptureAssistService.this).getScaledTouchSlop(),dp(4));public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
+        case MotionEvent.ACTION_DOWN:stopDockAnimation();dismissNotice();record("touch_dispatch","delay_ms="+Math.max(0,SystemClock.uptimeMillis()-e.getEventTime()));x=e.getRawX();y=e.getRawY();grabX=expanded?dp(24):x-layout.x+(dp(48)-layout.width)/2f;grabY=Math.max(0,Math.min(dp(48),y-layout.y));pointer=e.getPointerId(0);moved=false;v.setPressed(true);return true;
+        case MotionEvent.ACTION_MOVE:if(pointer<0||e.getPointerId(0)!=pointer)return true;if(!moved&&Math.hypot(e.getRawX()-x,e.getRawY()-y)>slop){moved=true;v.setPressed(false);beginDrag(e.getEventTime());}if(moved){layout.x=Math.max(0,Math.min(width()-dp(48),Math.round(e.getRawX()-grabX)));layout.y=Math.max(dp(24),Math.min(height()-dp(80),Math.round(e.getRawY()-grabY)));updateWindow();}return true;
+        case MotionEvent.ACTION_POINTER_UP:if(e.getPointerId(e.getActionIndex())!=pointer)return true;pointer=-1;v.setPressed(false);if(moved)snapAfterDrag();return true;
+        case MotionEvent.ACTION_UP:v.setPressed(false);if(pointer<0)return true;pointer=-1;if(!moved){tapAt=e.getEventTime();v.performClick();}else snapAfterDrag();return true;
+        case MotionEvent.ACTION_CANCEL:pointer=-1;v.setPressed(false);if(moved&&dragging)snapAfterDrag();else{handleReveal=0;render();}return true;default:return true;}}});}
     private void measureFrame(long started){
+        measureFrame(started,"panel_frame");
+    }
+    private void measureFrame(long started,String event){
         final View view=bubble;if(view==null)return;
-        view.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener(){boolean done;public void onDraw(){if(done)return;done=true;record("panel_frame","ms="+Math.max(0,SystemClock.uptimeMillis()-started));view.post(()->{if(view.getViewTreeObserver().isAlive())view.getViewTreeObserver().removeOnDrawListener(this);});}});view.invalidate();
+        view.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener(){boolean done;public void onDraw(){if(done)return;done=true;record(event,"ms="+Math.max(0,SystemClock.uptimeMillis()-started));view.post(()->{if(view.getViewTreeObserver().isAlive())view.getViewTreeObserver().removeOnDrawListener(this);});}});view.invalidate();
     }
     private void message(String text){lastMessage=text;busy=false;libraryMenuExpanded=false;resultFailed=!text.startsWith("已取消");resultPending=resultFailed;render();if(!expanded&&resultFailed)showResultNotice(false);}
     private static boolean social(String pkg){return pkg.equals("com.xingin.xhs")||pkg.equals("com.ss.android.ugc.aweme")||pkg.equals("com.ss.android.ugc.aweme.lite")||bilibili(pkg);}
