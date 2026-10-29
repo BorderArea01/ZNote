@@ -429,7 +429,7 @@
     pageBusy = false;
     if(img) {
       groupIndex=index; hoverURL=group.images[index]; previewImage.src=img.src;
-      previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · ${url===hoverURL?'原图':'快速预览'} · 滚轮翻页`;
+      previewLabel.textContent=`${img.naturalWidth} × ${img.naturalHeight} · ${group.preview_indexes?.includes(index)?'网页预览图':url===hoverURL?'原图':'快速预览'} · 滚轮翻页`;
       previewImage.onload=placePreview; requestAnimationFrame(placePreview);
       for(const next of nearby)previewCache.get(next).catch(()=>{});
       continuePendingSave();

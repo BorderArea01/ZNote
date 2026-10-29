@@ -4,7 +4,7 @@ import {imageFilename,downloadBlob} from './gallery-download.js';
 export async function downloadBatch(group,persist,announce,rows,startNow){
   const $=id=>document.getElementById(id);let running=false,controller;
   document.querySelector('header span').textContent='ZNote · 套图下载';$('minimize').setAttribute('aria-label','收起下载窗口');
-  $('summary').textContent=`${group.images.length} 张原图 · 按页码下载`;
+  $('summary').textContent=`${group.images.length} 张${group.preview_indexes?.length ? `图片（${group.preview_indexes.length} 张网页预览图）` : '原图'} · 按页码下载`;
   for(const el of document.querySelectorAll('main>label,#collection,#tags,.connection'))el.hidden=true;
   group.states=group.images.map((_,i)=>['done','failed'].includes(group.states?.[i])?group.states[i]:'pending');
   const draw=()=>{

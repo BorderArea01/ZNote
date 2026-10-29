@@ -30,7 +30,7 @@ export function workLocation(target, loc = location) {
 export async function workImages(target, doc = document, loc = location) {
   loc=new URL(loc.href); // Freeze this request's route while an SPA navigation is in flight.
   const host=loc.hostname.replace(/^www\./,''),page_url=loc.href,selected=workLocation(target,loc);
-  let source_url=page_url,title=doc.title,images,previews;
+  let source_url=page_url,title=doc.title,images,previews,preview_indexes=[];
   if(host==='pixiv.net'||/^pawchive\.(pw|st)$/.test(host)) {
     if(!selected)return null;source_url=selected.href;
     const live=host!=='pixiv.net'&&selected.pathname===loc.pathname;
@@ -45,9 +45,7 @@ export async function workImages(target, doc = document, loc = location) {
           root=new DOMParser().parseFromString(html,'text/html');
         }
         const article=await siteArticle(root,selected);
-        // Anonymous Paw pages can contain only thumbnails. Never silently treat
-        // those as originals, and do not cache this state across login/retry.
-        if(/^pawchive\./.test(host)&&!article.document.querySelector('[data-znote-work-image]'))throw Error('未找到套图原图链接，请确认 Paw 已登录且作品已加载完成');
+        if(/^pawchive\./.test(host)&&!article.document.querySelector('[data-znote-work-image]'))throw Error('未找到可保存的作品图片，请等待页面加载完成后重新识别');
         return article;
       })();
       cached={time:Date.now(),promise};if(!live){cache.delete(source_url);cache.set(source_url,cached);}
@@ -58,6 +56,7 @@ export async function workImages(target, doc = document, loc = location) {
     title=article.title||title;
     const nodes=[...article.document.querySelectorAll('[data-znote-work-image]')];
     images=nodes.map(img=>img.src);previews=nodes.map(img=>img.getAttribute('data-znote-preview')||img.src);
+    preview_indexes=nodes.flatMap((img,i)=>img.getAttribute('data-znote-image-quality')==='preview'?[i]:[]);
   } else {
     const container=target.closest('article,[data-gallery],.post__content');if(!container)return null;
     const nodes=[...container.querySelectorAll('img')].filter(img=>!img.closest('nav,aside,header,footer,[data-znote-overlay]')&&Math.max(img.naturalWidth,img.width)>=32&&Math.max(img.naturalHeight,img.height)>=32&&
@@ -73,5 +72,5 @@ export async function workImages(target, doc = document, loc = location) {
   const identity=url=>{try{const u=new URL(url);if(selected&&host==='pixiv.net')return u.pathname.match(/\/(\d+_p\d+)/)?.[1]||url;if(selected&&/^pawchive\./.test(host))return u.pathname.replace(/^\/thumbnail/,'');return url;}catch{return url;}};
   const index=pairs.findIndex(p=>candidates.some(url=>url===p.original||url===p.preview||identity(url)===identity(p.original)||identity(url)===identity(p.preview)));
   if(index<0&&!selected)return null;
-  return {title:title.slice(0,180),source_url,page_url,images:pairs.map(p=>p.original),previews:pairs.map(p=>p.preview),start_index:Math.max(0,index)};
+  return {title:title.slice(0,180),source_url,page_url,images:pairs.map(p=>p.original),previews:pairs.map(p=>p.preview),preview_indexes:pairs.flatMap((p,i)=>preview_indexes.includes(images.indexOf(p.original))?[i]:[]),start_index:Math.max(0,index)};
 }

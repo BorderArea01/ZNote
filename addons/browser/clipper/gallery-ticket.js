@@ -17,6 +17,7 @@ export async function openGallery(group, sender, action = 'download', inline = f
   const previews=images.map(url=>{
     try{const value=group.previews?.[group.images.indexOf(url)],u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&u.href.length<=4096?u.href:url;}catch{return url;}
   });
+  const preview_indexes=images.flatMap((url,i)=>Array.isArray(group.preview_indexes)&&group.preview_indexes.includes(group.images.indexOf(url))?[i]:[]);
   const saved = await chrome.storage.session.get(null);
   const old = Object.entries(saved).filter(([key])=>key.startsWith('gallery-')).sort((a,b)=>b[1].created-a[1].created);
   if(inline){
@@ -29,7 +30,7 @@ export async function openGallery(group, sender, action = 'download', inline = f
   const id = crypto.randomUUID();
   const config=action==='save'?await settings():null;
   const initialTarget=config?{server:serverUrl(config.server),collection_id:config.collection_id,tags:config.tags}:undefined;
-  await chrome.storage.session.set({['gallery-'+id]:{images,previews,action,title:String(group.title||'作品图片').slice(0,180),source_url:source.href,created:Date.now(),...(inline?{inline:true,autoStart:true,initialTarget,owner:{tab:sender.tab.id,frame:sender.frameId||0,origin:page.origin}}:{})}});
+  await chrome.storage.session.set({['gallery-'+id]:{images,previews,preview_indexes,action,title:String(group.title||'作品图片').slice(0,180),source_url:source.href,created:Date.now(),...(inline?{inline:true,autoStart:true,initialTarget,owner:{tab:sender.tab.id,frame:sender.frameId||0,origin:page.origin}}:{})}});
   if(inline)return {id,inline:true,message:action==='save'?'正在保存到上次选择的知识库':'已开始下载套图'};
   await chrome.tabs.create({url:chrome.runtime.getURL('gallery.html')+'?id='+id});
   return {message:'已打开作品批量下载'};

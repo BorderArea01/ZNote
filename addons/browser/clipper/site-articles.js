@@ -169,7 +169,19 @@ export async function siteArticle(document, location, fetcher = fetch) {
       try {const preview=new URL(source?.getAttribute('data-src')||source?.getAttribute('src')||url,location.href);if(/^https?:$/.test(preview.protocol)&&/^(?:img|file|n[1-9]\d*)\.pawchive\.(pw|st)$/.test(preview.hostname)&&!preview.username&&!preview.password)img.setAttribute('data-znote-preview',preview.href);}catch{}
       link.replaceWith(img);
     }
+    // Preview-only posts expose unlinked images in the files area. Keep the
+    // actual public URLs; never guess a protected original from a thumbnail.
+    let previewCount=0;
+    for(const image of article.querySelectorAll('.post__files figure img,figure > img')){
+      if(image.hasAttribute('data-znote-work-image')||image.closest('a[href]'))continue;
+      let url;try{url=new URL(image.getAttribute('data-src')||image.getAttribute('src')||'',location.href);}catch{continue;}
+      if(url.protocol!=='https:'||url.username||url.password||!/^img\.pawchive\.(?:pw|st)$/.test(url.hostname)||!url.pathname.startsWith('/thumbnail/data/')||!/\.(?:avif|bmp|gif|jpe?g|png|webp)$/i.test(url.pathname))continue;
+      if(seen.has(url.href)){image.remove();continue;}
+      seen.add(url.href);previewCount++;
+      image.src=url.href;image.setAttribute('data-znote-work-image','');image.setAttribute('data-znote-image-quality','preview');image.setAttribute('data-znote-preview',url.href);
+    }
     for(const image of article.querySelectorAll('img')) if(!seen.has(image.getAttribute('src'))&&!image.closest('.post__content'))image.remove();
+    if(previewCount){const quality=clone.createElement('p');quality.textContent=`其中 ${previewCount} 张保存网页预览图，页面未提供对应原图链接。`;article.append(quality);}
     if(!seen.size && !article.querySelector('.post__content'))throw Error('未找到作品正文或原图，请确认已登录且作品加载完成');
     clone.body.append(article);return {document:clone,title:main.querySelector('h1')?.textContent?.trim()||document.title,selector:'main'};
   }

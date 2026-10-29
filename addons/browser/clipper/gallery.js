@@ -32,7 +32,7 @@ async function show(next, original=false) {
   try {
     const value=await previewCache.get(url);
     if(token!==previewToken)return;
-    $('image').onload=()=>{if(token===previewToken)$('preview-status').textContent=`${$('image').naturalWidth} × ${$('image').naturalHeight} · ${url===group.images[index]?'原图预览':'快速预览'}`;};
+    $('image').onload=()=>{if(token===previewToken)$('preview-status').textContent=`${$('image').naturalWidth} × ${$('image').naturalHeight} · ${group.preview_indexes?.includes(index)?'网页预览图':url===group.images[index]?'原图预览':'快速预览'}`;};
     $('image').onerror=()=>{$('preview-status').textContent='浏览器无法预览此图片，仍可尝试下载原文件';};
     $('image').src=value.url;for(const next of nearby)previewCache.get(next).catch(()=>{});
   } catch(e) {if(token===previewToken)$('preview-status').textContent='暂时无法预览：'+e.message;}

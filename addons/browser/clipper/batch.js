@@ -8,7 +8,7 @@ try{
   const result=await chrome.runtime.sendMessage({type:'inline-gallery-load'});if(!result?.ok)throw Error(result?.error||'请从原网页打开批量入库');
   ({id,group}=result.value);group.busy=false;
   new ResizeObserver(announce).observe(document.body);
-  $('title').textContent=group.title;$('summary').textContent=`${group.images.length} 张原图 · 按作品成组保存`;
+  $('title').textContent=group.title;$('summary').textContent=`${group.images.length} 张${group.preview_indexes?.length ? `图片（${group.preview_indexes.length} 张网页预览图）` : '原图'} · 按作品成组保存`;
   const rows=group.images.map((_,i)=>{const li=document.createElement('li'),label=document.createElement('span'),state=document.createElement('span');label.textContent=`第 ${i+1} 张`;li.append(label,state);$('pages').append(li);return state;});
   const persist=()=>chrome.storage.session.set({['gallery-'+id]:group});
   const changed=()=>{library?.draw();rows.forEach((row,i)=>row.textContent=library?.label(i)||'待入库');announce();};

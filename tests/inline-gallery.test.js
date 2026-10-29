@@ -11,13 +11,14 @@ test('inline gallery tickets preserve active jobs and scope recovery to the orig
   }},webNavigation:{getFrame:async()=>({url:'https://pawchive.pw/fanbox/user/1/post/2'})},tabs:{create:async tab=>tabs.push(tab)}};
   t.after(()=>{globalThis.chrome=previous});
   const source='https://pawchive.pw/fanbox/user/1/post/2',sender={url:source,tab:{id:3},frameId:0};
-  const group={source_url:source,images:['https://file.pawchive.pw/a.png','https://file.pawchive.pw/b.png']};
+  const group={source_url:source,images:['https://file.pawchive.pw/a.png','https://file.pawchive.pw/b.png'],preview_indexes:[1,-1,9,'0']};
   const first=await openGallery(group,sender,'save');assert.equal(first.inline,true);assert.equal(tabs.length,0);
   const frame={url:'chrome-extension://test/batch.html?id='+first.id,tab:{id:3},frameId:2};
   const loads=await Promise.all([inlineGalleryTicket(frame),inlineGalleryTicket(frame)]);
   assert.equal(loads.filter(r=>r.startNow).length,1,'Concurrent frame loads consume a click only once');
   assert.equal((await inlineGalleryTicket(frame)).startNow,false,'Reload never automatically retries');
   assert.deepEqual(loads[0].group.initialTarget,{server:'http://localhost:3741',collection_id:'art',tags:'test'});
+  assert.deepEqual(loads[0].group.preview_indexes,[1],'Quality markers follow valid member indexes only');
   assert.ok(!JSON.stringify(loads).includes('secret-token'));
   await assert.rejects(inlineGalleryTicket({...frame,frameId:0}),/原网页|网页/);
   await assert.rejects(inlineGalleryTicket({...frame,tab:{id:4}}),/过期/);

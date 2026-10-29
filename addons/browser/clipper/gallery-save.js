@@ -41,7 +41,7 @@ export function libraryBatch(group, persist, changed, downloading) {
       $('collection').value = selected;
       $('tags').value = destination?.tags ?? connection.tags;
       ready = true;
-      $('save-status').textContent = count() ? `已入库 ${count()} / ${states.length} 张，可继续未完成项。` : '选择知识库后保存整组原图。';
+      $('save-status').textContent = count() ? `已入库 ${count()} / ${states.length} 张，可继续未完成项。` : '选择知识库后保存整组图片。';
     } catch (e) { $('save-status').textContent = e.message; }
     changed();
   }
@@ -75,7 +75,7 @@ export function libraryBatch(group, persist, changed, downloading) {
             filename: imageFilename(group.title, i, group.images[i], blob.type).split('/').pop(),
             title: `${group.title.slice(0, 175)} · ${String(i + 1).padStart(3, '0')}`,
             ...grouping, group_index:i, image_url: group.images[i],
-            capture_note: `作品：${group.title}\n页码：${i + 1} / ${states.length}`,
+            capture_note: `作品：${group.title}\n页码：${i + 1} / ${states.length}${group.preview_indexes?.includes(i) ? '\n画质：网页预览图（页面未提供原图链接）' : ''}`,
           }, AbortSignal.timeout(180000), config);
           states[i] = item.duplicate ? 'duplicate' : 'done';
         } catch (e) {
