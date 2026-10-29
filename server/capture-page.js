@@ -16,6 +16,7 @@ import {extractJlijiGallery} from './capture-gallery.js';
 import {ehPolicy} from './capture-eh-policy.js';
 import {captureMusic} from './capture-music.js';
 import {tiebaThread, fetchTiebaPlan} from './capture-tieba.js';
+import {douyinArticle,extractDouyinArticle} from './capture-douyin-article.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -75,6 +76,13 @@ const fetchDocument=createCaptureDocumentFetcher();
 
 export async function fetchCapturePage(value, signal, redirects = 0, options = {}) {
   const url = new URL(value);
+  if(douyinArticle(value)){
+    // The mobile UA redirects articles to /home. Desktop pages subsequently
+    // expose the exact work through the existing bounded browser fallback.
+    const resource=await fetchDocument(value,signal,redirects,{userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'});
+    if(douyinArticle(resource.url)!==douyinArticle(value))throw fail('抖音文章跳转到了其他页面，未取得正文');
+    return resource;
+  }
   if (tiebaThread(value)) return fetchTiebaPlan(value, signal, fetchDocument, options);
   const post = xPost(value);
   if (post) {
@@ -407,7 +415,7 @@ function findRecord(data, id, platform) {
   while (stack.length && count++ < 30000) {
     const v = stack.pop(); if (!v || typeof v !== 'object') continue;
     if (platform === 'xhs' && String(v.noteId || v.note_id || '') === id && (Array.isArray(v.imageList) || Array.isArray(v.image_list) || Array.isArray(v.noteCard?.imageList) || v.type === 'video')) return v;
-    if (platform === 'douyin' && String(v.aweme_id || v.awemeId || '') === id && (v.desc !== undefined || v.author || v.images || v.image_list || v.image_post_info || v.imagePostInfo)) return v;
+    if (platform === 'douyin' && String(v.aweme_id || v.awemeId || '') === id && (v.article_info || v.articleInfo || v.desc !== undefined || v.author || v.images || v.image_list || v.image_post_info || v.imagePostInfo)) return v;
     for (const child of Object.values(v)) if (child && typeof child === 'object') stack.push(child);
   }
   return null;
@@ -499,13 +507,14 @@ export function extractCapturePage(html, url) {
   const meta = name => document.querySelector(`meta[property="${name}"],meta[name="${name}"]`)?.getAttribute('content') || '';
   const xhs = /(^|\.)xiaohongshu\.com$/.test(host), dy = /(^|\.)(douyin|iesdouyin)\.com$/.test(host);
   if (/^pawchive\.(?:pw|st)$/i.test(host) && /^\/(?:fanbox|patreon)\/user\/[^/]+\/post\/[^/]+\/?$/i.test(u.pathname)) return extractPawCapture(html, url);
-  const id = xhs ? u.pathname.match(/\/(?:explore|discovery\/item)\/([a-f\d]+)/i)?.[1] : u.pathname.match(/\/(?:video|note|slides)\/(\d+)/)?.[1] || u.searchParams.get('modal_id');
+  const id = xhs ? u.pathname.match(/\/(?:explore|discovery\/item)\/([a-f\d]+)/i)?.[1] : u.pathname.match(/\/(?:video|note|slides|article)\/(\d+)/)?.[1] || u.searchParams.get('modal_id');
   if (xhs || dy) {
     for (const script of [...document.querySelectorAll('script:not([src])')].slice(0,150).sort((a,b)=>Number(b.textContent.includes('window.__SETUP_SERVER_STATE__='))-Number(a.textContent.includes('window.__SETUP_SERVER_STATE__=')))) {
       let raw = script.textContent;
       if (script.id === 'RENDER_DATA') { try { raw = decodeURIComponent(raw); } catch { continue; } }
       const record = id && scriptValues(raw).map(data=>findRecord(data, id, xhs ? 'xhs' : 'douyin')).find(Boolean);
       if (!record) continue;
+      if(dy){const article=extractDouyinArticle(record,url);if(article)return article;}
       const bgm=captureMusic(record,url);
       const galleryImages=galleryEntries(record, xhs ? 'xhs' : 'douyin');
       if (xhs && record.type === 'video' || dy && !galleryImages.length) {
@@ -522,6 +531,7 @@ export function extractCapturePage(html, url) {
       return { kind: 'note', url, title: record.title || record.desc?.split('\n')[0] || '手机采集', content: record.desc || '', images: urls, image_candidates: images, live_videos, author: record.user?.nickname || record.user?.nickName || record.author?.nickname || record.authorInfo?.nickname || '',...(bgm?{bgm}:{}) };
     }
     // Do not archive login screens or unrelated recommendation thumbnails.
+    if(douyinArticle(url))throw fail('抖音文章未提供完整正文，可能需要登录或验证');
     if (dy && !/\/note\//.test(u.pathname) || /video/i.test(meta('og:type'))) return { kind: 'video', url };
     throw fail('平台未提供这篇作品的完整数据，可能需要登录或验证；可从原 App 直接分享图片，或用浏览器扩展采集');
   }

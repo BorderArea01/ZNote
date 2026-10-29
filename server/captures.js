@@ -12,7 +12,7 @@ import {extractBrowserXPost} from './capture-x.js';
 import {ehSite,ehPolicy} from './capture-eh-policy.js';
 import { downloadVideo } from './imports.js';
 import { downloadCaptureVideo,downloadCaptureBgm } from './capture-video.js';
-import {douyinWork,renderDouyinCapture} from './capture-browser.js';
+import {douyinWork,renderDouyinCapture,hasCaptureResources} from './capture-browser.js';
 import {MAX_CAPTURE_GROUP_IMAGES,MAX_CAPTURE_NOTE_IMAGES} from '../shared/capture-limits.js';
 import {jlijiSet} from './capture-gallery.js';
 const KEY = 'mobile_captures_v1';
@@ -73,7 +73,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       }
       else {
         try{plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);}catch(e){if(!douyinWork(resource.url))throw e;}
-        if(douyinWork(resource.url)&&!plan?.images?.length&&!plan?.video_urls?.length){patch(job.id,{message:'正在读取抖音作品页面'});plan=await renderDouyinCapture(resource.url,signal);}
+        if(douyinWork(resource.url)&&!hasCaptureResources(plan)){patch(job.id,{message:'正在读取抖音作品页面'});plan=await renderDouyinCapture(resource.url,signal);}
         if(plan.content?.length>450000)throw fail(413,'正文过长，未入库');
         patch(job.id,{plan,title:plan.title||job.title});
       }
@@ -101,7 +101,9 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     // Count both sources so a group request keeps its mode and group key.
     const contentImages=new Set(markdownImages(plan.content||'').map(image=>image.url));
     const mediaCount=new Set([...galleryEntries.map(entry=>entry.url),...contentImages]).size+liveVideos.length;
-    const imageMode=job.input.image_mode || plan.default_image_mode || (/(^|\.)(xiaohongshu|x|twitter)\.com$/.test(new URL(plan.url).hostname) ? 'group' : 'note');
+    // Long articles retain their ordered body even when the mobile/extension
+    // default is image groups; a text-only article must not become a video.
+    const imageMode=plan.capture_format==='douyin-article'?'note':job.input.image_mode || plan.default_image_mode || (/(^|\.)(xiaohongshu|x|twitter)\.com$/.test(new URL(plan.url).hostname) ? 'group' : 'note');
     if(imageMode==='group'&&mediaCount===0&&(job.input.image_mode||/(^|\.)(x|twitter)\.com$/.test(new URL(plan.url).hostname)))throw fail(422,'未获取到这篇作品的图片或视频，未保存图片组；请显示原帖全部媒体后重试');
     const album=imageMode==='group'&&mediaCount>0;
     const liveOnly=liveVideos.length>0&&galleryEntries.length===0;
@@ -218,7 +220,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       if(resource.type.startsWith('image/'))return {kind:'note',url:resource.url,title:'网页图片',images:[resource.url]};
       let plan;
       try{plan=extractCapturePage(resource.buffer.toString('utf8'),resource.url);}catch(e){if(!douyinWork(resource.url))throw e;}
-      if(douyinWork(resource.url)&&!plan?.images?.length&&!plan?.video_urls?.length)plan=await renderDouyinCapture(resource.url,signal);
+      if(douyinWork(resource.url)&&!hasCaptureResources(plan))plan=await renderDouyinCapture(resource.url,signal);
       if(plan.content?.length>450000)throw fail(413,'正文过长');
       return plan;
     },

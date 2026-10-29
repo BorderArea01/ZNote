@@ -1,11 +1,12 @@
 import {extractCapturePage} from './capture-page.js';
+import {douyinArticle} from './capture-douyin-article.js';
 const fail=message=>Object.assign(Error(message),{status:422});
 const domains=['douyin.com','iesdouyin.com','douyinstatic.com','douyincdn.com','douyinpic.com','douyinvod.com','byteimg.com','bytedance.com','bytednsdoc.com','bytescm.com','bytegoofy.com','ibytedtos.com','pstatp.com','snssdk.com','bytecdn.cn','bytetos.com'];
 export function allowedCaptureRequest(value,type){
   try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password&&!u.port&&!['image','media','font'].includes(type)&&domains.some(d=>u.hostname===d||u.hostname.endsWith('.'+d));}catch{return false;}
 }
 export function douyinWork(value){
-  try{const u=new URL(value);if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(u.hostname))return '';return u.pathname.match(/\/(?:video|note|slides)\/(\d+)/)?.[1]||(/^\d+$/.test(u.searchParams.get('modal_id')||'')?u.searchParams.get('modal_id'):'');}catch{return '';}
+  try{const u=new URL(value);if(!/(^|\.)(douyin|iesdouyin)\.com$/.test(u.hostname))return '';return u.pathname.match(/\/(?:video|note|slides|article)\/(\d+)/)?.[1]||(/^\d+$/.test(u.searchParams.get('modal_id')||'')?u.searchParams.get('modal_id'):'');}catch{return '';}
 }
 export function douyinAwemeEndpoint(value){
   try{
@@ -16,7 +17,7 @@ export function douyinAwemeEndpoint(value){
     return '';
   }catch{return '';}
 }
-export function hasCaptureResources(plan){return Boolean(plan&&(plan.images?.length||plan.video_urls?.length));}
+export function hasCaptureResources(plan){return Boolean(plan&&(plan.images?.length||plan.video_urls?.length||plan.capture_format==='douyin-article'&&plan.kind==='note'&&plan.content?.trim()));}
 // One short-lived anonymous browser, never a user's profile or a resident browser.
 // Only the requested work's detail response is used; recommendations are ignored.
 export async function renderDouyinCapture(source,signal){
@@ -49,7 +50,7 @@ export async function renderDouyinCapture(source,signal){
       }catch{}
     });
     const requested=new URL(source),gallery=/\/(?:note|slides)\//.test(requested.pathname);
-    const targets=gallery?[`https://www.iesdouyin.com/share/slides/${id}/`,source]:[source,`https://www.douyin.com/video/${id}`];
+    const targets=douyinArticle(source)?[source]:gallery?[`https://www.iesdouyin.com/share/slides/${id}/`,source]:[source,`https://www.douyin.com/video/${id}`];
     for(const target of [...new Set(targets)]){
       // Bound each navigation separately. A heavy first page must not prevent
       // the canonical fallback page from loading.
@@ -59,14 +60,14 @@ export async function renderDouyinCapture(source,signal){
       // React Flight payload and may never request the older detail endpoint.
       if(!plan){
         try{const parsed=extractCapturePage(await page.content(),page.url());if(hasCaptureResources(parsed))plan=parsed;}
-        catch(e){if(!/完整数据|完整图集/.test(e.message))throw e;}
+        catch(e){if(!/完整数据|完整图集|文章未提供完整正文/.test(e.message))throw e;}
       }
       for(let waited=0;!closed&&!hasCaptureResources(plan)&&waited<67;waited++){
         await page.waitForTimeout(150);
         // React Flight chunks can finish shortly after DOMContentLoaded.
         if(waited%5===4){
           try{const parsed=extractCapturePage(await page.content(),page.url());if(hasCaptureResources(parsed))plan=parsed;}
-          catch(e){if(!/完整数据|完整图集/.test(e.message))throw e;}
+          catch(e){if(!/完整数据|完整图集|文章未提供完整正文/.test(e.message))throw e;}
         }
       }
       if(hasCaptureResources(plan))break;
