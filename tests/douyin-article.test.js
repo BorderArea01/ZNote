@@ -29,6 +29,18 @@ test('existing Douyin video and picture parsing retain their original types',()=
  const image={aweme_id:'1',desc:'图片',images:[{url_list:['https://cdn.example/image.jpg']}]};assert.equal(extractCapturePage(html(image),'https://www.douyin.com/note/1').images.length,1);
 });
 
+test('empty article_info in ordinary videos, photos and live galleries does not enter the article parser',()=>{
+ for(const article_info of [{},{article_id:'0',article_content:''},{article_id:0,article_content:'',has_more:false},{article_id:'123',article_title:'关联文章'}]){
+  const video={aweme_id:'1',aweme_type:0,desc:'普通视频',article_info,video:{play_addr:{url_list:['https://cdn.example/video.mp4']}}};
+  assert.equal(extractDouyinArticle(video,'https://www.douyin.com/video/1'),null);
+  const parsed=extractCapturePage(html(video),'https://www.douyin.com/video/1');assert.equal(parsed.kind,'video');assert.equal(parsed.video_urls[0],'https://cdn.example/video.mp4');
+  const image={aweme_id:'1',aweme_type:68,desc:'普通图集',article_info,images:[{url_list:['https://cdn.example/one.jpg']},{url_list:['https://cdn.example/two.jpg'],video:{play_addr:{url_list:['https://cdn.example/live.mp4']}}}]};
+  const gallery=extractCapturePage(html(image),'https://www.iesdouyin.com/share/slides/1/');assert.equal(gallery.kind,'note');assert.equal(gallery.images.length,2);assert.equal(gallery.live_videos.length,1);
+ }
+ const viaVideo=extractCapturePage(html(article()),'https://www.douyin.com/video/'+id);assert.equal(viaVideo.capture_format,'douyin-article');
+ assert.throws(()=>extractDouyinArticle({...article(),article_info:{}},url),/编号不匹配/);
+});
+
 for(const withImages of [false,true])test('article pipeline keeps one note and ordered local pictures despite group default: '+withImages,async()=>{
  const content=withImages?'文章开头\n\n![第一张](https://cdn.example/one.png)\n\n段落中间\n\n![第二张](https://cdn.example/two.png)\n\n文章结尾':'文章开头\n\n文章结尾',record=article(content),png=await sharp({create:{width:12,height:12,channels:3,background:'#aaaaaa'}}).png().toBuffer();
  const runtime=createApp({dataDir:await mkdtemp(resolve('artifacts/douyin-article-unit-')),captureOptions:{page:async()=>({url,type:'text/html',buffer:Buffer.from(html(record))}),image:async()=>png}});

@@ -6,6 +6,11 @@ export function extractDouyinArticle(record,url){
   const article=record.article_info||record.articleInfo;if(!article)return null;
   const source=new URL(url),id=douyinArticle(url)||source.pathname.match(/\/(?:video|note|slides)\/(\d+)/)?.[1];
   const workId=String(record.aweme_id||record.awemeId||'');
+  // Ordinary videos and galleries also carry an empty article_info object.
+  // It is article data only for an article route/type or a matching full body.
+  const articleId=String(article.article_id||article.articleId||'');
+  const articleBody=article.article_content||article.articleContent;
+  if(!douyinArticle(url)&&Number(record.aweme_type??record.awemeType)!==163&&(!articleBody||!/^[1-9]\d*$/.test(articleId)||articleId!==workId))return null;
   if(!id||workId!==id||String(article.article_id||article.articleId||'')!==id)throw fail('抖音文章编号不匹配，未保存其他作品');
   if(article.has_more===true||article.has_more===1)throw fail('抖音只提供了部分文章正文，请打开完整文章后重试');
   let data=article.article_content||article.articleContent;
