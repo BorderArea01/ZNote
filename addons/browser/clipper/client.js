@@ -1,7 +1,8 @@
 import {videoDetails} from './video-details.js';
 import { blockedSite } from './site-policy.js';
 import {readPlayableVideo} from './video-fetch.js';
-export const defaults = { server: 'http://localhost:3741', token: '', collection_id: '', tags: '', hover: true, dock: true, saveAction: 'save', downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [], largeImageDefault: 'inherit' };
+import {normalizeServer,requestAt,routeConnection,remotePathAllowed,remoteCapture} from './connection-routes.js';
+export const defaults = { server: 'http://localhost:3741', token: '', remoteServer:'', remoteToken:'', collection_id: '', tags: '', hover: true, dock: true, saveAction: 'save', downloadKey: 's', saveKey: 'z', previewWidth: 720, blockedSites: [], largeImageDefault: 'inherit' };
 export async function settings() {
   const stored = await chrome.storage.local.get([...Object.keys(defaults), 'shortcutVersion']);
   const config = { ...defaults, ...stored };
@@ -11,17 +12,35 @@ export async function settings() {
   if (!stored.shortcutVersion && config.downloadKey === 's' && config.saveKey === 'k') config.saveKey = 'z';
   return config;
 }
-export function serverUrl(value) {
-  const url = new URL(value);
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('请输入 HTTP(S) 服务器地址');
-  return url.href.replace(/\/$/, '');
+export const serverUrl=normalizeServer;
+export const connection=async(config=null,options={})=>routeConnection(config||await settings(),options);
+export async function jobConnection(kind,id,config=null){
+  config ||= await settings();
+  const key='captureRoute:'+kind+':'+id,stored=await chrome.storage.local.get([key,'lastCapture','lastImport']);
+  let ref=stored[key];
+  if(!ref){const legacy=stored[kind==='imports'?'lastImport':'lastCapture'];if(legacy?.id===id)ref=legacy;}
+  if(!ref?.server)return {server:config.server,token:config.token,remote:false,kind};
+  const server=serverUrl(ref.server),remote=!!config.remoteServer&&server===serverUrl(config.remoteServer);
+  if(!remote&&server!==serverUrl(config.server))throw Error('任务属于另一个知识库地址，请恢复原连接后查询');
+  const token=remote?config.remoteToken:config.token;if(!token)throw Error('原任务入口尚未授权，请重新连接后查询');
+  return {...config,server,token,remote,kind:ref.kind||kind};
 }
 export async function api(path, options = {}, config = null) {
   config ||= await settings();
-  if (!config.token) throw new Error('请先打开连接设置，填写 ZNote 写入令牌');
-  const response = await fetch(serverUrl(config.server) + path, { ...options, credentials: 'omit', redirect: 'error', headers: { ...options.headers, Authorization: 'Bearer ' + config.token }, signal: options.signal || AbortSignal.timeout(30000) });
-  let data; try { data = await response.json(); } catch { throw new Error('服务器未返回有效响应，请检查地址'); }
-  if (!response.ok) throw Object.assign(new Error(data.error || `请求失败 ${response.status}`), { status: response.status });
+  const task=path.match(/^\/api\/(captures|imports)\/([a-f\d-]{36})(\/retry)?$/),create=options.method==='POST'&&['/api/captures','/api/imports'].includes(path);
+  const route=task?await jobConnection(task[1],decodeURIComponent(task[2]),config):await connection(config,{localOnly:!remotePathAllowed(path)&&path!=='/api/imports',signal:options.signal});
+  const originalKind=path==='/api/imports'?'imports':'captures';let kind=task?route.kind:originalKind;
+  if(route.remote){
+    if(task){kind=route.kind==='imports'?'captures':route.kind;path=`/api/${kind}/${task[2]}${task[3]||''}`;}
+    if(create){const input=JSON.parse(options.body||'{}');if(path==='/api/imports')input.text=input.url;path='/api/captures';kind='captures';options={...options,body:JSON.stringify(remoteCapture(input))};}
+    if(!remotePathAllowed(path))throw Error('Cloudflare 备用只支持链接采集，此操作需要直连知识库');
+  }
+  const data=await requestAt(route,path,options);
+  if(create&&data.id){
+    const ref={server:serverUrl(route.server),kind,time:Date.now()};
+    await chrome.storage.local.set({['captureRoute:'+originalKind+':'+data.id]:ref,['captureRoute:'+kind+':'+data.id]:ref});
+  }
+  if(data&&typeof data==='object'&&!Array.isArray(data))data.connection={server:serverUrl(route.server),remote:route.remote,kind};
   return data;
 }
 export async function saveImage(blob, details, signal, config = null) {

@@ -1,5 +1,5 @@
 import { collectGallery, collectVideo, record, capturePage, startCaptureRegion, finishCaptureRegion } from './actions.js';
-import { api, settings, serverUrl } from './client.js';
+import { api, settings, serverUrl, connection } from './client.js';
 import {getDownloadJob} from './media-tasks.js';
 
 // Content scripts act only on their own top frame. Never trust a page tabId,
@@ -32,7 +32,7 @@ export async function pageAction(message, sender) {
     case 'screenshot': return {item:await record(()=>capturePage(tab))};
     case 'article': await chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});return {};
     case 'settings': await chrome.runtime.openOptionsPage();return {};
-    case 'library': await chrome.tabs.create({url:serverUrl((await settings()).server)});return {};
+    case 'library': await chrome.tabs.create({url:serverUrl((await connection()).server)});return {};
     default: throw Error('未知采集操作');
   }
 }

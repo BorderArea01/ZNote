@@ -5,6 +5,7 @@ import { discover } from './discovery.js';
 import {inlineGalleryTicket} from './gallery-ticket.js';
 import {updateMediaTask,downloadMediaBlob,startMediaTask} from './media-tasks.js';
 import {contextMenuEntries} from './entry-menu.js';
+import {requestAt,normalizeServer} from './connection-routes.js';
 let directVideoBusy = false;
 async function setupContextMenus() {
   const config=await settings();
@@ -13,7 +14,7 @@ async function setupContextMenus() {
   });
 }
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !['hover', 'dock', 'saveAction', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server'].some(key => key in changes)) return;
+  if (area !== 'local' || !['hover', 'dock', 'saveAction', 'downloadKey', 'saveKey', 'shortcutVersion', 'previewWidth', 'blockedSites', 'server', 'remoteServer', 'remoteToken'].some(key => key in changes)) return;
   if(changes.saveAction)setupContextMenus();
   chrome.tabs.query({url: ['http://*/*', 'https://*/*']}).then(tabs => Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {type: 'media-settings-changed'})))).catch(() => {});
 });
@@ -53,6 +54,17 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     downloadMediaBlob(message).then(value=>reply({ok:true,value}),error=>reply({ok:false,error:error.message}));return true;
   }
   if(message.type==='inline-gallery-load'&&sender.id===chrome.runtime.id){inlineGalleryTicket(sender).then(value=>reply({ok:true,value}),e=>reply({ok:false,error:e.message}));return true;}
+  if(message.type==='znote-connect-remote'&&sender.id===chrome.runtime.id&&sender.tab&&sender.frameId===0){
+    (async()=>{
+      const server=normalizeServer(new URL(sender.url).origin);
+      if(!server.startsWith('https://')||!/^zn_[a-f0-9]{64}$/.test(message.token||''))throw Error('远程备用授权无效');
+      const config={server,token:message.token},health=await requestAt(config,'/api/health');
+      if(health.status!=='ok'||health.mode!=='remote-capture')throw Error('此页面不是 ZNote 远程采集入口');
+      await requestAt(config,'/api/collections');
+      const current=await settings();if(normalizeServer(current.server)===server)throw Error('请先把本机地址与远程备用地址分开设置');
+      await chrome.storage.local.set({remoteServer:server,remoteToken:message.token});
+    })().then(()=>reply({ok:true}),error=>reply({ok:false,error:error.message}));return true;
+  }
   if (message.type === 'znote-connect' && sender.id === chrome.runtime.id && sender.tab && sender.frameId === 0) {
     (async () => {
       const server = new URL(sender.url).origin;

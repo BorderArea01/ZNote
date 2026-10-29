@@ -32,7 +32,7 @@ export function siteControlState(value, config = {}) {
   const url = parsedWebUrl(value), rule = siteRuleFor(value);
   if (!url || !rule) return { supported: false, blocked: true, automatic: false, rule: null, matching: [], direct: [], other: [] };
   let automatic = false;
-  try { automatic = !!config.server && url.origin === new URL(config.server).origin; } catch { automatic = true; }
+  try { automatic = [config.server,config.remoteServer].filter(Boolean).some(server=>url.origin===new URL(server).origin); } catch { automatic = true; }
   const matching = matchingBlockedSites(value, Array.isArray(config.blockedSites) ? config.blockedSites : []);
   const direct = matching.filter(entry => {
     if (/^https?:\/\//i.test(entry)) {
@@ -65,7 +65,7 @@ export function blockedSite(value, config={}) {
   const url = parsedWebUrl(value);
   if (!url) return true;
   try {
-    if (config.server && url.origin === new URL(config.server).origin) return true;
+    if ([config.server,config.remoteServer].filter(Boolean).some(server=>url.origin===new URL(server).origin)) return true;
     return matchingBlockedSites(value, Array.isArray(config.blockedSites) ? config.blockedSites : []).length > 0;
   } catch { return true; }
 }

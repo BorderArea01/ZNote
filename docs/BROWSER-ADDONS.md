@@ -16,6 +16,22 @@ X 作品详情页右下角用一条工具栏提供「ZNote · 保存本帖」和
 
 插件页提供当前扩展版本、图片预览和媒体浮窗开关，以及浏览器扩展管理入口。不会增加读取其他扩展的权限，不能把未知的安装状态显示为“已安装”。其他插件的版本、启停和重新加载由浏览器管理。
 
+## 局域网优先与 Cloudflare 备用（0.9.42）
+
+在扩展「设置与连接 → Cloudflare 备用」打开远程入口，登录后点击「连接浏览器扩展备用」。本机地址和写入授权保持独立；本机 /api/health 与授权可用时直连，不可用时新作品链接使用备用入口，恢复后自动优先本机。手机授权不会自动复制给浏览器。
+
+任务固定在提交时的队列查询、重试，不会在写入结果不确定时向另一入口重复投递。弹窗显示当前线路，恢复本机后仍能看到上一个远程任务。移除备用连接保留本机配置。
+
+Cloudflare 只接收作品链接与保存选项；不传登录网页 HTML、Cookie 或提取的原始媒体。平台需要登录数据时，远程链接解析仍可能失败。截图、正文附件、原图/视频上传及需要服务器解析的下载只使用直连；已经找到的媒体直链仍可直接下载。本功能不提供完整图库远程浏览，也不改变 Pixiv/E-Hentai 独立扩展的文件上传路径。
+
+## 完整图库远程浏览
+
+当前 Pages 是链接任务收件箱，不代理图库、原图或视频流。完整远程浏览可让手机和开发机加入私有组网，再打开开发机虚拟地址上的3741；[EasyTier](https://easytier.cn/guide/introduction.html)支持 Android 和无公网 IP 的异地互联。开发机与 ZNote 需保持运行，速度取决于上行带宽和直连/中继链路。
+
+Android 每个用户/工作资料只能保留一个活动 [VpnService](https://developer.android.com/develop/connectivity/vpn)，因此手机 Clash 使用 VPN 模式时不能直接再开另一个普通 VPN 客户端，需先设计两者的共存路径。不能为接入图库而擅自切断现有代理或 EasyTier。
+
+若要无需组网的固定 HTTPS 浏览入口，可另建带认证的公网访问服务；常规 [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/get-started/)发布应用需要域名。[Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)无需域名但地址临时、无可用性保证，适合验证，不应当作永久图库入口。
+
 ## 目录与协议
 
 公开清单位于 `addons/browser/catalog.json`，其中只列公开插件的 `addon.json`。本机其他插件使用被忽略的 `addons/browser/private/catalog.json`；各自源码、依赖、产物、登记信息和安装包保持私有。

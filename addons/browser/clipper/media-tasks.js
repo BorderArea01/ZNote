@@ -1,4 +1,4 @@
-import { settings, prepareImageRequests } from './client.js';
+import { settings, prepareImageRequests, connection } from './client.js';
 
 const KEY = 'mediaTasks';
 const OFFSCREEN_PATH = 'media-worker.html';
@@ -28,7 +28,8 @@ async function ensureOffscreen() {
 
 export async function startMediaTask(resource, action, tabId, providedConfig = null) {
   if (!['save', 'download'].includes(action)) throw new Error('后台任务类型无效');
-  const config = providedConfig || await settings();
+  let config = providedConfig || await settings();
+  if(action==='save'||['work','hls'].includes(resource.kind))config=await connection(config,{localOnly:true});
   if (action === 'save' && !config.token) throw new Error('请先在连接设置中连接 ZNote');
   if (resource.kind === 'hls' && !config.token) throw new Error('m3u8 合并需要先连接 ZNote');
   if(action==='download'&&['image','work'].includes(resource.kind))await prepareImageRequests();

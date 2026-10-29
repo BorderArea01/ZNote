@@ -1,4 +1,5 @@
 import { settings, serverUrl, api } from './client.js';
+import {requestAt} from './connection-routes.js';
 import { parseBlockedSites } from './site-policy.js';
 const $ = id => document.getElementById(id);
 const current = await settings();
@@ -43,9 +44,9 @@ function values() {
   return { server, token, tags: $('tags').value.trim(), collection_id: $('collection').value };
 }
 async function load(config = current) {
-  const me = await api('/api/me', {}, config);
+  const me = await requestAt(config,'/api/me');
   if (me.scope !== 'write') throw new Error('采集需要 write 写入令牌，请使用 ZNote 中的写入令牌');
-  const collections = await api('/api/collections', {}, config);
+  const collections = await requestAt(config,'/api/collections');
   $('collection').replaceChildren(new Option('未分类', ''), ...collections.map(c => new Option(c.name, c.id)));
   if (collections.some(c => c.id === selected)) $('collection').value = selected;
 }
@@ -62,3 +63,8 @@ $('connect').addEventListener('click', () => saveConnection('连接成功，请�
 $('settings').addEventListener('submit', event => { event.preventDefault(); saveConnection('已保存，可以右键图片或截图入库'); });
 if (current.token) load().catch(e => { $('status').textContent = e.message; });
 document.body.dataset.ready = 'true';
+const remoteHome='https://znote-capture-inbox.pages.dev';
+async function remoteState(){const config=await settings();$('remote-state').textContent=config.remoteToken?'已启用：'+config.remoteServer+' · 本机优先':'尚未连接备用入口';$('remote-remove').hidden=!config.remoteToken;}
+$('remote-connect').onclick=async()=>{const config=await settings();await chrome.tabs.create({url:config.remoteServer||remoteHome});};
+$('remote-remove').onclick=async()=>{await chrome.storage.local.remove(['remoteServer','remoteToken']);await remoteState();$('status').textContent='已移除此浏览器的备用连接，本机连接保持';};
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&(changes.remoteServer||changes.remoteToken))remoteState();});remoteState();

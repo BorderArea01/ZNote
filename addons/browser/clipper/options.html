@@ -60,6 +60,10 @@
         ><label>默认标签<input id="tags" placeholder="参考, 灵感" /></label
         ><button class="primary" type="submit">保存设置</button>
       </form>
+      <h3 id="remote-heading">Cloudflare 备用</h3>
+      <div class="actions"><button type="button" id="remote-connect">打开远程入口并授权</button><button type="button" id="remote-remove" hidden>移除备用授权</button></div>
+      <p id="remote-state" role="status"></p>
+      <p data-help-for="remote-heading" data-help-label="自动切换与远程范围">在远程入口登录后，点击「连接浏览器扩展备用」。本机地址与写入授权可用时优先直连，不可用时新作品链接投递 Cloudflare。原任务仍在提交时的入口查询和重试，不跨队列重新保存。远程只接收链接，不发送登录网页数据；截图、正文文件、媒体上传和下载解析需要本机直连。仅配过手机的授权不会自动复制给浏览器。</p>
       <p id="status" role="status"></p>
       <p data-help-for="manual-heading" data-help-label="连接隐私">
         扩展会在你点击采集时读取目标图片或截图，并上传到所填服务器。令牌仅保存在此浏览器的扩展存储中，不同步到云端。

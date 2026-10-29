@@ -40,7 +40,9 @@ async function connectorAuth(request,env){
 }
 async function route(request,env){
  const db=env.DB,url=new URL(request.url),path=url.pathname,now=Date.now();
- if(!['GET','HEAD','OPTIONS'].includes(request.method)&&request.headers.has('Origin')&&request.headers.get('Origin')!==url.origin)fail(403,'不允许跨站提交');
+ const origin=request.headers.get('Origin');
+ if(!['GET','HEAD','OPTIONS'].includes(request.method)&&origin&&origin!==url.origin&&origin!=='chrome-extension://ndfidbdoncgiaamafhgfpbdnbeiedile')fail(403,'不允许跨站提交');
+ if(!['GET','HEAD','OPTIONS'].includes(request.method)&&origin==='chrome-extension://ndfidbdoncgiaamafhgfpbdnbeiedile'&&!/^Bearer zn_[a-f0-9]{64}$/.test(request.headers.get('Authorization')||''))fail(403,'扩展请求需要独立设备授权');
  if(request.method==='GET'&&(path==='/'||path==='/connect'||/^\/connect\/[a-zA-Z0-9_-]{16,80}\/?$/.test(path)))return new Response(path==='/'?portalHtml:connectHtml,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'}});
  if(request.method==='GET'&&path==='/connect.js')return new Response(connectScript,{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'}});
  if(request.method==='GET'&&path==='/portal.js')return new Response(portalScript,{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'}});

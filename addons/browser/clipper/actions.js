@@ -1,4 +1,4 @@
-import { saveImage, limitedImage, api, settings } from './client.js';
+import { saveImage, limitedImage, api, settings, connection } from './client.js';
 import { blockedSite } from './site-policy.js';
 import {startMediaTask, downloadJob, getDownloadJob} from './media-tasks.js';
 export async function captureJob(id, tabId) {
@@ -32,6 +32,7 @@ export async function collectImage(info, tab, preferOriginal = true) {
   }
   const urls = [...new Set([...(Array.isArray(candidates) ? candidates.map(c => c.url) : []), info.srcUrl])];
   if(config.saveAction==='download')return downloadTask({id:urls[0],kind:'image',urls,title:info.selectionText||tab.title||'网页图片',source_url:info.pageUrl||tab.url},tab,config);
+  await connection(config,{localOnly:true});
   let lastError;
   for (const url of urls) {
     let image;
@@ -46,6 +47,7 @@ export async function collectImage(info, tab, preferOriginal = true) {
 }
 export async function capturePage(tab, region = null) {
   const config=await settings();
+  if(config.saveAction!=='download')await connection(config,{localOnly:true});
   const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
   if (active?.id !== tab.id) throw new Error('当前标签页已经改变，请重新点击截图');
   await chrome.tabs.sendMessage(tab.id,{type:'prepare-page-screenshot'},{frameId:0}).catch(()=>{});
@@ -106,9 +108,9 @@ export async function collectVideo(tab, url = tab.url) {
   assertSiteAllowed(tab?.url, config);
   if(config.saveAction==='download')return downloadTask({id:url,kind:'work',text:url,title:tab.title||'作品视频',source_url:url,videoOnly:true},tab,config);
   try {
-    const job = await api('/api/imports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, collection_id: config.collection_id || null, tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }) });
+    const job = await api('/api/imports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, request_id:'clipper-video-'+crypto.randomUUID(), collection_id: config.collection_id || null, tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }) },config);
     // The server owns long downloads; closing the popup or suspending the worker is safe.
-    await chrome.storage.local.set({ lastImport: { id: job.id, server: serverUrlForJob(config.server) } });
+    await chrome.storage.local.set({ lastImport: { id: job.id, server: job.connection?.server||serverUrlForJob(config.server), kind:job.connection?.kind||'imports' } });
     await chrome.action.setBadgeText({ text: '…' });
     return job;
   } catch (e) {
@@ -151,9 +153,9 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
         ...(browserHtml ? { browser_html: browserHtml } : {}),
         ...(browserPost ? { browser_post: browserPost } : {}),
       }),
-    });
+    },config);
     if (dedupe && job.status === 'failed') job = await api(`/api/captures/${job.id}/retry`, { method: 'POST' });
-    await chrome.storage.local.set({ lastCapture: { id: job.id, server: serverUrlForJob(config.server), time: Date.now() } });
+    await chrome.storage.local.set({ lastCapture: { id: job.id, server: job.connection?.server||serverUrlForJob(config.server), kind:'captures', time: Date.now() } });
     await chrome.action.setBadgeText({ text: '…' });
     return job;
   } catch (e) {

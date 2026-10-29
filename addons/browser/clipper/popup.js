@@ -1,4 +1,4 @@
-import { settings, serverUrl, api } from './client.js';
+import { settings, serverUrl, api, connection } from './client.js';
 import { siteControlState, toggleSiteBlock } from './site-policy.js';
 import { pluginShell } from './ui/panel.js';
 const $ = id => document.getElementById(id), selectPanel = pluginShell();
@@ -36,13 +36,13 @@ $('site-toggle').onclick = async () => {
 async function connect() {
   if(config.saveAction==='download')return;
   $('destination').disabled = true; $('connection-retry').hidden = true;
-  if (!config.token) { $('connection-state').textContent = '尚未连接知识库，预览与下载仍可使用'; return; }
+  if (!config.token&&!config.remoteToken) { $('connection-state').textContent = '尚未连接知识库，预览与下载仍可使用'; return; }
   $('connection-state').textContent = '正在读取知识库…';
   try {
     const collections = await api('/api/collections', {signal:AbortSignal.timeout(8000)}, config);
     $('destination').replaceChildren(new Option('未分类',''), ...collections.map(c => new Option(c.name,c.id)));
     if (config.collection_id && !collections.some(c => c.id === config.collection_id)) {const missing=new Option('原知识库已删除，请重新选择',config.collection_id);missing.disabled=true;$('destination').append(missing);$('destination').value=config.collection_id;throw Error('原目标知识库已删除，请重新选择');}
-    $('destination').value = config.collection_id; $('connection-state').textContent = '';
+    $('destination').value = config.collection_id; $('connection-state').textContent = config.remoteToken?((await connection(config)).remote?'Cloudflare 备用 · 链接采集':'本机直连 · 优先使用'):'';
   } catch (error) { $('connection-state').textContent = error.message; $('connection-retry').hidden = false; }
   finally { $('destination').disabled = $('destination').options.length <= 1 && !!$('connection-state').textContent; }
 }
@@ -72,7 +72,7 @@ $('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel'
 const running=job=>['queued','running'].includes(job?.status);
 async function task(kind, ref, force) {
   const prefix=kind==='captures'?'gallery':'video', card=$(prefix+'-task');
-  if(!ref||serverUrl(config.server)!==serverUrl(ref.server)){card.hidden=true;jobs.delete(kind);refs.delete(kind);return;}
+  if(!ref){card.hidden=true;jobs.delete(kind);refs.delete(kind);return;}
   card.hidden=false;const previous=refs.get(kind);refs.set(kind,ref);
   if(!force&&previous?.id===ref.id&&jobs.has(kind)&&!running(jobs.get(kind)))return;
   try{
@@ -81,7 +81,7 @@ async function task(kind, ref, force) {
     $(prefix+'-open').hidden=job.status!=='completed'||!job.item_id;
     if(job.item_id)$(prefix+'-open').href=serverUrl(config.server)+'/#item/'+encodeURIComponent(job.item_id);
     $(prefix+'-retry').hidden=!['failed','cancelled'].includes(job.status);
-    if(kind==='imports')$('cancel-video').hidden=!running(job);
+    if(kind==='imports')$('cancel-video').hidden=!running(job)||ref.kind==='captures';
   }catch(e){$(prefix+'-status').textContent=e.message;card.dataset.state='failed';$(prefix+'-open').hidden=true;$(prefix+'-retry').hidden=false;if(kind==='imports')$('cancel-video').hidden=true;}
 }
 for(const [kind,prefix] of [['captures','gallery'],['imports','video']])$(prefix+'-retry').onclick=async()=>{
@@ -113,5 +113,5 @@ for(const [id,key] of [['quick-hover','hover'],['quick-dock','dock']]){
   $(id).checked=config[key]!==false;$(id).onchange=async()=>{try{await chrome.storage.local.set({[key]:$(id).checked});config=await settings();$('plugin-status').textContent='已保存，当前网页同步生效';}catch(e){$(id).checked=config[key]!==false;$('plugin-status').textContent=e.message;}};
 }
 $('settings').onclick=()=>chrome.runtime.openOptionsPage();
-$('library-open').onclick=()=>chrome.tabs.create({url:serverUrl(config.server)});
+$('library-open').onclick=async()=>chrome.tabs.create({url:serverUrl((await connection(config)).server)});
 document.body.dataset.ready='true';
