@@ -14,6 +14,12 @@ Windows 启动页同样提供「界面与图标」，与知识库页的选择双
 
 控件边缘的处理基于 [CSS mask-image](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/mask-image) 与 [mask-composite](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/mask-composite)，只应用于不接收输入的装饰层。桌面启动页 CSP 单独允许本地 data 图片以加载 SVG 遮罩，不开放脚本或外部连接。
 
+用户进一步否定「静态边缘、悬停小幅抖动」，明确要求酷炫的数据熔断动态。当前动态模式使用 `rupture.svg` 的分段位移场切开实际面板材质，再做水平像素拖长、RGB 拆分和重组；独立条带与像素块从容器内部拉开、飞散、消失，横幅摄影有大幅分段错位。它模拟文件损坏的视觉，不改变用户媒体编码或像素。生成器为 `scripts/build-glitch-rupture.mjs`；不是将一段视频贴到界面上。
+
+「主题动效」提供动态和静态选择。`motion.js` 以 IntersectionObserver 和页面可见事件控制 CSS 动画，仅为可见容器创建装饰片段；布局、点击位置与可访问名称不动，没有每帧 DOM 截图、Canvas 循环或网络视频。减少动态效果时静止。飞散片段在页面边界裁切，不能撑出横向滚动条，也不能给媒体预览新增 transform/paint containment 祖先。Playwright 的浏览器/Electron loader 禁用了后台节流，本轮自动化只记录真实可见事件历史，不能把合成事件说成真机后台验证。
+
+本轮先交付真实页面与录屏以核对动态方向，Windows29 连接页与动效设置为源码候选，没有发布新安装包；安卓原生浮窗同样未发布新 APK。
+
 摄影素材使用内置 imagegen 生成，原始文件为 `architecture-source.png`。生成提示：
 
 > 建筑摄影，故障艺术 Glitch Art，强烈横向像素排序，水平撕裂拉伸畸变，建筑破碎成大量水平条状碎片，像素碎块在空中飘散，数据熔合 datamoshing 效果，保留建筑整体轮廓可识别，晴朗蓝天背景，自然日光，写实照片基底，数字文件损坏效果，零散漂浮的小像素方块，轻微 RGB 色偏，高细节，电影感画面。白色混凝土现代建筑，横向构图，无文字、人物或 UI；保持可用于宽横幅与手机裁切的天空和建筑轮廓。

@@ -466,3 +466,15 @@
 
 - Windows beta.28 已发布 clients-v0.10.0-beta.28，源码提交 c0f78e35a6a9fed5b7f5d3a143e809e36e4ca392。安装包SHA256 f829f6a1397aeab956b3e0bd3d74badde1cc088c7df00dcb98e54bae22b46697；源码SHA256 98ca5badf565d8fcf9d8941fb59b5d4f4ef650388519fd9ed49d6db236d74e56。Pages 079e90c7 部署后，稳定域名手机尺寸界面、切换、全部新材质资源hash及仍有效的APK26/源码26下载校验通过，collector在线、原任务数量未变，证据 artifacts/glitch-release-live-X1IPyT。
 - 最终核对 artifacts/glitch-v3-final-state.json：当前3741生产HTML/CSS和新遮罩资源一致，Windows28/回退Windows27安装包与来源hash均验证；当前项目包为 android-beta28-release，唯一项目回退为 android-beta27-release，两个包中有效Android26组件为硬链接。client-release.json仍声明Android26且指向当前包中的有效文件。已清理旧26项目包、模拟设备与安卓/Windows可再生编译目录，释放约3.35GiB。没有发布Android28 APK；荣耀真机未验证。
+
+
+## 2026-10-31 强数据熔断动态：不能退化成小幅抖动
+
+- 用户两次纠正动态方向，明确要求强烈横向像素排序、水平拉伸破裂、容器拆成大量条带、像素块飘散、数据熔合与重组。静态纹理或边缘几像素抖动不是完成，不能再把个人对低动效的偏好替代用户要求。保留动态/静态选择及系统减少动态效果；经典等旧主题仍完整保留。
+- 网页与远程采集页改用 rupture.svg 的四种分段位移场，材质横向位移、像素拖长、RGB拆分重组；独立条带/像素块从控件内部拉开、飞散再消失。主题横幅也做大幅分段错位。它是交互UI的损坏视觉模拟，不损坏原媒体文件，不对用户图片/视频加滤镜。脚本生成器 scripts/build-glitch-rupture.mjs 与 motion.js 由网页、Pages、Windows连接页复用。
+- motion.js 只监听可见区域/页面状态及输入事件；CSS负责动画帧，可见控件才生成装饰片段，滚出屏幕后移除。没有每帧DOM截图或Canvas循环。文字与命中区域的几何位置不动，片段为aria-hidden且不接收输入。页面裁切装饰溢出，不得让碎片撑宽手机视口。
+- 实际3741桌面/真实touch tap动态验证通过：artifacts/glitch-motion-live-LGCtNx，连续画面有6/9种渲染变化及5/4种材质位置；静态/刷新持久化、OS减少动态效果、滚出屏幕停止、真实点击反馈、脚本加载失败静态回退及恢复均通过，read授权且无API写请求，原items元数据hash本次未变。活跃采集中可能有外部写入，测试必须记录真实hash差异并验证自身无写请求，不能冻结用户正常使用来追求全库hash永远不变。
+- 检查真实媒体预览时发现手机布局视口因溢出扩至453而可视区只有390，关闭按钮在x399不可点击。用动态视口尺寸约束遮罩与全屏层，弹窗限制水平溢出并允许flex内容收缩；保持纵向滚动与固定媒体预览，不添加transform/paint containment祖先。修正后弹窗390×844，关闭按钮x336，实际触屏可关闭；完整桌面/触屏当前图库与原媒体无滤镜、分层关闭通过 artifacts/glitch-v2-live-0sCPHq。
+- Windows29仅源码候选，开发程序的动效偏好/桥接/连接与重启验证 artifacts/desktop-appearance-j1xM0v；本轮没有打包或发布新Windows安装包，也没有发布Android APK。现有有效客户端仍Windows28与Android26，唯一项目回退仍27项目包。用户否定弱动效后，先交付实际强动态页面和录屏，不能把先前弱版继续发布。
+- Playwright浏览器/Electron loader实际添加disable-background-timer-throttling、disable-backgrounding-occluded-windows等开关，自动化中的document.hidden未变化；背景暂停逻辑基于真实Page Visibility事件实现，但本轮没有真机后台验证，不得把模拟事件或空历史写成验证通过。Windows测试在隐藏后由主进程恢复窗口，再读取真实事件历史，不能在隐藏渲染器内无限等待RAF。
+- 最终生产前端为 index-8hBdmF3M.js（以实际dist入口为准），主题资源URL版本5。Pages部署10efabdd，稳定域名全部新资源hash、手机尺寸Portal切换、collector在线、原任务数量未变，以及现有有效APK26/源码26和Windows28资产hash通过 artifacts/glitch-release-live-QjS1Lk。公开GitHub API在当前出口仍403，认证目录检查通过，不宣称手机匿名更新路径已验证。实际录屏 artifacts/glitch-motion-live-LGCtNx/dynamic-preview.mp4；不是只交静态截图。

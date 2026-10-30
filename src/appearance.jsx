@@ -17,10 +17,11 @@ export const palettes = [
   { id: 'amber', name: '琥珀橙', color: '#a36520' },
   { id: 'slate', name: '石墨灰', color: '#566478' },
 ];
-const defaults = { style: 'minimal', palette: 'forest' };
+const defaults = { style: 'minimal', palette: 'forest', motion: 'dynamic' };
 function normalize(value) {
   return { style: styles.some(s => s.id === value?.style) ? value.style : defaults.style,
-    palette: palettes.some(p => p.id === value?.palette) ? value.palette : defaults.palette };
+    palette: palettes.some(p => p.id === value?.palette) ? value.palette : defaults.palette,
+    motion: value?.motion === 'still' ? 'still' : 'dynamic' };
 }
 const AppearanceContext = createContext(null);
 export function AppearanceProvider({ children }) {
@@ -31,22 +32,23 @@ export function AppearanceProvider({ children }) {
   useEffect(() => {
     document.documentElement.dataset.style = appearance.style;
     document.documentElement.dataset.palette = appearance.palette;
+    document.documentElement.dataset.motion = appearance.motion;
     try { localStorage.setItem('znote-appearance', JSON.stringify(appearance)); } catch {}
     const sync=()=>{
       const glitch=appearance.style==='glitch';
       document.querySelector('link[rel="icon"]')?.setAttribute('href',glitch?'/themes/glitch/icon.svg':'/icon.svg');
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content',glitch?'#1859a8':'#287464');
-      queueMicrotask(()=>{try{window.ZNoteAppearance?.set?.(JSON.stringify({style:document.documentElement.dataset.style,palette:document.documentElement.dataset.palette,mode:localStorage.getItem('znote-theme')||'system'}));}catch{}});
+      queueMicrotask(()=>{try{window.ZNoteAppearance?.set?.(JSON.stringify({style:document.documentElement.dataset.style,palette:document.documentElement.dataset.palette,motion:document.documentElement.dataset.motion,mode:localStorage.getItem('znote-theme')||'system'}));}catch{}});
     };sync();window.addEventListener('znote:theme-changed',sync);
     return()=>window.removeEventListener('znote:theme-changed',sync);
   }, [appearance]);
-  useEffect(()=>{const changed=e=>{if(styles.some(s=>s.id===e.detail?.style))setAppearance(a=>({...a,style:e.detail.style}));};window.addEventListener('znote:native-appearance',changed);return()=>window.removeEventListener('znote:native-appearance',changed);},[]);
+  useEffect(()=>{const changed=e=>{if(styles.some(s=>s.id===e.detail?.style))setAppearance(a=>({...a,style:e.detail.style,...(['dynamic','still'].includes(e.detail?.motion)?{motion:e.detail.motion}:{})}));};window.addEventListener('znote:native-appearance',changed);return()=>window.removeEventListener('znote:native-appearance',changed);},[]);
   return <AppearanceContext.Provider value={{ appearance, setAppearance }}>{children}</AppearanceContext.Provider>;
 }
 export function AppearanceSettings() {
   const { appearance, setAppearance } = useContext(AppearanceContext);
   return <div className="appearance-settings">
-    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">建筑故障以晴空摄影为底，按钮和容器边缘呈现横向撕裂、错位切片及零散像素，交互时短暂飘散。中心文字、点击区域和原始媒体保持清晰稳定；支持明暗模式与减少动态效果。手机原生面板和采集浮窗同步使用，原有主题可随时切回。</HelpHint></div>
+    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">建筑故障以晴空摄影为底，将容器材质切成横向条带，拉伸、错位、分色并重组，碎片向外飘散。布局和点击位置保持稳定，原始媒体不加滤镜；原有主题可随时切回。</HelpHint></div>
     <div className="style-presets" role="group" aria-label="界面风格">
       {styles.map(style => <button key={style.id} className="style-preset" aria-label={`风格：${style.name}`} aria-pressed={appearance.style === style.id} onClick={() => setAppearance(a => ({ ...a, style: style.id }))}>
         <span className={`style-sample sample-${style.id}`} aria-hidden="true"><i /><span><b /><em /><em /></span></span>
@@ -54,6 +56,12 @@ export function AppearanceSettings() {
 
       </button>)}
     </div>
+    {appearance.style === 'glitch' ? <>
+      <div className="inline-heading"><p className="appearance-label">主题动效</p><HelpHint label="主题动效">动态模式间歇播放横向撕裂，滚出屏幕或切到后台时暂停；系统开启减少动态效果时也保持静态。此设置用于知识库页面，安卓原生浮窗的更新单独发布。</HelpHint></div>
+      <div className="palette-presets" role="group" aria-label="主题动效">
+        {[['dynamic','动态'],['still','静态']].map(([motion,label])=><button key={motion} aria-pressed={appearance.motion===motion} onClick={()=>setAppearance(a=>({...a,motion}))}>{label}{appearance.motion===motion&&<Check size={13}/>}</button>)}
+      </div>
+    </> : null}
     {['minimal', 'glass'].includes(appearance.style) ? <>
       <p className="appearance-label">预设色调</p>
       <div className="palette-presets" role="group" aria-label="预设色调">

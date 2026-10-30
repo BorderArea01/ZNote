@@ -14,8 +14,15 @@
   --stage-a: #132237; --stage-b: #22374c;
 }
 html[data-style="glitch"] body {
+  overflow-x: clip;
   background: radial-gradient(ellipse at 68% 0%,#8ac7ed29,transparent 48%),linear-gradient(110deg,#7894ae06,transparent 60%),var(--canvas);
 }
+/* Clip decorative overflow at the viewport's content boundary, without adding
+   a transformed/paint-contained ancestor for fixed media previews. */
+html[data-style="glitch"] .main { overflow-x:clip; }
+html[data-style="glitch"] .dialog-shade { width:100dvw; height:100dvh; overflow:clip; }
+html[data-style="glitch"] .lightbox { width:100dvw; height:100dvh; }
+html[data-style="glitch"] .dialog { overflow-x:hidden; }
 html[data-style="glitch"] :is(.brand img,.auth-logo) { content: url('/themes/glitch/icon.svg'); }
 html[data-style="glitch"] .topbar { background: var(--surface); border-bottom: 1px solid var(--border); }
 html[data-style="glitch"] .sidebar { background: var(--surface-2); }
@@ -32,6 +39,7 @@ html[data-style="glitch"] .glitch-scene {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(90deg,#10253c40,transparent 50%),linear-gradient(0deg,#081f3c70,transparent 35%);
 }
+.glitch-scene::before { content:''; position:absolute; inset:0; background:inherit; pointer-events:none; opacity:0; mask-image:linear-gradient(transparent 0 11%,#000 11% 13%,transparent 13% 26%,#000 26% 29%,transparent 29% 44%,#000 44% 45%,transparent 45% 58%,#000 58% 63%,transparent 63% 77%,#000 77% 78%,transparent 78% 89%,#000 89% 93%,transparent 93%); }
 .glitch-scene-caption { position: absolute; z-index: 1; bottom: 14px; left: 20px; color: #fff; font: 10px/1.4 'Consolas',monospace; letter-spacing: 2px; }
 .glitch-scene-mark { position: absolute; z-index: 1; right: 22px; top: 16px; width: 42px; height: 42px; font-size: 0; background: url('/themes/glitch/icon.svg') center / contain no-repeat; }
 .glitch-scene-grid { position: absolute; inset: 11px; z-index: 1; border: 1px solid #f0f8ff38; clip-path: polygon(0 0,20px 0,20px 1px,1px 1px,1px 20px,0 20px,0 0,100% 100%,calc(100% - 20px) 100%,calc(100% - 20px) calc(100% - 1px),calc(100% - 1px) calc(100% - 1px),calc(100% - 1px) calc(100% - 20px),100% calc(100% - 20px),100% 100%); }

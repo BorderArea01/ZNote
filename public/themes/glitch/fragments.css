@@ -6,6 +6,7 @@ html[data-style="glitch"] {
   --signal-cyan: #63bbd8;
   --signal-rose: #d894b3;
 }
+html[data-style="glitch"] body > main { overflow-x:clip; }
 html[data-style="glitch"][data-style] :is(.library-card, .intro-banner, .signal-surface) {
   --edge-size: 42px;
   --edge-outset: -13px;
@@ -45,7 +46,7 @@ html[data-style="glitch"] .library-card:nth-child(3n+2) {
   --edge-left: var(--edge-left-alt);
   --edge-right: var(--edge-right-alt);
 }
-html[data-style="glitch"] .library-card:nth-child(3n+2)::after { background-position: 83% 42%; transform: scaleY(-1); }
+html[data-style="glitch"] .library-card:nth-child(3n+2)::after { --fragment-flip: -1; background-position: 83% 42%; transform: scaleY(-1); }
 html[data-style="glitch"] .library-card:nth-child(3n+3)::after { background-position: 3% 18%; }
 html[data-style="glitch"][data-style] .intro-banner { --edge-size: 32px; --edge-outset: -9px; border-left-color: transparent; }
 html[data-style="glitch"] :is(.primary, .signal-button, .heading-actions > button:not(.icon-button)) {
@@ -80,13 +81,53 @@ html[data-style="glitch"] :is(.primary, .signal-button, .heading-actions > butto
   mask-repeat: no-repeat;
   opacity: .65;
 }
-/* Only the material changes briefly on hover, never the text or hit box. */
-@media (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference) {
-  html[data-style="glitch"] :is(.library-card, .signal-surface, .primary, .signal-button):hover::after { animation: signal-fracture 360ms steps(2, end) 1; }
+/* Opt-in data rupture: the actual material is cut into many horizontal
+   sections, pulled apart, smeared, RGB separated and recombined. Text and
+   pointer geometry stay in the live DOM. Visibility gating prevents offscreen
+   filters from allocating surfaces. No canvas loop or video texture. */
+html[data-style="glitch"][data-glitch-motion="running"] :is(.library-card,.intro-banner,.signal-surface)[data-glitch-visible]::before { animation:signal-rupture 6.8s steps(1,end) var(--contour-delay,0s) infinite; }
+html[data-style="glitch"][data-glitch-motion="running"] :is(.library-card,.intro-banner,.signal-surface,.primary,.signal-button)[data-glitch-visible]::after { animation:signal-debris 6.8s steps(1,end) var(--grain-delay,0s) infinite; }
+html[data-style="glitch"] .library-card:nth-child(3n+2) { --contour-delay:-2.3s; --grain-delay:-2.3s; }
+html[data-style="glitch"] .library-card:nth-child(3n+3) { --contour-delay:-4.7s; --grain-delay:-4.7s; }
+html[data-style="glitch"] .intro-banner { --contour-delay:-1.8s; --grain-delay:-1.8s; }
+html[data-style="glitch"][data-glitch-motion="running"] :is(.primary,.signal-button,.heading-actions > button)[data-glitch-pulse]::before { animation:signal-impact 680ms steps(1,end) 1; }
+@media (hover:hover) and (pointer:fine) {
+ html[data-style="glitch"][data-glitch-motion="running"] :is(.library-card,.signal-surface,.primary,.signal-button):hover::before { animation:signal-impact 860ms steps(1,end) 1; }
 }
-@keyframes signal-fracture { 25% { background-position: 63% 49%; opacity:.7; } 65% { background-position: 59% 48%; opacity:1; } }
+@keyframes signal-rupture {
+ 0%,8%,34%,66%,88%,100% { filter:none; transform:translate(0,0); }
+ 9%,13%,68%,72% { filter:url("rupture.svg#tear-a"); transform:translate(-3px,0); }
+ 14%,18%,73%,77% { filter:url("rupture.svg#tear-b"); transform:translate(5px,-1px); }
+ 19%,23%,78%,82% { filter:url("rupture.svg#tear-c"); transform:translate(-7px,1px); }
+ 24%,28%,83%,85% { filter:url("rupture.svg#tear-a"); transform:translate(4px,0); }
+ 29%,33%,86%,87% { filter:url("rupture.svg#tear-b"); transform:translate(-2px,0); }
+}
+@keyframes signal-debris {
+ 0%,8%,35%,66%,89%,100% { transform:translate(0,0) scaleY(var(--fragment-flip,1)); filter:none; opacity:.95; }
+ 9%,14%,68%,73% { transform:translate(-10px,-2px) scaleY(var(--fragment-flip,1)); filter:url("rupture.svg#tear-a"); opacity:1; }
+ 15%,21%,74%,80% { transform:translate(18px,-6px) scaleY(var(--fragment-flip,1)); filter:url("rupture.svg#tear-c"); opacity:.9; }
+ 22%,28%,81%,85% { transform:translate(-26px,-10px) scaleY(var(--fragment-flip,1)); filter:url("rupture.svg#tear-b"); opacity:.7; }
+ 29%,34%,86%,88% { transform:translate(34px,-15px) scaleY(var(--fragment-flip,1)); filter:url("rupture.svg#tear-a"); opacity:.3; }
+}
+@keyframes signal-impact {
+ 0%,100% { filter:none; transform:translateX(0); }
+ 12%,28%,62% { filter:url("rupture.svg#tear-a"); transform:translateX(-4px); }
+ 29%,44%,76% { filter:url("rupture.svg#tear-c"); transform:translateX(7px); }
+ 45%,61%,88% { filter:url("rupture.svg#tear-b"); transform:translateX(-8px); }
+}
+html[data-style="glitch"][data-glitch-motion="running"] .glitch-scene[data-glitch-visible]::before { animation:signal-datamosh 7.3s steps(1,end) infinite; }
+@keyframes signal-datamosh {
+ 0%,8%,35%,66%,88%,100% { opacity:0; filter:none; transform:translateX(0); }
+ 9%,15%,68%,73% { opacity:1; filter:url("rupture.svg#tear-a"); transform:translateX(10px); }
+ 16%,22%,74%,80% { opacity:1; filter:url("rupture.svg#tear-hero"); transform:translateX(-24px); }
+ 23%,29%,81%,85% { opacity:1; filter:url("rupture.svg#tear-b"); transform:translateX(16px); }
+ 30%,34%,86%,87% { opacity:.8; filter:url("rupture.svg#tear-c"); transform:translateX(-9px); }
+}
+html[data-style="glitch"][data-glitch-motion="running"] :is(.item-card,.dialog)[data-glitch-visible]::before { animation:signal-debris 7.7s steps(1,end) infinite; }
+html[data-style="glitch"][data-motion="still"] .brand img { animation:none!important; }
 @media (prefers-reduced-motion:reduce) {
-  html[data-style="glitch"] :is(.library-card, .signal-surface, .primary, .signal-button)::after { animation:none!important; }
+ html[data-style="glitch"] :is(.library-card,.intro-banner,.signal-surface,.glitch-scene,.item-card,.dialog,.primary,.signal-button)::before,
+ html[data-style="glitch"] :is(.library-card,.intro-banner,.signal-surface,.glitch-scene,.item-card,.dialog,.primary,.signal-button)::after { animation:none!important; filter:none!important; }
 }
 @media (max-width:760px) {
   html[data-style="glitch"][data-style] :is(.library-card, .signal-surface) { --edge-size: 32px; --edge-outset: -9px; }
@@ -95,3 +136,21 @@ html[data-style="glitch"] :is(.primary, .signal-button, .heading-actions > butto
   html[data-style="glitch"] :is(.library-card, .intro-banner, .signal-surface) { background:var(--signal-fill); border-color:var(--border,#bdccdd); }
   html[data-style="glitch"] :is(.library-card, .intro-banner, .signal-surface)::after { display:none; }
 }
+/* Detached, independently moving material strips. They do not receive input. */
+html[data-style="glitch"] .signal-shards { position:absolute!important; display:block!important; inset:0; margin:0!important; padding:0; width:auto; height:auto; z-index:2; pointer-events:none; font-size:0; overflow:visible; }
+html[data-style="glitch"] .signal-shards > i { position:absolute; left:var(--bit-x); top:var(--bit-y); width:var(--bit-w); height:var(--bit-h); margin:0; opacity:0; pointer-events:none; background:var(--signal-fill) url("architecture-mobile.webp") var(--bit-sample) 42% / 480px auto; box-shadow:-1px 0 #66c6ec,1px 0 #d57786; }
+html[data-style="glitch"] .signal-shards > i:nth-child(3n) { background-image:none; }
+html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-visible] > .signal-shards > i { animation:signal-shards 6.8s steps(1,end) var(--contour-delay,0s) infinite; }
+html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-pulse] > .signal-shards > i { animation:signal-shards-impact 680ms steps(1,end) 1; }
+@keyframes signal-shards {
+ 0%,8%,35%,66%,89%,100% { opacity:0; transform:translate(0,0) scaleX(1); }
+ 9%,13%,68%,72% { opacity:.95; transform:translate(calc(var(--bit-dx) * .2),0) scaleX(1.3); }
+ 14%,19%,73%,78% { opacity:1; transform:translate(calc(var(--bit-dx) * .55),calc(var(--bit-dy) * .3)) scaleX(1.8); }
+ 20%,25%,79%,83% { opacity:.8; transform:translate(var(--bit-dx),calc(var(--bit-dy) * .65)) scaleX(1.2); }
+ 26%,31%,84%,87% { opacity:.45; transform:translate(calc(var(--bit-dx) * 1.25),var(--bit-dy)) scaleX(.7); }
+ 32%,34%,88% { opacity:.15; transform:translate(calc(var(--bit-dx) * 1.4),calc(var(--bit-dy) * 1.25)) scaleX(.3); }
+}
+@keyframes signal-shards-impact { 5% { opacity:1; transform:translate(0,0); } 30% { opacity:1; transform:translate(calc(var(--bit-dx) * .5),calc(var(--bit-dy) * .4)) scaleX(1.8); } 65% { opacity:.6; transform:translate(var(--bit-dx),var(--bit-dy)); } 100% { opacity:0; transform:translate(calc(var(--bit-dx) * 1.4),var(--bit-dy)) scaleX(.3); } }
+@media (prefers-reduced-motion:reduce) { html[data-style="glitch"] .signal-shards { display:none!important; } }
+/* Fragments fly within the material and its gutter, never widen a mobile viewport. */
+html[data-style="glitch"] .signal-shards { inset:-24px -10px; overflow:clip; }
