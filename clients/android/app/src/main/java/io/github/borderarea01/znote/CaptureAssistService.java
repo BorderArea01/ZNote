@@ -61,6 +61,9 @@ public class CaptureAssistService extends AccessibilityService {
     private long tapAt;
     private String directShareOwner="";
     private long directShareUntil;
+    private final CopyLinkTrigger copyTrigger=new CopyLinkTrigger();
+    private Runnable copyPrompt;
+    private final java.util.concurrent.atomic.AtomicBoolean copyInspecting=new java.util.concurrent.atomic.AtomicBoolean();
     private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
     private SharedPreferences sharingPrefs(){return getSharedPreferences("CaptureSharing",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
@@ -71,8 +74,36 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);}
-    @Override public void onAccessibilityEvent(AccessibilityEvent event){}
+    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
+    @Override public void onAccessibilityEvent(AccessibilityEvent event){
+        if(event==null||event.isPassword()||busy||ShareActivity.captureVisible||bubble==null||!prefs().getBoolean("copy_link_prompt",true))return;
+        String owner=String.valueOf(event.getPackageName());if(owner.equals(getPackageName())||owner.equals("null"))return;
+        if(event.getEventType()==AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED){if(!"android.widget.Toast".contentEquals(event.getClassName()==null?"":event.getClassName()))return;for(CharSequence label:event.getText())if(CopyLinkTrigger.completed(label)){prepareCopyPrompt(owner,event.getEventTime());return;}return;}
+        if(event.getEventType()!=AccessibilityEvent.TYPE_VIEW_CLICKED)return;
+        boolean copied=CopyLinkTrigger.label(event.getContentDescription());int checked=0;for(CharSequence label:event.getText()){if(++checked>8)break;copied|=CopyLinkTrigger.label(label);}
+        if(copied){prepareCopyPrompt(owner,event.getEventTime());return;}
+        // Some share sheets put the text inside a clickable layout, leaving
+        // the click event text empty. Inspect only that clicked control on a
+        // worker, with a strict node/depth budget; never traverse the page.
+        String type=String.valueOf(event.getClassName());if(!type.matches("android\\.(widget\\.(Button|ImageButton|LinearLayout|FrameLayout)|view\\.View)")||!copyInspecting.compareAndSet(false,true))return;
+        AccessibilityEvent snapshot=AccessibilityEvent.obtain(event);
+        reader.submit(()->{try{AccessibilityNodeInfo source=snapshot.getSource();if(source!=null)try{if(copyControl(source,0,new int[]{12})){long time=snapshot.getEventTime();handler.post(()->prepareCopyPrompt(owner,time));}}finally{source.recycle();}}catch(RuntimeException ignored){/* The source App may remove the clicked control immediately. */}finally{snapshot.recycle();copyInspecting.set(false);}});
+    }
+    private boolean copyControl(AccessibilityNodeInfo node,int depth,int[] budget){
+        if(node==null||node.isPassword()||--budget[0]<0||depth>2)return false;
+        if(CopyLinkTrigger.label(node.getText())||CopyLinkTrigger.label(node.getContentDescription()))return true;
+        if(node.getChildCount()>8)return false;
+        for(int i=0;i<node.getChildCount()&&budget[0]>0;i++){AccessibilityNodeInfo child=node.getChild(i);if(child!=null)try{if(copyControl(child,depth+1,budget))return true;}finally{child.recycle();}}
+        return false;
+    }
+    private void prepareCopyPrompt(String owner,long time){
+        if(busy||ShareActivity.captureVisible||bubble==null||!prefs().getBoolean("copy_link_prompt",true)||!copyTrigger.accept(time,SystemClock.uptimeMillis()))return;
+        long after=System.currentTimeMillis()-(SystemClock.uptimeMillis()-time)-250;int version=generation;
+        if(copyPrompt!=null)handler.removeCallbacks(copyPrompt);
+        copyPrompt=()->{copyPrompt=null;if(version==generation&&bubble!=null&&!busy&&prefs().getBoolean("copy_link_prompt",true)){record("copy_link_prompt","user_copy_action");openPanel("",owner,after,true,false);}};
+        handler.postDelayed(copyPrompt,250);
+    }
+    void configureCopyPrompt(){android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();if(info==null)return;info.eventTypes=visible()&&prefs().getBoolean("copy_link_prompt",true)?AccessibilityEvent.TYPE_VIEW_CLICKED|AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:0;info.notificationTimeout=80;setServiceInfo(info);}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
     @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();catalogue.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;libraryMenuExpanded=false;render();}
@@ -94,7 +125,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     boolean visible(){return bubble!=null;}
     boolean capturing(){return busy;}
-    void setVisible(boolean value){prefs().edit().putBoolean("capture_bubble",value).apply();if(value)showBubble();else hideBubble();notifyReady();}
+    void setVisible(boolean value){prefs().edit().putBoolean("capture_bubble",value).apply();if(value)showBubble();else hideBubble();configureCopyPrompt();notifyReady();}
     public void showBubble(){
         if(manager==null)return;
         if(bubble!=null){render();if(bubble!=null)return;}
@@ -386,7 +417,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private void openPanel(String value,String owner,long after,boolean clipboard,boolean quick){
         lastMessage="";cancel();resultPending=false;resultFailed=false;handleReveal=0;expanded=false;render();
-        record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick).putExtra("selected_collection",sharingPrefs().getString("share_collection","")));}
+        record("panel_requested","capture_process");try{startActivity(new Intent(this,FloatingShareActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("panel_requested_at",SystemClock.elapsedRealtime()).putExtra(Intent.EXTRA_TEXT,value).putExtra("read_clipboard",clipboard).putExtra("copy_prompt",clipboard&&after>0&&!quick).putExtra("source_package",owner).putExtra("copied_after",after).putExtra("quick_save",quick).putExtra("selected_collection",sharingPrefs().getString("share_collection","")));}
         catch(Exception e){message("无法打开采集面板，请重试");}
     }
     void backgroundQueued(String id,String jobOrigin){lastMessage="正在后台采集…";resultPending=false;resultFailed=false;busy=false;expanded=false;record("capture_queued",id);rememberJob(id,jobOrigin);savingJobs=trackedJobs().size();render();notifyReady();scheduleTracking(0);}

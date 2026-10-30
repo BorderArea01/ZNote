@@ -1,6 +1,7 @@
 import {portalHtml,portalScript,portalCss} from './portal.js';
 import {connectHtml,connectScript,connectCss} from './connect.js';
 import {sharedUrls} from '../../../shared/share-input.js';
+import {normalizePixivPost} from '../../../shared/pixiv-capture.js';
 const json=(value,status=200,headers={})=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
 const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),v=>v.toString(16).padStart(2,'0')).join('');
@@ -8,9 +9,9 @@ const secret=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toSt
 const PAIR_TTL=24*60*60*1000;
 const publicJob=row=>({id:row.id,status:row.status,title:row.title,message:row.message,source_url:row.source_url,created_at:new Date(row.created).toISOString(),collection_id:JSON.parse(row.input).collection_id,attempt:row.attempt});
 async function body(request){
- if(Number(request.headers.get('Content-Length'))>32768)fail(413,'分享文字过长');
+ if(Number(request.headers.get('Content-Length'))>262144)fail(413,'采集请求过大');
  const reader=request.body?.getReader();if(!reader)return {};
- const chunks=[];let size=0;try{while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>32768){await reader.cancel();fail(413,'分享文字过长');}chunks.push(value);}}finally{reader.releaseLock();}
+ const chunks=[];let size=0;try{while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>262144){await reader.cancel();fail(413,'采集请求过大');}chunks.push(value);}}finally{reader.releaseLock();}
  const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length;}
  try{return JSON.parse(new TextDecoder().decode(bytes));}catch{fail(400,'请求格式不正确');}
 }
@@ -24,7 +25,7 @@ function captureInput(raw){
  if(raw.image_mode!==undefined&&!['group','note'].includes(raw.image_mode))fail(400,'保存方式无效');
  const tags=raw.tags||[];if(!Array.isArray(tags)||tags.length>20||tags.some(v=>typeof v!=='string'||!v.trim()||v.length>40))fail(400,'标签格式不正确');
  const requestId=raw.request_id||crypto.randomUUID();if(!/^[a-zA-Z0-9:_-]{1,160}$/.test(requestId))fail(400,'分享编号无效');
- return {source:url.href,requestId,input:{text:raw.text.trim(),collection_id:raw.collection_id||null,image_mode:raw.image_mode||'group',tags}};
+ return {source:url.href,requestId,input:{text:raw.text.trim(),collection_id:raw.collection_id||null,image_mode:raw.image_mode||'group',tags,...(raw.browser_pixiv!==undefined?{browser_pixiv:normalizePixivPost(raw.browser_pixiv,url.href)}:{})}};
 }
 async function token(db,name,kind,now){const raw='zn_'+secret(),id=crypto.randomUUID(),expires=now+(kind==='session'?30:180)*86400000;await db.prepare('INSERT INTO relay_tokens(id,hash,kind,name,expires) VALUES(?,?,?,?,?)').bind(id,await hash(raw),kind,name,expires).run();return {id,token:raw,scope:'write',name,expires_at:new Date(expires).toISOString()};}
 async function auth(request,db,now){
@@ -107,7 +108,7 @@ async function route(request,env){
  if(match){
   const job=await db.prepare('SELECT * FROM relay_jobs WHERE id=? AND owner=?').bind(match[1],owner).first();if(!job)fail(404,'采集任务不存在');
   if(request.method==='GET'&&!match[2])return json(publicJob(job));
-  if(request.method==='POST'&&match[2]){if(job.status!=='failed')fail(409,'只有失败任务可以重试');const row=await db.prepare("UPDATE relay_jobs SET status='queued',message='等待开发机重试',attempt=attempt+1,lease=NULL,lease_until=0,updated=? WHERE id=? AND status='failed' RETURNING *").bind(now,job.id).first();if(!row)fail(409,'任务状态已变化');return json(publicJob(row),202);}
+  if(request.method==='POST'&&match[2]){if(job.status!=='failed')fail(409,'只有失败任务可以重试');const raw=await body(request),input=JSON.parse(job.input);if(raw.browser_pixiv!==undefined)input.browser_pixiv=normalizePixivPost(raw.browser_pixiv,job.source_url);const row=await db.prepare("UPDATE relay_jobs SET input=?,status='queued',message='等待开发机重试',attempt=attempt+1,lease=NULL,lease_until=0,updated=? WHERE id=? AND status='failed' RETURNING *").bind(JSON.stringify(input),now,job.id).first();if(!row)fail(409,'任务状态已变化');return json(publicJob(row),202);}
   if(request.method==='DELETE'&&!match[2]){if(!['failed','completed'].includes(job.status))fail(409,'请等待任务结束后移除记录');await db.prepare('DELETE FROM relay_jobs WHERE id=? AND owner=?').bind(job.id,owner).run();return json({removed:true});}
  }
  if(request.method==='POST'&&['/api/assets','/api/videos'].includes(path))fail(413,'远程采集入口只接收分享链接，不接收图片或视频文件');

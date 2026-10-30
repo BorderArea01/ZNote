@@ -202,7 +202,8 @@ async function expandEHentai(resource, signal, options = {}) {
 }
 
 async function fetchPixivJson(url, signal, referer) {
-  const resource = await fetchDocument(url, signal, 0, { json: true, referer });
+  let resource;try{resource=await fetchDocument(url, signal, 0, { json: true, referer });}
+  catch(error){if(/HTTP (?:401|403|404)/.test(error.message))throw fail('Pixiv 作品需要登录或当前不可访问；请在手机 ZNote 的采集设置中登录 Pixiv 后采集');throw error;}
   try { return JSON.parse(resource.buffer.toString('utf8')); } catch { throw fail('Pixiv 返回了无法读取的数据，可能需要验证'); }
 }
 

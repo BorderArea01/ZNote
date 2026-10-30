@@ -17,6 +17,7 @@ import java.util.concurrent.*;
 
 /** Receives only the content explicitly granted by the Android share sheet. */
 public class ShareActivity extends Activity {
+    static volatile boolean captureVisible;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ArrayList<Uri> files=new ArrayList<>();
@@ -30,6 +31,8 @@ public class ShareActivity extends Activity {
     private TextView status;
     private Button save;
     private Button login;
+    private Button pixivLogin;
+    private static final class PixivLoginRequired extends IOException{PixivLoginRequired(String message){super(message);}}
     private View modeSection,linkHeading;
     private boolean keyboardOpen;
     private boolean busy=false,visible=false,ready=false,completed=false,quickSave=false,autoShare=false;
@@ -117,6 +120,8 @@ public class ShareActivity extends Activity {
         status=label(clipboardPending?"正在读取刚复制的分享链接…":floating()&&shared.trim().isEmpty()&&files.isEmpty()?"添加作品链接后即可保存":"正在连接知识库…",12);status.setTextColor(CaptureVisuals.MUTED);status.setMaxLines(3);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);chrome.addView(status);
 
         login=button("打开知识库 / 登录",()->startActivity(new Intent(this,MainActivity.class)));CaptureVisuals.action(login,"folder",false);chrome.addView(login);login.setVisibility(View.GONE);
+        pixivLogin=button("登录 Pixiv",()->{quickSave=false;startActivityForResult(new Intent(this,PixivLoginActivity.class).putExtra("active_capture",true),61);});CaptureVisuals.action(pixivLogin,"folder",false);chrome.addView(pixivLogin);pixivLogin.setVisibility(PixivSession.work(CaptureAssistService.link(shared)).isEmpty()?View.GONE:View.VISIBLE);
+        text.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int b,int c){}public void onTextChanged(CharSequence s,int a,int b,int c){pixivLogin.setVisibility(PixivSession.work(CaptureAssistService.link(s.toString())).isEmpty()?View.GONE:View.VISIBLE);}public void afterTextChanged(android.text.Editable e){}});
         if(floating())chrome.getViewTreeObserver().addOnGlobalLayoutListener(()->{
             // Legacy floating Dialog windows may resize without reporting
             // Type.ime visibility, even on API 30+. Use their visible frame too.
@@ -126,17 +131,20 @@ public class ShareActivity extends Activity {
         });
     }
     private void openLibrary(){startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));}
+    @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==61){quickSave=false;if(pixivLogin!=null)pixivLogin.setText(result==RESULT_OK?"管理 Pixiv 登录":"登录 Pixiv");if(status!=null)status.setText(result==RESULT_OK?"Pixiv 登录状态已保存在手机，可继续保存当前作品":"已返回，作品链接仍保留");}}
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused)timing("panel_focus");if(focused&&clipboardPending)handler.post(this::readClipboard);}
     private void readClipboard(){
         if(!hasWindowFocus()||!clipboardPending||isFinishing())return;
         try{
             ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
             ClipDescription description=clipboard.getPrimaryClipDescription();
+            boolean copyPrompt=getIntent().getBooleanExtra("copy_prompt",false);
+            if(copyPrompt&&description!=null&&description.getExtras()!=null&&description.getExtras().getBoolean("android.content.extra.IS_SENSITIVE",false)){clipboardPending=false;status.setText("内容标记为敏感，请手动粘贴确认");return;}
             long after=getIntent().getLongExtra("copied_after",0);
             ClipData clip=description!=null&&description.getTimestamp()>=after?clipboard.getPrimaryClip():null;
             CharSequence clipText=clip!=null&&clip.getItemCount()>0?clip.getItemAt(0).getText():null;
             String value=clipText!=null?clipText.toString():clip!=null&&clip.getItemCount()>0&&clip.getItemAt(0).getUri()!=null?clip.getItemAt(0).getUri().toString():"";
-            String url=CaptureAssistService.link(value),owner=getIntent().getStringExtra("source_package");
+            String url=CaptureAssistService.link(value),owner=copyPrompt?"":getIntent().getStringExtra("source_package");
             if(!url.isEmpty()&&CaptureAssistService.acceptsLink(owner,url)){
                 clipboardPending=false;clipboardFeedback=true;text.setText(value);status.setText(quickSave?"已读取，正在加入后台保存…":"已读取分享链接，确认知识库后保存");maybeQuickSave();return;
             }
@@ -154,8 +162,8 @@ public class ShareActivity extends Activity {
     private void maybeQuickSave(){if(quickSave&&ready&&!busy&&!completed&&(!files.isEmpty()||!text.getText().toString().trim().isEmpty()))submit();}
     private void saved(String message){busy=false;completed=true;status.setText(message);save.setText("继续采集");save.setEnabled(true);save.setOnClickListener(v->nextCapture());}
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}
-    @Override protected void onResume(){super.onResume();visible=true;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).addPrimaryClipChangedListener(clipboardListener);if(!completed&&(!busy||!jobId.isEmpty()))loadCollections();}
-    @Override protected void onPause(){visible=false;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).removePrimaryClipChangedListener(clipboardListener);handler.removeCallbacksAndMessages(null);super.onPause();}
+    @Override protected void onResume(){super.onResume();visible=true;captureVisible=true;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).addPrimaryClipChangedListener(clipboardListener);if(!completed&&(!busy||!jobId.isEmpty()))loadCollections();}
+    @Override protected void onPause(){visible=false;captureVisible=false;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).removePrimaryClipChangedListener(clipboardListener);handler.removeCallbacksAndMessages(null);super.onPause();}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putString("requestId",requestId);state.putString("jobId",jobId);state.putString("submissionOrigin",submissionOrigin);state.putInt("uploaded",uploaded);}
     private void ui(Runnable run){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())run.run();});}
     private void loadCollections(){
@@ -192,12 +200,21 @@ public class ShareActivity extends Activity {
             }
             if(files.isEmpty()){
                 JSONObject input=new JSONObject().put("text",value).put("image_mode",asNote?"note":"group").put("collection_id",target.isEmpty()?JSONObject.NULL:target).put("request_id","android:"+requestId);
+                String workUrl=CaptureAssistService.link(value);
+                if(!PixivSession.work(workUrl).isEmpty()){
+                    ui(()->status.setText("正在使用手机 Pixiv 登录读取作品…"));
+                    Bundle resolved=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"pixiv",workUrl,null);
+                    if(resolved==null)throw new IOException("Pixiv 读取失败，请重试");
+                    if(resolved.getBoolean("requires_login",false))throw new PixivLoginRequired(resolved.getString("error","请先登录 Pixiv"));
+                    if(!resolved.getString("error","").isEmpty())throw new IOException(resolved.getString("error"));
+                    input.put("browser_pixiv",new JSONObject(resolved.getString("post","{}")));
+                }
                 JSONObject result=request("POST","/api/captures",input.toString());jobId=result.getString("id");ui(()->{if(floating()||autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.backgroundQueued(jobId,submissionOrigin);Toast.makeText(this,"已加入后台保存，可继续浏览",Toast.LENGTH_SHORT).show();finish();}else poll();});
             }else{
                 for(int i=uploaded;i<files.size();i++){final int index=i;ui(()->status.setText("正在上传 "+(index+1)+" / "+files.size()));upload(files.get(i),target,value,i);uploaded=i+1;}
                 ui(()->{String message="已保存 "+files.size()+" 个媒体文件";if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(true,message);Toast.makeText(this,message,Toast.LENGTH_SHORT).show();finish();}else saved(message+"，可返回原 App");});
             }
-        }catch(Exception e){ui(()->{if(e instanceof CaptureLoginRequired)login.setVisibility(View.VISIBLE);String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);if(imageMode!=null)imageMode.setEnabled(uploaded==0);status.setText(message);});}});
+        }catch(Exception e){ui(()->{if(e instanceof CaptureLoginRequired)login.setVisibility(View.VISIBLE);if(e instanceof PixivLoginRequired){quickSave=false;autoShare=false;pixivLogin.setVisibility(View.VISIBLE);}String message=(uploaded>0?"已保存 "+uploaded+" 个；":"")+e.getMessage();if(autoShare){if(CaptureAssistService.current!=null)CaptureAssistService.current.directResult(false,message);Toast.makeText(this,"采集失败，已发送通知",Toast.LENGTH_LONG).show();finish();return;}busy=false;save.setEnabled(true);collection.setEnabled(uploaded==0);text.setEnabled(uploaded==0);if(imageMode!=null)imageMode.setEnabled(uploaded==0);status.setText(message);});}});
     }
     private void poll(){
         if(!visible||jobId.isEmpty()||isDestroyed())return;

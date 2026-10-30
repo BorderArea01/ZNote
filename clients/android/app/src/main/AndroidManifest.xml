@@ -6,6 +6,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <application android:label="ZNote" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:supportsRtl="true">
     <provider android:name=".CaptureSessionProvider" android:authorities="${applicationId}.capture-session" android:exported="false"/>
+    <activity android:name=".PixivLoginActivity" android:label="Pixiv 登录" android:exported="false"/>
     <activity android:name=".UpdateActivity" android:label="应用更新" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/>
     <service android:name=".CaptureAssistService" android:process=":capture" android:label="ZNote 点击采集" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled floating capture control, available while browsing other apps; reads the current page only on explicit tap."/>

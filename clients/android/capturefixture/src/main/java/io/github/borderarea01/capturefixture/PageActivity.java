@@ -17,7 +17,7 @@ public class PageActivity extends Activity {
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(20,20,20,20);TextView header=new TextView(this);header.setText("分享至");header.setTextSize(22);panel.addView(header);
         if(!getIntent().getBooleanExtra("copyOnly",false)){Button direct=new Button(this);direct.setText("ZNote");direct.setContentDescription("ZNote");panel.addView(direct);direct.setOnClickListener(w->{Intent send=new Intent(Intent.ACTION_SEND).setType("text/plain").setPackage("io.github.borderarea01.znote").putExtra(Intent.EXTRA_TEXT,"分享作品 "+url);startActivity(send);});}
         LinearLayout tile=new LinearLayout(this);tile.setPadding(30,30,30,30);TextView icon=new TextView(this);icon.setText("↗");tile.addView(icon);TextView label=new TextView(this);label.setText(douyin?"复制链接到剪贴板":"复制\n链接");tile.addView(label);panel.addView(tile);
-        AlertDialog dialog=new AlertDialog.Builder(this).setView(panel).create();tile.setOnClickListener(w->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("作品","分享作品 "+url+"，复制本条信息打开 App"));dialog.dismiss();});dialog.show();dialog.getWindow().setGravity(Gravity.BOTTOM);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(panel).create();tile.setOnClickListener(w->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("作品","分享作品 "+url+"，复制本条信息打开 App"));dialog.dismiss();Toast.makeText(this,"链接已复制",Toast.LENGTH_SHORT).show();});dialog.show();dialog.getWindow().setGravity(Gravity.BOTTOM);
     };share.setOnClickListener(v->showShare.run());if(getIntent().getBooleanExtra("menuOpen",false))page.post(showShare);}
   }
 }

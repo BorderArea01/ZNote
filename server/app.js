@@ -1199,7 +1199,7 @@ export function createApp({
   app.post('/api/captures/resolve',async(req,res)=>res.json({plan:await captures.resolve(req.body)}));
   app.get('/api/captures/:id',(req,res)=>res.json(captures.get(req.params.id)));
   app.delete('/api/captures/:id',(req,res)=>res.json(captures.remove(req.params.id)));
-  app.post('/api/captures/:id/retry',(req,res)=>res.status(202).json(captures.retry(req.params.id)));
+  app.post('/api/captures/:id/retry',(req,res)=>res.status(202).json(captures.retry(req.params.id,req.body)));
   registerStreamRoutes(app, { dataDir, saveVideo });
   app.get('/api/imports', (req, res) => res.json({ jobs: imports.list() }));
   app.get('/api/imports/:id', (req, res) => res.json(imports.get(req.params.id)));

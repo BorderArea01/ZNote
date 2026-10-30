@@ -1,6 +1,7 @@
 import {request as httpRequest} from 'node:http';
 import {request as httpsRequest} from 'node:https';
 import {proxyAgent} from '../../../server/network-proxy.js';
+import {normalizePixivPost} from '../../../shared/pixiv-capture.js';
 
 // Fixed origins only: a cloud job can supply a share link, never a local API
 // path, destination address, credential, file path or executable command.
@@ -35,7 +36,7 @@ export function createCollector({local,relay,state={jobs:[]},save=async()=>{}}){
     entry.local_id=result.id;entry.needs_retry=false;await persist();
    }
    let job=await local('/api/captures/'+encodeURIComponent(entry.local_id));
-   if(entry.needs_retry&&job.status==='failed')job=await local('/api/captures/'+encodeURIComponent(entry.local_id)+'/retry','POST',{});
+   if(entry.needs_retry&&job.status==='failed')job=await local('/api/captures/'+encodeURIComponent(entry.local_id)+'/retry','POST',entry.input.browser_pixiv?{browser_pixiv:entry.input.browser_pixiv}:{});
    entry.needs_retry=false;
    if(!['queued','running','failed','completed'].includes(job.status))throw Error('开发机任务状态无效');
    entry.status=job.status;entry.message=String(job.message||'等待开发机处理').slice(0,1800);entry.title=String(job.title||'作品采集').slice(0,200);
@@ -56,7 +57,7 @@ export function createCollector({local,relay,state={jobs:[]},save=async()=>{}}){
    if(result.job){
     const job=result.job;
     if(!/^[a-f0-9-]{36}$/.test(job.id)||typeof job.lease!=='string'||!job.input||typeof job.input.text!=='string'||job.input.text.length>16000)throw Error('收件箱任务格式无效');
-    const entry={id:job.id,lease:job.lease,input:{text:job.input.text,collection_id:job.input.collection_id||null,image_mode:job.input.image_mode||'group',tags:job.input.tags||[]},...(job.local_id?{local_id:job.local_id}:{}),needs_retry:job.attempt>0,status:'queued',message:'等待开发机采集'};
+    const entry={id:job.id,lease:job.lease,input:{text:job.input.text,collection_id:job.input.collection_id||null,image_mode:job.input.image_mode||'group',tags:job.input.tags||[],...(job.input.browser_pixiv?{browser_pixiv:normalizePixivPost(job.input.browser_pixiv,job.source_url)}:{})},...(job.local_id?{local_id:job.local_id}:{}),needs_retry:job.attempt>0,status:'queued',message:'等待开发机采集'};
     jobs.set(entry.id,entry);await persist();await observe(entry);
    }
    await persist();return {active:jobs.size};

@@ -15,6 +15,7 @@ import { downloadCaptureVideo,downloadCaptureBgm } from './capture-video.js';
 import {douyinWork,renderDouyinCapture,hasCaptureResources} from './capture-browser.js';
 import {MAX_CAPTURE_GROUP_IMAGES,MAX_CAPTURE_NOTE_IMAGES} from '../shared/capture-limits.js';
 import {jlijiSet} from './capture-gallery.js';
+import {pixivCapturePlan} from '../shared/pixiv-capture.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
@@ -231,6 +232,10 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const input=captureInput.parse(raw);validateCollection(input.collection_id);
       const urls=sharedUrls(input.text);if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
       let browserPlan=null;
+      if(raw?.browser_pixiv!==undefined){
+        if(raw.browser_post!==undefined||raw.browser_html!==undefined)throw fail(400,'每次只可提供一种作品数据');
+        browserPlan=pixivCapturePlan(raw.browser_pixiv,urls[0]);
+      }
       if(raw?.browser_post!==undefined){
         if(raw.browser_html!==undefined)throw fail(400,'每次只可提供一种浏览器作品数据');
         browserPlan=extractBrowserXPost(raw.browser_post,urls[0]);
@@ -261,7 +266,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:browserPlan?.title||input.text.slice(0,100),...(browserPlan?{plan:browserPlan}:{}),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
       jobs.push(job);write(jobs);schedule();return exposed(job);
     },
-    retry(id){const job=this.get(id),previous=read().find(j=>j.id===id),musicOnly=previous.bgm_item_ids?.length&&previous.plan?.bgm;if(job.status!=='failed'&&!(job.status==='completed'&&job.bgm_status==='failed'))throw fail(409,'只有失败的采集或配乐可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);
+    retry(id,options={}){const job=this.get(id),previous=read().find(j=>j.id===id),musicOnly=previous.bgm_item_ids?.length&&previous.plan?.bgm;if(job.status!=='failed'&&!(job.status==='completed'&&job.bgm_status==='failed'))throw fail(409,'只有失败的采集或配乐可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);
+      if(options?.browser_pixiv!==undefined){const plan=pixivCapturePlan(options.browser_pixiv,job.source_url);patch(id,{plan,status:'queued',message:'等待使用手机 Pixiv 登录重新采集'});schedule();return this.get(id);}
       // Upgrade pre-parser tasks only before any media has been saved. Once
       // saving starts, retain the plan so retry cannot shuffle stable IDs.
       const oldGallery=jlijiSet(job.source_url)&&previous.plan?.parser!=='jliji-gallery-v1';

@@ -10,9 +10,13 @@ import android.webkit.CookieManager;
  * Callers use a worker: a cold WebView provider must never block overlay input. */
 public class CaptureSessionProvider extends ContentProvider {
     @Override public boolean onCreate(){return true;}
-    @Override public synchronized Bundle call(String method,String arg,Bundle extras){
+    @Override public Bundle call(String method,String arg,Bundle extras){
         if(Binder.getCallingUid()!=android.os.Process.myUid())throw new SecurityException("Private capture session");
+        if("pixiv".equals(method))return PixivSession.resolve(arg);
         if(!"session".equals(method))throw new IllegalArgumentException("Unsupported operation");
+        return session(arg,extras);
+    }
+    private synchronized Bundle session(String arg,Bundle extras){
         SharedPreferences prefs=getContext().getSharedPreferences("MainActivity",0);
         String preferred=prefs.getString("origin",""),remote=prefs.getString("remote_capture_origin",""),lan=prefs.getString("lan_origin","");
         if(!preferred.isEmpty()&&!prefs.contains("routing_legacy_origin"))prefs.edit().putString("routing_legacy_origin",preferred).commit();
