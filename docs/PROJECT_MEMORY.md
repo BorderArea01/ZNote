@@ -478,3 +478,5 @@
 - Windows29仅源码候选，开发程序的动效偏好/桥接/连接与重启验证 artifacts/desktop-appearance-j1xM0v；本轮没有打包或发布新Windows安装包，也没有发布Android APK。现有有效客户端仍Windows28与Android26，唯一项目回退仍27项目包。用户否定弱动效后，先交付实际强动态页面和录屏，不能把先前弱版继续发布。
 - Playwright浏览器/Electron loader实际添加disable-background-timer-throttling、disable-backgrounding-occluded-windows等开关，自动化中的document.hidden未变化；背景暂停逻辑基于真实Page Visibility事件实现，但本轮没有真机后台验证，不得把模拟事件或空历史写成验证通过。Windows测试在隐藏后由主进程恢复窗口，再读取真实事件历史，不能在隐藏渲染器内无限等待RAF。
 - 最终生产前端为 index-8hBdmF3M.js（以实际dist入口为准），主题资源URL版本5。Pages部署10efabdd，稳定域名全部新资源hash、手机尺寸Portal切换、collector在线、原任务数量未变，以及现有有效APK26/源码26和Windows28资产hash通过 artifacts/glitch-release-live-QjS1Lk。公开GitHub API在当前出口仍403，认证目录检查通过，不宣称手机匿名更新路径已验证。实际录屏 artifacts/glitch-motion-live-LGCtNx/dynamic-preview.mp4；不是只交静态截图。
+
+- 最终演示改为 artifacts/rupture-demo-kxhuvy/preview.mp4：在当前3741独立录屏，不在录制中调用元素截图或临时改变视口；1280×900、9秒、约1.04MiB。测试过程的视频可能因截图器改变捕获面而出现大片灰底，不能直接交付；专门录制后已提帧目视并校验灰底占比0.0016%。前面LGCtNx视频仅作为过程证据，最终交付用本条路径。源码 cfe2a2d 已推送，生产静态资源保持新动态版本；没有发布Windows29或Android新APK，原28/26有效组件及唯一27回退保留，候选前端编译目录已清理。
