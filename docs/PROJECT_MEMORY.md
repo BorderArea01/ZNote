@@ -463,3 +463,6 @@
 - Android候选改为 beta.28 /10028：原生Path按bounds缓存，真实轮廓和摄影边缘取代旧六条等距色线；受控release/debug/test构建与lint通过。模拟器两次分别在可用内存1491、1504MiB时被1536MiB守卫停止，原生UI未验收、不得发布或冒充通过；当前有效APK仍为beta.26。Windows28打包与发布结果另记，不能仅凭编译通过宣称发布。
 
 - Windows28成品已完成实际EXE验收，artifacts/desktop-appearance-bHlWI0 确认本地SVG通过CSP、浅深色、窗口/托盘、桥接与重启；artifacts/desktop-smoke-ANNr3z 确认内置服务建库、密码、上传、取消关闭、退出后停止、重启保留内容。截图已目视；原生Android28仍未通过UI验收。
+
+- Windows beta.28 已发布 clients-v0.10.0-beta.28，源码提交 c0f78e35a6a9fed5b7f5d3a143e809e36e4ca392。安装包SHA256 f829f6a1397aeab956b3e0bd3d74badde1cc088c7df00dcb98e54bae22b46697；源码SHA256 98ca5badf565d8fcf9d8941fb59b5d4f4ef650388519fd9ed49d6db236d74e56。Pages 079e90c7 部署后，稳定域名手机尺寸界面、切换、全部新材质资源hash及仍有效的APK26/源码26下载校验通过，collector在线、原任务数量未变，证据 artifacts/glitch-release-live-X1IPyT。
+- 最终核对 artifacts/glitch-v3-final-state.json：当前3741生产HTML/CSS和新遮罩资源一致，Windows28/回退Windows27安装包与来源hash均验证；当前项目包为 android-beta28-release，唯一项目回退为 android-beta27-release，两个包中有效Android26组件为硬链接。client-release.json仍声明Android26且指向当前包中的有效文件。已清理旧26项目包、模拟设备与安卓/Windows可再生编译目录，释放约3.35GiB。没有发布Android28 APK；荣耀真机未验证。
