@@ -452,3 +452,12 @@
 - 线上Pages的CSS/图标/摄影资源、原Android26的APK与对应源码hash、Windows27的GitHub资产hash和实际手机尺寸Portal开关已验证；原采集记录数量不变，collector在线，证据 artifacts/glitch-release-live-HLcnKA/result.json。匿名GitHubAPI在开发机出口仍403，认证目录核对通过，不把它说成已验证手机的匿名更新请求。
 - Android原生beta.27候选没有发布。最后受控build/lint成功证据 artifacts/android-glitch-v2-retry-build.txt；模拟设备多次被守卫中止，最多只完成debug APK安装，未执行通过新原生UI用例。不要用同目录旧 result.txt（beta.26的PASS）冒充本轮UI证据。后续需在资源允许时或获授权的真机上完成原生检查，再签名发布；原签名密钥保留。
 - 当前项目包为Windows27与仍有效的Android26，目录 artifacts/android-beta27-release 沿用历史目录名；其中旧26 APK及其匹配源码使用硬链接，作为当前有效Android组件，不新增第二套物理副本。client-release.json仍声明Android26，引用当前项目包里的有效文件。唯一项目回退为 artifacts/android-beta26-release 的已验证APK与完整源码；旧25、旧Windows26安装包、候选编译包、runtime暂存及模拟设备已清理，不按平台额外保留回退。当前包装源码27包含尚未发布的Android27绘制代码，实际APK26的匹配源码26也保留供追溯。
+
+
+## 2026-10-31 蓝天参考图：材质碎裂边缘修正
+
+- 用户否定规则横线/方块组成的假边缘，给出蓝天白云、摄影纹理与白色面板互相撕裂的参考。后续不能把等距色线、重复条码或彩色描边称为 datamoshing；轮廓应有长短、粗细、间距、聚集和留白变化，中心阅读区完整。
+- 新版由 scripts/build-glitch-fragments.mjs 固定种子生成静态 SVG alpha 遮罩，网页、Windows 启动页和 Pages 复用 fragment-masks.css。面板底色自身形成不规则边界，摄影碎片只在边缘交错；移除旧规则方块与双彩描边。提高主题选择器优先级，避免深色模式把完整矩形背景盖回。样式 URL 带版本，避免旧 CSS 缓存。
+- 原图片/视频不加滤镜，实际按钮命中区和文本不移动，空闲无动画；减少动态效果、原主题切换、320px 界限、弹窗滚动/关闭保持。Windows CSP 只增加 data 图片以加载本地 SVG 遮罩，脚本和外部连接权限未扩大。
+- 当前3741真实图库桌面/实际触屏检查通过，items元数据哈希和PIN未变，证据 artifacts/glitch-v2-live-OBXyEv；隔离主题明暗/触屏/键盘/恢复/对比度检查 artifacts/glitch-ui-htiCAu；Windows开发程序主题/窗口托盘/双向桥接/重启检查 artifacts/desktop-appearance-uLP2HH。截图均已目视。
+- Android候选改为 beta.28 /10028：原生Path按bounds缓存，真实轮廓和摄影边缘取代旧六条等距色线；受控release/debug/test构建与lint通过。模拟器两次分别在可用内存1491、1504MiB时被1536MiB守卫停止，原生UI未验收、不得发布或冒充通过；当前有效APK仍为beta.26。Windows28打包与发布结果另记，不能仅凭编译通过宣称发布。

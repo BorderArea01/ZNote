@@ -1,6 +1,6 @@
 import{build}from'esbuild';import{readFile,writeFile,mkdir,copyFile,stat}from'node:fs/promises';import{createHash}from'node:crypto';import{dirname,resolve,join}from'node:path';import{fileURLToPath}from'node:url';import{portalHtml}from'./portal.js';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..'),dir=join(root,'artifacts/remote-access/pages');await mkdir(dir,{recursive:true});
-const themeDir=join(dir,'themes/glitch');await mkdir(themeDir,{recursive:true});for(const file of['architecture-mobile.webp','icon.svg','fragments.css'])await copyFile(join(root,'public/themes/glitch',file),join(themeDir,file));
+const themeDir=join(dir,'themes/glitch');await mkdir(themeDir,{recursive:true});for(const file of['architecture-mobile.webp','icon.svg','fragments.css','fragment-masks.css'])await copyFile(join(root,'public/themes/glitch',file),join(themeDir,file));
 await build({entryPoints:[join(root,'addons/connectors/cloudflare/worker.js')],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:join(dir,'_worker.js'),legalComments:'eof'});
 await writeFile(join(dir,'index.html'),portalHtml);
 // Optional public release artifacts only. Never copy collector configuration,

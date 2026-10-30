@@ -39,13 +39,13 @@ html[data-style="glitch"] .glitch-scene {
 .glitch-scene > i:nth-last-child(2) { top: 64%; right: 11%; width: 8%; height: 3px; background: #d5a5b9c9; }
 .glitch-scene > i:last-child { top: 68%; right: 0; width: 13%; height: 1px; }
 html[data-style="glitch"] .page-heading h1 { letter-spacing: -.8px; }
-html[data-style="glitch"] .intro-banner { background: var(--surface); border-left: 3px solid var(--green); border-radius: 4px; }
+html[data-style="glitch"] .intro-banner { border-left: 3px solid transparent; border-radius: 4px; }
 html[data-style="glitch"] .primary { border-radius: 3px 8px 3px 3px; }
 html[data-style="glitch"] :is(.dialog-header,.settings-title) { border-bottom-color: var(--border); }
 /* Keep scrolling, media clipping and touch paint containment intact. The
    fractured frame is painted underneath content, never across an image. */
-html[data-style="glitch"] :is(.item-card,.dialog) { position:relative; isolation:isolate; box-shadow:-2px 1px 0 #63bbd832,3px -1px 0 #d894b326,var(--panel-shadow); }
-html[data-style="glitch"] :is(.item-card,.dialog)::before { content:''; position:absolute; z-index:-1; inset:1px; pointer-events:none; background:linear-gradient(90deg,var(--signal-cyan),var(--signal-rose)); mask-image:var(--signal-strips),linear-gradient(90deg,#000 0 2px,transparent 5px calc(100% - 5px),#000 calc(100% - 2px)); mask-composite:intersect; }
+html[data-style="glitch"] :is(.item-card,.dialog) { position:relative; isolation:isolate; box-shadow:var(--panel-shadow); }
+html[data-style="glitch"] :is(.item-card,.dialog)::before { content:''; position:absolute; z-index:-1; inset:1px; pointer-events:none; background:url('/themes/glitch/architecture-mobile.webp') 61% 48% / 620px auto; mask-image:var(--grain-left),var(--grain-right); mask-size:9px 100%; mask-position:left,right; mask-repeat:no-repeat; opacity:.55; }
 html[data-style="glitch"] .auth-art { background: linear-gradient(0deg,#0b213cdc,#1129408c),url('/themes/glitch/architecture.webp') center / cover; color: #f5f8fe; }
 html[data-style="glitch"] .auth-art :is(h1,p,.eyebrow,.brand) { color: inherit; }
 html[data-style="glitch"] .style-presets { grid-template-columns: repeat(auto-fit,minmax(105px,1fr)); }

@@ -1,4 +1,5 @@
 import{mkdir,readFile,writeFile}from'node:fs/promises';import sharp from'sharp';
+import './build-glitch-fragments.mjs';
 const dir='public/themes/glitch',native='clients/android/app/src/main/res/drawable-nodpi';await mkdir(native,{recursive:true});
 const photo=await readFile('docs/design/glitch/architecture-source.png');
 await sharp(photo).resize({width:1600,withoutEnlargement:true}).webp({quality:83}).toFile(dir+'/architecture.webp');
@@ -8,5 +9,6 @@ const svg=await readFile(dir+'/icon.svg');await sharp(svg).resize(512,512).png()
 await sharp(svg).resize(64,64).png().toFile('clients/desktop/launcher/icon-glitch.png');
 await writeFile('clients/desktop/launcher/glitch-architecture.webp',await readFile(dir+'/architecture-mobile.webp'));
 await writeFile('clients/desktop/launcher/fragments.css',await readFile(dir+'/fragments.css'));
+await writeFile('clients/desktop/launcher/fragment-masks.css',await readFile(dir+'/fragment-masks.css'));
 await writeFile('clients/desktop/launcher/architecture-mobile.webp',await readFile(dir+'/architecture-mobile.webp'));
 console.log('Built bounded architecture backgrounds and the alternate Z icon; classic assets retained.');
