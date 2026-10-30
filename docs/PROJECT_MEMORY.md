@@ -2,6 +2,9 @@
 
 ## 手机复制链接弹窗与 Pixiv 手机登录（2026-10-30）
 
+- 发布记录：beta.25 原签名 APK / Git 源码已公开发布，源码提交 5250886；正式 Pages 部署 8270132e，与本地 APK SHA256 9ef5d5d8374933f78b4036b368730533a39bfcde8d3fc29fd3266c9170fa9427 及源码哈希核对一致。真实云端新元数据/原任务重试校验、原失败任务不变、连接器在线均通过，临时验收会话已退出，证据 artifacts/mobile-pixiv-release-live-pLEoSb。当前开发机代理共享出口的 GitHub 匿名 REST 返回403/额度0，认证目录可见 beta.25；不能把认证目录检查说成匿名 App 更新接口通过，用户可用正式 Pages /downloads/ZNote-0.10.0-beta.25-android.apk 覆盖安装。未触发 GitHub Actions。
+- 已关闭本轮隔离模拟器与3747测试服务。清理 artifacts/android-copy-local-sJy0is/device/userdata-qemu.img.qcow2 被自动审批 blocked by policy 拒绝，约506MiB测试磁盘暂留；未绕过删除审批。
+
 - 用户要求复制链接后打开大浮窗、填入并等待确认；Pixiv 登录选择在手机 ZNote 内完成。Android 10+ 普通后台应用不能持续读剪贴板，采用无障碍的明确复制链接点击 / 链接已复制 Toast → 可聚焦保存面板读取新剪贴板；普通复制、密码、敏感 clip 不自动读，关闭开关或隐藏浮窗后停止监听。有限点击子树读取在 worker，不能重新引入整页扫描或主线程 IPC。
 - Pixiv 官方登录 WebView 和 Cookie 留在主进程，私有 provider 供采集进程读取作品；仅白名单作品元数据和 pximg CDN URL 进入 LAN / Pages / collector，不向服务器或云端传 PHPSESSID。失败重试携带新元数据并保留原任务、原目标库与成员顺序；ugoira 暂明确交给电脑扩展，不把封面当动画。设置页登录后提供失败任务勾选补采，默认只选当天，避免重下已通过扩展保存的旧历史。
 - beta.25 / versionCode10025：受控 release/debug/test APK/lint 和 15 项协议/既有抖音回归通过；隔离 Android30 真实点击外部测试 App 的复制链接 → 大面板自动填入、等待确认、关闭、禁用不再弹、Pixiv 原生入口通过，截图目视；原签名 beta.24→beta.25 覆盖升级保留安装权限。证据 artifacts/android-copy-local-sJy0is。不是荣耀 Android15 真机或真实 Pixiv 账号登录验收。
