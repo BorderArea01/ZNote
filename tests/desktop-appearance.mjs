@@ -7,7 +7,7 @@ const data=await mkdtemp(resolve('artifacts/desktop-appearance-'));
 const runtime=createApp({dataDir:join(data,'library'),staticDir:resolve('artifacts/build-glitch')});
 const server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
 const launch=()=>electron.launch({executablePath:process.env.ZNOTE_DESKTOP_EXE||resolve('clients/desktop/node_modules/electron/dist/electron.exe'),args:process.env.ZNOTE_DESKTOP_EXE?[]:[resolve('clients/desktop')],env:{...process.env,ZNOTE_DESKTOP_TEST_DATA:join(data,'client'),ZNOTE_DESKTOP_HEADLESS:'0'},timeout:30000});
-let app;const report={};
+let app;const report={packagedExecutable:process.env.ZNOTE_DESKTOP_EXE||null};
 try{
  app=await launch();const launcher=await app.firstWindow(),policyErrors=[];launcher.on('console',m=>{if(/Refused|Content Security Policy/i.test(m.text()))policyErrors.push(m.text());});await launcher.locator('#version').filter({hasText:'beta.28'}).waitFor();
  await app.evaluate(({BrowserWindow,Tray})=>{global.__appearanceCalls={window:[],tray:[]};for(const [type,proto,key]of[['window',BrowserWindow.prototype,'setIcon'],['tray',Tray.prototype,'setImage']]){const original=proto[key];proto[key]=function(icon){global.__appearanceCalls[type].push(icon.toDataURL());return original.call(this,icon);};}});

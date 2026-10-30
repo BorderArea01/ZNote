@@ -461,3 +461,5 @@
 - 原图片/视频不加滤镜，实际按钮命中区和文本不移动，空闲无动画；减少动态效果、原主题切换、320px 界限、弹窗滚动/关闭保持。Windows CSP 只增加 data 图片以加载本地 SVG 遮罩，脚本和外部连接权限未扩大。
 - 当前3741真实图库桌面/实际触屏检查通过，items元数据哈希和PIN未变，证据 artifacts/glitch-v2-live-OBXyEv；隔离主题明暗/触屏/键盘/恢复/对比度检查 artifacts/glitch-ui-htiCAu；Windows开发程序主题/窗口托盘/双向桥接/重启检查 artifacts/desktop-appearance-uLP2HH。截图均已目视。
 - Android候选改为 beta.28 /10028：原生Path按bounds缓存，真实轮廓和摄影边缘取代旧六条等距色线；受控release/debug/test构建与lint通过。模拟器两次分别在可用内存1491、1504MiB时被1536MiB守卫停止，原生UI未验收、不得发布或冒充通过；当前有效APK仍为beta.26。Windows28打包与发布结果另记，不能仅凭编译通过宣称发布。
+
+- Windows28成品已完成实际EXE验收，artifacts/desktop-appearance-bHlWI0 确认本地SVG通过CSP、浅深色、窗口/托盘、桥接与重启；artifacts/desktop-smoke-ANNr3z 确认内置服务建库、密码、上传、取消关闭、退出后停止、重启保留内容。截图已目视；原生Android28仍未通过UI验收。
