@@ -37,7 +37,7 @@ foreach($path in $targets){
   $item=Get-Item -LiteralPath $path
   $resolved=[IO.Path]::GetFullPath($item.FullName)
   if(!$resolved.StartsWith($workspace+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or $item.LinkType){throw 'Cleanup target escaped workspace or is a link'}
-  if(@(Get-ChildItem -LiteralPath $resolved -Recurse -Force -Attributes ReparsePoint).Count){throw 'A cleanup target contains a link'}
+  if($item.PSIsContainer -and @(Get-ChildItem -LiteralPath $resolved -Recurse -Force -Attributes ReparsePoint).Count){throw ('A cleanup target contains a link: '+$resolved)}
   $verb=if($Apply){'Remove '}else{'Would remove '};Write-Output ($verb+$resolved)
   if($Apply){Remove-Item -LiteralPath $resolved -Recurse -Force}
 }
