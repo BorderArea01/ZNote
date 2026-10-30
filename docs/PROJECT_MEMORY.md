@@ -438,3 +438,12 @@
 - Windows 打包预备目录已由过时的 extensions 路径改为明确的公共 addons/browser/clipper；不复制整个 addons/browser/private。暂存目录先清理旧 dist/server/shared/scripts，避免将旧分块带入新安装包。受控打包通过 scripts/desktop-single-worker.cjs 限制 7-Zip 为一个线程，配合资源守卫。
 - 本轮版本 Android 与 Windows 为 0.10.0-beta.26，Android versionCode 10026，原发布签名。验收覆盖当前 3741 服务桌面/触屏页面、明暗模式、旧主题恢复、原生浮窗与复制入口、Windows 真实 Electron 启动/上传/退出/重启，以及 beta.25 → beta.26 覆盖安装；荣耀 Android15 真机尚未验证。
 - 用户新要求：整个项目仅保留当前有效版本及最多一份已验证回退。当前唯一回退为 artifacts/android-beta25-release 的签名 APK 与完整源码，不能按平台各留一份。scripts/prune-build-artifacts.ps1 先验回退哈希、检查所属构建已结束，再清理旧安装包和可重建中间目录，保留源码、素材、数据、配置及签名密钥。
+
+## 2026-10-31 鼠标悬停展开与控件故障皮肤
+
+- 用户要求浏览器贴边工具鼠标掠过自动展开。网页采集扩展 0.9.44 在 page-tools.js 同一状态所有者内增加 120ms mouse pointerenter 展开，按下立即取消悬停计时以保留页签拖拽；不抢焦点，不发采集请求。手动收起后须先离开再进入，边缘 9px 透明衔接避免展开时失去悬停；触屏继续点击，闲置四秒、菜单/视频面板保护、反馈、左右吸附及位置记忆保留。
+- 安装目录 C:/Users/31093/Downloads/clipper 仅替换 page-tools.js 并提高 manifest 到 0.9.44，原公钥/ID、凭据及其他在维护的采集改动保持。当前3741选库、左右边缘悬停、停留不回缩、拖拽/取消、键盘、触屏、320边界、黑名单恢复与失败反馈通过，证据 artifacts/page-tools-dock-NE8G1S/result.json；反馈是显式注入，并非真实入库。用户原浏览器不是调试实例，需重新加载扩展并刷新原网页。
+- 用户修正皮肤方向：故障效果作用到按钮和容器本身。public/themes/glitch/fragments.css 由网页、Windows启动页及远程采集页复用，以不规则横向遮罩、摄影背景切片、偏移轮廓、分离像素和轻微RGB边缘实现；有限悬停动画仅移动装饰，文字/命中区域不动，闲置无循环。保留旧主题、明暗、减少动态效果、媒体原像素、弹窗滚动与触屏paint containment。
+- 当前3741生产前端已更新。当前真实图库桌面与实际touch tap检查图片解码、原媒体无filter、预览与全屏分层关闭，原items版本/时间/分组字段hash和PIN不变；证据 artifacts/glitch-v2-live-ymyxPQ/result.json。隔离UI覆盖皮肤切换、对比度、320边界、弹窗滚动及关闭，证据 artifacts/glitch-ui-RppCQM/result.json，截图已目视。
+- Android候选 beta.27 /10027 原生Canvas按钮和面板横向切片绘制已通过受控release/debug/test APK及lint（0 errors）；原生界面验收曾在模拟设备启动后被资源守卫终止，不能把编译通过当界面通过，发布状态须以后续实证为准。Windows beta.27 开发程序联动/关闭/重启测试通过，打包与发布状态同样须以后续实证为准。
+- 资源守卫保留实际游戏进程、1536MiB门槛和所属进程树停止逻辑，只补充准确中止原因（游戏、实际内存、资源查询失败或信号）；不能再把同一句泛称 game/resource 当作已经证明内存不足，不放松限制、不自动后台重试。

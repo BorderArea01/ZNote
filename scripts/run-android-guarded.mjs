@@ -29,7 +29,7 @@ let rootIdentity = null
 try { rootIdentity = readRootIdentity() } catch { child.kill() }
 let finished = false
 let stopped = false
-const stopOwned = () => {
+const stopOwned = (reason = 'interrupted') => {
   if (finished || stopped) return
   stopped = true
   // Recheck creation time and exact command so PID reuse cannot target a user
@@ -41,14 +41,14 @@ const stopOwned = () => {
     } else child.kill() // libuv retains the original process handle.
   }
   catch { child.kill() }
-  console.error('Stopped this task only: game/resource guard. No automatic retry.')
+  console.error(`Stopped this task only: ${reason}. No automatic retry.`)
 }
 const timer = setInterval(() => {
   if (finished) return
-  try { const state = inspect(); if (state.game || state.freeMiB < 1536) stopOwned() }
-  catch { stopOwned() }
+  try { const state = inspect(); if (state.game) stopOwned('game running'); else if (state.freeMiB < 1536) stopOwned(`available memory ${state.freeMiB} MiB below 1536 MiB`) }
+  catch (error) { stopOwned(`resource inspection failed (${error.code || error.name})`) }
 }, 3_000)
 child.on('error', () => { finished = true; clearInterval(timer); process.exitCode = 1 })
 child.on('exit', code => { finished = true; clearInterval(timer); process.exitCode = stopped ? 75 : code ?? 1 })
-process.on('SIGINT', stopOwned)
-process.on('SIGTERM', stopOwned)
+process.on('SIGINT', () => stopOwned('SIGINT'))
+process.on('SIGTERM', () => stopOwned('SIGTERM'))

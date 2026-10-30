@@ -19,7 +19,7 @@ final class CaptureVisuals {
         button.setTextSize(13);button.setMinHeight(NativeUi.dp(c,44));button.setMinimumHeight(NativeUi.dp(c,44));
         button.setPadding(pad,0,pad,0);button.setBackgroundTintList(null);
         button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},new int[]{MUTED,primary?0xfff7fbff:INK}));
-        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),NativeUi.shape(c,primary?PRIMARY:0x00000000,11),null));
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),NativeAppearance.control(c,primary?PRIMARY:0x00000000,11),null));
         button.setCompoundDrawablesWithIntrinsicBounds(icon(c,icon,primary?0xfff7fbff:MUTED,16),null,null,null);button.setCompoundDrawablePadding(NativeUi.dp(c,8));
     }
 

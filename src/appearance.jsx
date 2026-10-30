@@ -46,7 +46,7 @@ export function AppearanceProvider({ children }) {
 export function AppearanceSettings() {
   const { appearance, setAppearance } = useContext(AppearanceContext);
   return <div className="appearance-settings">
-    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">建筑故障以晴空建筑摄影、横向像素切片和轻微 RGB 色偏组成装饰，正文和原始媒体保持清晰。支持明暗模式；手机 App 中同时用于原生界面与采集浮窗。原有主题可随时切回，简约和毛玻璃可自选色调。</HelpHint></div>
+    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">建筑故障以晴空摄影为底，按钮和容器边缘呈现横向撕裂、错位切片及零散像素，交互时短暂飘散。中心文字、点击区域和原始媒体保持清晰稳定；支持明暗模式与减少动态效果。手机原生面板和采集浮窗同步使用，原有主题可随时切回。</HelpHint></div>
     <div className="style-presets" role="group" aria-label="界面风格">
       {styles.map(style => <button key={style.id} className="style-preset" aria-label={`风格：${style.name}`} aria-pressed={appearance.style === style.id} onClick={() => setAppearance(a => ({ ...a, style: style.id }))}>
         <span className={`style-sample sample-${style.id}`} aria-hidden="true"><i /><span><b /><em /><em /></span></span>

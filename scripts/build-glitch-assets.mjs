@@ -7,4 +7,6 @@ await sharp(photo).resize({width:720,withoutEnlargement:true}).webp({quality:80}
 const svg=await readFile(dir+'/icon.svg');await sharp(svg).resize(512,512).png().toFile(native+'/ic_glitch.png');
 await sharp(svg).resize(64,64).png().toFile('clients/desktop/launcher/icon-glitch.png');
 await writeFile('clients/desktop/launcher/glitch-architecture.webp',await readFile(dir+'/architecture-mobile.webp'));
+await writeFile('clients/desktop/launcher/fragments.css',await readFile(dir+'/fragments.css'));
+await writeFile('clients/desktop/launcher/architecture-mobile.webp',await readFile(dir+'/architecture-mobile.webp'));
 console.log('Built bounded architecture backgrounds and the alternate Z icon; classic assets retained.');
