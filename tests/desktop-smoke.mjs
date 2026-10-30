@@ -11,11 +11,13 @@ let app=await launch(),origin;
 const deadline=setTimeout(()=>{console.error('Desktop smoke exceeded 150 seconds');app.process().kill();process.exitCode=1},150000);deadline.unref();
 try{
  const launcher=await app.firstWindow();await launcher.locator('#version').filter({hasText:'ZNote 0.'}).waitFor();await launcher.locator('#local').waitFor();await launcher.screenshot({path:join(data,'launcher.png')});console.log('PASS desktop launcher renders');
+ if(process.argv.includes('--glitch')){await launcher.locator('.appearance summary').click();await launcher.locator('#style').selectOption('glitch');await launcher.locator('#mode').selectOption('dark');await launcher.locator('html[data-style=glitch]').waitFor();}
  await launcher.locator('#address').fill('http://example.com');await launcher.locator('#connect button').click();await launcher.getByRole('status').filter({hasText:'HTTPS'}).waitFor();
  const next=app.waitForEvent('window',{predicate:p=>!p.url().startsWith('file:'),timeout:30000});await launcher.locator('#local').click();const page=await next;
  await page.getByLabel('访问密码').waitFor();origin=new URL(page.url()).origin;
  assert.equal(await page.evaluate(()=>typeof require),'undefined');assert.equal(await page.evaluate(()=>typeof window.znoteLauncher),'undefined');
  await page.getByLabel('访问密码').fill('0427');await page.getByRole('button',{name:'开始使用 ZNote'}).click();await page.getByRole('heading',{name:/我的知识库/}).waitFor();
+ if(process.argv.includes('--glitch')){assert.equal(await page.locator('html').getAttribute('data-style'),'glitch');assert.ok(await page.evaluate(()=>getComputedStyle(document.querySelector('.new-library'),'::before').maskImage.includes('linear-gradient')));}
  const image=await sharp({create:{width:300,height:200,channels:3,background:'#6f70a8'}}).png().toBuffer();
  await page.locator('input[type=file]').first().setInputFiles({name:'client-test.png',mimeType:'image/png',buffer:image});await page.getByRole('button',{name:'开始上传',exact:true}).click();await page.getByRole('button',{name:'完成',exact:true}).click();await page.getByRole('button',{name:'全部内容 1',exact:true}).click();await page.getByRole('button',{name:'打开 client-test.png',exact:true}).waitFor();
  const items=await page.evaluate(async()=>{const r=await fetch('/api/items');return r.json()});assert.ok(JSON.stringify(items).includes('client-test.png'));
