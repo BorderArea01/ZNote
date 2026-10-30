@@ -12,6 +12,7 @@ $receipt=Get-Content -LiteralPath (Join-Path $rollback 'ANDROID-BUILD-SOURCE.jso
 $rollbackApkVersion=if($receipt.apk_version){$receipt.apk_version}else{$RollbackVersion}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$rollbackApkVersion+'-android.apk')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.apk_sha256){throw 'Rollback hash mismatch'}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$RollbackVersion+'-source.zip')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.source_sha256){throw 'Rollback source hash mismatch'}
+if($receipt.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$rollbackApkVersion+'-source.zip'))).Hash.ToLower() -ne $receipt.android_source_sha256){throw 'Rollback effective Android source mismatch'}
 $targets=[Collections.Generic.List[string]]::new()
 if($Apply -and $Intermediates){
  $current=Join-Path $artifactRoot $currentDirectory

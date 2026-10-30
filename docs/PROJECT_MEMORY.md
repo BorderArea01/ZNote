@@ -447,3 +447,8 @@
 - 当前3741生产前端已更新。当前真实图库桌面与实际touch tap检查图片解码、原媒体无filter、预览与全屏分层关闭，原items版本/时间/分组字段hash和PIN不变；证据 artifacts/glitch-v2-live-ymyxPQ/result.json。隔离UI覆盖皮肤切换、对比度、320边界、弹窗滚动及关闭，证据 artifacts/glitch-ui-RppCQM/result.json，截图已目视。
 - Android候选 beta.27 /10027 原生Canvas按钮和面板横向切片绘制已通过受控release/debug/test APK及lint（0 errors）；原生界面验收曾在模拟设备启动后被资源守卫终止，不能把编译通过当界面通过，发布状态须以后续实证为准。Windows beta.27 开发程序联动/关闭/重启测试通过，打包与发布状态同样须以后续实证为准。
 - 资源守卫保留实际游戏进程、1536MiB门槛和所属进程树停止逻辑，只补充准确中止原因（游戏、实际内存、资源查询失败或信号）；不能再把同一句泛称 game/resource 当作已经证明内存不足，不放松限制、不自动后台重试。
+
+- 本轮已发布 Windows 0.10.0-beta.27，标签 clients-v0.10.0-beta.27，发布源码提交 aa9d2d34c6d5b8add0b48d4926736102d33ec1c5；成品主题/托盘与窗口/重启检查 artifacts/desktop-appearance-9GcQmg、内置新皮肤建库上传与退出重启 artifacts/desktop-smoke-Bbh4tk，通过并目视。10项扩展API/路由/保存方式回归通过。
+- 线上Pages的CSS/图标/摄影资源、原Android26的APK与对应源码hash、Windows27的GitHub资产hash和实际手机尺寸Portal开关已验证；原采集记录数量不变，collector在线，证据 artifacts/glitch-release-live-HLcnKA/result.json。匿名GitHubAPI在开发机出口仍403，认证目录核对通过，不把它说成已验证手机的匿名更新请求。
+- Android原生beta.27候选没有发布。最后受控build/lint成功证据 artifacts/android-glitch-v2-retry-build.txt；模拟设备多次被守卫中止，最多只完成debug APK安装，未执行通过新原生UI用例。不要用同目录旧 result.txt（beta.26的PASS）冒充本轮UI证据。后续需在资源允许时或获授权的真机上完成原生检查，再签名发布；原签名密钥保留。
+- 当前项目包为Windows27与仍有效的Android26，目录 artifacts/android-beta27-release 沿用历史目录名；其中旧26 APK及其匹配源码使用硬链接，作为当前有效Android组件，不新增第二套物理副本。client-release.json仍声明Android26，引用当前项目包里的有效文件。唯一项目回退为 artifacts/android-beta26-release 的已验证APK与完整源码；旧25、旧Windows26安装包、候选编译包、runtime暂存及模拟设备已清理，不按平台额外保留回退。当前包装源码27包含尚未发布的Android27绘制代码，实际APK26的匹配源码26也保留供追溯。
