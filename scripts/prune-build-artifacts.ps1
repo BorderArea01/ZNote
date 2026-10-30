@@ -23,6 +23,7 @@ foreach($dir in Get-ChildItem -LiteralPath $artifactRoot -Directory){
   if($dir.Name -match '^android-(?:beta\d+|back|overlay|share)-release$' -and $dir.Name -notin @($currentDirectory,$rollbackDirectory)){$targets.Add($dir.FullName)}
   if($dir.Name -match '^release-(?:android-1348|mac-arm-5c19|windows-73fb|v0100|v0931-source)$'){$targets.Add($dir.FullName)}
   if($dir.Name -match '^android-(?:copy|import|overlay|route|glitch)-local(?:-.+)?$'){$device=Join-Path $dir.FullName 'device';if(Test-Path -LiteralPath $device){$targets.Add($device)}}
+  if($dir.Name -in @('android-beta12','android-beta5-final-build','mobile-beta6-ci-unsigned')){foreach($file in Get-ChildItem -LiteralPath $dir.FullName -File){if($file.Name -match '\.apk(?:\.idsig)?$'){$targets.Add($file.FullName)}}}
   if($Intermediates -and $dir.Name -match '^build-' -and (Test-Path -LiteralPath (Join-Path $dir.FullName 'index.html')) -and (Test-Path -LiteralPath (Join-Path $dir.FullName 'assets')) -and $dir.Name -ne 'build-glitch'){$targets.Add($dir.FullName)}
 }
 $downloads=Join-Path $artifactRoot 'remote-access/pages/downloads'
