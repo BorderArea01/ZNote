@@ -61,6 +61,7 @@ import {
 import "./style.css";
 import "./features.css";
 import "./themes.css";
+import "./glitch.css";
 import './video.css';
 import { AppearanceProvider } from './appearance.jsx';
 import { api, send, bytes, authenticated } from "./api.js";

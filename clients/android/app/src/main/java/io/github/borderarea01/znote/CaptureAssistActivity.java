@@ -13,14 +13,14 @@ public class CaptureAssistActivity extends Activity {
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private Button button(String text,Runnable run){return NativeUi.button(this,text,run);}
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(24),dp(48),dp(24),dp(32));root.setBackgroundColor(0xff161b28);
+        super.onCreate(state);NativeAppearance.load(this);NativeAppearance.window(this);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(24),dp(48),dp(24),dp(32));root.setBackgroundColor(NativeUi.BG);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
         root.setOnApplyWindowInsetsListener((v,i)->{if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets s=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(24)+s.left,dp(24)+s.top,dp(24)+s.right,dp(24)+s.bottom);}return i;});
-        TextView title=new TextView(this);title.setText("悬浮采集");title.setTextSize(26);title.setTextColor(0xffe7ebf5);title.setPadding(0,0,0,0);LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button close=button("×",this::finish);close.setContentDescription("关闭设置");NativeUi.quiet(close);header.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));root.addView(header);
+        TextView title=new TextView(this);title.setText("悬浮采集");title.setTextSize(26);title.setTextColor(NativeUi.TEXT);title.setPadding(0,0,0,0);LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button close=button("×",this::finish);close.setContentDescription("关闭设置");NativeUi.quiet(close);header.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));root.addView(header);
         LinearLayout access=NativeUi.card(root,"采集辅助");
         NativeUi.row(access,button("? 使用与权限说明",()->new AlertDialog.Builder(this).setTitle("点击时才读取页面").setMessage(getString(io.github.borderarea01.znote.R.string.capture_accessibility_description)+"\n\n拖动贴边页签会恢复完整按钮，松手吸向近侧；点标题可收起，上方可切换目标知识库。采集时收起，完成后短暂显示结果，失败保留标记。浏览器需显示地址栏。若某个 App 的分享入口无法识别，可从该 App 打开系统分享菜单，直接选择 ZNote。\n\n悬浮入口负责取得链接，图片和视频由服务器下载；它不能绕过平台登录，也不能直接读取其他 App 的内部文件。") .setPositiveButton("知道了",null).show()));
-        status=new TextView(this);status.setTextColor(0xffc3cde1);status.setTextSize(15);status.setPadding(0,dp(20),0,dp(20));access.addView(status);
+        status=new TextView(this);status.setTextColor(NativeUi.MUTED);status.setTextSize(15);status.setPadding(0,dp(20),0,dp(20));access.addView(status);
         NativeUi.row(access,button("开启 / 管理采集辅助",()->new AlertDialog.Builder(this).setTitle("开启点击采集").setMessage(getString(R.string.capture_accessibility_description)).setNegativeButton("取消",null).setPositiveButton("前往系统设置",(d,w)->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).show()));
         LinearLayout visibility=new LinearLayout(this);visibility.setGravity(Gravity.CENTER);access.addView(visibility);
         Button show=button("显示悬浮窗",()->command("show"));NativeUi.primary(show);visibility.addView(show,new LinearLayout.LayoutParams(0,dp(48),1));
@@ -33,6 +33,7 @@ public class CaptureAssistActivity extends Activity {
             else {if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}
         }));
         LinearLayout tools=NativeUi.card(root,"工具");
+        NativeUi.row(tools,button("界面与图标",()->NativeAppearance.choose(this,this::recreate)));
         Switch automatic=new Switch(this);automatic.setText("复制链接后打开保存面板");automatic.setTextColor(NativeUi.TEXT);automatic.setPadding(dp(10),dp(8),dp(10),dp(8));automatic.setChecked(getSharedPreferences("CaptureAssist",MODE_PRIVATE).getBoolean("copy_link_prompt",true));automatic.setOnCheckedChangeListener((b,value)->{getSharedPreferences("CaptureAssist",MODE_PRIVATE).edit().putBoolean("copy_link_prompt",value).apply();if(CaptureAssistService.current!=null)CaptureAssistService.current.configureCopyPrompt();});tools.addView(automatic);
         NativeUi.row(tools,button("? 自动弹窗的范围",()->new AlertDialog.Builder(this).setTitle("复制链接后准备保存").setMessage("悬浮窗开启时，识别其他 App 的“复制链接”按钮点击，随后打开保存面板并读取本次链接，等待你确认。不会自动入库。普通“复制”文字、密码和未提供无障碍事件的按钮不会触发，可继续点浮窗粘贴。Android 不允许普通后台应用持续读取剪贴板。关闭此开关或隐藏悬浮窗后停止监听复制操作。").setPositiveButton("知道了",null).show()));
         NativeUi.row(tools,button("Pixiv 登录",()->startActivity(new Intent(this,PixivLoginActivity.class))));

@@ -427,3 +427,14 @@
 ## 最近一次教训
 
 视频组修复曾经只通过临时 Playwright fixture，真实页面仍出现“0 个视频 / 视频组不存在”。后续必须同时使用真实运行服务、真实组数据和页面交互验证，并在报告中区分“测试通过”和“用户实例已验证”。
+
+## 2026-10-30 建筑故障主题与客户端外观
+
+- 用户要求手机、网页、Windows 客户端可选建筑摄影与水平像素撕裂风格，Windows 明确包含启动页、窗口及托盘图标。保留所有旧风格，不强制替换；原始媒体不加滤镜，空闲不循环播放故障动画。
+- 新主题 ID `glitch`，名称「建筑故障」。摄影原图与生成说明在 `docs/design/glitch`；网页使用受限尺寸 WebP，Android 复用本地小位图。`public/icon.svg` 经典 Z 保留，新 Z 为独立资产。
+- 网页设置与原生外观通过只允许外观值的桥接同步，不暴露凭据。原生未配置时不要覆盖原网页偏好；同步读取最新 DOM 并合并同轮更新，避免明暗模式和风格互相覆盖或广播死循环。切换时不能重载编辑页。
+- Android 使用私有 Provider 单写原子外观文件，采集进程从本地读快照并接收同包广播，避免拉起 WebView。启动器 alias 切换保留原 MainActivity/深链接。MainActivity 连接与授权偏好必须固定使用 `getSharedPreferences("MainActivity", MODE_PRIVATE)`；使用 getPreferences 会因启动器 alias 而读取另一份文件，表现为配置丢失。
+- Windows 外观与连接保存在同一配置文件，通过串行合并写入；禁止外观更新覆盖服务器地址。知识库窗口只暴露 appearance bridge，主进程校验窗口、主框架和同源；不能复用拥有启停本机服务能力的启动页桥接。
+- Windows 打包预备目录已由过时的 extensions 路径改为明确的公共 addons/browser/clipper；不复制整个 addons/browser/private。暂存目录先清理旧 dist/server/shared/scripts，避免将旧分块带入新安装包。受控打包通过 scripts/desktop-single-worker.cjs 限制 7-Zip 为一个线程，配合资源守卫。
+- 本轮版本 Android 与 Windows 为 0.10.0-beta.26，Android versionCode 10026，原发布签名。验收覆盖当前 3741 服务桌面/触屏页面、明暗模式、旧主题恢复、原生浮窗与复制入口、Windows 真实 Electron 启动/上传/退出/重启，以及 beta.25 → beta.26 覆盖安装；荣耀 Android15 真机尚未验证。
+- 用户新要求：整个项目仅保留当前有效版本及最多一份已验证回退。当前唯一回退为 artifacts/android-beta25-release 的签名 APK 与完整源码，不能按平台各留一份。scripts/prune-build-artifacts.ps1 先验回退哈希、检查所属构建已结束，再清理旧安装包和可重建中间目录，保留源码、素材、数据、配置及签名密钥。

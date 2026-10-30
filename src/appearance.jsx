@@ -7,6 +7,7 @@ export const styles = [
   { id: 'glass', name: '毛玻璃', description: '通透面板，柔和光晕' },
   { id: 'cyber', name: '赛博朋克', description: '霓虹青紫，几何网格' },
   { id: 'paper', name: '纸感', description: '暖色纸张，安静阅读' },
+  { id: 'glitch', name: '建筑故障', description: '晴空建筑，水平像素撕裂' },
 ];
 export const palettes = [
   { id: 'forest', name: '松林绿', color: '#287464' },
@@ -23,6 +24,7 @@ function normalize(value) {
 }
 const AppearanceContext = createContext(null);
 export function AppearanceProvider({ children }) {
+  useEffect(()=>window.ZNoteAppearance?.subscribe?.(detail=>window.dispatchEvent(new CustomEvent('znote:native-appearance',{detail}))),[]);
   const [appearance, setAppearance] = useState(() => {
     try { return normalize(JSON.parse(localStorage.getItem('znote-appearance'))); } catch { return defaults; }
   });
@@ -30,13 +32,21 @@ export function AppearanceProvider({ children }) {
     document.documentElement.dataset.style = appearance.style;
     document.documentElement.dataset.palette = appearance.palette;
     try { localStorage.setItem('znote-appearance', JSON.stringify(appearance)); } catch {}
+    const sync=()=>{
+      const glitch=appearance.style==='glitch';
+      document.querySelector('link[rel="icon"]')?.setAttribute('href',glitch?'/themes/glitch/icon.svg':'/icon.svg');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content',glitch?'#1859a8':'#287464');
+      queueMicrotask(()=>{try{window.ZNoteAppearance?.set?.(JSON.stringify({style:document.documentElement.dataset.style,palette:document.documentElement.dataset.palette,mode:localStorage.getItem('znote-theme')||'system'}));}catch{}});
+    };sync();window.addEventListener('znote:theme-changed',sync);
+    return()=>window.removeEventListener('znote:theme-changed',sync);
   }, [appearance]);
+  useEffect(()=>{const changed=e=>{if(styles.some(s=>s.id===e.detail?.style))setAppearance(a=>({...a,style:e.detail.style}));};window.addEventListener('znote:native-appearance',changed);return()=>window.removeEventListener('znote:native-appearance',changed);},[]);
   return <AppearanceContext.Provider value={{ appearance, setAppearance }}>{children}</AppearanceContext.Provider>;
 }
 export function AppearanceSettings() {
   const { appearance, setAppearance } = useContext(AppearanceContext);
   return <div className="appearance-settings">
-    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">简约侧重留白，毛玻璃使用通透光晕，赛博朋克采用霓虹青紫，纸感采用暖纸墨棕。简约和毛玻璃可自选色调。</HelpHint></div>
+    <div className="inline-heading"><p className="appearance-label">界面风格</p><HelpHint label="界面风格">建筑故障以晴空建筑摄影、横向像素切片和轻微 RGB 色偏组成装饰，正文和原始媒体保持清晰。支持明暗模式；手机 App 中同时用于原生界面与采集浮窗。原有主题可随时切回，简约和毛玻璃可自选色调。</HelpHint></div>
     <div className="style-presets" role="group" aria-label="界面风格">
       {styles.map(style => <button key={style.id} className="style-preset" aria-label={`风格：${style.name}`} aria-pressed={appearance.style === style.id} onClick={() => setAppearance(a => ({ ...a, style: style.id }))}>
         <span className={`style-sample sample-${style.id}`} aria-hidden="true"><i /><span><b /><em /><em /></span></span>
@@ -54,3 +64,5 @@ export function AppearanceSettings() {
     </> : null}
   </div>;
 }
+
+export function ThemeScene(){return <div className="glitch-scene" aria-hidden="true"><span className="glitch-scene-grid"/><span className="glitch-scene-mark">Z</span><span className="glitch-scene-caption">ZNOTE / SIGNAL ARCHITECTURE</span><i/><i/><i/></div>;}

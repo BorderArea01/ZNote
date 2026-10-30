@@ -116,7 +116,7 @@ html[data-style="paper"] :is(.page-heading h1, .markdown-preview h1, .markdown-p
 
 /* Presets are actual controls with independent miniature previews. */
 html[data-style] .appearance-label { margin: 18px 0 10px; font-size: 12px; font-weight: 600; color: var(--ink); }
-.style-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.style-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 10px; }
 html[data-style] .style-preset { display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: 8px; min-width: 0; text-align: left; }
 .preset-title { display: flex; justify-content: space-between; gap: 4px; font-weight: 600; font-size: 12px; }
 html[data-style] .style-preset small { font-size: 10px; line-height: 1.6; color: var(--muted); }

@@ -1,5 +1,6 @@
 import{build}from'esbuild';import{readFile,writeFile,mkdir,copyFile,stat}from'node:fs/promises';import{createHash}from'node:crypto';import{dirname,resolve,join}from'node:path';import{fileURLToPath}from'node:url';import{portalHtml}from'./portal.js';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..'),dir=join(root,'artifacts/remote-access/pages');await mkdir(dir,{recursive:true});
+const themeDir=join(dir,'themes/glitch');await mkdir(themeDir,{recursive:true});for(const file of['architecture-mobile.webp','icon.svg'])await copyFile(join(root,'public/themes/glitch',file),join(themeDir,file));
 await build({entryPoints:[join(root,'addons/connectors/cloudflare/worker.js')],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:join(dir,'_worker.js'),legalComments:'eof'});
 await writeFile(join(dir,'index.html'),portalHtml);
 // Optional public release artifacts only. Never copy collector configuration,
@@ -26,7 +27,7 @@ for(const preview of designPreviews){
  const target=join(dir,'design',preview.name);await mkdir(target,{recursive:true});
  for(const name of preview.files)await copyFile(join(preview.source,name),join(target,name));
 }
-await writeFile(join(dir,'_routes.json'),JSON.stringify({version:1,include:['/*'],exclude:['/downloads/*',...designPreviews.flatMap(({name})=>['/design/'+name,'/design/'+name+'/*'])]}));
+await writeFile(join(dir,'_routes.json'),JSON.stringify({version:1,include:['/*'],exclude:['/downloads/*','/themes/*',...designPreviews.flatMap(({name})=>['/design/'+name,'/design/'+name+'/*'])]}));
 await writeFile(join(dir,'_headers'),['/downloads/*',...designPreviews.map(({name})=>'/design/'+name+'/*')].map(path=>path+'\n  Cache-Control: no-store\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n').join(''));
 const worker=JSON.parse(await readFile(join(root,'data/cloudflare-collector/wrangler.json'),'utf8'));
 await writeFile(join(root,'data/cloudflare-collector/pages.json'),JSON.stringify({name:worker.name,account_id:worker.account_id,pages_build_output_dir:dir,compatibility_date:worker.compatibility_date,d1_databases:worker.d1_databases},null,2));

@@ -4,5 +4,7 @@ contextBridge.exposeInMainWorld('znoteLauncher',{
   connect:address=>ipcRenderer.invoke('launcher:connect',address),
   local:()=>ipcRenderer.invoke('launcher:local'),
   media:()=>ipcRenderer.invoke('launcher:media'),
-  feedback:()=>ipcRenderer.invoke('launcher:feedback')
+  feedback:()=>ipcRenderer.invoke('launcher:feedback'),
+  appearance:value=>ipcRenderer.invoke('launcher:appearance',value),
+  onAppearance:callback=>{const listener=(_event,value)=>callback(value);ipcRenderer.on('appearance:changed',listener);return()=>ipcRenderer.removeListener('appearance:changed',listener);}
 });

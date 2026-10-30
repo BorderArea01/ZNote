@@ -14,7 +14,7 @@ public class PixivLoginActivity extends Activity {
     private TextView status;
     private boolean pageFailed;
     @Override public void onCreate(Bundle saved){
-        super.onCreate(saved);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(0,32,0,0);root.setBackgroundColor(0xff161b28);
+        super.onCreate(saved);NativeAppearance.load(this);NativeAppearance.window(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(0,32,0,0);root.setBackgroundColor(NativeUi.BG);
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);TextView title=NativeUi.label(this,"Pixiv 登录",17);bar.addView(title,new LinearLayout.LayoutParams(0,NativeUi.dp(this,56),1));
         bar.addView(NativeUi.button(this,"取消",this::finish));bar.addView(NativeUi.button(this,"完成登录",this::complete));root.addView(bar);
         status=NativeUi.label(this,"正在打开 Pixiv 官方登录页…",13);status.setPadding(20,12,20,12);status.setOnClickListener(v->web.reload());root.addView(status);

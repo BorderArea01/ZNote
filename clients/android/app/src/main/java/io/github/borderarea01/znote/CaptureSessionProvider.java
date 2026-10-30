@@ -12,6 +12,7 @@ public class CaptureSessionProvider extends ContentProvider {
     @Override public boolean onCreate(){return true;}
     @Override public Bundle call(String method,String arg,Bundle extras){
         if(Binder.getCallingUid()!=android.os.Process.myUid())throw new SecurityException("Private capture session");
+        if("appearance".equals(method))return NativeAppearance.save(getContext(),arg);
         if("pixiv".equals(method))return PixivSession.resolve(arg);
         if(!"session".equals(method))throw new IllegalArgumentException("Unsupported operation");
         return session(arg,extras);

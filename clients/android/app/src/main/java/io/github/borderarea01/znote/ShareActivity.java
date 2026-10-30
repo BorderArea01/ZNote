@@ -46,7 +46,7 @@ public class ShareActivity extends Activity {
     private int uploaded=0;
     private SharedPreferences preferences(){return getSharedPreferences("CaptureSharing",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
-    private TextView label(String value,int size){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(0xffe7ebf5);v.setPadding(0,dp(floating()?6:12),0,dp(floating()?6:10));return v;}
+    private TextView label(String value,int size){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(CaptureVisuals.INK);v.setPadding(0,dp(floating()?6:12),0,dp(floating()?6:10));return v;}
     private Button button(String value,Runnable click){return NativeUi.button(this,value,click);}
     private ArrayAdapter<String> choices(List<String> values){
         return new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,values){
@@ -71,7 +71,7 @@ public class ShareActivity extends Activity {
         if(status!=null){status.setMaxLines(open?2:3);status.setEllipsize(open?android.text.TextUtils.TruncateAt.END:null);}
     }
     @Override public void onCreate(Bundle state){
-        if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);timing("panel_create");
+        if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);NativeAppearance.load(this);NativeAppearance.window(this);timing("panel_create");
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");submissionOrigin=state.getString("submissionOrigin","");uploaded=state.getInt("uploaded",0);}
         Intent intent=getIntent();String shared=sharedText(intent);
         try{
@@ -81,7 +81,7 @@ public class ShareActivity extends Activity {
         autoShare=state==null&&CaptureAssistService.current!=null&&CaptureAssistService.current.consumeDirectShare(intent,shared,!files.isEmpty());
         quickSave=(floating()&&intent.getBooleanExtra("quick_save",false))||autoShare;clipboardPending=floating()&&intent.getBooleanExtra("read_clipboard",false)&&state==null;
         LinearLayout chrome=new LinearLayout(this){@Override protected void onMeasure(int w,int h){if(floating()){int available=getResources().getDisplayMetrics().heightPixels-dp(72);if(View.MeasureSpec.getMode(h)!=View.MeasureSpec.UNSPECIFIED)available=Math.min(available,View.MeasureSpec.getSize(h));h=View.MeasureSpec.makeMeasureSpec(Math.max(1,available),View.MeasureSpec.AT_MOST);}super.onMeasure(w,h);}};
-        chrome.setOrientation(LinearLayout.VERTICAL);chrome.setBackgroundColor(0xff161b28);chrome.setPadding(dp(24),dp(24),dp(24),dp(20));
+        chrome.setOrientation(LinearLayout.VERTICAL);chrome.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,0):NativeUi.shape(this,0xff161b28,0));chrome.setPadding(dp(24),dp(24),dp(24),dp(20));
         chrome.setOnApplyWindowInsetsListener((v,i)->{if(Build.VERSION.SDK_INT>=30&&!floating()){android.graphics.Insets s=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(24)+s.left,dp(24)+s.top,dp(24)+s.right,dp(20)+s.bottom);}return i;});
         // Only the form scrolls. Window resizing for the IME must keep the
         // header and footer outside that scroll area, with save always visible.
@@ -89,11 +89,11 @@ public class ShareActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);scroll.addView(root);setContentView(chrome);
         if(floating()){
             chrome.setPadding(dp(15),dp(8),dp(15),dp(10));
-            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(CaptureVisuals.SURFACE);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),CaptureVisuals.BORDER);chrome.setBackground(bg);chrome.setClipToOutline(true);
+            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(CaptureVisuals.SURFACE);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),CaptureVisuals.BORDER);chrome.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,12):bg);chrome.setClipToOutline(true);
             resizePanel();
             getWindow().setGravity(Gravity.CENTER);setFinishOnTouchOutside(false);
         }
-        TextView panelTitle=label("保存到 ZNote",floating()?14:26);panelTitle.setTypeface(null,android.graphics.Typeface.BOLD);panelTitle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",0xffa3b6a8,20),null,null,null);panelTitle.setCompoundDrawablePadding(dp(8));
+        TextView panelTitle=label("保存到 ZNote",floating()?14:26);panelTitle.setTypeface(null,android.graphics.Typeface.BOLD);panelTitle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",NativeAppearance.glitch?CaptureVisuals.ACCENT:0xffa3b6a8,20),null,null,null);panelTitle.setCompoundDrawablePadding(dp(8));
         LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);titleRow.addView(panelTitle,new LinearLayout.LayoutParams(0,-2,1));
         {Button close=button("",this::finish);CaptureVisuals.action(close,"close",false);close.setPadding(dp(14),0,dp(14),0);close.setContentDescription("收起采集面板");titleRow.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));}chrome.addView(titleRow);chrome.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         if(floating())panelTitle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;public boolean onTouch(View v,android.view.MotionEvent e){WindowManager.LayoutParams p=getWindow().getAttributes();if(e.getActionMasked()==MotionEvent.ACTION_DOWN){x=e.getRawX();y=e.getRawY();ox=p.x;oy=p.y;return true;}if(e.getActionMasked()==MotionEvent.ACTION_MOVE){int maxX=Math.max(0,(getResources().getDisplayMetrics().widthPixels-getWindow().getDecorView().getWidth())/2-dp(12)),maxY=Math.max(0,(getResources().getDisplayMetrics().heightPixels-getWindow().getDecorView().getHeight())/2-dp(24));p.x=Math.max(-maxX,Math.min(maxX,ox+(int)(e.getRawX()-x)));p.y=Math.max(-maxY,Math.min(maxY,oy+(int)(e.getRawY()-y)));getWindow().setAttributes(p);return true;}return true;}});
@@ -101,9 +101,9 @@ public class ShareActivity extends Activity {
         heading.addView(label(files.isEmpty()?"作品链接":"已接收 "+files.size()+" 个媒体文件",12),new LinearLayout.LayoutParams(0,-2,1));
         Button help=button("",()->new AlertDialog.Builder(this).setTitle("手机采集").setMessage("在任意 App 可用系统分享菜单，把链接、图片或视频直接发给 ZNote；悬浮入口也会尝试读取当前作品的分享链接。服务器负责下载正文、图片或视频。B 站图文动态（b23.tv 或 /opus/ 链接）会保存标题、正文、话题和配图。\n\n局域网保存需要手机能连接服务器。外出时可将链接发给微信 ClawBot，并在微信收件设置开启链接采集。平台要求登录或验证时，任务会保留失败原因。") .setPositiveButton("知道了",null).show());CaptureVisuals.action(help,"help",false);help.setPadding(dp(14),0,dp(14),0);help.setContentDescription("手机采集说明");heading.addView(help,new LinearLayout.LayoutParams(dp(44),dp(44)));root.addView(heading,headingSpace);linkHeading=heading;
         if(!floating()&&shared.trim().isEmpty()&&files.isEmpty()&&!quickSave){
-            LinearLayout empty=new LinearLayout(this);empty.setGravity(Gravity.CENTER_VERTICAL);empty.setPadding(dp(12),dp(10),dp(12),dp(10));empty.setBackground(NativeUi.shape(this,0xff20283a,16));
-            TextView icon=label("↗",20);icon.setGravity(Gravity.CENTER);icon.setTextColor(0xffaebcff);icon.setBackground(NativeUi.shape(this,0xff303c5c,13));LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(40),dp(40));iconParams.setMargins(0,0,dp(12),0);empty.addView(icon,iconParams);
-            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);TextView title=label("链接还没带进来",14);title.setTypeface(null,android.graphics.Typeface.BOLD);TextView hint=label("也可从任意 App 的分享菜单直接发送",12);hint.setTextColor(0xffaab4ca);copy.addView(title);copy.addView(hint);empty.addView(copy,new LinearLayout.LayoutParams(0,-2,1));LinearLayout.LayoutParams emptyParams=new LinearLayout.LayoutParams(-1,-2);emptyParams.setMargins(0,dp(6),0,dp(8));root.addView(empty,emptyParams);emptyState=empty;
+            LinearLayout empty=new LinearLayout(this);empty.setGravity(Gravity.CENTER_VERTICAL);empty.setPadding(dp(12),dp(10),dp(12),dp(10));empty.setBackground(NativeUi.shape(this,CaptureVisuals.FIELD,16));
+            TextView icon=label("↗",20);icon.setGravity(Gravity.CENTER);icon.setTextColor(0xffaebcff);icon.setBackground(NativeUi.shape(this,CaptureVisuals.SURFACE,13));LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(40),dp(40));iconParams.setMargins(0,0,dp(12),0);empty.addView(icon,iconParams);
+            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);TextView title=label("链接还没带进来",14);title.setTypeface(null,android.graphics.Typeface.BOLD);TextView hint=label("也可从任意 App 的分享菜单直接发送",12);hint.setTextColor(CaptureVisuals.MUTED);copy.addView(title);copy.addView(hint);empty.addView(copy,new LinearLayout.LayoutParams(0,-2,1));LinearLayout.LayoutParams emptyParams=new LinearLayout.LayoutParams(-1,-2);emptyParams.setMargins(0,dp(6),0,dp(8));root.addView(empty,emptyParams);emptyState=empty;
         }
         text=new EditText(this);text.setTextSize(14);text.setTextColor(CaptureVisuals.INK);text.setHintTextColor(CaptureVisuals.MUTED);text.setHint(files.isEmpty()?"作品链接或分享文案":"备注（可选）");text.setMinLines(floating()?2:3);text.setMaxLines(floating()?4:7);text.setGravity(Gravity.TOP|Gravity.START);text.setPadding(dp(12),dp(12),dp(12),dp(12));text.setBackgroundTintList(null);text.setBackground(NativeUi.shape(this,CaptureVisuals.FIELD,10));text.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(16000)});text.setTextIsSelectable(true);text.setLongClickable(true);text.setText(shared);root.addView(text);
         if(emptyState!=null)text.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){emptyState.setVisibility(s.toString().trim().isEmpty()?View.VISIBLE:View.GONE);}public void afterTextChanged(android.text.Editable e){}});

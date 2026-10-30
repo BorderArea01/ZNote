@@ -44,8 +44,10 @@ export function useTheme() {
     try {
       localStorage.setItem("znote-theme", theme);
     } catch {}
+    window.dispatchEvent(new Event('znote:theme-changed'));
     return () => media.removeEventListener("change", apply);
   }, [theme]);
+  useEffect(()=>{const changed=e=>{if(['light','dark','system'].includes(e.detail?.mode))setTheme(e.detail.mode);};window.addEventListener('znote:native-appearance',changed);return()=>window.removeEventListener('znote:native-appearance',changed);},[]);
   return [theme, setTheme, resolvedTheme];
 }
 export function TagInput({

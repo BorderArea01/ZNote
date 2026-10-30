@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <permission android:name="${applicationId}.permission.APPEARANCE" android:protectionLevel="signature"/>
+  <uses-permission android:name="${applicationId}.permission.APPEARANCE"/>
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -20,8 +22,9 @@
       <intent-filter><action android:name="android.intent.action.SEND_MULTIPLE"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="image/*"/><data android:mimeType="video/*"/></intent-filter>
     </activity>
     <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:enableOnBackInvokedCallback="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
-      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
       <intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="znote" android:host="connect"/></intent-filter>
     </activity>
+    <activity-alias android:name=".LauncherClassic" android:targetActivity=".MainActivity" android:enabled="true" android:exported="true" android:icon="@drawable/ic_launcher" android:label="ZNote"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity-alias>
+    <activity-alias android:name=".LauncherGlitch" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/ic_glitch" android:label="ZNote"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity-alias>
   </application>
 </manifest>

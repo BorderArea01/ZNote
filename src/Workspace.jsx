@@ -1,4 +1,5 @@
 import {useBgmPlayback} from './Bgm.jsx';
+import {ThemeScene} from './appearance.jsx';
 import {LocalPlugins} from './LocalPlugins.jsx';
 import {toggleDefaultFavorite} from './favorites.js';
 import {ContentActions} from './ContentActions.jsx';
@@ -1155,6 +1156,7 @@ export default function Workspace({
           </div>
         </header>
         <div className="main-content">
+          <ThemeScene/>
           <section className="page-heading">
             <div>
               <h1>

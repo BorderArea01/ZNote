@@ -64,6 +64,7 @@ public class CaptureAssistService extends AccessibilityService {
     private final CopyLinkTrigger copyTrigger=new CopyLinkTrigger();
     private Runnable copyPrompt;
     private final java.util.concurrent.atomic.AtomicBoolean copyInspecting=new java.util.concurrent.atomic.AtomicBoolean();
+    private final BroadcastReceiver appearanceReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){NativeAppearance.apply(c,i.getStringExtra("style"),i.getStringExtra("mode"));if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;render();}}};
     private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
     private SharedPreferences sharingPrefs(){return getSharedPreferences("CaptureSharing",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
@@ -74,7 +75,7 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
+    @Override protected void onServiceConnected(){NativeAppearance.load(this);NativeAppearance.register(this,appearanceReceiver);current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null||event.isPassword()||busy||ShareActivity.captureVisible||bubble==null||!prefs().getBoolean("copy_link_prompt",true))return;
         String owner=String.valueOf(event.getPackageName());if(owner.equals(getPackageName())||owner.equals("null"))return;
@@ -105,8 +106,8 @@ public class CaptureAssistService extends AccessibilityService {
     }
     void configureCopyPrompt(){android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();if(info==null)return;info.eventTypes=visible()&&prefs().getBoolean("copy_link_prompt",true)?AccessibilityEvent.TYPE_VIEW_CLICKED|AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:0;info.notificationTimeout=80;setServiceInfo(info);}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
-    @Override public void onDestroy(){hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();catalogue.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
-    @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);cancel();expanded=false;libraryMenuExpanded=false;render();}
+    @Override public void onDestroy(){try{unregisterReceiver(appearanceReceiver);}catch(Exception ignored){}hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();catalogue.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
+    @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);NativeAppearance.load(this);if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;}cancel();expanded=false;libraryMenuExpanded=false;render();}
     void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);if(!diagnostics.isShutdown())diagnostics.execute(()->writeDiagnostic(event,detail));}
     private void recordEnvironment(){if(diagnostics.isShutdown())return;diagnostics.execute(()->{try{
         android.app.ActivityManager am=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
@@ -120,7 +121,7 @@ public class CaptureAssistService extends AccessibilityService {
     private int height(){return getResources().getDisplayMetrics().heightPixels;}
     private GradientDrawable shape(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
     private TextView control(String text,String description,Runnable action){
-        TextView b=new TextView(this);b.setText(text);b.setContentDescription(description);b.setTextSize(14);b.setSingleLine(true);b.setEllipsize(android.text.TextUtils.TruncateAt.END);b.setTextColor(0xffecedf5);b.setGravity(Gravity.CENTER);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setFocusable(true);b.setClickable(true);
+        TextView b=new TextView(this);b.setText(text);b.setContentDescription(description);b.setTextSize(14);b.setSingleLine(true);b.setEllipsize(android.text.TextUtils.TruncateAt.END);b.setTextColor(CaptureVisuals.INK);b.setGravity(Gravity.CENTER);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setFocusable(true);b.setClickable(true);
         b.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x336f82ff),shape(0x00202020,10),shape(0xffffffff,10)));b.setOnClickListener(v->{try{action.run();}catch(RuntimeException e){record("control_failed",e.getClass().getSimpleName());Toast.makeText(this,"操作未完成，请重新显示悬浮窗",Toast.LENGTH_LONG).show();}});return b;
     }
     boolean visible(){return bubble!=null;}
@@ -162,7 +163,7 @@ public class CaptureAssistService extends AccessibilityService {
         if(bubble==null)return;
         boolean right=prefs().getBoolean("capture_right",true);
         bubble.setPadding(expanded?dp(15):0,expanded?dp(8):0,expanded?dp(15):0,expanded?dp(10):0);
-        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),CaptureVisuals.BORDER);bubble.setBackground(bg);}else bubble.setBackground(null);
+        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),CaptureVisuals.BORDER);bubble.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,12):bg);}else bubble.setBackground(null);
         bubble.setElevation(expanded?dp(6):0);layout.flags=windowFlags();
         bubble.setOnTouchListener((v,e)->{if(e.getActionMasked()==MotionEvent.ACTION_OUTSIDE&&expanded){expanded=false;libraryMenuExpanded=false;render();return true;}return false;});
         if(handle==null){
@@ -171,14 +172,14 @@ public class CaptureAssistService extends AccessibilityService {
         handle.setText(expanded?"ZNote":"");handle.setTextSize(12);handle.setTypeface(null,android.graphics.Typeface.BOLD);
         handle.setContentDescription(expanded?"ZNote 采集面板；点击标题收起，拖动标题可移动":dragging?"ZNote 完整页签按钮，正在移动":working()?"ZNote 正在后台采集，点击查看":resultPending?"ZNote 采集结果："+lastMessage:"ZNote 贴边页签，点击展开，拖动换位置");
         handle.setPadding(expanded?dp(2):0,0,expanded?dp(2):0,0);
-        if(expanded){handle.setBackground(null);handle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",0xffa3b6a8,20),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,15),null);handle.setCompoundDrawablePadding(dp(8));}
+        if(expanded){handle.setBackground(null);handle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",NativeAppearance.glitch?CaptureVisuals.ACCENT:0xffa3b6a8,20),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,15),null);handle.setCompoundDrawablePadding(dp(8));}
         else{handle.setCompoundDrawables(null,null,null,null);handleArtwork.state(right,dragging?1:handleReveal,artworkState());handle.setBackground(handleArtwork);}
         handle.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(expanded?36:48)));
         if(panel==null){
             panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(0,dp(2),0,0);
-            libraryPicker=control("","选择采集目标知识库",this::toggleLibraryMenu);libraryPicker.setTextSize(12);libraryPicker.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);libraryPicker.setPadding(dp(10),0,dp(8),0);libraryPicker.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"folder",CaptureVisuals.MUTED,16),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,14),null);libraryPicker.setCompoundDrawablePadding(dp(8));libraryPicker.setBackground(shape(0xff2a3446,10));panel.addView(libraryPicker,new LinearLayout.LayoutParams(-1,dp(42)));
-            libraryList=new LinearLayout(this);libraryList.setOrientation(LinearLayout.VERTICAL);libraryList.setPadding(dp(4),dp(4),dp(4),dp(4));libraryList.setBackground(shape(0xff202638,10));libraryScroll=new ScrollView(this);libraryScroll.addView(libraryList);libraryScroll.setVisibility(View.GONE);LinearLayout.LayoutParams options=new LinearLayout.LayoutParams(-1,dp(176));options.setMargins(0,dp(6),0,dp(2));panel.addView(libraryScroll,options);buildLibraryList();
-            captureAction=control("采集当前作品","获取当前页面作品并保存到所选知识库",this::capture);captureAction.setTextSize(13);captureAction.setPadding(dp(16),0,dp(16),0);captureAction.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"capture",CaptureVisuals.INK,17),null,null,null);captureAction.setBackground(shape(0xff7689d8,11));LinearLayout.LayoutParams captureParams=new LinearLayout.LayoutParams(-1,dp(48));captureParams.setMargins(0,dp(12),0,dp(3));panel.addView(captureAction,captureParams);
+            libraryPicker=control("","选择采集目标知识库",this::toggleLibraryMenu);libraryPicker.setTextSize(12);libraryPicker.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);libraryPicker.setPadding(dp(10),0,dp(8),0);libraryPicker.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"folder",CaptureVisuals.MUTED,16),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,14),null);libraryPicker.setCompoundDrawablePadding(dp(8));libraryPicker.setBackground(shape(CaptureVisuals.FIELD,10));panel.addView(libraryPicker,new LinearLayout.LayoutParams(-1,dp(42)));
+            libraryList=new LinearLayout(this);libraryList.setOrientation(LinearLayout.VERTICAL);libraryList.setPadding(dp(4),dp(4),dp(4),dp(4));libraryList.setBackground(shape(CaptureVisuals.SURFACE,10));libraryScroll=new ScrollView(this);libraryScroll.addView(libraryList);libraryScroll.setVisibility(View.GONE);LinearLayout.LayoutParams options=new LinearLayout.LayoutParams(-1,dp(176));options.setMargins(0,dp(6),0,dp(2));panel.addView(libraryScroll,options);buildLibraryList();
+            captureAction=control("采集当前作品","获取当前页面作品并保存到所选知识库",this::capture);captureAction.setTextSize(13);captureAction.setPadding(dp(16),0,dp(16),0);captureAction.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"capture",0xfff7fbff,17),null,null,null);captureAction.setBackground(shape(CaptureVisuals.PRIMARY,11));LinearLayout.LayoutParams captureParams=new LinearLayout.LayoutParams(-1,dp(48));captureParams.setMargins(0,dp(12),0,dp(3));panel.addView(captureAction,captureParams);
             cancelAction=control("取消识别","取消读取当前页面",()->{cancel();message("已取消，可重新采集");});cancelAction.setTextSize(12);panel.addView(cancelAction,new LinearLayout.LayoutParams(-1,dp(44)));
             LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER_VERTICAL);
             TextView paste=control("粘贴链接","在浮窗内粘贴分享链接",()->open(""));paste.setTextSize(11);paste.setPadding(dp(8),0,dp(5),0);paste.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"paste",CaptureVisuals.MUTED,14),null,null,null);paste.setCompoundDrawablePadding(dp(4));actions.addView(paste,new LinearLayout.LayoutParams(0,dp(44),1));
@@ -187,7 +188,7 @@ public class CaptureAssistService extends AccessibilityService {
             status=new TextView(this);status.setTextSize(11);status.setPadding(dp(2),dp(7),dp(2),dp(2));status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);panel.addView(status);
             panelScroll=new ScrollView(this);panelScroll.setFillViewport(false);panelScroll.addView(panel);bubble.addView(panelScroll,new LinearLayout.LayoutParams(-1,-2));
         }
-        captureAction.setEnabled(!busy);captureAction.setAlpha(busy?.6f:1);captureAction.setText(busy?"正在识别作品…":"采集当前作品");cancelAction.setVisibility(busy?View.VISIBLE:View.GONE);
+        captureAction.setTextColor(0xfff7fbff);captureAction.setEnabled(!busy);captureAction.setAlpha(busy?.6f:1);captureAction.setText(busy?"正在识别作品…":"采集当前作品");cancelAction.setVisibility(busy?View.VISIBLE:View.GONE);
         status.setTextColor(resultFailed?CaptureVisuals.WARNING:CaptureVisuals.MUTED);status.setText(busy?"正在读取当前作品，可继续浏览":lastMessage);status.setVisibility(status.getText().length()==0?View.GONE:View.VISIBLE);
         panelScroll.setVisibility(expanded?View.VISIBLE:View.GONE);libraryScroll.setVisibility(expanded&&libraryMenuExpanded?View.VISIBLE:View.GONE);updateLibraryPicker();
         if(dragging){layout.width=dp(48);layout.height=dp(48);updateWindow();}else dock();

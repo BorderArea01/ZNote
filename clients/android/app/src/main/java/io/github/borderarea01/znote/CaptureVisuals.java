@@ -9,7 +9,7 @@ import android.widget.Button;
 
 /** Small vector artwork shared by the floating card, bookmark and result hint. */
 final class CaptureVisuals {
-    static final int INK=0xffe7ebf5, MUTED=0xffabb7ce, ACCENT=0xff8da0ed,
+    static int INK=0xffe7ebf5, MUTED=0xffabb7ce, ACCENT=0xff8da0ed,
         SUCCESS=0xff9bbcae, WARNING=0xffd3b185, SURFACE=0xff212938,
         FIELD=0xff2a3446, PRIMARY=0xff7689d8, BORDER=0xff424e63;
     private CaptureVisuals(){}
@@ -18,9 +18,9 @@ final class CaptureVisuals {
         Context c=button.getContext();int pad=NativeUi.dp(c,12);
         button.setTextSize(13);button.setMinHeight(NativeUi.dp(c,44));button.setMinimumHeight(NativeUi.dp(c,44));
         button.setPadding(pad,0,pad,0);button.setBackgroundTintList(null);
-        button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},new int[]{MUTED,INK}));
+        button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},new int[]{MUTED,primary?0xfff7fbff:INK}));
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),NativeUi.shape(c,primary?PRIMARY:0x00000000,11),null));
-        button.setCompoundDrawablesWithIntrinsicBounds(icon(c,icon,primary?INK:MUTED,16),null,null,null);button.setCompoundDrawablePadding(NativeUi.dp(c,8));
+        button.setCompoundDrawablesWithIntrinsicBounds(icon(c,icon,primary?0xfff7fbff:MUTED,16),null,null,null);button.setCompoundDrawablePadding(NativeUi.dp(c,8));
     }
 
     static Drawable icon(Context context,String name,int color,int size){
@@ -40,7 +40,7 @@ final class CaptureVisuals {
         @Override public int getIntrinsicHeight(){return size;}
         @Override public void draw(Canvas c){
             Rect b=getBounds();paint.setColor(color);paint.setStyle(Paint.Style.STROKE);paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);
-            if(name.equals("z")){logo(c,new RectF(b),paint);return;}
+            if(name.equals("z")){if(NativeAppearance.glitch){c.save();c.clipRect(b.left,b.top+b.height()*.43f,b.right,b.top+b.height()*.59f);paint.setColor(0xff70c7e0);c.translate(-size*.06f,0);logo(c,new RectF(b),paint);paint.setColor(0xffd999b8);c.translate(size*.12f,0);logo(c,new RectF(b),paint);c.restore();c.save();c.clipRect(b.left,b.top+b.height()*.43f,b.right,b.top+b.height()*.59f);c.translate(size*.03f,0);paint.setColor(color);logo(c,new RectF(b),paint);c.restore();c.save();Path region=new Path();region.addRect(b.left,b.top,b.right,b.top+b.height()*.43f,Path.Direction.CW);region.addRect(b.left,b.top+b.height()*.59f,b.right,b.bottom,Path.Direction.CW);c.clipPath(region);paint.setColor(color);logo(c,new RectF(b),paint);c.restore();}else logo(c,new RectF(b),paint);return;}
             c.save();c.translate(b.left,b.top);c.scale(b.width()/24f,b.height()/24f);paint.setStrokeWidth(1.65f);Path p=new Path();
             switch(name){
                 case "folder":p.moveTo(3,7);p.lineTo(3,5);p.quadTo(3,3,5,3);p.lineTo(9,3);p.lineTo(12,6);p.lineTo(19,6);p.quadTo(21,6,21,8);p.lineTo(21,19);p.quadTo(21,21,19,21);p.lineTo(5,21);p.quadTo(3,21,3,19);p.close();break;
@@ -74,7 +74,8 @@ final class CaptureVisuals {
             // square rounds its bottom corners. The hit area stays 24 x 48 dp.
             path.reset();path.moveTo(r,0);path.lineTo(w-r,0);path.quadTo(w,0,w,r);path.lineTo(w,h-bottomRadius);path.quadTo(w,h,w-bottomRadius,h);path.lineTo(w*.5f,h-cut);path.lineTo(bottomRadius,h);path.quadTo(0,h,0,h-bottomRadius);path.lineTo(0,r);path.quadTo(0,0,r,0);path.close();
             paint.setStyle(Paint.Style.FILL);paint.setColor(SURFACE);paint.setAlpha(Math.round(220+35*free));c.drawPath(path,paint);
-            paint.setStyle(Paint.Style.STROKE);paint.setColor(0xff596780);paint.setAlpha(255);paint.setStrokeWidth(density);c.drawPath(path,paint);
+            paint.setStyle(Paint.Style.STROKE);paint.setColor(NativeAppearance.glitch?BORDER:0xff596780);paint.setAlpha(255);paint.setStrokeWidth(density);c.drawPath(path,paint);
+            if(NativeAppearance.glitch){paint.setStyle(Paint.Style.FILL);paint.setColor(0xff76bed7);c.drawRect(0,7*density,w*.7f,8*density,paint);paint.setColor(0xffcf9ab3);c.drawRect(w*.4f,10*density,w,11*density,paint);}
             if(free>.05f){
                 paint.setColor(INK);paint.setAlpha(Math.round(255*free));float s=23*density;logo(c,new RectF((w-s)/2,(h-s)/2,(w+s)/2,(h+s)/2),paint);
                 paint.setColor(0xff72819d);paint.setAlpha(Math.round(255*free));paint.setStrokeWidth(density);paint.setStyle(Paint.Style.STROKE);Path fold=new Path();fold.moveTo(w-11*density,3*density);fold.lineTo(w-11*density,10*density);fold.lineTo(w-4*density,10*density);c.drawPath(fold,paint);

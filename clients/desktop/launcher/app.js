@@ -1,6 +1,9 @@
 const bridge=window.znoteLauncher,status=document.querySelector('#status'),address=document.querySelector('#address');
 async function act(fn){document.querySelectorAll('button,input').forEach(e=>e.disabled=true);status.textContent='正在连接，请稍候…';try{const r=await fn();status.textContent=r.error||r.message||'';}catch{status.textContent='连接失败，请检查知识库地址与网络。'}finally{document.querySelectorAll('button,input').forEach(e=>e.disabled=false)}}
-bridge.state().then(s=>{address.value=s.address||'';document.querySelector('#version').textContent='ZNote '+s.version;});
+function renderAppearance(value){const a=value||{style:'minimal',mode:'system'};document.documentElement.dataset.style=a.style;document.documentElement.dataset.mode=a.mode;document.querySelector('.brand').src=a.style==='glitch'?'icon-glitch.png':'icon.png';document.querySelector('#style').value=a.style;document.querySelector('#mode').value=a.mode;}
+bridge.onAppearance(renderAppearance);
+bridge.state().then(s=>{address.value=s.address||'';document.querySelector('#version').textContent='ZNote '+s.version;renderAppearance(s.appearance);});
+for(const id of['style','mode'])document.querySelector('#'+id).addEventListener('change',async()=>{const value={style:document.querySelector('#style').value,mode:document.querySelector('#mode').value};const result=await bridge.appearance(value);if(result.error)status.textContent=result.error;});
 document.querySelector('#connect').addEventListener('submit',e=>{e.preventDefault();act(()=>bridge.connect(address.value))});document.querySelector('#local').addEventListener('click',()=>act(()=>bridge.local()));document.querySelector('#feedback').addEventListener('click',()=>bridge.feedback());
 
 document.querySelector('#media').addEventListener('click',()=>act(()=>bridge.media()));
