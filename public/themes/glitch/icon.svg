@@ -1,12 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="sky" x2=".8" y2="1"><stop stop-color="#246bd0"/><stop offset="1" stop-color="#0a1e3d"/></linearGradient>
-    <path id="z" d="M16 23C23 14 35 24 46 18C49 16.5 49 20.5 43 25.5L20 42.5C16 46 18 49 22 46.5C30 41.5 42 51 49 42" fill="none" stroke-width="6.8" stroke-linecap="round" stroke-linejoin="round"/>
-    <clipPath id="round"><rect width="64" height="64" rx="15"/></clipPath>
+    <linearGradient id="tile" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#337bce"/><stop offset=".5" stop-color="#194e88"/><stop offset="1" stop-color="#0c2548"/></linearGradient>
+    <radialGradient id="light" cx=".2" cy="0" r="1"><stop stop-color="#9edbff" stop-opacity=".2"/><stop offset=".8" stop-color="#9edbff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ink" x2=".7" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#e7f2fc"/></linearGradient>
+    <path id="mark" d="M17 22.5C24.5 16.5 34 24.4 46.5 18.7C48.1 18 47.8 20.5 44 23.7L21 41.8C17.4 45 18.4 47.8 21.9 45.7C29.4 41.2 39.6 49.4 47.5 41.8" fill="none" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <clipPath id="displace"><path d="M0 28.6H64V31.1H0ZM0 38.8H64V40.2H0Z"/></clipPath>
   </defs>
-  <g clip-path="url(#round)">
-    <rect width="64" height="64" fill="url(#sky)"/>
-    <path d="M4 53V29H10V20H19V53M46 55V35H51V13H59V55" fill="#d5e7f3" opacity=".1"/>
-    <use href="#z" stroke="#f5f7ed"/>
+  <rect width="64" height="64" rx="16" fill="#123b6a"/>
+  <rect width="64" height="64" rx="16" fill="url(#tile)"/>
+  <rect width="64" height="64" rx="16" fill="url(#light)"/>
+  <rect x=".65" y=".65" width="62.7" height="62.7" rx="15.35" fill="none" stroke="#c5e4ff" stroke-opacity=".19" stroke-width=".7"/>
+  <use href="#mark" stroke="#072b53" transform="translate(0 1.1)" opacity=".3"/>
+  <use href="#mark" stroke="url(#ink)"/>
+  <g clip-path="url(#displace)">
+    <rect width="64" height="64" fill="url(#tile)"/>
+    <rect width="64" height="64" fill="url(#light)"/>
+    <use href="#mark" stroke="#55d9f0" transform="translate(-2.1)" opacity=".95"/>
+    <use href="#mark" stroke="#e795bd" transform="translate(2.8)" opacity=".85"/>
+    <use href="#mark" stroke="url(#ink)" transform="translate(.85)"/>
   </g>
+  <path d="M44.8 29.1H52.8M12.4 39.4H16.6" stroke="#80c9f0" stroke-width=".75" stroke-linecap="round" opacity=".65"/>
 </svg>

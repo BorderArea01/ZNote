@@ -193,7 +193,7 @@ function Auth({ configured, onDone, reason }) {
     <div className={`auth-page${reason?' auth-recovery':''}`}>
       <div className="auth-art">
         <div className="brand">
-          <img src="/icon.svg" />
+          <img src="/icon.svg?v=10" />
           ZNote<span>知识，看得见。</span>
         </div>
         <div className="auth-heading">
@@ -243,7 +243,7 @@ function Auth({ configured, onDone, reason }) {
           }
         }}
       >
-        <img className="auth-logo" src="/icon.svg" />
+        <img className="auth-logo" src="/icon.svg?v=10" />
         <h2>{configured ? "欢迎回到你的知识库" : "创建你的知识空间"}</h2>
         {reason && <div role="status">{reason}</div>}
         <p>

@@ -9,7 +9,7 @@ export const portalAppearanceCss=`
 html[data-style=glitch]{background:#111b29;color:#e9f0f8}html[data-style=glitch] main{--panel:#192738;--field:#203146;--edge:#405872;--text:#e9f0f8;--muted:#afc1d6}
 html[data-style=glitch] header{padding:24px 16px;background:linear-gradient(90deg,#10243ac7,#10243a40),url('/themes/glitch/architecture-clean-mobile.webp') center/cover;border-radius:7px}
 html[data-style=glitch] main{--signal-fill:var(--panel)}
-html[data-style=glitch] .logo{background:url('/themes/glitch/icon.svg?v=9') center/contain no-repeat;border:0;font-size:0}
+.logo{background:url('/themes/glitch/icon.svg?v=10') center/contain no-repeat;border:0;font-size:0}
 html[data-style=glitch] :is(form,section>section){background:var(--panel);border-color:var(--edge);border-radius:10px}
 html[data-style=glitch] :is(input,select,textarea){background:var(--field);color:var(--text);border-color:var(--edge)}html[data-style=glitch] button{background:#1859a8;border-color:#4281c8;color:#fff}
 html[data-style=glitch] :is(label,.job p,footer){color:var(--muted)}html[data-style=glitch] a{color:var(--text)}html[data-style=glitch] :is(header p,#online){color:#e3edfa}

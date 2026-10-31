@@ -36,7 +36,7 @@ export function AppearanceProvider({ children }) {
     try { localStorage.setItem('znote-appearance', JSON.stringify(appearance)); } catch {}
     const sync=()=>{
       const glitch=appearance.style==='glitch';
-      document.querySelector('link[rel="icon"]')?.setAttribute('href',glitch?'/themes/glitch/icon.svg?v=9':'/icon.svg');
+      document.querySelector('link[rel="icon"]')?.setAttribute('href','/icon.svg?v=10');
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content',glitch?'#1859a8':'#287464');
       queueMicrotask(()=>{try{window.ZNoteAppearance?.set?.(JSON.stringify({style:document.documentElement.dataset.style,palette:document.documentElement.dataset.palette,motion:document.documentElement.dataset.motion,mode:localStorage.getItem('znote-theme')||'system'}));}catch{}});
     };sync();window.addEventListener('znote:theme-changed',sync);

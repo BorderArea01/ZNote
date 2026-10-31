@@ -1007,7 +1007,7 @@ export default function Workspace({
             goHome();
           }}
         >
-          <img src="/icon.svg" />
+          <img src="/icon.svg?v=10" />
           ZNote<span className="beta">LOCAL</span>
         </a>
         <div className="workspace-label">

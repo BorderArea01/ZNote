@@ -4,7 +4,7 @@ const media=require('./media.cjs');
 const {normalize:normalizeAppearance}=require('./appearance.cjs');
 let appearance=null,configWrites=Promise.resolve();
 function saveConfig(patch){const next=configWrites.then(async()=>{const value={...await config(),...patch};await mkdir(appData(),{recursive:true});await writeFile(configPath()+'.tmp',JSON.stringify(value,null,2));await require('node:fs/promises').rename(configPath()+'.tmp',configPath());});configWrites=next.catch(()=>{});return next;}
-function currentIcon(){return nativeImage.createFromPath(join(__dirname,'launcher',appearance?.style==='glitch'?'icon-glitch.png':'icon.png'));}
+function currentIcon(){return nativeImage.createFromPath(join(__dirname,'launcher','icon.png'));}
 async function setAppearance(value){const next=normalizeAppearance(value);if(!next)throw Error('Invalid appearance');if(JSON.stringify(appearance)===JSON.stringify(next))return {ok:true};await saveConfig({appearance:next});appearance=next;const icon=currentIcon();tray?.setImage(icon.resize({width:20,height:20}));for(const win of[launcher,library])if(win&&!win.isDestroyed()){win.setIcon(icon);win.webContents.send('appearance:changed',appearance);}return {ok:true};}
 const {normalizeAddress,sameOrigin,externalLink}=require('./policy.cjs');
 let launcher,library,tray,child,quitting=false,currentOrigin='',localOrigin='',ownsService=false;

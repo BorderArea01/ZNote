@@ -23,7 +23,7 @@ html[data-style="glitch"] .main { overflow-x:clip; }
 html[data-style="glitch"] .dialog-shade { width:100dvw; height:100dvh; overflow:clip; }
 html[data-style="glitch"] .lightbox { width:100dvw; height:100dvh; }
 html[data-style="glitch"] .dialog { overflow-x:hidden; }
-html[data-style="glitch"] :is(.brand img,.auth-logo) { content: url('/themes/glitch/icon.svg?v=9'); }
+html[data-style="glitch"] :is(.brand img,.auth-logo) { content: url('/icon.svg?v=10'); }
 html[data-style="glitch"] .topbar { background: var(--surface); border-bottom: 1px solid var(--border); }
 html[data-style="glitch"] .sidebar { background: var(--surface-2); }
 html[data-style="glitch"] .brand { letter-spacing: -.6px; }
@@ -41,7 +41,7 @@ html[data-style="glitch"] .glitch-scene {
 }
 .glitch-scene::before { content:''; position:absolute; inset:0; background:inherit; pointer-events:none; opacity:0; mask-image:linear-gradient(transparent 0 11%,#000 11% 13%,transparent 13% 26%,#000 26% 29%,transparent 29% 44%,#000 44% 45%,transparent 45% 58%,#000 58% 63%,transparent 63% 77%,#000 77% 78%,transparent 78% 89%,#000 89% 93%,transparent 93%); }
 .glitch-scene-caption { position: absolute; z-index: 1; bottom: 14px; left: 20px; color: #fff; font: 10px/1.4 'Consolas',monospace; letter-spacing: 2px; }
-.glitch-scene-mark { position: absolute; z-index: 1; right: 22px; top: 16px; width: 42px; height: 42px; font-size: 0; background: url('/themes/glitch/icon.svg?v=9') center / contain no-repeat; }
+.glitch-scene-mark { position: absolute; z-index: 1; right: 22px; top: 16px; width: 42px; height: 42px; font-size: 0; background: url('/icon.svg?v=10') center / contain no-repeat; }
 .glitch-scene-grid { position: absolute; inset: 11px; z-index: 1; border: 1px solid #f0f8ff38; clip-path: polygon(0 0,20px 0,20px 1px,1px 1px,1px 20px,0 20px,0 0,100% 100%,calc(100% - 20px) 100%,calc(100% - 20px) calc(100% - 1px),calc(100% - 1px) calc(100% - 1px),calc(100% - 1px) calc(100% - 20px),100% calc(100% - 20px),100% 100%); }
 .glitch-scene > i { display:none; }
 .glitch-scene > i:nth-last-child(2) { top: 64%; right: 11%; width: 8%; height: 3px; background: #d5a5b9c9; }

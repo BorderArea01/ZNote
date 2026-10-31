@@ -501,3 +501,13 @@
 - 移除 steps(1,end) 和所有 infinite 主题动画，改用连续 transform/clip-path/opacity 插值。实际当前实例有限RAF观察采到112种不同位移，不代表已测手机或用户屏幕的真实FPS；录屏工具的25fps上限也不能当应用帧率，不以补帧伪造60fps。原动态/静态设置与系统减少动态效果保持。
 - 生产构建通过：index-DYm-oopY.js/index-IzJUB_On.css，共享资源URL版本9。当前3741实际桌面/触屏闲置像素稳定、完整底色无mask碎边、真实悬停单次/停留不循环/子元素不重触发/重新进入可触发、连续插值、触屏和键盘、文字尺寸更新、静态持久化、减少动态效果、失败回退/恢复及宽度边界通过 artifacts/glitch-hover-live-iKa5t2/result.json，只读授权无API写请求，原items与PIN未变。
 - 静态浅深色/键盘触屏主题切换/320px边界与Portal检查 artifacts/glitch-ui-w5TZG8；实际图库原媒体无滤镜、桌面/触屏预览分层关闭检查 artifacts/glitch-v2-live-mqne7l 通过。静止/悬停截图已目视；实际鼠标进入录屏 artifacts/rupture-demo-zVpWoG/preview.mp4。Windows启动页和安卓替代图标源素材同步，未构建/发布新安装包；有效Windows28/Android26及唯一27项目回退保持。
+
+
+## 2026-10-31 品牌图标保持故障风格，统一为全局默认
+
+- 用户纠正“图标不要改回来。我们的全局默认图标就要故障风格，现在太粗糙了。”图标为明确例外：界面容器静止时完整，品牌图标始终保留故障特征；不能因切换简约/其他皮肤、静态动效或减少动态效果改回普通图标。此条覆盖前一条“主题 Z 清除静态断层”的误判。
+- public/icon.svg 为唯一母版：保留手写 Z，笔画由6.8收细至5.8，打磨曲线、蓝色渐变和内缘，两处局部横向切片/有限青粉色差，清除杂乱散点。16/20/24/32/48/64/128像素视图已目视 artifacts/brand-icons/sizes.png；源SVG/PNG无需依赖图像生成服务。
+- build-client-icons.mjs 唯一拥有所有图标输出：网页/PWA/Apple touch/Windows ICO+PNG/扩展/Android。theme icon.svg、icon-glitch.png、ic_glitch.png 为同图兼容别名；build-glitch-assets.mjs 不再写图标。maskable填满正方形且Z位于中心安全圆；Android ic_launcher.xml 引用同母版512PNG ic_brand，避免单路径转换丢掉渐变/切片。多端像素一致、maskable alpha/安全圆与ICO四尺寸解码 tests/brand-icons.mjs 通过。
+- 当前3741网页默认favicon、登录/工作区/顶部图标与PWA图标查询版本10；五种皮肤切换均同图，桌面/触屏10条路径、实际登录页、PWA接口字节验证 artifacts/global-brand-live-psIMlP/result.json 通过。只读会话无API写请求，原items与PIN未变。第一次脚本错等移动端刻意隐藏的auth-logo，随后改为检查用户实际可见的登录页品牌图；不通过强制显示/点击改变产品。
+- Windows开发程序窗口/托盘/启动页、明暗/风格切换保持品牌不变，原桥接/未保存草稿/连接/重启保留与CSP检查 artifacts/desktop-appearance-ztcrzS 通过；这是开发程序验收，不是新EXE验收。主题/320px/触屏回归 artifacts/glitch-ui-d9IT14 通过。相关截图已目视。
+- 扩展0.9.46只同步已安装目录的图标、品牌伪元素和版本，保留key/凭据/其他文件；用户原浏览器需重新加载扩展。前端生产 index-DeCwtyG5.js/index-DxQ7YQqK.css，当前实例已加载；本轮没有构建或发布新Android/Windows安装包，有效版本仍28/26、唯一27项目回退不变。源端Android默认与别名图标、Windows打包资源已同步，不宣称旧安装包自动换图标。
