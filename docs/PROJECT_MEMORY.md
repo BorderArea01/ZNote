@@ -480,3 +480,14 @@
 - 最终生产前端为 index-8hBdmF3M.js（以实际dist入口为准），主题资源URL版本5。Pages部署10efabdd，稳定域名全部新资源hash、手机尺寸Portal切换、collector在线、原任务数量未变，以及现有有效APK26/源码26和Windows28资产hash通过 artifacts/glitch-release-live-QjS1Lk。公开GitHub API在当前出口仍403，认证目录检查通过，不宣称手机匿名更新路径已验证。实际录屏 artifacts/glitch-motion-live-LGCtNx/dynamic-preview.mp4；不是只交静态截图。
 
 - 最终演示改为 artifacts/rupture-demo-kxhuvy/preview.mp4：在当前3741独立录屏，不在录制中调用元素截图或临时改变视口；1280×900、9秒、约1.04MiB。测试过程的视频可能因截图器改变捕获面而出现大片灰底，不能直接交付；专门录制后已提帧目视并校验灰底占比0.0016%。前面LGCtNx视频仅作为过程证据，最终交付用本条路径。源码 cfe2a2d 已推送，生产静态资源保持新动态版本；没有发布Windows29或Android新APK，原28/26有效组件及唯一27回退保留，候选前端编译目录已清理。
+
+
+## 2026-10-31 知乎动图格式与内容切片故障皮肤
+
+- 用户截图的条目 12dfbda6-1239-42e5-a29d-ddc486b6da26 实际为 600×189、40932 字节、29 帧动态 WebP，不是静态缩略图误下载。原文件/当前 original API/浏览器原生下载 SHA256 与数据库一致，浏览器建议扩展名 .webp，真实时间采样有 8 种画面；证据 artifacts/animated-original-live.json。不能把 WebP 一概当静态，不能只改后缀冒充 GIF。没有覆盖用户原文件。
+- 0.9.45 扩展增加页面明确提供的 data-actualsrc、data-actual-src、data-original-gif 候选，原始动图与高分辨率候选优先；保留展示图回退，不推测不存在的 GIF URL。原图候选 DOM 检查 tests/animated-original-candidates.mjs 通过；安装目录只更新 candidates.js/manifest 版本，保留原 key、权限与其他采集维护。用户原浏览器需重新加载扩展/网页；不能声称已热加载。
+- 用户参考 https://zhuanlan.zhihu.com/p/384808252 直接抓取 403；实际阅读作者 Dragonir 同篇原文 https://www.cnblogs.com/dragonir/p/14878001.html。借鉴 clip-path 动态分片、实际内容副本错位、RGB 色差与复原原理，自行实现，不复制示例代码/素材。保留建筑蓝天摄影色调，不套示例黄红配色。
+- signal-replay 只复制实际标题/按钮纯文字与本地摄影，aria-hidden/inert/无输入事件，不克隆按钮、链接、ID 或用户媒体。两层内容以不等高横向片段错位再复原；观察文本、尺寸和明暗变化，过滤自身装饰变更防止观察器循环；离屏/静态/减少动态效果移除副本，命中区域与原文本几何不动。
+- 受控轻量扩展/前端构建通过，实际3741桌面/触屏内容分片、文字尺寸更新、明暗同步、静态刷新、离屏停止、点击反馈、脚本失败/恢复及边界验证 artifacts/glitch-motion-live-JjDb2G/result.json 通过；只读会话无 API 写请求，原 items 元数据与 PIN 未变。当前图库预览桌面/触屏分层关闭、原媒体无滤镜检查 artifacts/glitch-v2-live-P7K34z 通过。静态明暗/主题恢复/320px 检查 artifacts/glitch-ui-uj1Lhu；截图已目视，实际录屏 artifacts/rupture-demo-hh5iHR/preview.mp4（1280×900，9秒）。
+- tests/work-images-ui.mjs 在 Paw 缩略图回退用例的旧“必须报原图链接错误”断言失败；HEAD 原 candidates 也同样失败，日志 animated-original-existing-baseline。不把既有失败说成本轮回归或全套测试通过；本轮没有更改 Paw 分组/缩略图逻辑。
+- 本轮网页共享主题资源 URL 版本7；Windows启动页源码同步，仍未发布 Windows29/Android28。有效客户端仍 Windows28/Android26，唯一项目回退为27项目包。

@@ -20,10 +20,14 @@ Windows 启动页同样提供「界面与图标」，与知识库页的选择双
 
 本轮先交付真实页面与录屏以核对动态方向，Windows29 连接页与动效设置为源码候选，没有发布新安装包；安卓原生浮窗同样未发布新 APK。
 
+第四轮参考用户提供的[知乎文章](https://zhuanlan.zhihu.com/p/384808252)。知乎直接访问返回 403，实际阅读的是作者 Dragonir 的[同篇原文](https://www.cnblogs.com/dragonir/p/14878001.html)：借鉴 `clip-path` 动态分片、内容副本错位、短暂 RGB 色差再复原的原理，自行实现，不复制其示例代码或配图。保留蓝天与建筑摄影色调，不套用示例的黄红配色。
+
+`signal-replay` 在可见面板/按钮内重放实际标题和按钮文字的水平切片，替代只有外围碎屑晃动的观感。装饰只包含纯文本，不克隆输入框、链接、媒体、ID 或事件；`aria-hidden`、`inert` 与 `pointer-events:none` 保持辅助技术、焦点和点击路径。文本/尺寸变化后重采样，过滤自身 DOM 变更防止观察器循环，离屏、静态或减少动态效果时移除副本。摄影撕裂、分段材质和独立碎块继续保留，预览中的用户图片不作故障处理。
+
 摄影素材使用内置 imagegen 生成，原始文件为 `architecture-source.png`。生成提示：
 
 > 建筑摄影，故障艺术 Glitch Art，强烈横向像素排序，水平撕裂拉伸畸变，建筑破碎成大量水平条状碎片，像素碎块在空中飘散，数据熔合 datamoshing 效果，保留建筑整体轮廓可识别，晴朗蓝天背景，自然日光，写实照片基底，数字文件损坏效果，零散漂浮的小像素方块，轻微 RGB 色偏，高细节，电影感画面。白色混凝土现代建筑，横向构图，无文字、人物或 UI；保持可用于宽横幅与手机裁切的天空和建筑轮廓。
 
-`scripts/build-glitch-assets.mjs` 生成桌面与手机 WebP、Android 小尺寸背景和替代图标。手写 Z 延续原字形，只对中间一条做横向错位及轻微 RGB 分离；原 `public/icon.svg` 保留。主题不改变用户图片或视频像素，空闲无循环故障动画，支持减少动态效果。Android 背景位图复用缓存，不在拖动期间读取网络或重新解码。
+`scripts/build-glitch-assets.mjs` 生成桌面与手机 WebP、Android 小尺寸背景和替代图标。手写 Z 延续原字形，只对中间一条做横向错位及轻微 RGB 分离；原 `public/icon.svg` 保留。主题不改变用户图片或视频像素；动态模式保留可见区域的间歇撕裂，静态和减少动态效果时停止。Android 背景位图复用缓存，不在拖动期间读取网络或重新解码。
 
 实现依据：[Android activity-alias](https://developer.android.com/guide/topics/manifest/activity-alias-element)、[减少动态效果](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/%40media/prefers-reduced-motion)、[装饰图片优化](https://developer.chrome.com/docs/modern-web-guidance/guides/performance/deliver-optimized-decorative-images)。

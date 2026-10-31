@@ -30,6 +30,11 @@ globalThis.ZNoteCandidates = (element) => {
       }
     } catch {}
     for (const name of [
+      // Zhihu exposes the animated/original file separately from currentSrc,
+      // which can be a CDN WebP rendition. Only trust explicit page metadata.
+      "data-actualsrc",
+      "data-actual-src",
+      "data-original-gif",
       "data-original",
       "data-full",
       "data-fullsize",

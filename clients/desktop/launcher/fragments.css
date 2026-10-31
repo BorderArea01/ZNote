@@ -8,8 +8,8 @@ html[data-style="glitch"] {
 }
 html[data-style="glitch"] body > main { overflow-x:clip; }
 html[data-style="glitch"][data-style] :is(.library-card, .intro-banner, .signal-surface) {
-  --edge-size: 42px;
-  --edge-outset: -13px;
+  --edge-size: 30px;
+  --edge-outset: -9px;
   position: relative;
   isolation: isolate;
   overflow: visible;
@@ -154,3 +154,39 @@ html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-pulse] > .s
 @media (prefers-reduced-motion:reduce) { html[data-style="glitch"] .signal-shards { display:none!important; } }
 /* Fragments fly within the material and its gutter, never widen a mobile viewport. */
 html[data-style="glitch"] .signal-shards { inset:-24px -10px; overflow:clip; }
+/* Content slices: two independently clipped replicas of the real label/panel.
+   Inspired by Dragonir's CSS glitch explanation; original implementation here.
+   The steady live DOM remains underneath, including focus and hit geometry. */
+html[data-style="glitch"] .signal-replay { position:absolute!important; display:block!important; inset:0; width:auto; height:auto; margin:0!important; padding:0!important; border:0; overflow:clip; border-radius:inherit; pointer-events:none; z-index:3; font-size:0; }
+html[data-style="glitch"] .signal-replay-copy { position:absolute; display:block; inset:0; margin:0; padding:0; opacity:0; background:var(--replay-fill,var(--signal-fill)); pointer-events:none; }
+html[data-style="glitch"] .signal-replay-copy > span { margin:0; padding:0; pointer-events:none; text-shadow:-2px 0 #5bd5e9,2px 0 #e886a0; }
+html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-visible] > .signal-replay > .signal-replay-copy { animation:signal-content-tear 6.8s steps(1,end) var(--contour-delay,0s) infinite; }
+html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-visible] > .signal-replay > .signal-replay-copy:nth-child(2) { animation-name:signal-content-scan; }
+html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-pulse] > .signal-replay > .signal-replay-copy { animation:signal-content-hit 420ms steps(1,end) 1; }
+html[data-style="glitch"][data-glitch-motion="running"] [data-glitch-pulse] > .signal-replay > .signal-replay-copy:nth-child(2) { animation-direction:reverse; }
+html[data-style="glitch"] .glitch-scene > .signal-replay > .signal-replay-copy { background:#3976b6 url('architecture-mobile.webp') center 51% / cover; }
+@keyframes signal-content-tear {
+ 0%,8%,16%,28%,66%,74%,88%,100% { opacity:0; transform:none; clip-path:inset(50% 0 50%); }
+ 9%,11%,68%,70% { opacity:1; transform:translateX(-19px); clip-path:polygon(0 12%,100% 12%,100% 17%,0 17%,0 38%,100% 38%,100% 48%,0 48%,0 78%,100% 78%,100% 81%,0 81%); }
+ 12%,15%,71%,73% { opacity:1; transform:translateX(25px) skewX(-9deg); clip-path:polygon(0 26%,100% 26%,100% 31%,0 31%,0 55%,100% 55%,100% 69%,0 69%,0 92%,100% 92%,100% 94%,0 94%); }
+ 23%,25%,83%,85% { opacity:1; transform:translateX(-11px); clip-path:inset(43% 0 48%); }
+ 26%,27%,86%,87% { opacity:.75; transform:translateX(7px); clip-path:inset(72% 0 25%); }
+}
+@keyframes signal-content-scan {
+ 0%,10%,19%,31%,69%,79%,89%,100% { opacity:0; transform:none; clip-path:inset(50% 0 50%); }
+ 11%,14%,70%,74% { opacity:.9; transform:translateX(13px) scaleX(1.04); clip-path:inset(28% 0 66%); }
+ 15%,18%,75%,78% { opacity:1; transform:translateX(-32px) scaleX(1.12); clip-path:inset(58% 0 36%); }
+ 28%,30%,86%,88% { opacity:.8; transform:translateX(21px); clip-path:inset(17% 0 80%); }
+}
+@keyframes signal-content-hit {
+ 0%,100% { opacity:0; transform:none; clip-path:inset(50% 0 50%); }
+ 8%,22% { opacity:1; transform:translateX(-18px); clip-path:inset(12% 0 68%); }
+ 23%,44% { opacity:1; transform:translateX(22px) skewX(-10deg); clip-path:inset(48% 0 35%); }
+ 45%,63% { opacity:1; transform:translateX(-12px) scaleX(1.1); clip-path:inset(72% 0 22%); }
+ 64%,85% { opacity:.8; transform:translateX(8px); clip-path:inset(30% 0 63%); }
+}
+@media (hover:hover) and (pointer:fine) {
+ html[data-style="glitch"][data-glitch-motion="running"] :is(.library-card,.signal-surface,.primary,.signal-button):hover > .signal-replay > .signal-replay-copy { animation:signal-content-hit 620ms steps(1,end) 1; }
+ html[data-style="glitch"][data-glitch-motion="running"] :is(.library-card,.signal-surface,.primary,.signal-button):hover > .signal-replay > .signal-replay-copy:nth-child(2) { animation-direction:reverse; }
+}
+@media (prefers-reduced-motion:reduce) { html[data-style="glitch"] .signal-replay { display:none!important; } }
