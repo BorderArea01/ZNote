@@ -1,4 +1,5 @@
 import { resolveCaptureHost } from './capture-dns.js';
+import { youtubeVideoUrl } from '../shared/youtube.js';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
@@ -502,6 +503,8 @@ function liveAddressUrls(value,base,depth=0){
     .flatMap(key=>liveAddressUrls(value[key],base,depth+1));
 }
 export function extractCapturePage(html, url) {
+  const youtube=youtubeVideoUrl(url);
+  if(youtube)return {kind:'video',url:youtube,title:'YouTube 视频',images:[]};
   const gallery=extractJlijiGallery(html,url);if(gallery)return gallery;
   const chapter=extractComicChapter(html,url);if(chapter)return chapter;
   const { document } = parseHTML(html), u = new URL(url), host = u.hostname;

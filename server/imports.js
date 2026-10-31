@@ -6,11 +6,15 @@ import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { MAX_VIDEO_BYTES } from './videos.js';
+import { youtubeVideoUrl } from '../shared/youtube.js';
+import { proxyUrl } from './network-proxy.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 export function platformUrl(value) {
   let url; try { url = new URL(value); } catch { throw fail(400, '请粘贴完整的视频页面链接'); }
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.port || url.href.length > 4096) throw fail(400, '视频链接格式不正确');
+  const youtube = youtubeVideoUrl(url.href);
+  if (youtube) return youtube;
   const h = url.hostname, p = url.pathname;
   // Personal/favorites pages open a single work in a modal; import that work.
   if (['www.douyin.com', 'douyin.com'].includes(h) && /^\d+$/.test(url.searchParams.get('modal_id') || '')) return 'https://www.douyin.com/video/' + url.searchParams.get('modal_id');
@@ -21,7 +25,7 @@ export function platformUrl(value) {
     (h === 'www.xiaohongshu.com' && /^\/(?:explore|discovery\/item)\/[a-f\d]+/i.test(p)) ||
     (h === 'xhslink.com' && /^\/(?:a\/)?[\w-]+\/?$/.test(p)) ||
     (['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com'].includes(h) && /^\/[\w]+\/status\/\d+/.test(p));
-  if (!valid) throw fail(400, '目前支持哔哩哔哩、抖音、小红书和 X 的单条视频链接（不支持主页或直播）');
+  if (!valid) throw fail(400, '目前支持 YouTube、哔哩哔哩、抖音、小红书和 X 的单条视频链接（不支持主页或直播）');
   // The restricted extractor list excludes the mobile redirect extractor.
   if (h === 'm.bilibili.com' || h === 'bilibili.com') url.hostname = 'www.bilibili.com';
   url.protocol = 'https:'; url.hash = ''; return url.href;
@@ -71,6 +75,8 @@ function run(command, args, { signal, cwd, onText = () => {}, timeout = 600000, 
 }
 function friendlyError(text) {
   if (text.includes('ERROR:')) text = text.slice(text.lastIndexOf('ERROR:'));
+  if (/confirm your age|age.restrict|age.verif/i.test(text)) return 'YouTube 要求账号完成年龄验证，服务器无法仅凭链接读取。请在已登录且能播放的浏览器页面使用扩展采集当前视频；未保存封面或空文件。';
+  if (/\[youtube\]/i.test(text)&&/sign in|cookies|confirm.*bot|403|429/i.test(text)) return 'YouTube 要求登录或验证，服务器没有浏览器的登录状态。请在已登录且能播放的 YouTube 页面使用扩展采集当前视频。';
   if (/cookies|login|sign in|confirm.*bot|403|412|429|blocked|risk|captcha|验证|登录/i.test(text)) return '平台要求登录、验证或限制了服务器访问，未能取得媒体文件。任务已保留，可重试或从原 App 分享媒体文件给 ZNote。';
   if (/too large|max.filesize|larger than/i.test(text)) return '视频超过 500 MB，未入库';
   if (/not available|unavailable|404|removed|private|not found/i.test(text)) return '视频已删除、非公开或暂不可访问，请检查原页面';
@@ -85,7 +91,7 @@ export function importVideoFormat(value) {
   // Bilibili commonly ranks HEVC above AVC at the same resolution. Prefer
   // its native H.264 stream so the saved video also plays in browser WebViews;
   // keep the original fallback when the platform offers no AVC stream.
-  return /(^|\.)bilibili\.com$/i.test(host)
+  return /(^|\.)(?:bilibili|youtube)\.com$/i.test(host)
     ? 'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]/' + fallback
     : fallback;
 }
@@ -94,7 +100,10 @@ export async function downloadVideo({ url, dir, signal, progress }) {
   url = await resolveShareLink(url, signal);
   await run(ffmpeg, ['-version'], { signal, timeout: 10000 });
   const args = ['--ignore-config', '--no-playlist', '--playlist-items', '1', '--no-cache-dir', '--no-warnings', '--newline', '--socket-timeout', '20', '--retries', '1', '--fragment-retries', '1', '--concurrent-fragments', '1', '--max-filesize', String(MAX_VIDEO_BYTES), '--max-downloads', '1', '--no-write-thumbnail', '--write-info-json', '--no-write-playlist-metafiles', '--ffmpeg-location', ffmpeg === 'ffmpeg' ? ffmpeg : dirname(ffmpeg), '-f', importVideoFormat(url), '--merge-output-format', 'mp4', '-o', join(dir, 'media.%(ext)s'), '--', url];
-  args.splice(1, 0, '--use-extractors', 'BiliBili,Douyin,XiaoHongShu,Twitter');
+  args.splice(1, 0, '--use-extractors', 'BiliBili,Douyin,XiaoHongShu,Twitter,Youtube');
+  const proxy = proxyUrl();
+  if (proxy) args.splice(1, 0, '--proxy', proxy);
+  if (youtubeVideoUrl(url)) args.splice(1, 0, '--js-runtimes', 'node:' + process.execPath);
   const controller = new AbortController();
   const abort = () => controller.abort(); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
   let overLimit = false;

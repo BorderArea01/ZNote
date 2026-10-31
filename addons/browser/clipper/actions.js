@@ -1,5 +1,7 @@
 import { saveImage, limitedImage, api, settings, connection } from './client.js';
 import { blockedSite } from './site-policy.js';
+import {youtubeVideoId} from './youtube-url.js';
+import {validateYoutubeResource} from './youtube-formats.js';
 import {startMediaTask, downloadJob, getDownloadJob} from './media-tasks.js';
 export async function captureJob(id, tabId) {
   return await getDownloadJob(id,tabId) || await api('/api/captures/'+encodeURIComponent(id));
@@ -106,6 +108,7 @@ export async function finishCaptureRegion(tab,selected) {
 export async function collectVideo(tab, url = tab.url) {
   const config = await settings();
   assertSiteAllowed(tab?.url, config);
+  if(youtubeVideoId(url)&&youtubeVideoId(url)===youtubeVideoId(tab?.url))return collectYoutube(tab,config);
   if(config.saveAction==='download')return downloadTask({id:url,kind:'work',text:url,title:tab.title||'作品视频',source_url:url,videoOnly:true},tab,config);
   try {
     const job = await api('/api/imports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, request_id:'clipper-video-'+crypto.randomUUID(), collection_id: config.collection_id || null, tags: config.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) }) },config);
@@ -125,6 +128,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
     if (!value) throw new Error('请粘贴作品链接或先打开作品页面');
     const source = value.match(/https?:\/\/[^\s<>"\u200b]+/i)?.[0] || value;
     assertSiteAllowed(source, config);
+    if(youtubeVideoId(source)&&youtubeVideoId(source)===youtubeVideoId(tab?.url))return collectYoutube(tab,config);
     if(!browserPost&&tab?.id&&/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[\w]+\/status\/\d+(?:[/?#]|$)/i.test(source)){
       const result=await chrome.tabs.sendMessage(tab.id,{type:'x-post-page',url:source},{frameId:0}).catch(()=>null);
       if(result?.error)throw Error(result.error);
@@ -165,3 +169,12 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
   }
 }
 const serverUrlForJob = value => value.replace(/\/$/, '');
+export async function collectYoutube(tab,config) {
+  const current=await chrome.tabs.get(tab.id);
+  if(youtubeVideoId(current.url)!==youtubeVideoId(tab.url))throw Error('页面已切换，请重新采集当前视频');
+  const result=await chrome.tabs.sendMessage(tab.id,{type:'youtube-current-video',url:current.url},{frameId:0}).catch(()=>null);
+  if(!result?.ok)throw Error(result?.error||'请重新加载扩展并刷新 YouTube 页面，然后播放当前视频再采集');
+  const resource=validateYoutubeResource(result.resource,current.url);
+  const task=await startMediaTask(resource,config.saveAction==='download'?'download':'save',tab.id,config);
+  return downloadJob(task);
+}

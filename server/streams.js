@@ -150,13 +150,15 @@ export function registerStreamRoutes(app, { dataDir, saveVideo }) {
         const mode = req.query.mode || "save";
         if (!["save", "download"].includes(mode))
           throw fail(400, "操作模式不正确");
+        const pair = req.query.format === 'pair';
+        if(req.query.format && !pair) throw fail(400, '媒体包格式不正确');
         const names = new Set();
         for (const file of req.files || []) {
-          if (!filename.test(file.originalname) || names.has(file.originalname))
+          if (!(pair ? /^(?:video|audio)\.bin$/.test(file.originalname) : filename.test(file.originalname)) || names.has(file.originalname))
             throw fail(400, "分片文件名不正确或重复");
           names.add(file.originalname);
         }
-        if (!names.has("index.m3u8")) throw fail(400, "缺少主播放列表");
+        if(pair ? names.size!==2 || !names.has('video.bin') || !names.has('audio.bin') : !names.has("index.m3u8")) throw fail(400, pair ? '需要完整的画面文件和声音文件' : '缺少主播放列表');
         dir = await mkdtemp(join(root, "stream-"));
         for (const file of req.files) {
           if (file.originalname.endsWith(".m3u8")) {
@@ -173,11 +175,17 @@ export function registerStreamRoutes(app, { dataDir, saveVideo }) {
         }
         const output = join(dir, "output.mp4");
         const ffmpeg = mediaTools().ffmpeg;
-        const segmentOptions = await localSegmentOptions(ffmpeg, abort.signal);
+        const segmentOptions = pair ? [] : await localSegmentOptions(ffmpeg, abort.signal);
         try {
           await runMediaCommand(
             ffmpeg,
-            [
+            pair ? [
+              '-hide_banner','-loglevel','error','-nostdin',
+              '-protocol_whitelist','file','-format_whitelist','mov,matroska,webm','-i',join(dir,'video.bin'),
+              '-protocol_whitelist','file','-format_whitelist','mov,matroska,webm','-i',join(dir,'audio.bin'),
+              '-map','0:v:0','-map','1:a:0','-c','copy','-movflags','+faststart',
+              '-fs',String(MAX_VIDEO_BYTES+1),output,
+            ] : [
               "-hide_banner",
               "-loglevel",
               "error",
@@ -209,7 +217,7 @@ export function registerStreamRoutes(app, { dataDir, saveVideo }) {
           if (e.status === 422)
             throw fail(
               415,
-              "分片合并失败，请检查视频是否完整、编码是否支持 MP4 封装",
+              pair ? '音画合并失败：需要完整的画面与声音，未保存无声视频' : "分片合并失败，请检查视频是否完整、编码是否支持 MP4 封装",
             );
           throw e;
         }

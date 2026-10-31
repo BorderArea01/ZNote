@@ -17,8 +17,8 @@ export async function pageAction(message, sender) {
     return {position:(await chrome.storage.local.get('pageToolsPosition')).pageToolsPosition};
   }
   if (message.type === 'page-tools-status') {
-    if(!['captures','imports','download'].includes(message.kind)||!/^[a-f\d-]{36}$/i.test(message.id||''))throw Error('采集任务无效');
-    if(message.kind==='download'){const job=await getDownloadJob(message.id,tab.id);if(!job)throw Error('下载任务不存在');return {job};}
+    if(!['captures','imports','download','media'].includes(message.kind)||!/^[a-f\d-]{36}$/i.test(message.id||''))throw Error('采集任务无效');
+    if(['download','media'].includes(message.kind)){const job=await getDownloadJob(message.id,tab.id);if(!job)throw Error('媒体任务不存在');return {job};}
     return {job:await api(`/api/${message.kind}/${message.id}`)};
   }
   if (message.type === 'region-capture-selection') return {item:await finishCaptureRegion(tab,message.selection)};

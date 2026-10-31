@@ -4,6 +4,7 @@ import {imageFilename} from './gallery-download.js';
 import { packageHls } from './hls-package.js';
 import { videoDetails } from './video-details.js';
 import { readPlayableVideo } from './video-fetch.js';
+import {captureYoutube} from './youtube-download.js';
 
 const queue = [];
 const known = new Set();
@@ -38,7 +39,10 @@ async function process(task) {
   const controller = new AbortController();
   await update(task, 'running', action === 'save' ? '正在保存到知识库…' : '正在准备下载…');
   let item;
-  if(resource.kind==='work') {
+  if(resource.kind==='youtube') {
+    item=await captureYoutube(resource,action,config,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(900000)]),
+      onProgress:message=>update(task,'running',message),download:blob=>downloadBlob(blob,task)});
+  } else if(resource.kind==='work') {
     const result=await downloadWork(resource,config,(blob,name)=>downloadBlob(blob,task,name),message=>update(task,'running',message));
     await update(task,'complete',`${result.count} 项下载完成`);return;
   } else if(resource.kind==='image' && action==='download') {

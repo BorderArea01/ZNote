@@ -58,7 +58,7 @@ async function message(type, extra={}) { const result=await chrome.runtime.sendM
 async function captureWork(text) {
   if(galleryBusy)return; galleryBusy=true; renderSite();
   $('gallery-task').hidden=false; $('gallery-status').textContent='正在提交作品采集…'; $('gallery-open').hidden=true; selectPanel('tasks-panel');
-  try { const result=await message('gallery',{text}); jobs.delete('captures'); await refreshTasks(true); if(!result.job)throw Error('服务器没有返回采集任务');if(result.job.kind==='download')$('gallery-task').hidden=true; }
+  try { const result=await message('gallery',{text}); jobs.delete('captures'); await refreshTasks(true); if(!result.job)throw Error('服务器没有返回采集任务');if(['download','media'].includes(result.job.kind))$('gallery-task').hidden=true; }
   catch(error){$('gallery-task').dataset.state='failed';$('gallery-status').textContent=error.message;}
   finally{galleryBusy=false;renderSite();updateCount();}
 }
@@ -68,7 +68,7 @@ $('discover').onclick=async()=>{try{await message('open-panel');window.close();}
 $('article').onclick=()=>{chrome.tabs.create({url:chrome.runtime.getURL('article.html')+'?tab='+tab.id});window.close();};
 $('capture-region').onclick=async()=>{ $('capture-region').disabled=true;try{await message('capture-region-start');window.close();}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
 $('capture').onclick=async()=>{ $('capture').disabled=true;saveFeedback('正在截图并上传…');try{await message('capture');await refreshTasks(true);}catch(e){saveFeedback(e.message,true);}finally{renderSite();}};
-$('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel');$('video-task').hidden=false;$('video-status').textContent='正在提交视频采集…';try{const result=await message('video');jobs.delete('imports');await refreshTasks(true);if(result.job?.kind==='download')$('video-task').hidden=true;}catch(e){$('video-status').textContent=e.message;$('video-task').dataset.state='failed';}finally{renderSite();updateCount();}};
+$('video').onclick=async()=>{ $('video').disabled=true;selectPanel('tasks-panel');$('video-task').hidden=false;$('video-status').textContent='正在提交视频采集…';try{const result=await message('video');jobs.delete('imports');await refreshTasks(true);if(['download','media'].includes(result.job?.kind))$('video-task').hidden=true;}catch(e){$('video-status').textContent=e.message;$('video-task').dataset.state='failed';}finally{renderSite();updateCount();}};
 const running=job=>['queued','running'].includes(job?.status);
 async function task(kind, ref, force) {
   const prefix=kind==='captures'?'gallery':'video', card=$(prefix+'-task');

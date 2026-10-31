@@ -511,3 +511,15 @@
 - 当前3741网页默认favicon、登录/工作区/顶部图标与PWA图标查询版本10；五种皮肤切换均同图，桌面/触屏10条路径、实际登录页、PWA接口字节验证 artifacts/global-brand-live-psIMlP/result.json 通过。只读会话无API写请求，原items与PIN未变。第一次脚本错等移动端刻意隐藏的auth-logo，随后改为检查用户实际可见的登录页品牌图；不通过强制显示/点击改变产品。
 - Windows开发程序窗口/托盘/启动页、明暗/风格切换保持品牌不变，原桥接/未保存草稿/连接/重启保留与CSP检查 artifacts/desktop-appearance-ztcrzS 通过；这是开发程序验收，不是新EXE验收。主题/320px/触屏回归 artifacts/glitch-ui-d9IT14 通过。相关截图已目视。
 - 扩展0.9.46只同步已安装目录的图标、品牌伪元素和版本，保留key/凭据/其他文件；用户原浏览器需重新加载扩展。前端生产 index-DeCwtyG5.js/index-DxQ7YQqK.css，当前实例已加载；本轮没有构建或发布新Android/Windows安装包，有效版本仍28/26、唯一27项目回退不变。源端Android默认与别名图标、Windows打包资源已同步，不宣称旧安装包自动换图标。
+
+
+## 2026-11-01 YouTube 链接与已授权播放流采集
+
+- 用户链接 https://www.youtube.com/watch?v=TuR6De4SI5c，实际失败任务 f88e823d-c6d2-4cdb-a665-3cdddb12bd80 原因包括：服务器把 YouTube 当普通图文、yt-dlp 允许名单未包含 Youtube，以及该作品实际要求账号年龄验证。用户确认其浏览器已登录且能正常播放；这不代表服务器也有登录态。
+- 严格共用单视频 URL 识别 watch/youtu.be/shorts/embed/live，拒绝伪域名、用户信息、任意端口和列表主页；自动采集在抓网页前识别 YouTube，不再存成普通文字或封面。yt-dlp 加入 Youtube、显式 Node JS runtime 和既有 proxyUrl；优先 AVC/AAC，并保留原 B 站格式与分享链接逐跳验证。年龄验证、账号/机器人验证分别明确提示，不提取 Cookie、不替换绕过验证的播放器客户端。
+- 扩展 0.9.47 增加只读 MAIN 播放器桥接：当前 URL、videoId、playabilityStatus、广告/直播/DRM 校验，复用当前播放器及 Resource Timing 中已授权的地址，按 itag 和同一媒体 ID 选择画面/声音；页面切换拒绝旧作品。签名未解决、缺完整地址或仅 SABR 等无法还原的流仍明确失败，不能宣称所有 YouTube 视频可下载。
+- 离屏任务顺序下载两路；覆盖原缓冲 range，以 8 MiB 查询范围读取，每段校验实际字节，45秒请求/15分钟总上限、500 MiB 音画合计上限，授权过期明确失败。显示画面/声音进度与合并/保存结果，当前作品、粘贴当前链接和嗅探使用同一路径；下载/入库沿用默认设置，原页面不跳转。保留来源、作者、说明和所选知识库，不把无声单路当完整视频保存。
+- /api/streams?format=pair 复用既有鉴权/磁盘上传/500 MiB合计/单任务/取消清理；只接受 video.bin 和 audio.bin 两个本地文件，FFmpeg 限定本地 file 与 mov/matroska/webm 输入，严格映射 0:v 和 1:a，无网络读取、不重新编码。仍需直连本机，Cloudflare 备用不传媒体或登录数据。
+- 12项 imports/格式/YouTube定向测试、23项 capture/HLS/YouTube回归以及最终4项YouTube测试通过。真实FFmpeg合并、缺音轨拒绝、认证、错误包及清理验证通过；artifacts/youtube-live-9KVRAe/result.json 使用实际安装目录和3741实例，桌面/触屏当前作品+真实嗅探按钮、原页进度、403失败/关闭/重试、错作品/登录错误、实际图库解码及重新下载文件音画解码通过，相关截图已目视。播放器与 CDN 是明确的授权夹具，不是用户的登录会话。
+- 真实网络探测中，普通公开视频 jNQXAC9IVRw 在开发机新会话也要求账号/机器人验证，不能报告公共视频网络下载通过；目标任务在更新后的3741真实重试仍为年龄验证，未产生条目，证据 artifacts/youtube-live-job-result.json。用户原 Edge 没有调试连接，不能冒充已在其登录态保存 TuR6De4SI5c；需要重新加载扩展/刷新目标页完成最后确认。
+- 本机3741已重启加载后端，安装目录 C:/Users/31093/Downloads/clipper 同步0.9.47，key、权限及本机连接凭据不变，保留其他未提交站点改动。无新 Android/Windows 安装包，当前有效组件仍Windows28/Android26，唯一项目回退仍27项目包。主题、全局故障图标和原始用户媒体保持。

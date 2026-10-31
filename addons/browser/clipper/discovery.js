@@ -4,6 +4,8 @@ import { openGallery,pendingInlineGalleries } from './gallery-ticket.js';
 import { blockedSite } from './site-policy.js';
 import { startMediaTask, mediaTasksForTab } from './media-tasks.js';
 import { parseContentRange } from './video-fetch.js';
+import {youtubeVideoId} from './youtube-url.js';
+import {collectYoutube} from './actions.js';
 const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
@@ -132,6 +134,14 @@ export async function resourceAction(resource, action, tabId) {
   let sourceUrl=resource.source_url;
   if(!sourceUrl&&Number.isInteger(tabId))sourceUrl=(await chrome.tabs.get(tabId)).url;
   if(sourceUrl&&blockedSite(sourceUrl,config))throw new Error('此网站已停用 ZNote 媒体采集，可在扩展弹窗或设置中恢复');
+  // A YouTube sniff result is often only one buffered picture track. Always
+  // return to the current authorized player and obtain both tracks together.
+  if(action!=='preview'&&youtubeVideoId(sourceUrl)) {
+    const tab=await chrome.tabs.get(tabId);
+    if(youtubeVideoId(tab.url)!==youtubeVideoId(sourceUrl))throw Error('视频页面已切换，请重新扫描当前作品');
+    const task=await collectYoutube(tab,{...config,saveAction:action});
+    return {task,message:'正在采集当前 YouTube 视频的完整音画'};
+  }
   if (action === "download" && !['video', 'hls'].includes(resource.kind)) {
     await chrome.downloads.download({
       url: resource.url,

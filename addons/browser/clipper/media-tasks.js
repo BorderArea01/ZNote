@@ -29,7 +29,7 @@ async function ensureOffscreen() {
 export async function startMediaTask(resource, action, tabId, providedConfig = null) {
   if (!['save', 'download'].includes(action)) throw new Error('后台任务类型无效');
   let config = providedConfig || await settings();
-  if(action==='save'||['work','hls'].includes(resource.kind))config=await connection(config,{localOnly:true});
+  if(action==='save'||['work','hls','youtube'].includes(resource.kind))config=await connection(config,{localOnly:true});
   if (action === 'save' && !config.token) throw new Error('请先在连接设置中连接 ZNote');
   if (resource.kind === 'hls' && !config.token) throw new Error('m3u8 合并需要先连接 ZNote');
   if(action==='download'&&['image','work'].includes(resource.kind))await prepareImageRequests();
@@ -65,10 +65,10 @@ export async function mediaTasksForTab(tabId) {
   return Object.values(await load()).filter(task => task.tabId === tabId).sort((a, b) => b.updated - a.updated).slice(0, 20);
 }
 
-export const downloadJob = task => ({...task, kind:'download', status:task.status==='complete'?'completed':task.status});
+export const downloadJob = task => ({...task, kind:task.action==='save'?'media':'download', status:task.status==='complete'?'completed':task.status});
 export async function getDownloadJob(id, tabId) {
   const task=(await load())[id];
-  if(!task || task.tabId!==tabId || task.action!=='download')return null;
+  if(!task || task.tabId!==tabId)return null;
   return downloadJob(task);
 }
 

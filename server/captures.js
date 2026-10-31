@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import { sharedUrls } from '../shared/share-input.js';
+import { youtubeVideoUrl } from '../shared/youtube.js';
 import { markdownImages, replaceMarkdownImages } from '../shared/markdown-images.js';
 import { videoDetails } from '../shared/video-details.js';
 import { fetchRemoteImage } from './remote-images.js';
@@ -61,6 +62,10 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     if(job.empty_group_note_id&&!before)throw fail(409,'此前的文字笔记已删除，未重新创建采集内容');
     if(before&&!(job.empty_group_note_id===before.id&&before.kind==='note')){patch(job.id,{status:'completed',message:'已入库',item_id:id});return;}
     let plan=job.plan;
+    if(!plan&&youtubeVideoUrl(job.source_url)) {
+      plan={kind:'video',url:youtubeVideoUrl(job.source_url),title:'YouTube 视频',images:[]};
+      patch(job.id,{plan,title:plan.title});
+    }
     if(!plan){
       const resource=await page(job.source_url,signal,0,{deferImages:true,progress:message=>patch(job.id,{message})});signal.throwIfAborted();
       if(resource.plan) plan=resource.plan;
@@ -216,6 +221,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
         if(source.protocol!=='https:'||source.hostname!=='www.xiaohongshu.com'||!/^\/(?:explore|discovery\/item)\/[a-f\d]+\/?$/i.test(source.pathname))throw fail(400,'浏览器作品数据只支持小红书单帖');
         return extractCapturePage(raw.browser_html,source.href);
       }
+      if(youtubeVideoUrl(urls[0]))return {kind:'video',url:youtubeVideoUrl(urls[0]),title:'YouTube 视频',images:[]};
       const resource=await page(urls[0],signal);signal.throwIfAborted();
       if(resource.plan)return resource.plan;
       if(resource.type.startsWith('image/'))return {kind:'note',url:resource.url,title:'网页图片',images:[resource.url]};

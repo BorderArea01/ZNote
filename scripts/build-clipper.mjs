@@ -33,6 +33,9 @@ for (const [src, dest] of [
 
 await copyFile('shared/video-details.js','addons/browser/clipper/video-details.js');
 await copyFile('shared/gallery-group.js','addons/browser/clipper/gallery-group.js');
+await copyFile('shared/youtube.js','addons/browser/clipper/youtube-url.js');
+await build({entryPoints:['addons/browser/clipper/youtube-page-source.js'],bundle:true,format:'iife',platform:'browser',target:'chrome120',
+  outfile:'addons/browser/clipper/vendor/youtube-page.js',minify:true,legalComments:'eof'});
 // Keep the page-world parser and observer in one entry, independent of the
 // isolated-world loader and its globals.
 await writeFile('addons/browser/clipper/vendor/douyin-network.js',

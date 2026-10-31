@@ -114,7 +114,7 @@
   function notice(message,{error=false,key='post',busy=false}={}){mount();if(busy&&dismissed.has(key))return;if(!busy)dismissed.delete(key);clearTimeout(timer);owner=key;text.textContent=message;feedback.dataset.error=String(error);feedback.hidden=false;progress.hidden=!busy;tab.dataset.state=busy?'busy':error?'error':'done';tab.title='ZNote · '+message;tab.setAttribute('aria-label','展开 ZNote 采集工具：'+message);root.querySelector('.dock-announcement').textContent=message;if(!busy)timer=setTimeout(()=>{if(!compact)clear(key)},error?20000:6000);}
   function clear(key) { if(!feedback || (key && key!==owner))return;clearTimeout(timer);feedback.hidden=true;owner=null;delete tab.dataset.state;tab.title='ZNote · 鼠标掠过或点击展开，拖动调整位置';tab.setAttribute('aria-label','展开 ZNote 采集工具');root.querySelector('.dock-announcement').textContent=''; }
   async function track(job,kind='captures'){
-    if(job?.kind==='download')kind='download';
+    if(['download','media'].includes(job?.kind))kind=job.kind;
     const started=Date.now();
     while(['queued','running'].includes(job?.status)){
       globalThis.ZNotePageTools.progress(job.message||'等待服务器处理',{key:'work',elapsed:Math.floor((Date.now()-started)/1000)});
