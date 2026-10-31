@@ -1,7 +1,7 @@
 /* Event-driven visibility gate shared by web, inbox and desktop. CSS owns frames. */
 (() => {
   const root=document.documentElement,reduced=matchMedia('(prefers-reduced-motion: reduce)');
-  const selector='.library-card,.intro-banner,.signal-surface,.glitch-scene,.item-card,.dialog,.primary,.signal-button,.heading-actions > button:not(.icon-button)';
+  const selector='.library-card,.intro-banner,.signal-surface,.glitch-scene,.primary,.signal-button,.heading-actions > button:not(.icon-button)';
   const observed=new Set(),pulses=new Map();let enabled=false,queued=false;
   // Re-sample the UI's own lettering, rather than throwing unrelated photo
   // confetti over it. Copies have no controls, identifiers or media requests.
@@ -28,7 +28,7 @@
     }
     old?old.replaceWith(layer):target.append(layer);
   }
-  const resize=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{if(enabled)for(const {target}of entries)if(target.hasAttribute('data-glitch-visible'))replay(target,true);}):null;
+  const resize=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{if(enabled)for(const {target}of entries)if(pulses.has(target))replay(target,true);}):null;
   function shards(target,visible){
     const old=target.querySelector(':scope > .signal-shards');
     if(!visible){old?.remove();return;}
@@ -46,14 +46,14 @@
     target.append(layer);
   }
   const intersection=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
-    for(const {target,isIntersecting} of entries){const active=enabled&&isIntersecting;target.toggleAttribute('data-glitch-visible',active);shards(target,active);replay(target,active);}
+    for(const {target,isIntersecting} of entries){const active=enabled&&isIntersecting;target.toggleAttribute('data-glitch-visible',active);if(!active)finish(target);}
   }):null;
   function scan(){
     queued=false;if(!enabled)return;
-    for(const el of observed)if(!el.isConnected){intersection?.unobserve(el);resize?.unobserve(el);observed.delete(el);}
-    for(const el of observed)if(el.hasAttribute('data-glitch-visible'))replay(el,true);
+    for(const el of observed)if(!el.isConnected){finish(el);intersection?.unobserve(el);resize?.unobserve(el);observed.delete(el);}
+    for(const el of pulses.keys())replay(el,true);
     for(const el of document.querySelectorAll(selector))if(!observed.has(el)){
-      observed.add(el);resize?.observe(el);if(intersection)intersection.observe(el);else{el.setAttribute('data-glitch-visible','');shards(el,true);replay(el,true);}
+      observed.add(el);resize?.observe(el);if(intersection)intersection.observe(el);else el.setAttribute('data-glitch-visible','');
     }
   }
   const decorative=node=>node instanceof Element&&node.matches('.signal-replay,.signal-replay *,.signal-shards,.signal-shards *');
@@ -65,15 +65,20 @@
     if(enabled){children.observe(document,{subtree:true,childList:true,characterData:true});scan();}
     else{children.disconnect();intersection?.disconnect();resize?.disconnect();for(const el of observed){el.removeAttribute('data-glitch-visible');el.removeAttribute('data-glitch-pulse');shards(el,false);replay(el,false);}observed.clear();for(const timer of pulses.values())clearTimeout(timer);pulses.clear();}
   }
+  function finish(target){clearTimeout(pulses.get(target));pulses.delete(target);target.removeAttribute('data-glitch-pulse');shards(target,false);replay(target,false);}
   function pulse(event){
-    if(!enabled||event.type==='keydown'&&!['Enter',' '].includes(event.key))return;
-    const target=event.target instanceof Element?event.target.closest('button'):null;
-    if(!target||!target.matches(selector)||target.disabled)return;
-    clearTimeout(pulses.get(target));target.setAttribute('data-glitch-pulse','');
-    pulses.set(target,setTimeout(()=>{target.removeAttribute('data-glitch-pulse');pulses.delete(target);},420));
+    if(!enabled||event.type==='keydown'&&(!['Enter',' '].includes(event.key)||event.repeat))return;
+    if(event.type==='pointerover'&&event.pointerType!=='mouse'||event.type==='pointerdown'&&event.pointerType==='mouse')return;
+    const target=event.target instanceof Element?event.target.closest(event.type==='keydown'?'button':selector):null;
+    if(!target||!target.matches(selector)||target.disabled||pulses.has(target))return;
+    if(event.type==='pointerdown'&&event.target.closest('input,textarea,select,[contenteditable="true"]'))return;
+    // Moving across descendants is still one entry into the same surface.
+    if(event.type==='pointerover'&&event.relatedTarget instanceof Node&&target.contains(event.relatedTarget))return;
+    replay(target,true);shards(target,true);target.setAttribute('data-glitch-pulse','');
+    pulses.set(target,setTimeout(()=>finish(target),680));
   }
   new MutationObserver(configure).observe(root,{attributes:true,attributeFilter:['data-style','data-motion','data-theme']});
   document.addEventListener('visibilitychange',configure);reduced.addEventListener('change',configure);
-  document.addEventListener('pointerdown',pulse,{passive:true});document.addEventListener('keydown',pulse);
+  document.addEventListener('pointerover',pulse,{passive:true});document.addEventListener('pointerdown',pulse,{passive:true});document.addEventListener('keydown',pulse);
   configure();
 })();

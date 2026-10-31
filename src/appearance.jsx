@@ -36,7 +36,7 @@ export function AppearanceProvider({ children }) {
     try { localStorage.setItem('znote-appearance', JSON.stringify(appearance)); } catch {}
     const sync=()=>{
       const glitch=appearance.style==='glitch';
-      document.querySelector('link[rel="icon"]')?.setAttribute('href',glitch?'/themes/glitch/icon.svg':'/icon.svg');
+      document.querySelector('link[rel="icon"]')?.setAttribute('href',glitch?'/themes/glitch/icon.svg?v=9':'/icon.svg');
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content',glitch?'#1859a8':'#287464');
       queueMicrotask(()=>{try{window.ZNoteAppearance?.set?.(JSON.stringify({style:document.documentElement.dataset.style,palette:document.documentElement.dataset.palette,motion:document.documentElement.dataset.motion,mode:localStorage.getItem('znote-theme')||'system'}));}catch{}});
     };sync();window.addEventListener('znote:theme-changed',sync);
@@ -57,7 +57,7 @@ export function AppearanceSettings() {
       </button>)}
     </div>
     {appearance.style === 'glitch' ? <>
-      <div className="inline-heading"><p className="appearance-label">主题动效</p><HelpHint label="主题动效">动态模式间歇播放横向撕裂，滚出屏幕或切到后台时暂停；系统开启减少动态效果时也保持静态。此设置用于知识库页面，安卓原生浮窗的更新单独发布。</HelpHint></div>
+      <div className="inline-heading"><p className="appearance-label">主题动效</p><HelpHint label="主题动效">动态模式仅在鼠标掠过时播放一次横向撕裂，手机触碰和键盘操作也有反馈，结束后恢复完整轮廓；闲置不播放。系统开启减少动态效果时保持静态。此设置用于知识库页面，安卓原生浮窗的更新单独发布。</HelpHint></div>
       <div className="palette-presets" role="group" aria-label="主题动效">
         {[['dynamic','动态'],['still','静态']].map(([motion,label])=><button key={motion} aria-pressed={appearance.motion===motion} onClick={()=>setAppearance(a=>({...a,motion}))}>{label}{appearance.motion===motion&&<Check size={13}/>}</button>)}
       </div>

@@ -491,3 +491,13 @@
 - 受控轻量扩展/前端构建通过，实际3741桌面/触屏内容分片、文字尺寸更新、明暗同步、静态刷新、离屏停止、点击反馈、脚本失败/恢复及边界验证 artifacts/glitch-motion-live-JjDb2G/result.json 通过；只读会话无 API 写请求，原 items 元数据与 PIN 未变。当前图库预览桌面/触屏分层关闭、原媒体无滤镜检查 artifacts/glitch-v2-live-P7K34z 通过。静态明暗/主题恢复/320px 检查 artifacts/glitch-ui-uj1Lhu；截图已目视，实际录屏 artifacts/rupture-demo-hh5iHR/preview.mp4（1280×900，9秒）。
 - tests/work-images-ui.mjs 在 Paw 缩略图回退用例的旧“必须报原图链接错误”断言失败；HEAD 原 candidates 也同样失败，日志 animated-original-existing-baseline。不把既有失败说成本轮回归或全套测试通过；本轮没有更改 Paw 分组/缩略图逻辑。
 - 本轮网页共享主题资源 URL 版本7；Windows启动页源码同步，仍未发布 Windows29/Android28。有效客户端仍 Windows28/Android26，唯一项目回退为27项目包。
+
+
+## 2026-10-31 最新皮肤规范：静止完整，仅掠过触发，取消刻意降帧
+
+- 用户最新明确要求“把静态时候那些零碎的断层清理掉。我要动态效果就行了。而且动态效果可以帧率再高些、鼠标掠过的时候才触发。”本条取代前述常驻碎边/烘焙断层/自动循环，不能下次重新加回。
+- 面板、按钮、图片/弹窗装饰与主题 Z 清除静态断层；原摄影已烘焙故障，不能仅靠 CSS 隐藏。内置 image_gen 生成干净白色建筑/蓝天/海岸摄影 docs/design/glitch/architecture-clean-source.png，原素材保留，完整提示和使用路径在 docs/design/glitch/README.md。网页/Pages/Windows启动页源码使用 clean WebP；原生Android安装包未发布。
+- 动态仅鼠标进入目标时播放640ms一次；停留不重播，离开再进入可触发。pointerover过滤同一容器的子节点切换，触屏pointerdown与键盘按钮操作保留等价反馈；不因鼠标点击重复触发，不把输入框空格/回车或长按键盘当按钮动效。结束、离屏、禁用或后台释放复制层/碎片，无闲置片段DOM/循环滤镜。目标真实文本与命中区保持，用户图片/视频无滤镜。
+- 移除 steps(1,end) 和所有 infinite 主题动画，改用连续 transform/clip-path/opacity 插值。实际当前实例有限RAF观察采到112种不同位移，不代表已测手机或用户屏幕的真实FPS；录屏工具的25fps上限也不能当应用帧率，不以补帧伪造60fps。原动态/静态设置与系统减少动态效果保持。
+- 生产构建通过：index-DYm-oopY.js/index-IzJUB_On.css，共享资源URL版本9。当前3741实际桌面/触屏闲置像素稳定、完整底色无mask碎边、真实悬停单次/停留不循环/子元素不重触发/重新进入可触发、连续插值、触屏和键盘、文字尺寸更新、静态持久化、减少动态效果、失败回退/恢复及宽度边界通过 artifacts/glitch-hover-live-iKa5t2/result.json，只读授权无API写请求，原items与PIN未变。
+- 静态浅深色/键盘触屏主题切换/320px边界与Portal检查 artifacts/glitch-ui-w5TZG8；实际图库原媒体无滤镜、桌面/触屏预览分层关闭检查 artifacts/glitch-v2-live-mqne7l 通过。静止/悬停截图已目视；实际鼠标进入录屏 artifacts/rupture-demo-zVpWoG/preview.mp4。Windows启动页和安卓替代图标源素材同步，未构建/发布新安装包；有效Windows28/Android26及唯一27项目回退保持。

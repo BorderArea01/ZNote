@@ -1,5 +1,21 @@
 # 建筑故障主题
 
+## 当前交互规范（2026-10-31 用户最新要求）
+
+静止时保持完整容器、按钮、图标和摄影，没有碎边、散点或预先烘焙的撕裂。动态模式只在鼠标进入时播放一次 640 ms 故障；停留不重复，离开再进入可再次触发。触屏触碰与键盘按钮操作保留等价反馈。静态模式和系统减少动态效果均不触发。此规范替代下文历史迭代中的常驻碎边和自动循环。
+
+取消 `steps(1,end)` 与无限循环，使用连续的位移/拉伸、横向扫描裁切和透明度插值；仅触发目标创建纯文本副本与碎片，结束、离屏或禁用后释放。闲置不建立片段 DOM、不渲染故障滤镜；不设置低频定时器，也不以录屏补帧冒充界面帧率。浏览器实际刷新率由设备决定。
+
+干净底图由内置 image_gen 工具生成，保存为 [architecture-clean-source.png](architecture-clean-source.png)，压缩版为 `public/themes/glitch/architecture-clean.webp` 与 `architecture-clean-mobile.webp`。原摄影素材保留用于历史追溯；新网页、Pages 和 Windows 启动页源码使用干净版本。原生客户端安装包需独立验收发布，本轮没有发布安装包。
+
+生成提示（内置工具模式）：
+
+> Create one photorealistic architectural background photograph for the ZNote app. A sculptural modern white concrete and glass building with long horizontal cantilevered volumes under a clear brilliant blue sky and soft white summer cumulus clouds, crisp natural daylight, subtle realistic concrete texture and clean glass reflections, cinematic architectural photography, wide landscape 16:9 composition usable as a panoramic strip with architectural silhouette across the middle. The photograph must be completely pristine and physically coherent: NO glitch, NO tearing, NO datamoshing, NO displaced stripes, NO floating fragments, NO chromatic aberration, NO artificial pixels, NO grain effects, NO text or logo, NO people, NO UI. Restrained elegant editorial photography, natural colors.
+
+连续插值依据 [animation-timing-function](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/animation-timing-function)，鼠标跨越子元素的重复事件依据 [pointerover](https://developer.mozilla.org/en-US/docs/Web/API/Element/pointerover_event) 的边界行为处理。没有移动真实命中区域、复制可聚焦控件或修改用户媒体。
+
+## 历史迭代记录
+
 可在「设置与连接 → 外观 → 建筑故障」选择，保留所有旧主题与明暗模式。Android 的「界面与图标」入口同步原生面板、浮窗和桌面图标；账号、连接、任务及媒体文件不随外观变化。
 
 Windows 启动页同样提供「界面与图标」，与知识库页的选择双向同步，并更换窗口及托盘图标。安装包与系统快捷方式保留经典图标，避免为外观变更重写用户快捷方式。

@@ -2,18 +2,11 @@
   <defs>
     <linearGradient id="sky" x2=".8" y2="1"><stop stop-color="#246bd0"/><stop offset="1" stop-color="#0a1e3d"/></linearGradient>
     <path id="z" d="M16 23C23 14 35 24 46 18C49 16.5 49 20.5 43 25.5L20 42.5C16 46 18 49 22 46.5C30 41.5 42 51 49 42" fill="none" stroke-width="6.8" stroke-linecap="round" stroke-linejoin="round"/>
-    <clipPath id="top"><path d="M0 0H64V29H0Z"/></clipPath>
-    <clipPath id="middle"><path d="M0 29H64V36H0Z"/></clipPath>
-    <clipPath id="bottom"><path d="M0 36H64V64H0Z"/></clipPath>
     <clipPath id="round"><rect width="64" height="64" rx="15"/></clipPath>
   </defs>
   <g clip-path="url(#round)">
     <rect width="64" height="64" fill="url(#sky)"/>
     <path d="M4 53V29H10V20H19V53M46 55V35H51V13H59V55" fill="#d5e7f3" opacity=".1"/>
-    <g stroke="#f5f7ed"><use href="#z" clip-path="url(#top)"/><use href="#z" clip-path="url(#bottom)"/></g>
-    <g clip-path="url(#middle)"><use href="#z" stroke="#6ce3f5" transform="translate(-4)"/><use href="#z" stroke="#e8a5bf" transform="translate(5)"/><use href="#z" stroke="#f5f7ed" transform="translate(2)"/></g>
-    <path d="M2 28H20V30H2ZM39 36H62V38H39ZM5 49H12V50H5ZM46 10H56V12H46Z" fill="#acd7ef"/>
-    <path d="M8 35H14V37H8ZM49 45H58V46H49Z" fill="#eaa2ba"/>
-    <path d="M10 11H12V13H10ZM56 23H59V26H56ZM3 40H5V42H3Z" fill="#f2f4ec"/>
+    <use href="#z" stroke="#f5f7ed"/>
   </g>
 </svg>
