@@ -11,7 +11,9 @@
         if(entry.video?.variants)variants.push(...entry.video.variants);
         const urls=[...new Set(variants.map(v=>({url:valid(v.url||v.src),bitrate:Number(v.bitrate)||0})).filter(v=>v.url).sort((a,b)=>b.bitrate-a.bitrate).map(v=>v.url))].slice(0,16);
         const images=[...new Set(media.filter(m=>m.type==='photo').map(m=>m.media_url_https).filter(value=>{try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='pbs.twimg.com'&&!u.username&&!u.password&&!u.port&&u.pathname.startsWith('/media/');}catch{return false;}}))].slice(0,4);
-        if(urls.length||images.length){const previous=records.get(id);records.set(id,{id,video_urls:urls.length?urls:previous?.video_urls||[],images:images.length>=(previous?.images?.length||0)?images:previous.images});}
+        const videoMedia=media.filter(m=>['video','animated_gif'].includes(m.type));
+        const videos=videoMedia.map(m=>[...new Set((m.video_info?.variants||m.video?.variants||[]).map(v=>({url:valid(v.url||v.src),bitrate:Number(v.bitrate)||0})).filter(v=>v.url).sort((a,b)=>b.bitrate-a.bitrate).map(v=>v.url))].slice(0,16));
+        if(urls.length||images.length||videoMedia.length){const previous=records.get(id);records.set(id,{id,video_urls:urls.length?urls:previous?.video_urls||[],videos:videos.length&&videos.every(v=>v.length)?videos:previous?.videos||[],video_count:Math.max(videoMedia.length,previous?.video_count||0),video:videoMedia.length>0||!!previous?.video,images:images.length>=(previous?.images?.length||0)?images:previous.images});}
       }
       try{for(const child of Object.values(entry))if(child&&typeof child==='object')stack.push(child);}catch{}
     }

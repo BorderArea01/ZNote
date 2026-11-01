@@ -18,7 +18,7 @@
       }
     }
     remember(roots);
-    const row=cache.get(id);window.dispatchEvent(new CustomEvent('znote-x-video-response',{detail:{id,nonce,video_urls:row?.video_urls||[],images:row?.images||[]}}));
+    const row=cache.get(id);window.dispatchEvent(new CustomEvent('znote-x-video-response',{detail:{id,nonce,video_urls:row?.video_urls||[],videos:row?.videos||[],video_count:row?.video_count||0,video:!!row?.video,images:row?.images||[]}}));
   });
   const originalFetch=window.fetch;
   window.fetch=function(...args){

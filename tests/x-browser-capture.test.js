@@ -7,6 +7,17 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const source='https://x.com/Tir_al_/status/2107765375521939865';
 const browserPost={id:'2107765375521939865',text:'作品正文 #画画',author:{name:'作者',screen_name:'Tir_al_'},images:[1,2,3,4].map(i=>`https://pbs.twimg.com/media/image${i}?format=jpg&name=small`),video:false};
+
+test('X link metadata detects videos before photos, preserves mixed posts and every video',()=>{
+  const mp4='https://video.twimg.com/ext_tw_video/1/high.mp4';
+  const raw={id_str:browserPost.id,text:'正文',video:{variants:[{src:mp4,type:'video/mp4'}]},mediaDetails:[{type:'video',media_url_https:'https://pbs.twimg.com/ext_tw_video_thumb/cover.jpg',video_info:{variants:[{url:mp4}]}}]};
+  const video=extractXPost(raw,source);assert.equal(video.kind,'video');assert.deepEqual(video.video_urls,[mp4]);assert.equal(video.images,undefined);
+  const separate=extractXPost({...raw,mediaDetails:[{type:'video',media_url_https:'https://pbs.twimg.com/ext_tw_video_thumb/cover.jpg'}]},source);assert.deepEqual(separate.video_urls,[mp4]);
+  const mixed=extractBrowserXPost({...browserPost,images:browserPost.images.slice(0,1),video:true,video_urls:[mp4],videos:[[mp4],['https://video.twimg.com/ext_tw_video/2/two.mp4']]},source);
+  assert.equal(mixed.images.length,1);assert.equal(mixed.live_videos.length,2);assert.deepEqual(mixed.live_videos.map(v=>v.index),[1,2]);assert.equal(mixed.video_gallery,true);
+  const onlyVideos=extractBrowserXPost({...browserPost,images:[],video:true,videos:[[mp4],['https://video.twimg.com/ext_tw_video/2/two.mp4']]},source);assert.equal(onlyVideos.live_videos.length,2);assert.equal(onlyVideos.images.length,0);
+  assert.throws(()=>extractBrowserXPost({...browserPost,images:[],video:true,videos:[['https://localhost/private.mp4']]},source),/无效/);
+});
 test('X playback records bind variants to the owning post, prefer high bitrate MP4 and exclude HLS/init/cross-host URLs',async()=>{
   const context={URL};vm.createContext(context);vm.runInContext(await readFile('addons/browser/clipper/x-video-records.js','utf8'),context);
   const variants=[{bitrate:1,url:'https://video.twimg.com/ext_tw_video/1/low.mp4'},{bitrate:100,url:'https://video.twimg.com/ext_tw_video/1/high.mp4'},{bitrate:200,url:'https://video.twimg.com/ext_tw_video/1/master.m3u8'},{url:'https://video.twimg.com/ext_tw_video/1/seg-init.mp4'},{url:'https://evil.test/a.mp4'}];

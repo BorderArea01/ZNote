@@ -15,7 +15,7 @@
   };
   function mediaRecord(id){return new Promise(resolve=>{
     const nonce=crypto.randomUUID();const done=row=>{clearTimeout(timer);window.removeEventListener('znote-x-video-response',listener);resolve(row);};
-    const listener=event=>{if(event.detail?.id===id&&event.detail?.nonce===nonce)done({video_urls:Array.isArray(event.detail.video_urls)?event.detail.video_urls.slice(0,16):[],images:Array.isArray(event.detail.images)?event.detail.images.slice(0,4):[]});};
+    const listener=event=>{if(event.detail?.id===id&&event.detail?.nonce===nonce)done({video_urls:Array.isArray(event.detail.video_urls)?event.detail.video_urls.slice(0,16):[],videos:Array.isArray(event.detail.videos)?event.detail.videos.slice(0,4):[],video_count:Number(event.detail.video_count)||0,video:!!event.detail.video,images:Array.isArray(event.detail.images)?event.detail.images.slice(0,4):[]});};
     const timer=setTimeout(()=>done({video_urls:[],images:[]}),500);window.addEventListener('znote-x-video-response',listener);window.dispatchEvent(new CustomEvent('znote-x-video-request',{detail:{id,nonce}}));
   });}
   async function read(source) {
@@ -47,14 +47,16 @@
       const players=[...article.querySelectorAll('video,[data-testid="videoPlayer"]')].filter(node=>own(node,article));
       let video=players.length>0;
       const record=await mediaRecord(target.id),video_urls=record.video_urls;
+      if(record.video_count>1&&record.videos.length!==record.video_count)return {error:'尚未读取到本帖全部视频的播放地址，请显示并播放各段视频后重试'};
       // React/GraphQL retains every original even if X has not mounted its
       // photo DOM yet. Keep the post's canonical order, excluding quotes.
       const originals=[];
       for(const value of record.images){try{const u=new URL(value);if(u.protocol==='https:'&&u.hostname==='pbs.twimg.com'&&!u.username&&!u.password&&!u.port&&u.pathname.startsWith('/media/')){u.searchParams.set('name','orig');if(!originals.includes(u.href))originals.push(u.href);}}catch{}}
-      if(originals.length)images.splice(0,images.length,...originals);
+      video ||= record.video||video_urls.length>0;
+      if(originals.length||video)images.splice(0,images.length,...originals);
       // Never archive just text while the post's gated media is unavailable.
       const photoSlots=[...article.querySelectorAll('[data-testid="tweetPhoto"]')].filter(node=>own(node,article)&&!node.closest('[data-testid="videoPlayer"]'));
-      if(photoSlots.length>images.length||[...article.querySelectorAll('[data-testid="sensitiveMediaWarning"]')].some(node=>own(node,article)))return {error:'请先在原帖中显示全部媒体，再采集'};
+      if((!video&&photoSlots.length>images.length)||[...article.querySelectorAll('[data-testid="sensitiveMediaWarning"]')].some(node=>own(node,article)))return {error:'请先在原帖中显示全部媒体，再采集'};
       if(!images.length&&!video&&[...article.querySelectorAll('[data-testid="sensitiveMediaContainer"]')].some(node=>own(node,article)))return {error:'请先在原帖中显示媒体，再采集'};
       const user=[...article.querySelectorAll('[data-testid="User-Name"]')].find(node=>own(node,article));
       const lines=(user?.innerText||user?.textContent||'').split('\n').map(s=>s.trim()).filter(Boolean);
@@ -64,7 +66,7 @@
       for(const player of players){const value=player.currentSrc||player.src;try{const u=new URL(value);if(u.protocol==='https:'&&u.hostname==='video.twimg.com'&&/\.mp4$/i.test(u.pathname)&&!video_urls.includes(u.href))video_urls.push(u.href);}catch{}}
       if(video&&!video_urls.length)return {error:'尚未读取到这条推文的视频地址，请在原帖播放视频后重试采集'};
       if(!images.length&&!video)return {error:'没有读取到这条推文的图片或视频，请显示全部媒体后重试'};
-      return {id:target.id,text,images,author:{name:lines.find(s=>!s.startsWith('@'))||'',screen_name},video,...(video_urls.length?{video_urls:video_urls.slice(0,16)}:{})};
+      return {id:target.id,text,images,author:{name:lines.find(s=>!s.startsWith('@'))||'',screen_name},video,...(video_urls.length?{video_urls:video_urls.slice(0,16)}:{}),...(record.videos?.length?{videos:record.videos}:{})};
     }
     return null;
   }

@@ -41,7 +41,7 @@ try {
     const optionHelp=options.getByRole('button',{name:'大图片处理说明'});await optionHelp.scrollIntoViewIfNeeded();await options.waitForTimeout(250);await click(optionHelp);await options.getByRole('tooltip').filter({hasText:'默认使用 ZNote'}).waitFor();await options.waitForTimeout(300);assert.equal(await optionHelp.getAttribute('aria-expanded'),'true');await options.keyboard.press('Escape');
     await context.route('https://x.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><body style="background:#111;color:#eee;font-family:system-ui"><article data-testid="tweet" style="max-width:580px;padding:16px;border:1px solid #555"><a href="${source}"><time>2026-10-07</time></a><div data-testid="tweetText">作品正文<br>第二行</div><div style="display:grid;grid-template-columns:repeat(2,1fr)">${plan.images.map(url=>`<div data-testid="tweetPhoto"><img width="100" height="140" src="${url}"></div>`).join('')}</div><div role="group" style="display:flex;justify-content:space-between"><button>回复</button><button>转发</button><button>喜欢</button></div></article></body></html>`}));
     await context.route('https://pbs.twimg.com/**',route=>route.fulfill({contentType:'image/png',body:pngs[0]}));
-    const tab=await context.newPage();await tab.goto(source);const save=tab.getByRole('button',{name:'保存这条推文的全部图片到 ZNote'});await save.waitFor();
+    const tab=await context.newPage();await tab.goto(source);const save=tab.getByRole('button',{name:'保存这条推文的图片与视频到 ZNote'});await save.waitFor();
     // Failure and recovery do not navigate or strand the entry.
     if(!touch){await worker.evaluate(()=>chrome.storage.local.set({token:''}));await click(save);await save.filter({hasText:'重试采集'}).waitFor();await tab.getByRole('status').filter({hasText:'令牌'}).waitFor();await worker.evaluate(token=>chrome.storage.local.set({token}),token.token);}
     await click(save);await save.filter({hasText:'已保存 ✓'}).waitFor({timeout:15000});assert.equal(tab.url(),source);
@@ -51,7 +51,7 @@ try {
     await click(tab.getByRole('button',{name:'关闭采集提示'}));await tab.locator('[data-znote-page-tools] .feedback').waitFor({state:'hidden'});
     await tab.screenshot({path:resolve(`artifacts/x-post-${touch?'touch':'desktop'}.png`)});
     await worker.evaluate(()=>chrome.storage.local.set({blockedSites:['x.com']}));await save.waitFor({state:'hidden'});
-    await worker.evaluate(()=>chrome.storage.local.set({blockedSites:[]}));await tab.getByRole('button',{name:'保存这条推文的全部图片到 ZNote'}).waitFor();
+    await worker.evaluate(()=>chrome.storage.local.set({blockedSites:[]}));await tab.getByRole('button',{name:'保存这条推文的图片与视频到 ZNote'}).waitFor();
     await tab.locator('article').evaluate(article=>article.remove());await tab.locator('#znote-x-page-button').waitFor();assert.equal(await tab.locator('article .znote-x-post-button').count(),0);
     await context.close();contexts.pop();
   }

@@ -102,6 +102,21 @@
   };
   const css = `:host{all:initial;font:13px/1.55 system-ui,'Microsoft YaHei',sans-serif;color:#ecedf6}*{box-sizing:border-box}button,select,input{font:inherit}button{cursor:pointer;color:inherit;background:#2a3040;border:1px solid #404b65;border-radius:9px;padding:7px 11px}button:hover{background:#404b65}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #a8b5d3}button.primary{background:#5865ce;border-color:#808def}.dock{backdrop-filter:blur(18px);position:fixed;right:18px;bottom:24px;border:1px solid #a8b5d3;border-radius:24px;background:#1c202b;color:#ecedf6;box-shadow:0 5px 28px #0005;z-index:2147483647;padding:11px 16px;touch-action:none}.panel{position:fixed;right:18px;bottom:80px;width:min(414px,calc(100vw - 24px));max-height:min(710px,calc(100vh - 108px));display:flex;flex-direction:column;background:#14171f;color:#ecedf6;border:1px solid #404b65;border-radius:16px;box-shadow:0 12px 44px #0007;z-index:2147483647;overflow:hidden}.head,.controls,.destination{padding:12px 14px;border-bottom:1px solid #2a3040}.head{display:flex;align-items:center;justify-content:space-between;font-weight:650}.head small{font-size:11px;color:#a8b5d3;font-weight:400}.controls{display:flex;gap:6px;flex-wrap:wrap}.controls button[aria-pressed=true]{background:#404b65}.destination{display:grid;grid-template-columns:1fr 1fr;gap:8px}.destination input,.destination select{width:100%;min-width:0;border:1px solid #404b65;border-radius:7px;background:#1c202b;color:inherit;padding:6px}.destination label{font-size:11px}.list{overflow:auto;min-height:70px;padding:9px 12px;overscroll-behavior:contain}.item{padding:11px 0;border-bottom:1px solid #2a3040}.row{display:flex;gap:10px;align-items:center}.thumb{width:66px;height:48px;object-fit:cover;border-radius:6px;background:#2a3040}.info{min-width:0;flex:1}.title{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px}.meta{display:block;color:#a8b5d3;font-size:11px;word-break:break-all}.actions{display:flex;gap:7px;margin-top:9px}.footer{padding:10px 14px;color:#a8b5d3;font-size:11px;border-top:1px solid #2a3040}.status{padding:0 14px 10px;color:#cbd3e8;overflow-wrap:anywhere;font-size:12px}.preview{backdrop-filter:blur(18px);position:fixed;z-index:2147483646;padding:8px;border:1px solid #a8b5d3;border-radius:12px;background:#14171ff5;color:#ecedf6;box-shadow:0 8px 32px #0007;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);display:flex;flex-direction:column;gap:7px;pointer-events:auto}.preview img{display:block;max-width:min(720px,calc(100vw - 42px));max-height:calc(100vh - 116px);object-fit:contain}.preview .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.preview small{font-size:11px;color:#cbd3e8}.empty{color:#a8b5d3;padding:15px 2px}.hidden{display:none!important}`;
   const videoCss = '.panel{width:min(440px,calc(100vw - 24px))}.item{padding:14px 2px}.row{align-items:flex-start;gap:12px}.thumb-button{padding:0;width:104px;height:78px;flex:none;overflow:hidden;border:1px solid #384157;border-radius:10px;background:#222735}.thumb{width:100%;height:100%;object-fit:cover;display:block}.thumb-fallback{display:grid;place-items:center;height:100%;color:#b9c5e9;font-size:25px}.title{font-size:13px;line-height:1.5;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}.author{display:block;margin-top:5px;font-size:12px;color:#c2caf0}.unresolved{margin-top:5px;color:#aaaec0}.variants{width:100%;margin-top:10px;background:#202533;color:#cbd3e8;border:1px solid #384157;border-radius:7px;padding:6px;font:inherit;font-size:11px}.actions{display:grid;grid-template-columns:1fr 1fr 1.5fr;margin-top:11px}.actions button{padding:8px 5px}.task-state{display:block;margin-top:9px;padding:7px 9px;border-radius:8px;background:#202533;color:#cbd3e8;font-size:11px}.task-state.failed{color:#ffb8b8;background:#39252c}.task-state.complete{color:#bce9c9;background:#20342b}.head-title{display:flex;min-width:0;flex-direction:column}.head-title small{max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  let inlinePreview,inlineFrame,inlineTicket,previewRequest=0;
+  function closeInlinePreview(){
+    previewRequest++;inlineFrame?.remove();inlineFrame=null;
+    if(inlinePreview)inlinePreview.hidden=true;
+    if(inlineTicket)chrome.runtime.sendMessage({type:'inline-preview-release',id:inlineTicket}).catch(()=>{});
+    inlineTicket=null;
+  }
+  function showInlinePreview(result,resource){
+    closeInlinePreview();inlineTicket=result.preview_id;
+    inlinePreview.querySelector('strong').textContent=resource.title||'视频试播';
+    inlineFrame=element('iframe',null,{src:result.preview_url,title:'ZNote 浮窗视频试播',allow:'autoplay; fullscreen',referrerpolicy:'no-referrer'});
+    inlinePreview.append(inlineFrame);inlinePreview.hidden=false;
+    inlinePreview.parentElement.scrollTop=0;
+  }
+  window.addEventListener('message',event=>{if(inlineFrame&&event.source===inlineFrame.contentWindow&&event.origin==='chrome-extension://'+chrome.runtime.id&&event.data?.type==='znote-inline-preview-close'&&event.data.id===inlineTicket)closeInlinePreview();});
   function notify(text) {
     if (status) status.textContent = text;
   }
@@ -117,6 +132,8 @@
     draw();
   }
   async function act(resource, action, btn) {
+    if(action==='preview')closeInlinePreview();
+    const request=action==='preview'?++previewRequest:0;
     const duplicate=[...mediaTasks.values()].find(task=>task.resourceId===resource.id&&task.action===action&&['queued','running'].includes(task.status));
     if(duplicate){notify(duplicate.message);return;}
     if (btn) btn.disabled = true;
@@ -128,6 +145,7 @@
         id: resource.id,
         action,
       });
+      if(result.preview_url){if(request===previewRequest)showInlinePreview(result,resource);else chrome.runtime.sendMessage({type:'inline-preview-release',id:result.preview_id}).catch(()=>{});}
       if(result.task){const current=mediaTasks.get(result.task.id);if(!current||current.updated<=result.task.updated)mediaTasks.set(result.task.id,result.task);updateTaskSummary(mediaTasks.get(result.task.id));}
       notify(result.message);
     } catch (e) {
@@ -162,7 +180,8 @@
       thumb.addEventListener('pointerenter',requestFrame);thumb.addEventListener('focus',requestFrame);
       const info=element('div',null,{class:'info'});info.append(element('strong',r.title||'未识别标题',{class:'title',title:r.title||''}));
       info.append(element('span',r.author?'作者：'+r.author:'作者待识别',{class:r.author?'author':'meta unresolved'}));
-      info.append(element('span',(r.kind==='hls'?'m3u8 分段视频':'视频文件')+(group.items.length>1?' · '+group.items.length+' 条线路':'')+(r.bytes?' · '+(r.bytes/1024/1024).toFixed(1)+' MB':''),{class:'meta'}));
+      const bytes=Number(r.total_bytes||r.bytes)||0,size=bytes?(bytes<1024?bytes+' B':bytes<1048576?(bytes/1024).toFixed(1)+' KB':(bytes/1048576).toFixed(1)+' MB'):'大小未知';
+      info.append(element('span',(r.kind==='hls'?'m3u8 分段视频 · 播放列表 ':'视频文件 · ')+size+(r.partial?' · 范围响应':'')+(group.items.length>1?' · '+group.items.length+' 条线路':''),{class:'meta'}));
       row.append(thumb,info);item.append(row);
       if(group.items.length>1){
         const choices=element('select',null,{class:'variants','aria-label':'视频线路'});
@@ -263,7 +282,7 @@
     }
     pollTimer = setTimeout(poll, 1500);
   }
-  function closePanel(){panel.classList.add("hidden");clearTimeout(pollTimer);clearTimeout(scanTimer);scanTimer=null;scanQueued=false;globalThis.ZNoteVideoThumbnailCancel?.()}
+  function closePanel(){closeInlinePreview();panel.classList.add("hidden");clearTimeout(pollTimer);clearTimeout(scanTimer);scanTimer=null;scanQueued=false;globalThis.ZNoteVideoThumbnailCancel?.()}
   function hide() {
     clearTimeout(hoverTimer); clearTimeout(hideTimer); hideTimer = null; pendingTarget = null;
     preview.classList.add("hidden");
@@ -547,8 +566,12 @@
       if (e.isTrusted) saveDestination();
     });
     panel.append(destination);
-    list = element("div", null, { class: "list" });
-    panel.append(list);
+    const scroll=element('div',null,{class:'list'});
+    inlinePreview=element('section',null,{class:'inline-preview',hidden:''});
+    const previewHead=element('div',null,{class:'preview-head'});previewHead.append(element('strong','视频试播'),button('关闭试播',closeInlinePreview));inlinePreview.append(previewHead);
+    list = element("div", null, { class: "resources" });
+    scroll.append(inlinePreview,list);panel.append(scroll);
+    const playerSheet=new CSSStyleSheet();playerSheet.replaceSync('.inline-preview{margin:3px 0 12px;border:1px solid #414d65;border-radius:11px;background:#11141b;overflow:hidden}.preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;border-bottom:1px solid #30394d}.preview-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-head button{flex:none;font-size:11px;padding:5px 8px}.inline-preview iframe{display:block;border:0;width:100%;height:clamp(170px,30dvh,250px);background:#11141b}.resources{min-width:0}');root.adoptedStyleSheets=[...root.adoptedStyleSheets,playerSheet];
     const footer = element(
       "div",
       "最多保留当前页最近 100 个视频资源。",
@@ -642,7 +665,7 @@
     window.addEventListener('resize', placePreview);
     window.addEventListener('znote-hide-preview',hide);
     let pageURL=location.href;
-    const pageChanged=()=>{if(pageURL===location.href)return;pageURL=location.href;hide();resources=[];recentMedia.clear();selectedVariants.clear();for(const entry of renderedCards.values())entry.node.remove();renderedCards.clear();draw();pawControls?.checkRoute();};
+    const pageChanged=()=>{if(pageURL===location.href)return;pageURL=location.href;closeInlinePreview();hide();resources=[];recentMedia.clear();selectedVariants.clear();for(const entry of renderedCards.values())entry.node.remove();renderedCards.clear();draw();pawControls?.checkRoute();};
     for(const event of ['popstate','hashchange','pageshow','znote-page-changed'])window.addEventListener(event,pageChanged);
     window.addEventListener('znote-work-updated',()=>{
       pageChanged();
@@ -736,7 +759,7 @@
     });
     observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['src','poster']});
     try{new PerformanceObserver(entries=>{let changed=false;for(const entry of entries.getEntries())if(rememberMedia(entry))changed=true;if(changed)scheduleScan()}).observe({type:'resource',buffered:true})}catch{}
-    document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(scanTimer);scanTimer=null;globalThis.ZNoteVideoThumbnailCancel?.();globalThis.ZNoteDouyinObserve?.(false)}else if(enabled){scan();if(!panel.classList.contains('hidden'))poll()}});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){closeInlinePreview();clearTimeout(scanTimer);scanTimer=null;globalThis.ZNoteVideoThumbnailCancel?.();globalThis.ZNoteDouyinObserve?.(false)}else if(enabled){scan();if(!panel.classList.contains('hidden'))poll()}});
     await refreshSettings();
     window.addEventListener('focus', refreshSettings);
     if(!siteBlocked)try{const pending=await send({type:'media-gallery-resume'});if(pending.length){inlineGallery ||= new globalThis.ZNoteInlineGallery(root);for(const job of pending)inlineGallery.open(job.id,{minimized:true});}}catch{}

@@ -35,12 +35,20 @@ export function extractXPost(data, source) {
   for (const entity of data.entities?.urls || []) if (entity.url && entity.expanded_url) content = content.replaceAll(entity.url, entity.expanded_url);
   for (const entity of data.entities?.media || []) if (entity.url) content = content.replaceAll(entity.url, '');
   const details = { url: post.url, title: (content.trim().split('\n').find(Boolean) || `X · ${author || post.id}`).slice(0, 200), content: content.trim(), author, tags: (data.entities?.hashtags || []).map(v => v.text).filter(Boolean) };
-  if (images.length) return { ...details, kind: 'note', images, image_candidates: images.map(url => [url, xImage(url, 'large')]) };
-  if (data.video || data.mediaDetails?.some(m => ['video', 'animated_gif'].includes(m.type))) {
-    const variants=[...(data.video?.variants||[]),...(data.mediaDetails||[]).filter(m=>['video','animated_gif'].includes(m.type)).flatMap(m=>m.video_info?.variants||m.video?.variants||[])];
-    const video_urls=[...new Set(variants.sort((a,b)=>(Number(b.bitrate)||0)-(Number(a.bitrate)||0)).map(v=>xVideo(v.url||v.src)).filter(Boolean))].slice(0,16);
-    return { ...details, kind: 'video',...(video_urls.length?{video_urls}:{}) };
+  const mediaVideos=(data.mediaDetails||[]).filter(m=>['video','animated_gif'].includes(m.type));
+  const videos=(mediaVideos.length?mediaVideos:data.video?[{video:data.video}]:[]).map(m=>{
+    const variants=[...(m.video_info?.variants||m.video?.variants||(mediaVideos.length===1?data.video?.variants:[])||[])];
+    return [...new Set(variants.sort((a,b)=>(Number(b.bitrate)||0)-(Number(a.bitrate)||0)).map(v=>xVideo(v.url||v.src)).filter(Boolean))].slice(0,16);
+  });
+  if(videos.length){
+    if(videos.length===1&&!images.length)return {...details,kind:'video',...(videos[0].length?{video_urls:videos[0]}:{})};
+    if(videos.some(urls=>!urls.length))throw fail('X 未提供全部视频的播放地址，请在原帖显示并播放视频后重试');
+    // Keep genuine mixed media; video thumbnails are never photos. The
+    // existing mixed-gallery saver accepts video indices after the photos.
+    return {...details,kind:'note',images,image_candidates:images.map(url=>[url,xImage(url,'large')]),
+      live_videos:videos.map((urls,index)=>({index:images.length+index,urls})),video_gallery:true,default_image_mode:'group'};
   }
+  if (images.length) return { ...details, kind: 'note', images, image_candidates: images.map(url => [url, xImage(url, 'large')]) };
   if (details.content) return { ...details, kind: 'note', images: [] };
   throw fail('这条 X 推文没有可采集的正文或媒体');
 }
@@ -51,6 +59,7 @@ const browserPostSchema=z.object({
   author:z.object({name:z.string().max(200),screen_name:z.string().regex(/^\w{1,50}$/)}),
   video:z.boolean().default(false),
   video_urls:z.array(z.string().max(2048)).max(16).optional(),
+  videos:z.array(z.array(z.string().max(2048)).min(1).max(16)).max(4).optional(),
 }).strict();
 export function extractBrowserXPost(raw,source){
   const post=xPost(source),parsed=browserPostSchema.safeParse(raw);
@@ -58,7 +67,9 @@ export function extractBrowserXPost(raw,source){
   const data=parsed.data;
   if(data.images.some(url=>!xImage(url)))throw fail('浏览器推文包含无效的 X 图片地址，未采集');
   if(data.video_urls?.some(url=>!xVideo(url)))throw fail('浏览器推文包含无效的 X 视频地址，未采集');
-  if(data.video&&!data.video_urls?.length)throw fail('浏览器未提供这条推文的播放地址，请在原帖播放视频后重试');
+  if(data.videos?.flat().some(url=>!xVideo(url)))throw fail('浏览器推文包含无效的 X 视频地址，未采集');
+  if(data.video&&!data.video_urls?.length&&!data.videos?.length)throw fail('浏览器未提供这条推文的播放地址，请在原帖播放视频后重试');
   // Reuse the same normalization and ordered-group parser as the public API.
-  return extractXPost({id_str:data.id,text:data.text,user:data.author,entities:{hashtags:[...data.text.matchAll(/(?:^|\s)#([\p{L}\p{N}_]+)/gu)].map(match=>({text:match[1]}))},mediaDetails:data.images.map(url=>({type:'photo',media_url_https:url})),...(data.video?{video:{variants:(data.video_urls||[]).map(url=>({url}))}}:{})},post.url);
+  const videos=data.videos?.length?data.videos:data.video?[data.video_urls||[]]:[];
+  return extractXPost({id_str:data.id,text:data.text,user:data.author,entities:{hashtags:[...data.text.matchAll(/(?:^|\s)#([\p{L}\p{N}_]+)/gu)].map(match=>({text:match[1]}))},mediaDetails:[...data.images.map(url=>({type:'photo',media_url_https:url})),...videos.map(urls=>({type:'video',video_info:{variants:urls.map(url=>({url}))}}))]},post.url);
 }

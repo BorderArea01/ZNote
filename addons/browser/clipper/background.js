@@ -6,6 +6,7 @@ import {inlineGalleryTicket} from './gallery-ticket.js';
 import {updateMediaTask,downloadMediaBlob,startMediaTask} from './media-tasks.js';
 import {contextMenuEntries} from './entry-menu.js';
 import {requestAt,normalizeServer} from './connection-routes.js';
+import {inlinePreviewMessage} from './inline-preview-ticket.js';
 let directVideoBusy = false;
 async function setupContextMenus() {
   const config=await settings();
@@ -43,6 +44,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }).catch(() => {});
 });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if(sender.id===chrome.runtime.id&&['inline-preview-load','inline-preview-release'].includes(message.type)){
+    inlinePreviewMessage(message,sender).then(value=>reply({ok:true,...value}),error=>reply({ok:false,error:error.message}));return true;
+  }
   if(sender.id===chrome.runtime.id&&sender.tab&&sender.frameId===0&&['page-tools-action','page-tools-status','page-tools-position','region-capture-selection'].includes(message.type)){
     pageAction(message,sender).then(value=>reply({ok:true,...value}),error=>reply({ok:false,error:error.message}));return true;
   }

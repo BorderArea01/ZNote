@@ -13,20 +13,28 @@ try{
  const setup=await fetch(base+'/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'0123'})});const cookie=setup.headers.get('set-cookie').split(';')[0];
  const token=await(await fetch(base+'/api/tokens',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({name:'video-ui',scope:'write'})})).json();
  for(const touch of [false,true]){
-  context=await chromium.launchPersistentContext(join(dir,touch?'touch':'desktop'),{channel:'msedge',headless:true,hasTouch:touch,viewport:{width:touch?420:1200,height:850},args:[`--disable-extensions-except=${resolve('addons/browser/clipper')}`,`--load-extension=${resolve('addons/browser/clipper')}`]});
+  context=await chromium.launchPersistentContext(join(dir,touch?'touch':'desktop'),{channel:'msedge',headless:true,hasTouch:touch,viewport:{width:touch?420:1200,height:850},args:['--mute-audio','--disable-gpu',`--disable-extensions-except=${resolve('addons/browser/clipper')}`,`--load-extension=${resolve('addons/browser/clipper')}`]});
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');await worker.evaluate(config=>chrome.storage.local.set(config),{server:base,token:token.token});
+  await context.route('https://pbs.twimg.com/**',route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZ1kAAAAASUVORK5CYII=','base64')}));
+  await context.route('https://example.test/**',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>链接采集测试</title>'}));
   await context.route('https://x.com/**',route=>route.request().url().includes('/i/api/graphql/')?route.fulfill({contentType:'application/json',body:JSON.stringify({data:{tweet:record}})}):route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><body style="background:#17201e;color:white;font:16px system-ui"><article data-testid="tweet" style="padding:20px"><a href="${source}"><time>作品时间</time></a><div data-testid="User-Name">作者<br>@Tir_al_</div><div data-testid="tweetText">视频作品正文 #视频</div><div data-testid="videoPlayer"><video src="blob:https://x.com/123456" controls width="300"></video></div></article>`}));
-  const page=await context.newPage();await page.goto(source);const save=page.locator('#znote-x-page-button');await save.waitFor();const click=node=>touch?node.tap():node.click();
+  context.setDefaultTimeout(10000);
+  const page=await context.newPage();await page.goto(source);const save=page.locator('#znote-x-page-button');await save.waitFor({state:'attached'});const click=node=>touch?node.tap():node.click();await click(page.locator('[data-znote-page-tools] .edge-tab'));await save.waitFor();
+  await page.evaluate(()=>{const cover=document.createElement('div');cover.dataset.testid='tweetPhoto';cover.innerHTML='<img src="https://pbs.twimg.com/media/video-cover?format=jpg" width="100">';document.querySelector('article').append(cover);});
   // A blob URL alone must produce a recoverable error, not a text-only note.
   await click(save);await page.getByRole('status').filter({hasText:'视频地址'}).waitFor();assert.equal(runtime.db.prepare('SELECT count(*) n FROM items').get().n,touch?1:0);
   await page.evaluate(record=>document.querySelector('article').__reactProps$fixture={tweet:record},record);
   await click(save);await save.filter({hasText:'已保存'}).waitFor({timeout:20000});assert.equal(embeds,0);
   const rows=runtime.db.prepare('SELECT * FROM items WHERE deleted_at IS NULL').all();assert.equal(rows.length,1);assert.equal(rows[0].kind,'video');assert.ok(rows[0].content.includes('视频作品正文'));assert.equal(rows[0].source_url,source);assert.ok(rows[0].bytes>1000);
+  // A pasted link on another page reuses this matching, already-open X tab.
+  const options=await context.newPage();await options.goto('chrome-extension://'+worker.url().split('/')[2]+'/options.html');
+  const fromLink=await options.evaluate(async source=>{const unrelated=await chrome.tabs.create({url:'https://example.test/'});return chrome.runtime.sendMessage({type:'gallery',tabId:unrelated.id,text:source});},source);assert.equal(fromLink.ok,true);assert.equal(embeds,0);await options.close();await page.bringToFront();
   // Re-read network data after SPA activity, without depending on React props.
   await page.evaluate(async()=>{delete document.querySelector('article').__reactProps$fixture;await fetch('/i/api/graphql/fixture/TweetDetail').then(r=>r.json());});
   const observed=await worker.evaluate(async source=>{const tab=(await chrome.tabs.query({})).find(t=>t.url===source);return chrome.tabs.sendMessage(tab.id,{type:'x-post-page',url:source});},source);assert.equal(observed.browserPost.video_urls[0],high);
   await page.locator('[data-testid="videoPlayer"]').evaluate(node=>node.remove());
   const cached=await worker.evaluate(async source=>{const tab=(await chrome.tabs.query({})).find(t=>t.url===source);return chrome.tabs.sendMessage(tab.id,{type:'x-post-page',url:source});},source);assert.equal(cached.browserPost.video,true);assert.equal(cached.browserPost.video_urls[0],high);
+  const timeline=await context.newPage();await timeline.goto('https://x.com/home');await timeline.evaluate(record=>document.querySelector('article').__reactProps$fixture={tweet:record},record);const timelineSave=timeline.locator('article .znote-x-post-button');await timelineSave.waitFor();await click(timelineSave);await timelineSave.filter({hasText:'已保存'}).waitFor();await timeline.close();await page.bringToFront();
   await context.addCookies([{name:'znote_session',value:token.token,url:base,httpOnly:true,sameSite:'Strict'}]);await page.goto(base+'/#item/'+rows[0].id);const video=page.locator('[role="dialog"] video');await video.waitFor();await video.evaluate(v=>v.muted=true);await video.evaluate(v=>v.play());await page.waitForFunction(()=>document.querySelector('[role="dialog"] video')?.currentTime>0.2);await page.screenshot({path:join(dir,`${touch?'touch':'desktop'}-playback.png`)});await page.keyboard.press('Escape');await video.waitFor({state:'hidden'});
   await context.close();context=null;
  }

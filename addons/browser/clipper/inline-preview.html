@@ -1,0 +1,6 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZNote · 浮窗试播</title>
+<link rel="stylesheet" href="inline-preview.css"><body>
+<video id="player" controls playsinline muted preload="metadata"></video>
+<div class="status-row"><span id="status" role="status">正在读取媒体…</span><button id="retry" hidden>重试</button><span id="preview-help"></span></div>
+<span data-help-for="preview-help" data-help-label="试播">试播只检查当前资源是否能播放，不代表已取得完整作品。0:00、时长过短或缺画面可能是初始化片段或单个分段，也可能是访问限制。入库仍会单独检查文件。默认静音，可用播放器开启声音；关闭或切换预览会停止读取。</span>
+<script src="vendor/hls.min.js"></script><script type="module" src="inline-preview.js"></script><script type="module" src="help.js"></script></body></html>

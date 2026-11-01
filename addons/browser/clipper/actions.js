@@ -130,9 +130,13 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
     assertSiteAllowed(source, config);
     if(youtubeVideoId(source)&&youtubeVideoId(source)===youtubeVideoId(tab?.url))return collectYoutube(tab,config);
     if(!browserPost&&tab?.id&&/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[\w]+\/status\/\d+(?:[/?#]|$)/i.test(source)){
-      const result=await chrome.tabs.sendMessage(tab.id,{type:'x-post-page',url:source},{frameId:0}).catch(()=>null);
-      if(result?.error)throw Error(result.error);
-      if(result?.ok)browserPost=result.browserPost||null;
+      const id=source.match(/\/status\/(\d+)/)?.[1],tabs=await chrome.tabs.query({url:['https://*.x.com/*','https://*.twitter.com/*']});
+      const candidates=[tab,...tabs.filter(t=>t.id!==tab.id&&t.url?.match(/\/status\/(\d+)/)?.[1]===id)];let pageError;
+      for(const candidate of candidates){
+        const result=await chrome.tabs.sendMessage(candidate.id,{type:'x-post-page',url:source},{frameId:0}).catch(()=>null);
+        if(result?.ok&&result.browserPost){browserPost=result.browserPost;break;}if(result?.error)pageError=result.error;
+      }
+      if(!browserPost&&pageError)throw Error(pageError);
     }
     if (!browserHtml && tab?.id && /^https:\/\/www\.xiaohongshu\.com\/(?:explore|discovery\/item)\/[a-f\d]+(?:[/?#]|$)/i.test(source)) {
       // Reuse the logged-in page's complete work data for the popup and link
@@ -142,7 +146,7 @@ export async function collectGallery(tab, text = tab?.url, { dedupe = false, bro
     }
     if(config.saveAction==='download')return downloadTask({id:source,kind:'work',text:value,browserHtml,browserPost,title:tab.title||'网页作品',source_url:source},tab,config);
     const requestId = dedupe
-      ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?'x':/^https:\/\/www\.xiaohongshu\.com\//.test(source)?'xhs':'work'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
+      ? `clipper-${/^https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//.test(source)?(browserPost?.video?'x-video-v2':'x'):/^https:\/\/www\.xiaohongshu\.com\//.test(source)?'xhs':'work'}-${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${source}\n${config.collection_id || ''}`)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`
       : `clipper-gallery-${crypto.randomUUID()}`;
     let job = await api('/api/captures', {
       method: 'POST',

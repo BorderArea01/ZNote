@@ -32,7 +32,7 @@
     globalThis.ZNotePageTools?.notice(message,{error,key:'post'});
   }
   let saveAction='save';
-  function modeLabel(button){if(button.disabled)return;const download=saveAction==='download';button.textContent=button.id==='znote-x-page-button'?(download?'ZNote · 下载本帖':'ZNote · 保存本帖'):(download?'下载图组':'保存图组');button.setAttribute('aria-label',download?'下载这条推文的全部图片':'保存这条推文的全部图片到 ZNote');}
+  function modeLabel(button){if(button.disabled)return;const download=saveAction==='download';button.textContent=(button.id==='znote-x-page-button'?'ZNote · ':'')+(download?'下载本帖':'保存本帖');button.setAttribute('aria-label',download?'下载这条推文的图片与视频':'保存这条推文的图片与视频到 ZNote');}
   function createButton(url) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'znote-x-post-button'; button.dataset.url = url;
       button.textContent = '保存图组'; button.setAttribute('aria-label', '保存这条推文的全部图片到 ZNote');
@@ -73,7 +73,8 @@
       if (url!==detail&&existing?.dataset.url === url) continue;
       existing?.remove();
       const hasPhoto = [...article.querySelectorAll('[data-testid="tweetPhoto"] img')].some(img => img.closest('article') === article && !img.closest('[data-testid="quoteTweet"]') && (!globalThis.ZNoteXPostReader||globalThis.ZNoteXPostReader.own(img,article)) && /^https:\/\/pbs\.twimg\.com\/media\//.test(img.src));
-      if (!url || !hasPhoto || url===detail) continue;
+      const hasVideo=[...article.querySelectorAll('video,[data-testid="videoPlayer"],[data-testid="videoComponent"]')].some(node=>!globalThis.ZNoteXPostReader||globalThis.ZNoteXPostReader.own(node,article));
+      if (!url || (!hasPhoto&&!hasVideo) || url===detail) continue;
       const row = [...article.querySelectorAll('[role="group"]')].find(node=>node.closest('article')===article&&!node.closest('[data-testid="quoteTweet"]'));
       const button=createButton(url);
       // Standalone detail pages may omit the normal action group while loading.

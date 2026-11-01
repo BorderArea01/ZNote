@@ -6,6 +6,7 @@ import { startMediaTask, mediaTasksForTab } from './media-tasks.js';
 import { parseContentRange } from './video-fetch.js';
 import {youtubeVideoId} from './youtube-url.js';
 import {collectYoutube} from './actions.js';
+import {createInlinePreview} from './inline-preview-ticket.js';
 const key = "sniffTabs";
 let states = {},
   chain = chrome.storage.session.get(key).then((v) => {
@@ -176,6 +177,7 @@ export async function resourceAction(resource, action, tabId) {
       task,
     };
   }
+  if(['video','hls'].includes(resource.kind))return createInlinePreview(resource,tabId);
   const saved = await chrome.storage.session.get(null),
     tickets = Object.entries(saved)
       .filter(([k]) => k.startsWith("media-"))
