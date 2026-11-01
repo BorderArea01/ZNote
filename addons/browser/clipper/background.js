@@ -7,6 +7,9 @@ import {updateMediaTask,downloadMediaBlob,startMediaTask} from './media-tasks.js
 import {contextMenuEntries} from './entry-menu.js';
 import {requestAt,normalizeServer} from './connection-routes.js';
 import {inlinePreviewMessage} from './inline-preview-ticket.js';
+import {observeYoutubePlayback,forgetYoutubePlayback} from './youtube-session.js';
+chrome.webRequest.onBeforeRequest.addListener(details=>{void observeYoutubePlayback(details)?.catch(()=>{});},{urls:['https://*.googlevideo.com/videoplayback*']},['requestBody']);
+chrome.tabs.onRemoved.addListener(tabId=>{void forgetYoutubePlayback(tabId).catch(()=>{});});
 let directVideoBusy = false;
 async function setupContextMenus() {
   const config=await settings();

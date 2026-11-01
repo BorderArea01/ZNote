@@ -36,6 +36,12 @@ await copyFile('shared/gallery-group.js','addons/browser/clipper/gallery-group.j
 await copyFile('shared/youtube.js','addons/browser/clipper/youtube-url.js');
 await build({entryPoints:['addons/browser/clipper/youtube-page-source.js'],bundle:true,format:'iife',platform:'browser',target:'chrome120',
   outfile:'addons/browser/clipper/vendor/youtube-page.js',minify:true,legalComments:'eof'});
+await build({entryPoints:['addons/browser/clipper/youtube-sabr-source.js'],bundle:true,format:'esm',platform:'browser',target:'chrome120',
+  outfile:'addons/browser/clipper/vendor/youtube-sabr.js',minify:true,legalComments:'eof'});
+await copyFile('node_modules/googlevideo/LICENSE','addons/browser/clipper/vendor/googlevideo-LICENSE');
+// The protobuf npm distribution omits its license file; retain the vendored
+// upstream v2.16.0 Apache/BSD notice alongside the generated bundle.
+await readFile('addons/browser/clipper/vendor/protobuf-LICENSE','utf8');
 // Keep the page-world parser and observer in one entry, independent of the
 // isolated-world loader and its globals.
 await writeFile('addons/browser/clipper/vendor/douyin-network.js',

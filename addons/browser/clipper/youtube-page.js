@@ -10,7 +10,7 @@
     };
     const timer=setTimeout(()=>finish({ok:false,error:'未连接到 YouTube 播放器，请刷新视频页面后重试'}),5000);
     addEventListener('message',receive);
-    window.postMessage({type:'znote-youtube-read',nonce},location.origin);
+    window.postMessage({type:'znote-youtube-read',nonce,request:message.request},location.origin);
     return true;
   });
 })();

@@ -2,6 +2,7 @@ import { saveImage, limitedImage, api, settings, connection } from './client.js'
 import { blockedSite } from './site-policy.js';
 import {youtubeVideoId} from './youtube-url.js';
 import {validateYoutubeResource} from './youtube-formats.js';
+import {youtubePlaybackRequest} from './youtube-session.js';
 import {startMediaTask, downloadJob, getDownloadJob} from './media-tasks.js';
 export async function captureJob(id, tabId) {
   return await getDownloadJob(id,tabId) || await api('/api/captures/'+encodeURIComponent(id));
@@ -176,7 +177,7 @@ const serverUrlForJob = value => value.replace(/\/$/, '');
 export async function collectYoutube(tab,config) {
   const current=await chrome.tabs.get(tab.id);
   if(youtubeVideoId(current.url)!==youtubeVideoId(tab.url))throw Error('页面已切换，请重新采集当前视频');
-  const result=await chrome.tabs.sendMessage(tab.id,{type:'youtube-current-video',url:current.url},{frameId:0}).catch(()=>null);
+  const result=await chrome.tabs.sendMessage(tab.id,{type:'youtube-current-video',url:current.url,request:await youtubePlaybackRequest(tab.id,current.url)},{frameId:0}).catch(()=>null);
   if(!result?.ok)throw Error(result?.error||'请重新加载扩展并刷新 YouTube 页面，然后播放当前视频再采集');
   const resource=validateYoutubeResource(result.resource,current.url);
   const task=await startMediaTask(resource,config.saveAction==='download'?'download':'save',tab.id,config);

@@ -6,8 +6,9 @@ import {youtubeVideoUrl} from '../shared/youtube.js';
 import {platformUrl,mediaTools,runMediaCommand} from '../server/imports.js';
 import {extractCapturePage} from '../server/capture-page.js';
 import {youtubeResource,validateYoutubeResource} from '../addons/browser/clipper/youtube-formats.js';
-import {readYoutubeTrack} from '../addons/browser/clipper/youtube-download.js';
+import {readYoutubeTrack,youtubeTrackSize} from '../addons/browser/clipper/youtube-download.js';
 import {createApp} from '../server/app.js';
+import {observeYoutubePlayback,youtubePlaybackRequest} from '../addons/browser/clipper/youtube-session.js';
 const source='https://www.youtube.com/watch?v=TuR6De4SI5c';
 const stream=(itag,mime,extra={})=>({itag,mimeType:mime,contentLength:'1000',url:`https://r1.googlevideo.com/videoplayback?id=work1&itag=${itag}&clen=1000&range=0-1`,...extra});
 const player=()=>({playabilityStatus:{status:'OK'},videoDetails:{videoId:'TuR6De4SI5c',title:'标题',author:'作者'},streamingData:{adaptiveFormats:[stream(137,'video/mp4; codecs="avc1.640028"',{height:1080}),stream(140,'audio/mp4; codecs="mp4a.40.2"')]}});
@@ -41,6 +42,41 @@ test('YouTube buffered query range is replaced, exact length required and HTTP f
   await assert.rejects(()=>readYoutubeTrack(track,{fetcher:async()=>new Response('expired',{status:403})}),/授权/);
   await assert.rejects(()=>readYoutubeTrack(track,{fetcher:async()=>new Response('short')}),/不完整/);
   await assert.rejects(()=>readYoutubeTrack({...track,url:'http://127.0.0.1/file'}),/地址/);
+});
+test('observed progressive playback without a metadata length is probed before complete download',async()=>{
+  const p=player(),f=stream(18,'video/mp4; codecs="avc1.42001E, mp4a.40.2"',{audioQuality:'AUDIO_QUALITY_MEDIUM'});
+  delete f.contentLength;f.signatureCipher=new URLSearchParams({url:f.url.replace('&clen=1000',''),s:'cipher'}).toString();delete f.url;
+  p.streamingData={formats:[f],adaptiveFormats:[]};const observed=['https://r1.googlevideo.com/videoplayback?id=work1&itag=18&sig=authorized&range=2-3'];
+  const r=youtubeResource(p,{pageUrl:source,observed});assert.equal(r.tracks[0].size,0);assert.equal(r.tracks[0].muxed,true);validateYoutubeResource(r,source);
+  assert.throws(()=>youtubeResource(p,{pageUrl:source}),/完整/);
+  const bytes=Buffer.alloc(1024,17);const requests=[];
+  const blob=await readYoutubeTrack(r.tracks[0],{fetcher:async(url,options)=>{requests.push({url,options});if(options.method==='HEAD'){assert.equal(new URL(url).searchParams.has('range'),false);return new Response(null,{headers:{'Content-Length':String(bytes.length)}});}const [a,b]=new URL(url).searchParams.get('range').split('-').map(Number);return new Response(bytes.subarray(a,b+1));}});
+  assert.equal(requests.length,2);assert.deepEqual(Buffer.from(await blob.arrayBuffer()),bytes);
+  assert.throws(()=>validateYoutubeResource({...r,tracks:[{...r.tracks[0],observed:false}]},source));
+  assert.equal(await youtubeTrackSize(r.tracks[0],{fetcher:async(url,options)=>options.method==='HEAD'?new Response(null,{status:405}):new Response('x',{status:206,headers:{'Content-Range':'bytes 0-0/1024'}})}),1024);
+  await assert.rejects(()=>youtubeTrackSize(r.tracks[0],{fetcher:async()=>new Response(null,{headers:{'Content-Length':String(501*1024*1024)}})}),/500/);
+  await assert.rejects(()=>youtubeTrackSize(r.tracks[0],{fetcher:async()=>new Response(null)}),/大小/);
+});
+test('SABR binds the current work and complete audio/video formats to its observed playback session',()=>{
+  const p=player();p.videoDetails.lengthSeconds='40';p.streamingData.serverAbrStreamingUrl='https://r1.googlevideo.com/videoplayback?id=work1&sabr=1';
+  for(const f of p.streamingData.adaptiveFormats){delete f.url;f.lastModified='1696817551330113';f.approxDurationMs='40000';}
+  const request={url:'https://r2.googlevideo.com/videoplayback?id=work1&sabr=1&sig=authorized',body:'AAAA'};
+  const r=youtubeResource(p,{pageUrl:source,request});assert.equal(r.sabr.formats.length,2);assert.equal(r.tracks[0].itag,137);validateYoutubeResource(r,source);
+  assert.throws(()=>youtubeResource(p,{pageUrl:source,request:{...request,url:request.url.replace('work1','other')}}),/会话/);
+  assert.throws(()=>validateYoutubeResource({...r,sabr:{...r.sabr,formats:[]}},source),/不完整/);
+  assert.throws(()=>validateYoutubeResource({...r,tracks:[{...r.tracks[0],size:1},r.tracks[1]]},source),/匹配/);
+});
+test('SABR request observation is tab/page scoped, bounded, expires and excludes unrelated requests',async()=>{
+  const previous=globalThis.chrome,cache={};let page=source;
+  globalThis.chrome={tabs:{get:async()=>({url:page})},storage:{session:{get:async key=>({[key]:cache[key]}),set:async value=>Object.assign(cache,value)}}};
+  const request={url:'https://r1.googlevideo.com/videoplayback?id=work1&sabr=1',method:'POST',tabId:2,initiator:'https://www.youtube.com',requestBody:{raw:[{bytes:new Uint8Array([1,2,3]).buffer}]}};
+  try{
+    await observeYoutubePlayback({...request,initiator:'https://example.com'});assert.equal(await youtubePlaybackRequest(2,page),null);
+    await observeYoutubePlayback(request);const result=await youtubePlaybackRequest(2,page);assert.equal(result.body,'AQID');assert.deepEqual(Object.keys(result).sort(),['body','url']);
+    assert.equal(await youtubePlaybackRequest(3,page),null);assert.equal(await youtubePlaybackRequest(2,page+'&t=30'),null);
+    await observeYoutubePlayback({...request,requestBody:{raw:[{bytes:new ArrayBuffer(128*1024+1)}]}});assert.equal((await youtubePlaybackRequest(2,page)).body,'AQID');
+    cache.youtubePlaybackRequests[2].created=Date.now()-180001;assert.equal(await youtubePlaybackRequest(2,page),null);
+  }finally{globalThis.chrome=previous;}
 });
 test('real FFmpeg merges uploaded picture + sound; auth, missing audio, remote references and cleanup',async()=>{
   const dir=await mkdtemp(resolve('artifacts/youtube-api-'));

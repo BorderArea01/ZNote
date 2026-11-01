@@ -1,4 +1,4 @@
-import {youtubeResource,youtubeMediaUrl} from './youtube-formats.js';
+import {youtubeResource,youtubeMediaUrl,youtubePlayerDiagnostic} from './youtube-formats.js';
 if(window===top){
   // Resource Timing contains final, already-authorized playback requests.
   // Keep only the current page's small URL window; never read account cookies.
@@ -7,12 +7,13 @@ if(window===top){
   addEventListener('yt-navigate-start',()=>{observed=[];});
   addEventListener('message',event=>{
     if(event.source!==window||event.origin!==location.origin||event.data?.type!=='znote-youtube-read'||!/^[-\w]{16,64}$/.test(event.data.nonce||''))return;
-    let result;
+    let result,player;
     try{
       const p=document.querySelector('#movie_player');
       if(p?.getAdState?.()===1)throw Error('广告播放中，请等待正片开始后采集');
-      result={ok:true,resource:youtubeResource(p?.getPlayerResponse?.()||window.ytInitialPlayerResponse,{pageUrl:location.href,observed})};
-    }catch(error){result={ok:false,error:error.message||'尚未获得当前视频的音画数据'};}
+      player=p?.getPlayerResponse?.()||window.ytInitialPlayerResponse;
+      result={ok:true,resource:youtubeResource(player,{pageUrl:location.href,observed,request:event.data.request})};
+    }catch(error){result={ok:false,error:error.message||'尚未获得当前视频的音画数据',diagnostic:{...youtubePlayerDiagnostic(player,observed),sabrRequest:!!event.data.request}};}
     window.postMessage({type:'znote-youtube-data',nonce:event.data.nonce,...result},location.origin);
   });
 }

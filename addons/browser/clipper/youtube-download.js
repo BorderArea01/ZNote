@@ -2,9 +2,25 @@ import {validateYoutubeResource,youtubeMediaUrl} from './youtube-formats.js';
 import {api,serverUrl} from './client.js';
 import {videoDetails} from './video-details.js';
 const chunkSize=8*1024*1024;
+export async function youtubeTrackSize(track,{signal,fetcher=fetch}={}){
+  const url=youtubeMediaUrl(track.url);if(!url)throw Error('播放流地址不正确');url.searchParams.delete('range');
+  const options={credentials:'omit',signal:AbortSignal.any([signal||new AbortController().signal,AbortSignal.timeout(15000)])};
+  let size=0;
+  try{const r=await fetcher(url.href,{...options,method:'HEAD'});if(r.ok)size=Number(r.headers.get('content-length'))||0;await r.body?.cancel();}catch(error){if(signal?.aborted)throw error;}
+  if(!size){
+    const r=await fetcher(url.href,{...options,headers:{Range:'bytes=0-0'}});
+    await r.body?.cancel();
+    if(!r.ok)throw Error(r.status===403?'YouTube 播放授权已过期或服务器拒绝此播放流，请刷新并播放当前视频后重试':'无法读取 YouTube 完整文件大小（'+r.status+'）');
+    const range=r.headers.get('content-range')?.match(/^bytes 0-0\/(\d+)$/i);
+    size=r.status===206&&range?Number(range[1]):r.status===200?Number(r.headers.get('content-length')):0;
+  }
+  if(!Number.isSafeInteger(size)||size<=0)throw Error('YouTube 未返回完整文件大小，未保存不完整视频');
+  if(size>500*1024*1024)throw Error('视频超过 500 MB');return size;
+}
 export async function readYoutubeTrack(track,{signal,onProgress=()=>{},fetcher=fetch}={}) {
   const base=youtubeMediaUrl(track.url);
-  if(!base||!Number.isSafeInteger(track.size)||track.size<=0||track.size>500*1024*1024)throw Error('视频大小或播放流地址不正确');
+  if(!base||!Number.isSafeInteger(track.size)||track.size<0||track.size>500*1024*1024||!track.size&&!(track.muxed&&track.observed))throw Error('视频大小或播放流地址不正确');
+  if(!track.size)track={...track,size:await youtubeTrackSize(track,{signal,fetcher})};
   const chunks=[];
   // YouTube uses a query range in addition to HTTP Range. Retaining the
   // sniffed range would repeatedly download a single buffered fragment.
@@ -25,8 +41,9 @@ export async function readYoutubeTrack(track,{signal,onProgress=()=>{},fetcher=f
 }
 export async function captureYoutube(resource,action,config,{signal,onProgress=()=>{},download}={}) {
   validateYoutubeResource(resource,resource.source_url);
-  const tracks=[];
-  for(let i=0;i<resource.tracks.length;i++)tracks.push(await readYoutubeTrack(resource.tracks[i],{signal,onProgress:p=>onProgress(`正在读取${i?'声音':'画面'} ${p}%`)}));
+  let tracks=[];
+  if(resource.sabr){const {readYoutubeSabr}=await import('./vendor/youtube-sabr.js');tracks=await readYoutubeSabr(resource,{signal,onProgress});}
+  else for(let i=0;i<resource.tracks.length;i++)tracks.push(await readYoutubeTrack(resource.tracks[i],{signal,onProgress:p=>onProgress(`正在读取${i?'声音':'画面'} ${p}%`)}));
   if(tracks.length===1){
     if(action==='download'){await download(tracks[0]);return null;}
     const form=new FormData();form.set('file',tracks[0],'YouTube.'+(tracks[0].type.includes('webm')?'webm':'mp4'));

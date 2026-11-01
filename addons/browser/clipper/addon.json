@@ -7,5 +7,5 @@
   "expectedId": "ndfidbdoncgiaamafhgfpbdnbeiedile",
   "capabilities": ["image", "gallery", "video", "article", "screenshot"],
   "build": {"cwd": "../../..", "script": "clipper:build"},
-  "assets": ["ui/panel.js", "ui/panel.css", "help.js", "popup.css", "connection-routes.js", "inline-preview.html", "inline-preview.css", "inline-preview.js", "inline-preview-ticket.js"]
+  "assets": ["ui/panel.js", "ui/panel.css", "help.js", "popup.css", "connection-routes.js", "inline-preview.html", "inline-preview.css", "inline-preview.js", "inline-preview-ticket.js", "youtube-session.js", "youtube-sabr-resource.js", "vendor/youtube-sabr.js", "vendor/googlevideo-LICENSE", "vendor/protobuf-LICENSE"]
 }
