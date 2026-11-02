@@ -2,6 +2,7 @@ import {portalHtml,portalScript,portalCss} from './portal.js';
 import {connectHtml,connectScript,connectCss} from './connect.js';
 import {sharedUrls} from '../../../shared/share-input.js';
 import {normalizePixivPost} from '../../../shared/pixiv-capture.js';
+import {normalizeRemoteImage} from '../../../shared/remote-image.js';
 const json=(value,status=200,headers={})=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
 const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),v=>v.toString(16).padStart(2,'0')).join('');
@@ -25,7 +26,9 @@ function captureInput(raw){
  if(raw.image_mode!==undefined&&!['group','note'].includes(raw.image_mode))fail(400,'保存方式无效');
  const tags=raw.tags||[];if(!Array.isArray(tags)||tags.length>20||tags.some(v=>typeof v!=='string'||!v.trim()||v.length>40))fail(400,'标签格式不正确');
  const requestId=raw.request_id||crypto.randomUUID();if(!/^[a-zA-Z0-9:_-]{1,160}$/.test(requestId))fail(400,'分享编号无效');
- return {source:url.href,requestId,input:{text:raw.text.trim(),collection_id:raw.collection_id||null,image_mode:raw.image_mode||'group',tags,...(raw.browser_pixiv!==undefined?{browser_pixiv:normalizePixivPost(raw.browser_pixiv,url.href)}:{})}};
+ let remote_image;if(raw.remote_image!==undefined){try{remote_image=normalizeRemoteImage(raw.remote_image);}catch(e){fail(400,e.message);}if(remote_image.urls[0]!==url.href||raw.browser_pixiv!==undefined)fail(400,'图片地址与请求不一致');}
+ if(raw.image_size_mode!==undefined&&!['original','compress'].includes(raw.image_size_mode))fail(400,'图片保存方式无效');
+ return {source:url.href,requestId,input:{text:raw.text.trim(),collection_id:raw.collection_id||null,image_mode:raw.image_mode||'group',tags,...(remote_image?{remote_image}:{}),...(raw.image_size_mode?{image_size_mode:raw.image_size_mode}:{}),...(raw.browser_pixiv!==undefined?{browser_pixiv:normalizePixivPost(raw.browser_pixiv,url.href)}:{})}};
 }
 async function token(db,name,kind,now){const raw='zn_'+secret(),id=crypto.randomUUID(),expires=now+(kind==='session'?30:180)*86400000;await db.prepare('INSERT INTO relay_tokens(id,hash,kind,name,expires) VALUES(?,?,?,?,?)').bind(id,await hash(raw),kind,name,expires).run();return {id,token:raw,scope:'write',name,expires_at:new Date(expires).toISOString()};}
 async function auth(request,db,now){

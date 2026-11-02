@@ -32,5 +32,5 @@ export const remotePathAllowed=path=>path==='/api/collections'||/^\/api\/capture
 export function remoteCapture(input){
   // Do not send logged-in HTML, extracted media, cookies or local credentials
   // to the link-only inbox. The server parses the shared URL as on Android.
-  return Object.fromEntries(['text','collection_id','image_mode','tags','request_id'].filter(key=>input[key]!==undefined).map(key=>[key,input[key]]));
+  return Object.fromEntries(['text','collection_id','image_mode','image_size_mode','tags','request_id','remote_image'].filter(key=>input[key]!==undefined).map(key=>[key,input[key]]));
 }

@@ -566,3 +566,10 @@
 
 - 发布确认：clients-v0.10.0-beta.28已新增原签名Android28 APK和独立android-source.zip，GitHub digest分别为3dcf3eb0ec28a53cee21fb00bd964cce22fc25d7799fdba69c0c2c9854dabf00 / 9fe568556ef8451229cf401e49a2f473a43611fcf11b2ca7017668b8f506f45f；Android源码commit60b55cfe93549dd7de7aa776355bd0c0c9262da0，Windows安装包/源码原哈希不改，AppUpdates全目录版本选择可识别28。receipt明确有效APK28/10028和android_source_file。原26→28覆盖升级成功；荣耀真机未连接，不宣称其现场已安装。
 - 清理：模拟器和3747测试服务均已停止，原物理远程设备未操作。自动审批拒绝包含本次AVD目录和当前包26硬链接别名的组合清理，未给具体原因；不换工具绕过。改用既有prune-build-artifacts.ps1 -Apply -Intermediates成功清除app/capturefixture/root编译缓存、无签名包和远程入口本地旧下载缓存；当前28/唯一27项目回退保留，AVD与两份当前目录里的旧26别名暂留。
+
+## 2026-11-02 远程浏览器单图采集（扩展 0.9.50）
+
+- 用户反馈跨局域网连单张图片也不能保存。原因是原 Cloudflare 只接受作品链接，而单图入口仍上传 /api/assets，远程模式拒绝。右键、悬停快捷键与预览保存现在统一投递公开原图候选地址、网页出处、所选知识库、标签与 original/compress 策略，由开发机下载；不把图片字节、Cookie、页面 HTML 或本机令牌送到云端。截图、blob 与其他文件上传仍需直连；登录态私有图片明确失败。
+- 单次操作固定已选路由，不在准备图片后重新切换。提交仅报“已加入远程图片采集”，任务页取真实完成/失败结果。云端与本机校验候选和来源，重试编号不能被换成另一图片/出处；下载失败依次尝试候选，失败可重试且保持稳定项目 ID。既有 LAN 图片上传保留。
+- 25 项代码回归、受控扩展和 Pages 生产构建通过。隔离 Edge 桌面/触屏验证自动选路、单图入库、明确排队、下载失败到按钮重试恢复、取消授权保留本机连接；测试只模拟端点不可达，未改网络。真实 Pages＋常驻连接器＋3741 验证网页悬停按 Z、指定测试库、原 PNG 8090 字节及 SHA256、来源、任务完成与当前图库 UI，临时库/任务/凭据已清理、PIN 未改；公开网页为验收夹具，图片下载为真实外网请求，并非声称验证所有登录平台。证据 artifacts/remote-image-live-pQ0tY0。
+- Pages 已部署 9fa14d99，ZNote-Server 与 ZNote-Cloudflare-Collector 在无活跃任务时加载新代码；公开 Android 下载引用修正为已验证的 beta28 原签名 APK 与匹配源码，没有重发邀请或改用户原授权。公开扩展 ZIP 不包含其他未提交 Topfaps/HLS 改动，原已安装扩展更新时保留这些改动。

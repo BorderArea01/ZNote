@@ -1,5 +1,5 @@
 import { mediaKind, addResource } from "./resource-store.js";
-import { api, settings, serverUrl, saveImage, limitedImage } from "./client.js";
+import { api, settings, serverUrl, saveImage, limitedImage,connection,queueRemoteImage } from "./client.js";
 import { openGallery,pendingInlineGalleries } from './gallery-ticket.js';
 import { blockedSite } from './site-policy.js';
 import { startMediaTask, mediaTasksForTab } from './media-tasks.js';
@@ -153,6 +153,8 @@ export async function resourceAction(resource, action, tabId) {
     return { message: "已交给浏览器下载" };
   }
   if (action === "save" && resource.kind === "image") {
+    const route=await connection(config);
+    if(route.remote){const job=await queueRemoteImage([resource.url],{title:resource.title,source_url:sourceUrl},route);return {message:'已加入远程图片采集，可在扩展任务中查看进度',captureId:job.id};}
     const blob = await limitedImage(resource.url);
     const item = await saveImage(blob, {
       title: resource.title,
@@ -160,7 +162,7 @@ export async function resourceAction(resource, action, tabId) {
       image_url: resource.url,
       source_url: resource.source_url,
       capture_note: "悬停预览 / 媒体发现采集",
-    });
+    },undefined,route);
     return {
       message: item.duplicate
         ? "已收录，保留原备注并补充来源"

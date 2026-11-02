@@ -1,4 +1,4 @@
-import { saveImage, limitedImage, api, settings, connection } from './client.js';
+import { saveImage, limitedImage, api, settings, connection,queueRemoteImage } from './client.js';
 import { blockedSite } from './site-policy.js';
 import {youtubeVideoId} from './youtube-url.js';
 import {validateYoutubeResource} from './youtube-formats.js';
@@ -17,6 +17,7 @@ export async function record(operation) {
   await chrome.action.setBadgeText({ text: '…' });
   try {
     const item = await operation();
+    if(item.kind==='remote-capture'){await chrome.storage.local.set({lastResult:{ok:true,message:'已加入远程图片采集，可在任务中查看进度',time:Date.now()}});await chrome.action.setBadgeText({text:'…'});return item;}
     await chrome.storage.local.set({ lastResult: { ok: true, message: item.kind==='download' ? '已加入后台下载，可在任务中查看进度' : item.duplicate ? '此知识库已收录，已补充来源' : '已保存到知识库', itemId: item.kind==='download'?null:item.id, time: Date.now() } });
     await chrome.action.setBadgeBackgroundColor({ color: '#5865ce' }); await chrome.action.setBadgeText({ text: '✓' });
     return item;
@@ -35,7 +36,8 @@ export async function collectImage(info, tab, preferOriginal = true) {
   }
   const urls = [...new Set([...(Array.isArray(candidates) ? candidates.map(c => c.url) : []), info.srcUrl])];
   if(config.saveAction==='download')return downloadTask({id:urls[0],kind:'image',urls,title:info.selectionText||tab.title||'网页图片',source_url:info.pageUrl||tab.url},tab,config);
-  await connection(config,{localOnly:true});
+  const route=await connection(config);
+  if(route.remote)return queueRemoteImage(urls,{source_url:info.pageUrl||tab?.url,title:(info.selectionText||tab?.title||'网页图片').slice(0,200)},route);
   let lastError;
   for (const url of urls) {
     let image;
@@ -43,7 +45,7 @@ export async function collectImage(info, tab, preferOriginal = true) {
     let filename; try { if (/^https?:/i.test(url)) filename = decodeURIComponent(new URL(url).pathname.split('/').pop()); } catch {}
     try {
       return await saveImage(image, { filename: filename || '网页图片.png', title: info.selectionText || filename || tab?.title || '网页图片', image_url: /^https?:/i.test(url) ? url : undefined, source_url: info.pageUrl || tab?.url,
-        capture_note: preferOriginal ? (url !== info.srcUrl ? '已从网页提供的高清候选地址采集，未放大或重新编码。' : '未获得可用的更高清版本，已保存当前图片。') : '已保存当前图片。' }, undefined, config);
+        capture_note: preferOriginal ? (url !== info.srcUrl ? '已从网页提供的高清候选地址采集，未放大或重新编码。' : '未获得可用的更高清版本，已保存当前图片。') : '已保存当前图片。' }, undefined, route);
     } catch (e) { if (e.status !== 415) throw e; lastError = e; }
   }
   throw lastError || new Error('无法读取图片，可改用页面截图');

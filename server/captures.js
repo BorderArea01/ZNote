@@ -17,6 +17,7 @@ import {douyinWork,renderDouyinCapture,hasCaptureResources} from './capture-brow
 import {MAX_CAPTURE_GROUP_IMAGES,MAX_CAPTURE_NOTE_IMAGES} from '../shared/capture-limits.js';
 import {jlijiSet} from './capture-gallery.js';
 import {pixivCapturePlan} from '../shared/pixiv-capture.js';
+import {normalizeRemoteImage} from '../shared/remote-image.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
@@ -62,6 +63,15 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     if(job.empty_group_note_id&&!before)throw fail(409,'此前的文字笔记已删除，未重新创建采集内容');
     if(before&&!(job.empty_group_note_id===before.id&&before.kind==='note')){patch(job.id,{status:'completed',message:'已入库',item_id:id});return;}
     let plan=job.plan;
+    if(job.input.remote_image){
+      const remote=job.input.remote_image;let last;
+      for(const url of remote.urls){
+        let buffer;try{buffer=await image(url,signal);}catch(error){if(signal.aborted)throw error;last=error;continue;}
+        let item;try{item=await saveImage(buffer,{id,title:remote.title,content:'来源链接：'+remote.source_url+'\n\n原图链接：'+url,source_url:remote.source_url,collection_id:job.input.collection_id,tags:job.input.tags,image_size_mode:job.input.image_size_mode});}catch(error){if(error.status!==415)throw error;last=error;continue;}
+        patch(job.id,{status:'completed',message:'图片已入库',item_id:item.id,title:item.title});return;
+      }
+      throw fail(422,'原图下载失败：'+(last?.message||'地址不可访问')+'；需要浏览器登录的图片无法仅凭地址远程读取');
+    }
     if(!plan&&youtubeVideoUrl(job.source_url)) {
       plan={kind:'video',url:youtubeVideoUrl(job.source_url),title:'YouTube 视频',images:[]};
       patch(job.id,{plan,title:plan.title});
@@ -236,7 +246,9 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     get(id){const job=read().find(j=>j.id===id);if(!job)throw fail(404,'采集记录不存在');return exposed(job);},
     add(raw){
       const input=captureInput.parse(raw);validateCollection(input.collection_id);
+      if(raw.remote_image!==undefined){try{input.remote_image=normalizeRemoteImage(raw.remote_image);}catch(error){throw fail(400,error.message);}if(raw.browser_post!==undefined||raw.browser_html!==undefined||raw.browser_pixiv!==undefined)throw fail(400,'图片采集不能混入网页作品数据');}
       const urls=sharedUrls(input.text);if(urls.length!==1)throw fail(400,'每次分享请包含一个完整链接');
+      if(input.remote_image&&urls[0]!==input.remote_image.urls[0])throw fail(400,'图片地址与采集请求不一致');
       let browserPlan=null;
       if(raw?.browser_pixiv!==undefined){
         if(raw.browser_post!==undefined||raw.browser_html!==undefined)throw fail(400,'每次只可提供一种作品数据');
@@ -254,7 +266,7 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       }
       const jobs=read(), found=input.request_id&&jobs.find(j=>j.request_id===input.request_id);
       if(found){
-        if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'auto')!==(input.image_mode||'auto'))throw fail(409,'这次分享编号已用于其他内容');
+        if(found.source_url!==urls[0]||found.input.collection_id!==input.collection_id||(found.input.image_mode||'auto')!==(input.image_mode||'auto')||((found.input.remote_image||input.remote_image)&&(JSON.stringify(found.input.remote_image)!==JSON.stringify(input.remote_image)||found.input.image_size_mode!==input.image_size_mode)))throw fail(409,'这次分享编号已用于其他内容');
         if(browserPlan&&found.status==='failed'){
           // This is a fresh plan from the logged-in browser. Queue it here so
           // retry() cannot discard video URLs as if they were stale cache.

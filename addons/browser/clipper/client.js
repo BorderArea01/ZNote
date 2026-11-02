@@ -1,4 +1,5 @@
 import {videoDetails} from './video-details.js';
+import {normalizeRemoteImage} from './remote-image.js';
 import { blockedSite } from './site-policy.js';
 import {readPlayableVideo} from './video-fetch.js';
 import {normalizeServer,requestAt,routeConnection,remotePathAllowed,remoteCapture} from './connection-routes.js';
@@ -28,7 +29,9 @@ export async function jobConnection(kind,id,config=null){
 export async function api(path, options = {}, config = null) {
   config ||= await settings();
   const task=path.match(/^\/api\/(captures|imports)\/([a-f\d-]{36})(\/retry)?$/),create=options.method==='POST'&&['/api/captures','/api/imports'].includes(path);
-  const route=task?await jobConnection(task[1],decodeURIComponent(task[2]),config):await connection(config,{localOnly:!remotePathAllowed(path)&&path!=='/api/imports',signal:options.signal});
+  // Respect an internally selected route; probing again could switch a write
+  // after the caller has already chosen the remote image handoff.
+  const route=task?await jobConnection(task[1],decodeURIComponent(task[2]),config):typeof config.remote==='boolean'?config:await connection(config,{localOnly:!remotePathAllowed(path)&&path!=='/api/imports',signal:options.signal});
   const originalKind=path==='/api/imports'?'imports':'captures';let kind=task?route.kind:originalKind;
   if(route.remote){
     if(task){kind=route.kind==='imports'?'captures':route.kind;path=`/api/${kind}/${task[2]}${task[3]||''}`;}
@@ -46,6 +49,8 @@ export async function api(path, options = {}, config = null) {
 export async function saveImage(blob, details, signal, config = null) {
   if (blob.size > 100 * 1024 * 1024) throw new Error('图片超过 100 MB');
   config ||= await settings();
+  const route=typeof config.remote==='boolean'?config:await connection(config,{signal});
+  if(route.remote)return queueRemoteImage([details.image_url],details,route,signal);
   const data = new FormData();
   data.set('file', blob, details.filename || '网页图片.png');
   if (['original', 'compress'].includes(config.largeImageDefault)) data.set('image_size_mode', config.largeImageDefault);
@@ -56,7 +61,14 @@ export async function saveImage(blob, details, signal, config = null) {
   if (/^https?:\/\//i.test(details.source_url || '')) data.set('source_url', details.source_url);
   for(const field of ['group_key','group_index','group_title'])if(details[field]!==undefined)data.set(field,details[field]);
   data.set('captured_at', new Date().toISOString());
-  return api('/api/assets', { method: 'POST', body: data, signal }, config);
+  return api('/api/assets', { method: 'POST', body: data, signal }, route);
+}
+export async function queueRemoteImage(urls,details,config,signal){
+  const remote_image=normalizeRemoteImage({urls:[...new Set(urls.filter(v=>/^https?:\/\//i.test(v||'')))].slice(0,8),source_url:details.source_url,title:(details.title||'网页图片').slice(0,200)});
+  const job=await api('/api/captures',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({text:remote_image.urls[0],remote_image,collection_id:config.collection_id||null,tags:config.tags.split(/[,，]/).map(t=>t.trim()).filter(Boolean).slice(0,20),request_id:'clipper-image:'+crypto.randomUUID(),...(['original','compress'].includes(config.largeImageDefault)?{image_size_mode:config.largeImageDefault}:{})})},config);
+  await chrome.storage.local.set({lastCapture:{id:job.id,server:job.connection?.server||config.server,kind:'captures',time:Date.now()}});
+  await chrome.action.setBadgeText({text:'…'});
+  return {...job,kind:'remote-capture'};
 }
 export async function prepareImageRequests() {
   await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[8301],addRules:[{

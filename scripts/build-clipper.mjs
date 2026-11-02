@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { copyFile, readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 await mkdir('addons/browser/clipper/ui', {recursive:true});
+await copyFile('shared/remote-image.js','addons/browser/clipper/remote-image.js');
 for(const file of ['panel.js','panel.css'])await copyFile('addons/browser/common/'+file,'addons/browser/clipper/ui/'+file);
 await copyFile('addons/browser/common/help.js','addons/browser/clipper/help.js');
 await build({
