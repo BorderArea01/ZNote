@@ -371,11 +371,12 @@ public class CaptureAssistService extends AccessibilityService {
                     long opened=SystemClock.uptimeMillis(),until=opened+5500;boolean openedSystemShare=false;
                     while(copy==null&&SystemClock.uptimeMillis()<until){
                         Thread.sleep(160);check(token);
+                        copy=button(owner,true,token);
+                        if(copy==null)copy=activeShareCopyButton(owner,token);
+                        if(copy!=null)break;
                         AccessibilityNodeInfo target=shareTarget(token);
                         if(target!=null){armDirectShare(owner);if(click(target,token)){record("capture_transport","android_share");return;}clearDirectShare();}
                         if(!openedSystemShare&&SystemClock.uptimeMillis()-opened>650){AccessibilityNodeInfo more=optionTarget(token,CaptureAssistService::moreShareTarget);if(more!=null){openedSystemShare=click(more,token);if(openedSystemShare){record("capture_transport","open_system_share");Thread.sleep(300);continue;}}}
-                        copy=button(null,true,token);
-                        if(copy!=null&&SystemClock.uptimeMillis()-opened<1800){copy.recycle();copy=null;}
                     }
                 }
                 if(copy==null)throw new Exception("分享菜单中未识别到复制链接，请保持菜单打开后重试");
@@ -409,8 +410,39 @@ public class CaptureAssistService extends AccessibilityService {
         String owner=directShareOwner,url=link(text==null?"":text);if(!hasMedia&&(url.isEmpty()||!acceptsLink(owner,url)))return false;
         clearDirectShare();record("capture_transport","direct_share_received");return true;
     }
-    private void openClipboard(String owner,long after){openPanel("",owner,after,true,true);}
-    private void open(String value){openPanel(value,"",0,value.isEmpty(),!value.isEmpty());}
+    private void openClipboard(String owner,long after){
+        // A focused accessibility overlay can read the fresh clipboard without
+        // starting an Activity (and therefore pausing the source video).
+        final int token=generation;
+        if(bubble==null){openPanel("",owner,after,true,true);return;}
+        layout.flags=windowFlags()&~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        bubble.setFocusableInTouchMode(true);updateWindow();bubble.requestFocus();
+        handler.postDelayed(new Runnable(){int attempts;public void run(){
+            if(token!=generation)return;
+            String value="";
+            try{ClipboardManager cb=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);ClipDescription d=cb.getPrimaryClipDescription();if(bubble!=null&&bubble.hasWindowFocus()&&d!=null&&d.getTimestamp()>=after&&!(d.getExtras()!=null&&d.getExtras().getBoolean("android.content.extra.IS_SENSITIVE",false))){ClipData data=cb.getPrimaryClip();if(data!=null&&data.getItemCount()>0)value=String.valueOf(data.getItemAt(0).coerceToText(CaptureAssistService.this));}}catch(RuntimeException ignored){}
+            String url=link(value);
+            if(!url.isEmpty()&&acceptsLink(owner,url)){layout.flags=windowFlags();updateWindow();if(queueLink(value,sharingPrefs().getString("share_collection",""),UUID.randomUUID().toString()))return;openPanel(value,owner,0,false,true);return;}
+            if(++attempts<10){handler.postDelayed(this,100);return;}
+            layout.flags=windowFlags();updateWindow();openPanel("",owner,after,true,true);
+        }},80);
+    }
+    private void open(String value){if(!value.isEmpty()&&queueLink(value,sharingPrefs().getString("share_collection",""),UUID.randomUUID().toString()))return;openPanel(value,"",0,value.isEmpty(),!value.isEmpty());}
+    boolean queueLink(String value,String collection,String requestId){
+        if(value==null||value.length()>16000||link(value).isEmpty()||!PixivSession.work(link(value)).isEmpty())return false;
+        cancel();expanded=false;lastMessage="正在后台提交…";resultPending=false;resultFailed=false;render();
+        final boolean note=sharingPrefs().getBoolean("capture_as_note",false);
+        tracker.execute(()->{HttpURLConnection c=null;try{
+            Bundle session=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"session",null,null);
+            if(session==null||session.getString("origin","").isEmpty())throw new java.io.IOException("请先配置知识库连接");
+            String origin=MainActivity.normalize(session.getString("origin")),auth=session.getString("token",""),cookie=session.getString("cookie","");
+            c=(HttpURLConnection)(ConnectionRoutes.local(origin)?new URL(origin+"/api/captures").openConnection(java.net.Proxy.NO_PROXY):new URL(origin+"/api/captures").openConnection());c.setConnectTimeout(8000);c.setReadTimeout(15000);c.setRequestMethod("POST");c.setInstanceFollowRedirects(false);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");if(!auth.isEmpty())c.setRequestProperty("Authorization","Bearer "+auth);else if(!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
+            JSONObject input=new JSONObject().put("text",value).put("image_mode",note?"note":"group").put("collection_id",collection==null||collection.isEmpty()?JSONObject.NULL:collection).put("request_id","android:"+requestId);
+            try(java.io.OutputStream out=c.getOutputStream()){out.write(input.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}
+            int code=c.getResponseCode();JSONObject result=new JSONObject(new String(readSmall(code>=400?c.getErrorStream():c.getInputStream()),java.nio.charset.StandardCharsets.UTF_8));if(code<200||code>=300)throw new java.io.IOException(result.optString("error","提交失败（"+code+"）"));String id=result.getString("id");handler.post(()->backgroundQueued(id,origin));
+        }catch(Exception e){directResult(false,e.getMessage()==null?"后台提交失败，请重试":e.getMessage());}finally{if(c!=null)c.disconnect();}});
+        return true;
+    }
     private void openLibrary(){
         expanded=false;libraryMenuExpanded=false;record("open_library","floating_panel");render();
         try{startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));}

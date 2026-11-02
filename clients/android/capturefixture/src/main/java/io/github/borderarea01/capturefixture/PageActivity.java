@@ -5,8 +5,12 @@ import android.content.*;
 import android.widget.*;
 import android.view.*;
 public class PageActivity extends Activity {
+  private int pauses;private TextView lifecycle;
+  @Override protected void onPause(){pauses++;super.onPause();}
+  @Override protected void onResume(){super.onResume();if(lifecycle!=null)lifecycle.setText("浏览页面暂停次数："+pauses);}
   @Override public void onCreate(Bundle state){super.onCreate(state);
     LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(30,90,30,30);page.setBackgroundColor(0xfff1f3f8);setContentView(page);
+    lifecycle=new TextView(this);page.addView(lifecycle);
     boolean browser=getPackageName().equals("com.chrome.beta");
     final String url=browser?"https://example.com/fixture-article":getPackageName().equals("org.example.reader")?"https://reader.example/fixture-work":getPackageName().equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":getPackageName().equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
     if(browser){EditText bar=new EditText(this);bar.setId(R.id.url_bar);bar.setSingleLine(true);bar.setText("example.com");bar.setOnClickListener(v->bar.setText(url));page.addView(bar);}

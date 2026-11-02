@@ -39,7 +39,7 @@ final class OverlaySmoke {
     void run()throws Exception{
         Bundle report=new Bundle();try{
             if(!Build.FINGERPRINT.contains("generic")&&!Build.MODEL.contains("sdk"))throw new Exception("This test is emulator-only");
-            final String origin="http://10.0.2.2:3747";
+            ((android.content.ClipboardManager)context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("验收", "")); final String origin="http://10.0.2.2:3747";
             context.getSharedPreferences("MainActivity",0).edit().putString("origin",origin).commit();context.getSharedPreferences("CaptureAuthorization",0).edit().putString(android.net.Uri.encode(origin),"zn_"+"0".repeat(64)).commit();
             android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;ui.setServiceInfo(info);
             shell("settings put secure enabled_accessibility_services io.github.borderarea01.znote/.CaptureAssistService");shell("settings put secure accessibility_enabled 1");shell("input keyevent 3");

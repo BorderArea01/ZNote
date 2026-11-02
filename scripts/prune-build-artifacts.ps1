@@ -10,9 +10,11 @@ if($RollbackVersion -notmatch '^0\.10\.0-beta\.(\d+)$'){throw 'Unsupported rollb
 $rollback=Join-Path $artifactRoot $rollbackDirectory
 $receipt=Get-Content -LiteralPath (Join-Path $rollback 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
 $rollbackApkVersion=if($receipt.apk_version){$receipt.apk_version}else{$RollbackVersion}
+$rollbackAndroidSource=if($receipt.android_source_file){$receipt.android_source_file}else{'ZNote-'+$rollbackApkVersion+'-source.zip'}
+if($rollbackAndroidSource -notmatch '^ZNote-0\.10\.0-beta\.\d+-(?:android-)?source\.zip$'){throw 'Invalid rollback Android source filename'}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$rollbackApkVersion+'-android.apk')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.apk_sha256){throw 'Rollback hash mismatch'}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$RollbackVersion+'-source.zip')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.source_sha256){throw 'Rollback source hash mismatch'}
-if($receipt.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$rollbackApkVersion+'-source.zip'))).Hash.ToLower() -ne $receipt.android_source_sha256){throw 'Rollback effective Android source mismatch'}
+if($receipt.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $rollback $rollbackAndroidSource)).Hash.ToLower() -ne $receipt.android_source_sha256){throw 'Rollback effective Android source mismatch'}
 if($receipt.windows_sha256 -and (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$RollbackVersion+'-win-x64.exe'))).Hash.ToLower() -ne $receipt.windows_sha256){throw 'Rollback Windows installer mismatch'}
 $activeReceipt=Get-Content -LiteralPath (Join-Path (Join-Path $artifactRoot $currentDirectory) 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
 $activeAndroid=if($activeReceipt.apk_version){$activeReceipt.apk_version}else{$CurrentVersion}
@@ -21,9 +23,11 @@ if($Apply -and $Intermediates){
  $current=Join-Path $artifactRoot $currentDirectory
  $verified=Get-Content -LiteralPath (Join-Path $current 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
  $currentApkVersion=if($verified.apk_version){$verified.apk_version}else{$CurrentVersion}
+ $currentAndroidSource=if($verified.android_source_file){$verified.android_source_file}else{'ZNote-'+$currentApkVersion+'-source.zip'}
+ if($currentAndroidSource -notmatch '^ZNote-0\.10\.0-beta\.\d+-(?:android-)?source\.zip$'){throw 'Invalid current Android source filename'}
  if((Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$currentApkVersion+'-android.apk'))).Hash.ToLower() -ne $verified.apk_sha256){throw 'Current effective APK is not verified'}
  if((Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$CurrentVersion+'-source.zip'))).Hash.ToLower() -ne $verified.source_sha256){throw 'Current source is not verified'}
- if($verified.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$currentApkVersion+'-source.zip'))).Hash.ToLower() -ne $verified.android_source_sha256){throw 'Current effective Android source is not verified'}
+ if($verified.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $current $currentAndroidSource)).Hash.ToLower() -ne $verified.android_source_sha256){throw 'Current effective Android source is not verified'}
  if(!$verified.windows_sha256 -or (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$CurrentVersion+'-win-x64.exe'))).Hash.ToLower() -ne $verified.windows_sha256){throw 'Current Windows installer is not verified'}
 }
 foreach($dir in Get-ChildItem -LiteralPath $artifactRoot -Directory){

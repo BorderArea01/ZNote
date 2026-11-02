@@ -551,3 +551,15 @@
 - 验证后的条目8f7c995b-0ff6-4b4f-b9b3-26382fea8aa4已通过API从临时库移到原失败任务选择的「建模学习」，来源/作者/正文保留；临时库、临时授权、诊断页文件和明确属于本次的静音视频测试标签已清理。旧失败任务是历史记录，未用SQL伪改成已完成。最终位置见 artifacts/youtube-real-save-receipt.json。
 - 23项采集/导入/YouTube/票据回归通过；新增2项真实SABR协议夹具覆盖完整双轨、丢失开头、错格式、403与重试上限，串行通过。原入口桌面/触屏当前作品、嗅探保存、过期失败/关闭/重试、错作品/未登录及当前图库播放通过 artifacts/youtube-live-CsheHi/result.json。该入口回归明确为夹具，与上面的真实网站证据区分。生产扩展构建及注册资产检查通过，安装目录key/权限保持，最终0.9.49已实际重新加载。
 - 本轮只改浏览器链路，无后端行为改动、无原生包发布；当前3741健康。纯链接/安卓/Cloudflare只提交链接时仍受平台登录验证限制；扩展音画合并仍需直连ZNote。原有Topfaps/HLS及其他文档未提交改动完整保留，不混入本次提交；Windows28/Android26及唯一27项目回退不变。
+
+
+## 2026-11-02 安卓 B 站采集保持原页面
+
+- 用户反馈Bilibili App采集跳出作品，无法边看边保存。旧自动流程在分享菜单优先点ZNote/更多分享而不是已有复制入口；ShareActivity/FloatingShareActivity还等待选库加载和网络POST后才finish，源Activity因此暂停。
+- 自动流程优先查原App/前台分享面板的复制链接，拿到复制入口立即使用，不再先绕到ZNote分享目标，也移除原1.8秒人为延后。保留确无复制入口时的系统分享回退，不用全局BACK/启动B站首页假装返回原视频。
+- CaptureAssistService先短时让既有accessibility overlay取得窗口焦点，最多10次/约1秒读取本次新剪贴板，验证时间戳、来源平台、敏感标记，再恢复非聚焦状态；成功不启动Activity，不触发源App.onPause。系统不允许该读取时仍使用原小面板兼容路径，读取后立即把任务交服务，不等网络。Pixiv授权流程保留，手动粘贴仍是可编辑面板。
+- 服务持有所选知识库、组/笔记方式及每次唯一request_id；沿用CaptureSessionProvider的LAN/远程路由和授权，后台只发一次POST，不在可能已到达后切线路重发；拒绝HTTP重定向，不泄漏授权。提交/最终失败走现有浮窗和通知，成功沿用现有后台轮询，不抢前台。自动系统分享有文字链接时也立即交给服务结束Activity；附件分享旧流程保留。
+- 原链接输入框补齐稳定的无障碍字段名。新增BiliBackgroundSmoke及B站包名的受控fixture生命周期计数：真实模拟器触摸浮窗→复制→所选photo知识库POST→结果通知，源Activity暂停次数保持0，无panel_create日志；证据artifacts/bili-background-final.log与bili-background-verified.png已目视。明确是Android11隔离模拟器/平台页面夹具，不是荣耀Android15上的真实B站App。
+- 完整OverlaySmoke回归通过 artifacts/bili-overlay-isolated-final.log：拖拽/取消/边缘/选库/原生编辑/键盘/帮助/关闭/正常保存/失败重试/结果通知。隔离测试先清空自身模拟器剪贴板，避免前一个B站测试的链接污染空输入场景；用例匹配完整contentDescription，避免把测试标签不匹配当产品失败。受控release/debug/androidTest构建和lint通过 artifacts/android-bili-production-final.log，单worker/无持久daemon，原设备/网络/EasyTier不操作。
+- 原发布签名验证一致，APK versionCode10028高于原10026；隔离模拟器成功安装原签名26并覆盖升级28，最终候选SHA256 3dcf3eb0ec28a53cee21fb00bd964cce22fc25d7799fdba69c0c2c9854dabf00。发布以GitHub资产与本地receipt后续核对为准，不能仅构建后称手机已更新。
+- 项目继续仅一个当前包和一个27项目回退。28的Windows源码与本轮Android源码分别按有效组件记录；pruner支持严格basename校验的android_source_file，兼容旧receipt默认文件名，避免同版本Windows旧源码与Android新源码校验混淆，不增加第二个回退。
