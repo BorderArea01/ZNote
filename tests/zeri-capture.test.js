@@ -1,0 +1,22 @@
+import test from'node:test';import assert from'node:assert/strict';
+import{zeriComic,zeriArticle,extractZeriReader,fetchZeriChapter}from'../server/capture-zeri.js';
+const source='https://zeri-m.monster/index.php?route=comic/article&c_id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&comic_id=123',cid='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const pages=(count=25)=>Array.from({length:count},(_,i)=>({sort:String(i+1),extension:'avif'}));
+function article(count=25,overrides={}){return '<h1>示例作品</h1><img src="https://ads.example.com/cover.jpg"><script>var comic_data = '+JSON.stringify({comic_id:'123',c_id:cid,gk_id:'public-key',exhentai_id:'456',title:'示例作品; 带有 } 的标题',imgs:pages(count),comics:[{comic_id:'other',imgs:pages(100)}],...overrides})+';</script><a href="./index.php?route=comic/reader&amp;c_id='+cid+'&amp;gk_id=public-key">25 pictures.</a>'+Array.from({length:Math.min(count,10)},(_,i)=>'<img class="preview_image" src="https://cdn.example.com/preview/'+i+'.jpg">').join('');}
+function reader(count=25,overrides={}){const state={postID:123,c_id:cid,Image_List:pages(count),IMAGE_SERVER:{3:['//a3-1.cdn.example.com/image/','//a3-1.cdn.example.com/image/','//a3-2.cdn.example.com/image/']},IMAGE_FOLDER:'thumbnail/1000/456/',image_server_id:3,...overrides};return '<title>阅读页</title><img src="https://ads.example.com/banner.jpg"><script>var Image_List = Array();\n'+Object.entries(state).map(([k,v])=>k+' = '+JSON.stringify(v)+';').join('\n')+'</script>';}
+test('Zeri uses all 25 reading pages, not ten visible previews, ads, covers or recommended comics',()=>{
+ const a=zeriArticle(article(),source),p=extractZeriReader(reader(),a);assert.equal(p.images.length,25);assert.equal(p.parser,'zeri-chapter-v1');assert.equal(p.default_image_mode,'group');assert.equal(p.url,source);assert.equal(p.title,'示例作品; 带有 } 的标题');assert.equal(p.images[0],'https://a3-1.cdn.example.com/image/thumbnail/1000/456/1.avif');assert.equal(p.images[24],'https://a3-1.cdn.example.com/image/thumbnail/1000/456/25.avif');assert.ok(p.image_candidates.every(v=>v.length===2));assert.match(p.content,/页数：25/);assert.match(p.content,/站点提供的阅读图片/);assert.ok(p.images.every(v=>!v.includes('banner')&&!v.includes('preview')));
+ assert.equal(zeriComic(source.replace('zeri-m.monster','zeri-m.monster.evil.test')),null);assert.equal(zeriComic(source.replace('comic/article','comic/list')),null);assert.throws(()=>zeriComic(source+'&comic_id=321'),/编号/);
+});
+test('Zeri rejects missing/duplicate pages, cross-work data, forged reader links and invalid CDNs without evaluating scripts',()=>{
+ for(const html of['<script>var comic_data = null;</script>',article(2,{gk_id:null}),article(0),article(2,{imgs:[pages(2)[0],pages(2)[0]]}),article(2,{comic_id:'999'}),article().replace('./index.php?','https://evil.example.com/index.php?'),'<script>var comic_data = (()=>{throw Error("must not run")})();</script>'])assert.throws(()=>zeriArticle(html,source),/作品|阅读/);
+ const a=zeriArticle(article(),source);
+ for(const html of[reader(24),reader(25,{postID:321}),reader(25,{c_id:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}),reader(25,{IMAGE_FOLDER:'../private/456/'}),reader(25,{IMAGE_FOLDER:'thumbnail/1000/999/'}),reader(25,{IMAGE_SERVER:{3:['http://127.0.0.1/image/']}}),reader(25,{IMAGE_SERVER:{3:['https://user:secret@cdn.example.com/image/']}}),reader(25,{Image_List:[...pages(24),{sort:'25',extension:'exe'}]})])assert.throws(()=>extractZeriReader(html,a),/作品|阅读/);
+});
+test('Zeri follows only the declared same-work reader once; failures and aborts never silently save a partial note',async()=>{
+ const calls=[],fetchDocument=async(url,signal,redirects,extra)=>{calls.push({url,extra});return{url,type:'text/html',buffer:Buffer.from(calls.length===1?article():reader())};};
+ const result=await fetchZeriChapter(source,new AbortController().signal,{fetchDocument});assert.equal(result.plan.images.length,25);assert.equal(calls.length,2);assert.equal(calls[1].extra.referer,source);
+ await assert.rejects(fetchZeriChapter(source,new AbortController().signal,{fetchDocument:async()=>({url:'https://evil.example.com/',buffer:Buffer.from(article())})}),/跳转/);
+ await assert.rejects(fetchZeriChapter(source,new AbortController().signal,{fetchDocument:async(url)=>({url,buffer:Buffer.from(url===source?article():'<title>Login required</title>')})}),/阅读数据不完整/);
+ const abort=new AbortController();await assert.rejects(fetchZeriChapter(source,abort.signal,{fetchDocument:async url=>{abort.abort(Error('cancelled'));return{url,buffer:Buffer.from(article())};}}),/cancelled/);
+});

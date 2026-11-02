@@ -18,6 +18,7 @@ import {ehPolicy} from './capture-eh-policy.js';
 import {captureMusic} from './capture-music.js';
 import {tiebaThread, fetchTiebaPlan} from './capture-tieba.js';
 import {douyinArticle,extractDouyinArticle} from './capture-douyin-article.js';
+import {zeriComic,fetchZeriChapter} from './capture-zeri.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -77,6 +78,7 @@ const fetchDocument=createCaptureDocumentFetcher();
 
 export async function fetchCapturePage(value, signal, redirects = 0, options = {}) {
   const url = new URL(value);
+  if(zeriComic(value))return fetchZeriChapter(value,signal,{fetchDocument,progress:options.progress});
   if(douyinArticle(value)){
     // The mobile UA redirects articles to /home. Desktop pages subsequently
     // expose the exact work through the existing bounded browser fallback.
