@@ -563,3 +563,6 @@
 - 完整OverlaySmoke回归通过 artifacts/bili-overlay-isolated-final.log：拖拽/取消/边缘/选库/原生编辑/键盘/帮助/关闭/正常保存/失败重试/结果通知。隔离测试先清空自身模拟器剪贴板，避免前一个B站测试的链接污染空输入场景；用例匹配完整contentDescription，避免把测试标签不匹配当产品失败。受控release/debug/androidTest构建和lint通过 artifacts/android-bili-production-final.log，单worker/无持久daemon，原设备/网络/EasyTier不操作。
 - 原发布签名验证一致，APK versionCode10028高于原10026；隔离模拟器成功安装原签名26并覆盖升级28，最终候选SHA256 3dcf3eb0ec28a53cee21fb00bd964cce22fc25d7799fdba69c0c2c9854dabf00。发布以GitHub资产与本地receipt后续核对为准，不能仅构建后称手机已更新。
 - 项目继续仅一个当前包和一个27项目回退。28的Windows源码与本轮Android源码分别按有效组件记录；pruner支持严格basename校验的android_source_file，兼容旧receipt默认文件名，避免同版本Windows旧源码与Android新源码校验混淆，不增加第二个回退。
+
+- 发布确认：clients-v0.10.0-beta.28已新增原签名Android28 APK和独立android-source.zip，GitHub digest分别为3dcf3eb0ec28a53cee21fb00bd964cce22fc25d7799fdba69c0c2c9854dabf00 / 9fe568556ef8451229cf401e49a2f473a43611fcf11b2ca7017668b8f506f45f；Android源码commit60b55cfe93549dd7de7aa776355bd0c0c9262da0，Windows安装包/源码原哈希不改，AppUpdates全目录版本选择可识别28。receipt明确有效APK28/10028和android_source_file。原26→28覆盖升级成功；荣耀真机未连接，不宣称其现场已安装。
+- 清理：模拟器和3747测试服务均已停止，原物理远程设备未操作。自动审批拒绝包含本次AVD目录和当前包26硬链接别名的组合清理，未给具体原因；不换工具绕过。改用既有prune-build-artifacts.ps1 -Apply -Intermediates成功清除app/capturefixture/root编译缓存、无签名包和远程入口本地旧下载缓存；当前28/唯一27项目回退保留，AVD与两份当前目录里的旧26别名暂留。
