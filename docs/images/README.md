@@ -11,6 +11,6 @@
 
 ## 多端采集截图（2026-11-03）
 
-- capture-android-quick/save：2026-11-03 隔离模拟器的实际 Android 原生面板，来自已目视检查的 android-appearance-local-C5D1AD 验收；不是手机网页或真实荣耀手机截图，示例链接不代表采集结果。
+- capture-android-quick/save/bookmark：2026-11-03 隔离模拟器的实际 Android 原生面板，来自已目视检查的 android-appearance-local-n7S9eD 验收；不是手机网页或真实荣耀手机截图，示例链接不代表采集结果。
 - capture-mobile-remote：tests/cloudflare-inbox-ui.mjs --docs，当前 Worker 页面，zh-CN/Asia-Shanghai、390px触屏，隔离D1和实际本地API完成采集、失败与重试。
 - capture-browser-tools/saved：tests/capture-showcase-ui.mjs，实际加载的 Edge 扩展和隔离本地服务；原创演示网页/配图，真实提交并核对两张图片入库。未包含个人令牌、二维码或私人素材。
