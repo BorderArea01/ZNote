@@ -5,6 +5,15 @@ appearanceButton.onclick=()=>{const a={...appearanceState,style:document.documen
 window.addEventListener('znote:native-appearance',e=>applyAppearance(e.detail));window.ZNoteAppearance?.subscribe?.(applyAppearance);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>applyAppearance());applyAppearance();
 `;
 export const portalAppearanceCss=`
+html[data-style=minimal][data-theme=light]{color-scheme:light;background:#f2f5f9;color:#1d2b40}
+html[data-style=minimal][data-theme=light] :is(form,section>section){background:#fff;border-color:#d4dce8}
+html[data-style=minimal][data-theme=light] :is(input,select,textarea){background:#f5f7fb;color:#1d2b40;border-color:#c6d1e0}
+html[data-style=minimal][data-theme=light] :is(label,header p,#online,.job p,footer){color:#52647c}
+html[data-style=minimal][data-theme=light] .secondary{color:#274f85;border-color:#c6d1e0}
+html[data-style=minimal][data-theme=light] .job{border-color:#d4dce8}
+html[data-style=minimal][data-theme=light] a{color:#245db6}
+html[data-style=minimal][data-theme=light] #status{color:#87511e}
+
 #appearance{margin-left:auto;flex-shrink:0;font-size:11px}#online{margin-left:0}
 html[data-style=glitch]{background:#111b29;color:#e9f0f8}html[data-style=glitch] main{--panel:#192738;--field:#203146;--edge:#405872;--text:#e9f0f8;--muted:#afc1d6}
 html[data-style=glitch] header{padding:24px 16px;background:linear-gradient(90deg,#10243ac7,#10243a40),url('/themes/glitch/architecture-clean-mobile.webp') center/cover;border-radius:7px}
