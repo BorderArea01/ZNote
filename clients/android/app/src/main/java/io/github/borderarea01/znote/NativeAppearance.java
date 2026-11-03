@@ -25,46 +25,16 @@ final class NativeAppearance {
     }catch(Exception e){throw new IllegalArgumentException("外观未保存，请重试",e);}}
     private static void launcher(Context c){PackageManager pm=c.getPackageManager();ComponentName classic=new ComponentName(c,c.getPackageName()+".LauncherClassic"),alternate=new ComponentName(c,c.getPackageName()+".LauncherGlitch");ComponentName enabled=glitch?alternate:classic,disabled=glitch?classic:alternate;try{if(Build.VERSION.SDK_INT>=33)pm.setComponentEnabledSettings(java.util.Arrays.asList(new PackageManager.ComponentEnabledSetting(enabled,PackageManager.COMPONENT_ENABLED_STATE_ENABLED,PackageManager.DONT_KILL_APP),new PackageManager.ComponentEnabledSetting(disabled,PackageManager.COMPONENT_ENABLED_STATE_DISABLED,PackageManager.DONT_KILL_APP)));else{pm.setComponentEnabledSetting(enabled,PackageManager.COMPONENT_ENABLED_STATE_ENABLED,PackageManager.DONT_KILL_APP);pm.setComponentEnabledSetting(disabled,PackageManager.COMPONENT_ENABLED_STATE_DISABLED,PackageManager.DONT_KILL_APP);}}catch(RuntimeException ignored){/* The in-app icon still changes if a launcher caches its shortcut. */}}
     static void choose(Activity a,Runnable changed){load(a);String[] labels={"经典","建筑故障"};int current=glitch?1:0;new AlertDialog.Builder(a).setTitle("界面外观").setSingleChoiceItems(labels,current,(d,which)->{d.dismiss();String next=which==1?"glitch":"minimal";new AlertDialog.Builder(a).setTitle("明暗模式").setSingleChoiceItems(new String[]{"跟随系统","浅色","夜间"},"system".equals(mode)?0:"light".equals(mode)?1:2,(dialog,i)->{dialog.dismiss();String selected=i==0?"system":i==1?"light":"dark";java.util.concurrent.ExecutorService worker=java.util.concurrent.Executors.newSingleThreadExecutor();worker.execute(()->{try{Bundle result=a.getContentResolver().call(android.net.Uri.parse("content://"+a.getPackageName()+".capture-session"),"appearance",new JSONObject().put("style",next).put("mode",selected).toString(),null);a.runOnUiThread(()->{if(!a.isFinishing()){apply(a,next,selected);changed.run();}});}catch(Exception e){a.runOnUiThread(()->Toast.makeText(a,"外观未保存，请重试",Toast.LENGTH_LONG).show());}finally{worker.shutdown();}});}).setNegativeButton("取消",null).show();}).setNegativeButton("取消",null).show();}
-    static Drawable panel(Context c,int radius){return glitch?new Panel(c,radius):NativeUi.shape(c,CaptureVisuals.SURFACE,radius);}
-    static Drawable control(Context c,int color,int radius){return glitch&&Color.alpha(color)>0?new Control(c,color,radius):NativeUi.shape(c,color,radius);}
-    /** A static material silhouette. Paths are rebuilt only when bounds change;
-     * labels, touch targets and user media are never copied or displaced. */
-    private static Bitmap photo;
-    private static Bitmap photo(Context c){if(photo==null)photo=BitmapFactory.decodeResource(c.getResources(),R.drawable.glitch_architecture);return photo;}
-    /** One uniform cover scale for every panel and edge material. */
+    /** Capture has its own quiet dark surface; the library theme and logo stay selected. */
+    static void capturePalette(){
+        NativeUi.BG=0xff15181e;NativeUi.SURFACE=0xff20242c;NativeUi.TEXT=0xffeef1f6;NativeUi.MUTED=0xffa8b0bf;NativeUi.ACCENT=0xffa8bcf5;
+        CaptureVisuals.INK=NativeUi.TEXT;CaptureVisuals.MUTED=NativeUi.MUTED;CaptureVisuals.ACCENT=NativeUi.ACCENT;
+        CaptureVisuals.SURFACE=NativeUi.SURFACE;CaptureVisuals.FIELD=0xff2b303a;CaptureVisuals.PRIMARY=0xff526bb0;CaptureVisuals.BORDER=0xff3c424e;
+        CaptureVisuals.SUCCESS=0xffa6bfdc;CaptureVisuals.WARNING=0xffd3b185;
+    }
+    static void loadCapture(Context c){load(c);capturePalette();}
+    static Drawable panel(Context c,int radius){android.graphics.drawable.GradientDrawable d=NativeUi.shape(c,CaptureVisuals.SURFACE,radius);d.setStroke(NativeUi.dp(c,1),CaptureVisuals.BORDER);return d;}
+    static Drawable control(Context c,int color,int radius){return NativeUi.shape(c,color,radius);}
+    /** Retained geometry utility for photo consumers: uniform cover, never stretch. */
     static RectF photoBounds(int width,int height,RectF target){float scale=Math.max(target.width()/Math.max(1,width),target.height()/Math.max(1,height));float w=width*scale,h=height*scale;return new RectF(target.centerX()-w/2,target.centerY()-h/2,target.centerX()+w/2,target.centerY()+h/2);}
-    private static void photo(Canvas c,Paint p,Bitmap image,RectF target){c.save();c.clipRect(target);c.drawBitmap(image,null,photoBounds(image.getWidth(),image.getHeight(),target),p);c.restore();}
-    static final class Frame {
-        final Path body=new Path(),grain=new Path();
-        void bounds(Rect b,float d,float radius,boolean compact){
-            body.reset();grain.reset();java.util.Random left=new java.util.Random(compact?73:34),right=new java.util.Random(compact?29:81);
-            float edge=(compact?7:13)*d,r=Math.min(radius,Math.min(b.width(),b.height())/2f);
-            for(float y=b.top;y<b.bottom;){float h=Math.min(b.bottom-y,(.55f+left.nextFloat()*(compact?1.3f:2.1f))*d),t=(y-b.top)/Math.max(1,b.height());
-                float burst=(float)Math.pow(Math.sin(t*Math.PI*3.4+34),6),a=Math.max(0,edge*(.34f+(left.nextFloat()-.5f)*(.25f+burst*.85f))),z=Math.max(0,edge*(.34f+(right.nextFloat()-.5f)*(.25f+burst*.85f)));
-                float near=Math.min(y-b.top,b.bottom-y-h),corner=near<r?r-(float)Math.sqrt(Math.max(0,r*r-(r-near)*(r-near))):0;
-                body.addRect(b.left+Math.max(corner,a),y,b.right-Math.max(corner,z),y+h,Path.Direction.CW);
-                if(left.nextFloat()<.25f+burst*.65f)grain.addRect(b.left+a,y,b.left+Math.min(edge,a+(2+left.nextFloat()*5)*d),y+Math.min(h,d),Path.Direction.CW);
-                if(right.nextFloat()<.25f+burst*.65f)grain.addRect(b.right-Math.min(edge,z+(2+right.nextFloat()*5)*d),y,b.right-z,y+Math.min(h,d),Path.Direction.CW);
-                y+=h;
-            }
-        }
-        void material(Canvas c,Paint p,Bitmap bitmap,Rect b,boolean dim){if(bitmap==null)return;c.save();c.clipPath(body);c.clipPath(grain);p.setAlpha(dim?150:220);photo(c,p,bitmap,new RectF(b));p.setAlpha(255);c.restore();}
-    }
-    static final class Control extends Drawable {
-        final Paint paint=new Paint(3);final Frame frame=new Frame();final float density,radius;final int color;final Bitmap image;
-        Control(Context c,int color,int radius){density=c.getResources().getDisplayMetrics().density;this.color=color;this.radius=radius*density;image=photo(c);}
-        @Override protected void onBoundsChange(Rect b){frame.bounds(b,density,radius,true);}
-        @Override public void draw(Canvas c){paint.setColor(color);c.drawPath(frame.body,paint);frame.material(c,paint,image,getBounds(),dark);}
-        @Override public void setAlpha(int value){}@Override public void setColorFilter(ColorFilter value){}@Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
-    }
-    static final class Panel extends Drawable {
-        final Paint paint=new Paint(3);final Frame frame=new Frame();final float density,radius;final Bitmap image;
-        Panel(Context c,int radius){density=c.getResources().getDisplayMetrics().density;this.radius=radius*density;image=photo(c);}
-        @Override protected void onBoundsChange(Rect b){frame.bounds(b,density,radius,false);}
-        @Override public void draw(Canvas c){Rect b=getBounds();paint.setColor(NativeUi.SURFACE);c.drawPath(frame.body,paint);
-            if(image!=null){c.save();c.clipPath(frame.body);float h=Math.min(96*density,b.height());paint.setAlpha(dark?56:66);photo(c,paint,image,new RectF(b.left,b.top,b.right,b.top+h));paint.setAlpha(255);c.restore();}
-            frame.material(c,paint,image,b,dark);
-        }
-        @Override public void setAlpha(int a){}@Override public void setColorFilter(ColorFilter f){}@Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
-    }
 }

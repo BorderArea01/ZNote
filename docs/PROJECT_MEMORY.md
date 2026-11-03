@@ -588,3 +588,10 @@
 - 受控release/debug/test编译与Lint通过；隔离Android30几何断言覆盖宽窄容器，浅深色大小面板、Pixiv入口、外观选择/取消、单Launcher、持久化、无刷新WebView桥接通过，截图已目视（artifacts/android-appearance-local-C5D1AD）。GlitchAppearanceSmoke第二次startActivitySync会因singleTop复用实例永远等不到新实例；修正为恢复原Activity，全部原断言保留。没有荣耀真机验证。
 - 网页四种原主题/五种色调的浅深色对比度、桌面触屏、关闭、持久化/坏设置恢复通过；2项旧绿色首帧迁移单测通过，主扩展真实两图入库与反馈通过。候选生产构建artifacts/build-neutral，原生/扩展README截图已换成本轮实测。Windows原生包未重建，仍Windows28；网页主题修复由运行服务加载。
 - 本轮在codex/neutral-surfaces-photo-fit分支走PR+双平台CI，候选Android29/扩展0.9.51通过门禁后发布；项目仅保留当前29与唯一28回退包，Windows28原安装包及匹配源码仍有效并保留。其他Topfaps/HLS未提交变更不混入。
+
+## 2026-11-03 深色采集浮窗与书签展示
+- 用户拒绝原生静态毛刺/碎边，要求回归成熟深色面板，保留喜欢的B小书签。NativeAppearance移除随机条带轮廓、照片与边缘纹理；采集进程独立中性深色palette，不改变图库外观选择或故障Z图标，20dp平滑圆角与细描边。
+- README明确「复制链接后打开保存面板」开关、无障碍权限、选库确认流程及Bilibili/贴吧/小红书/YouTube/Pixiv适配与登录限制；实际模拟器截图展示大小面板和小书签。
+- Android30/10030原签名29→30升级及glitch light/dark原生面板、书签/小展开、选项取消、Pixiv入口、主题持久化与WebView不重载均通过，artifacts/android-appearance-local-RRgglK；荣耀真机未连接，不能宣称真机验证。
+
+- 用户进一步明确：小书签不要两行故障像素。已移除青色/粉色条纹，只保留轮廓、竖向把手与必要状态提示；不再擅自为极小收起控件添加故障装饰。

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Apply,[switch]$Intermediates,[string]$CurrentVersion='0.10.0-beta.29',[string]$RollbackVersion='0.10.0-beta.28')
+param([switch]$Apply,[switch]$Intermediates,[string]$CurrentVersion='0.10.0-beta.30',[string]$RollbackVersion='0.10.0-beta.29')
 $ErrorActionPreference='Stop'
 $workspace=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $artifactRoot=Join-Path $workspace 'artifacts'
@@ -15,8 +15,11 @@ if($rollbackAndroidSource -notmatch '^ZNote-0\.10\.0-beta\.\d+-(?:android-)?sour
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$rollbackApkVersion+'-android.apk')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.apk_sha256){throw 'Rollback hash mismatch'}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$RollbackVersion+'-source.zip')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.source_sha256){throw 'Rollback source hash mismatch'}
 if($receipt.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $rollback $rollbackAndroidSource)).Hash.ToLower() -ne $receipt.android_source_sha256){throw 'Rollback effective Android source mismatch'}
-if($receipt.windows_sha256 -and (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$RollbackVersion+'-win-x64.exe'))).Hash.ToLower() -ne $receipt.windows_sha256){throw 'Rollback Windows installer mismatch'}
+$rollbackWindows=if($receipt.windows_version){$receipt.windows_version}else{$RollbackVersion}
+if($rollbackWindows -notmatch '^0\.10\.0-beta\.\d+$'){throw 'Invalid rollback Windows version'}
+if($receipt.windows_sha256 -and (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$rollbackWindows+'-win-x64.exe'))).Hash.ToLower() -ne $receipt.windows_sha256){throw 'Rollback Windows installer mismatch'}
 $activeReceipt=Get-Content -LiteralPath (Join-Path (Join-Path $artifactRoot $currentDirectory) 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
+$activeWindows=if($activeReceipt.windows_version){$activeReceipt.windows_version}else{$CurrentVersion}
 $activeAndroid=if($activeReceipt.apk_version){$activeReceipt.apk_version}else{$CurrentVersion}
 $targets=[Collections.Generic.List[string]]::new()
 if($Apply -and $Intermediates){
@@ -42,7 +45,7 @@ foreach($dir in Get-ChildItem -LiteralPath $artifactRoot -Directory){
 $downloads=Join-Path $artifactRoot 'remote-access/pages/downloads'
 if(Test-Path -LiteralPath $downloads){foreach($file in Get-ChildItem -LiteralPath $downloads -File){if($file.Name -match '^ZNote-(.+)-(?:android\.apk|source\.zip)$' -and $Matches[1] -notin @($CurrentVersion,$RollbackVersion,$activeAndroid)){$targets.Add($file.FullName)}}}
 $desktopRelease=Join-Path $workspace 'clients/desktop/release'
-if(Test-Path -LiteralPath $desktopRelease){foreach($file in Get-ChildItem -LiteralPath $desktopRelease -File){if($file.Name -match '^ZNote-(.+)-win-x64\.(?:exe|zip)(?:\.blockmap)?$' -and $Matches[1] -notin @($CurrentVersion,$RollbackVersion)){$targets.Add($file.FullName)}}}
+if(Test-Path -LiteralPath $desktopRelease){foreach($file in Get-ChildItem -LiteralPath $desktopRelease -File){if($file.Name -match '^ZNote-(.+)-win-x64\.(?:exe|zip)(?:\.blockmap)?$' -and $Matches[1] -notin @($CurrentVersion,$RollbackVersion,$activeWindows,$rollbackWindows)){$targets.Add($file.FullName)}}}
 if($Intermediates){foreach($relative in @('clients/android/app/build','clients/android/capturefixture/build','clients/android/build','artifacts/build-glitch','clients/desktop/release/win-unpacked','clients/desktop/runtime')){$path=Join-Path $workspace $relative;if(Test-Path -LiteralPath $path){$targets.Add($path)}};foreach($release in @($currentDirectory,$rollbackDirectory)){$unsigned=Join-Path (Join-Path $artifactRoot $release) 'app-release-unsigned.apk';if(Test-Path -LiteralPath $unsigned){$targets.Add($unsigned)}}}
 $live=@(Get-CimInstance Win32_Process | Where-Object {$_.Name -match '^(?:emulator|qemu-system-x86_64|java|electron).*\.exe$' -and $_.CommandLine -match [regex]::Escape($workspace)})
 if($live.Count){throw 'Project build/emulator/desktop processes must be stopped before pruning'}

@@ -64,7 +64,7 @@ public class CaptureAssistService extends AccessibilityService {
     private final CopyLinkTrigger copyTrigger=new CopyLinkTrigger();
     private Runnable copyPrompt;
     private final java.util.concurrent.atomic.AtomicBoolean copyInspecting=new java.util.concurrent.atomic.AtomicBoolean();
-    private final BroadcastReceiver appearanceReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){NativeAppearance.apply(c,i.getStringExtra("style"),i.getStringExtra("mode"));if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;render();}}};
+    private final BroadcastReceiver appearanceReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){NativeAppearance.apply(c,i.getStringExtra("style"),i.getStringExtra("mode"));NativeAppearance.capturePalette();if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;render();}}};
     private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
     private SharedPreferences sharingPrefs(){return getSharedPreferences("CaptureSharing",MODE_PRIVATE);}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
@@ -75,7 +75,7 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){NativeAppearance.load(this);NativeAppearance.register(this,appearanceReceiver);current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
+    @Override protected void onServiceConnected(){NativeAppearance.loadCapture(this);NativeAppearance.register(this,appearanceReceiver);current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null||event.isPassword()||busy||ShareActivity.captureVisible||bubble==null||!prefs().getBoolean("copy_link_prompt",true))return;
         String owner=String.valueOf(event.getPackageName());if(owner.equals(getPackageName())||owner.equals("null"))return;
@@ -107,7 +107,7 @@ public class CaptureAssistService extends AccessibilityService {
     void configureCopyPrompt(){android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();if(info==null)return;info.eventTypes=visible()&&prefs().getBoolean("copy_link_prompt",true)?AccessibilityEvent.TYPE_VIEW_CLICKED|AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:0;info.notificationTimeout=80;setServiceInfo(info);}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
     @Override public void onDestroy(){try{unregisterReceiver(appearanceReceiver);}catch(Exception ignored){}hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();catalogue.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
-    @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);NativeAppearance.load(this);if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;}cancel();expanded=false;libraryMenuExpanded=false;render();}
+    @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);NativeAppearance.loadCapture(this);if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;}cancel();expanded=false;libraryMenuExpanded=false;render();}
     void record(String event,String detail){android.util.Log.i("ZNoteCapture",event+" "+detail);if(!diagnostics.isShutdown())diagnostics.execute(()->writeDiagnostic(event,detail));}
     private void recordEnvironment(){if(diagnostics.isShutdown())return;diagnostics.execute(()->{try{
         android.app.ActivityManager am=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
@@ -163,7 +163,7 @@ public class CaptureAssistService extends AccessibilityService {
         if(bubble==null)return;
         boolean right=prefs().getBoolean("capture_right",true);
         bubble.setPadding(expanded?dp(15):0,expanded?dp(8):0,expanded?dp(15):0,expanded?dp(10):0);
-        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),CaptureVisuals.BORDER);bubble.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,12):bg);}else bubble.setBackground(null);
+        if(expanded){GradientDrawable bg=shape(CaptureVisuals.SURFACE,20);bg.setStroke(dp(1),CaptureVisuals.BORDER);bubble.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,20):bg);}else bubble.setBackground(null);
         bubble.setElevation(expanded?dp(6):0);layout.flags=windowFlags();
         bubble.setOnTouchListener((v,e)->{if(e.getActionMasked()==MotionEvent.ACTION_OUTSIDE&&expanded){expanded=false;libraryMenuExpanded=false;render();return true;}return false;});
         if(handle==null){
@@ -172,7 +172,7 @@ public class CaptureAssistService extends AccessibilityService {
         handle.setText(expanded?"ZNote":"");handle.setTextSize(12);handle.setTypeface(null,android.graphics.Typeface.BOLD);
         handle.setContentDescription(expanded?"ZNote 采集面板；点击标题收起，拖动标题可移动":dragging?"ZNote 完整页签按钮，正在移动":working()?"ZNote 正在后台采集，点击查看":resultPending?"ZNote 采集结果："+lastMessage:"ZNote 贴边页签，点击展开，拖动换位置");
         handle.setPadding(expanded?dp(2):0,0,expanded?dp(2):0,0);
-        if(expanded){handle.setBackground(null);handle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",NativeAppearance.glitch?CaptureVisuals.ACCENT:0xffa3b6a8,20),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,15),null);handle.setCompoundDrawablePadding(dp(8));}
+        if(expanded){handle.setBackground(null);handle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",CaptureVisuals.ACCENT,20),null,CaptureVisuals.icon(this,"down",CaptureVisuals.MUTED,15),null);handle.setCompoundDrawablePadding(dp(8));}
         else{handle.setCompoundDrawables(null,null,null,null);handleArtwork.state(right,dragging?1:handleReveal,artworkState());handle.setBackground(handleArtwork);}
         handle.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(expanded?36:48)));
         if(panel==null){

@@ -75,7 +75,6 @@ final class CaptureVisuals {
             path.reset();path.moveTo(r,0);path.lineTo(w-r,0);path.quadTo(w,0,w,r);path.lineTo(w,h-bottomRadius);path.quadTo(w,h,w-bottomRadius,h);path.lineTo(w*.5f,h-cut);path.lineTo(bottomRadius,h);path.quadTo(0,h,0,h-bottomRadius);path.lineTo(0,r);path.quadTo(0,0,r,0);path.close();
             paint.setStyle(Paint.Style.FILL);paint.setColor(SURFACE);paint.setAlpha(Math.round(220+35*free));c.drawPath(path,paint);
             paint.setStyle(Paint.Style.STROKE);paint.setColor(NativeAppearance.glitch?BORDER:0xff596780);paint.setAlpha(255);paint.setStrokeWidth(density);c.drawPath(path,paint);
-            if(NativeAppearance.glitch){paint.setStyle(Paint.Style.FILL);paint.setColor(0xff76bed7);c.drawRect(0,7*density,w*.7f,8*density,paint);paint.setColor(0xffcf9ab3);c.drawRect(w*.4f,10*density,w,11*density,paint);}
             if(free>.05f){
                 paint.setColor(INK);paint.setAlpha(Math.round(255*free));float s=23*density;logo(c,new RectF((w-s)/2,(h-s)/2,(w+s)/2,(h+s)/2),paint);
                 paint.setColor(0xff72819d);paint.setAlpha(Math.round(255*free));paint.setStrokeWidth(density);paint.setStyle(Paint.Style.STROKE);Path fold=new Path();fold.moveTo(w-11*density,3*density);fold.lineTo(w-11*density,10*density);fold.lineTo(w-4*density,10*density);c.drawPath(fold,paint);

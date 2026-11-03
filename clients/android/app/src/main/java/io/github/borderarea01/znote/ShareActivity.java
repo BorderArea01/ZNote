@@ -71,7 +71,7 @@ public class ShareActivity extends Activity {
         if(status!=null){status.setMaxLines(open?2:3);status.setEllipsize(open?android.text.TextUtils.TruncateAt.END:null);}
     }
     @Override public void onCreate(Bundle state){
-        if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);NativeAppearance.load(this);NativeAppearance.window(this);timing("panel_create");
+        if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);NativeAppearance.loadCapture(this);NativeAppearance.window(this);timing("panel_create");
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");submissionOrigin=state.getString("submissionOrigin","");uploaded=state.getInt("uploaded",0);}
         Intent intent=getIntent();String shared=sharedText(intent);
         try{
@@ -90,11 +90,11 @@ public class ShareActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);scroll.addView(root);setContentView(chrome);
         if(floating()){
             chrome.setPadding(dp(15),dp(8),dp(15),dp(10));
-            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(CaptureVisuals.SURFACE);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),CaptureVisuals.BORDER);chrome.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,12):bg);chrome.setClipToOutline(true);
+            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(CaptureVisuals.SURFACE);bg.setCornerRadius(dp(20));bg.setStroke(dp(1),CaptureVisuals.BORDER);chrome.setBackground(NativeAppearance.glitch?NativeAppearance.panel(this,20):bg);chrome.setClipToOutline(true);
             resizePanel();
             getWindow().setGravity(Gravity.CENTER);setFinishOnTouchOutside(false);
         }
-        TextView panelTitle=label("保存到 ZNote",floating()?14:26);panelTitle.setTypeface(null,android.graphics.Typeface.BOLD);panelTitle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",NativeAppearance.glitch?CaptureVisuals.ACCENT:0xffa3b6a8,20),null,null,null);panelTitle.setCompoundDrawablePadding(dp(8));
+        TextView panelTitle=label("保存到 ZNote",floating()?14:26);panelTitle.setTypeface(null,android.graphics.Typeface.BOLD);panelTitle.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"z",CaptureVisuals.ACCENT,20),null,null,null);panelTitle.setCompoundDrawablePadding(dp(8));
         LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);titleRow.addView(panelTitle,new LinearLayout.LayoutParams(0,-2,1));
         {Button close=button("",this::finish);CaptureVisuals.action(close,"close",false);close.setPadding(dp(14),0,dp(14),0);close.setContentDescription("收起采集面板");titleRow.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));}chrome.addView(titleRow);chrome.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         if(floating())panelTitle.setOnTouchListener(new View.OnTouchListener(){float x,y;int ox,oy;public boolean onTouch(View v,android.view.MotionEvent e){WindowManager.LayoutParams p=getWindow().getAttributes();if(e.getActionMasked()==MotionEvent.ACTION_DOWN){x=e.getRawX();y=e.getRawY();ox=p.x;oy=p.y;return true;}if(e.getActionMasked()==MotionEvent.ACTION_MOVE){int maxX=Math.max(0,(getResources().getDisplayMetrics().widthPixels-getWindow().getDecorView().getWidth())/2-dp(12)),maxY=Math.max(0,(getResources().getDisplayMetrics().heightPixels-getWindow().getDecorView().getHeight())/2-dp(24));p.x=Math.max(-maxX,Math.min(maxX,ox+(int)(e.getRawX()-x)));p.y=Math.max(-maxY,Math.min(maxY,oy+(int)(e.getRawY()-y)));getWindow().setAttributes(p);return true;}return true;}});
