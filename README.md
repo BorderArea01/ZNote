@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/images/hero.svg" width="100%" alt="ZNote — 图片、视频与想法的私人收藏馆" />
   <h1>ZNote</h1>
-  <p><strong>把喜欢的图片、值得回看的视频、随手记下的想法，放进自己的知识库。</strong></p>
+  <p><strong>手机、浏览器、微信，随手采集到同一个私人知识库。</strong></p>
   <p>图片与视频成组 · Markdown 图文笔记 · 浏览器采集 · 微信收件 · Android 浮窗 · 本地自托管</p>
   <p>
     <img src="https://img.shields.io/badge/version-0.10.0-beta.1-7886c7?style=flat-square" alt="Version 0.10.0-beta.1" />
@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/deploy-Self--hosted-7860a8?style=flat-square" alt="Self-hosted" />
   </p>
   <p>
-    <a href="#先看一眼">界面展示</a> ·
+    <a href="#多端采集在看见的地方保存">多端采集</a> · <a href="#先看一眼">界面展示</a> ·
     <a href="#微信收件箱">微信收件</a> ·
     <a href="#浏览器采集">浏览器采集</a> ·
     <a href="#快速开始">快速开始</a> ·
@@ -19,6 +19,32 @@
     <a href="docs/API.md">开放 API</a>
   </p>
 </div>
+
+## 多端采集：在看见的地方保存
+
+**ZNote 的重点不只是多端打开图库，而是让不同设备都能把内容收进来。** 手机上刷到作品、浏览器里看到参考图、微信里想到一句话，都可以进入同一个知识库，连同正文、作者与出处一起整理。
+
+| 在哪里看见 | 怎么采集 | 保存之后 |
+| :--- | :--- | :--- |
+| Android 上的 App 或网站 | 系统分享给 ZNote，或展开浮窗；可识别时采集当前作品，也可读取剪贴板或直接粘贴链接，先选目标知识库 | 提交后收起浮窗继续浏览，后台保存，结果和失败重试留在任务里 |
+| 电脑浏览器 | 页面边缘展开采集工具，保存当前作品；悬停单图入库，也能保存正文、框选截图或嗅探到的视频 | 页面内反馈进度，图组保留页序，正文进入备注，来源可回看 |
+| 微信收集会话 | 给已绑定的入口发送文字和图片 | 可按天或手动分篇合成图文笔记 |
+
+**在家优先局域网，在外可用远程收件箱。** Android 和主浏览器扩展在已配置、已授权的局域网连接可用时优先直连；不可达时，可通过 Cloudflare 备用入口提交作品链接，由仍在运行的电脑下载入库。远程收件箱不等于完整图库的公网访问，也不承接所有文件上传；截图上传等操作仍需要直连。完整图库远程浏览需另配访问通道。
+
+### 手机：选好知识库，再交给后台
+
+<table><tr><td align="center"><img src="docs/images/capture-android-quick.png" width="300" alt="Android 客户端实际小浮窗：选知识库、采集当前作品、粘贴链接和前往知识库" /></td><td align="center"><img src="docs/images/capture-android-save.png" width="300" alt="Android 客户端实际保存面板：作品链接、目标知识库与图片组保存方式" /></td><td align="center"><img src="docs/images/capture-mobile-remote.png" width="300" alt="手机尺寸远程采集页：连接后的选库、提交与任务完成状态" /></td></tr></table>
+
+左、中图为 Android 客户端在隔离模拟器中的实际界面（2026-10-30，示例链接，非荣耀真机）；右图为当前远程页面的触屏浏览器实测，使用演示库验证提交、入库和重试。展示真实功能，不把示例链接说成平台作品已采集成功。
+
+### 浏览器：直接在原网页完成
+
+![实际运行的浏览器扩展：展开采集工具并选择目标知识库](docs/images/capture-browser-tools.png)
+
+![实际运行的浏览器扩展：当前作品保存为图片组，原页面收到完成反馈](docs/images/capture-browser-saved.png)
+
+上面是已加载扩展的真实 Edge 操作截图，网页和配图为原创演示内容；点击后确实经过本地 API 保存两张图片，再显示完成反馈。并非仅绘制出来的按钮，也不意味着所有站点都能免登录采集。需要平台验证、未提供完整资源或受限的内容，会保留具体失败原因。
 
 ## 先看一眼
 
