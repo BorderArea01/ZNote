@@ -5,13 +5,17 @@ const cancelled=()=>Object.assign(new Error('已停止请求；已入库内容�
 export class TaskStore {
   constructor({limit=1000,history=100}={}) {
     this.limit=limit;this.history=history;this.jobs=new Map();this.listeners=new Set();this.lanes=new Set();this.closed=false;this.changes=0;
-    this.remote={imports:[],exports:[],backup:null,error:null,loaded:false};this.watchers=0;this.refreshRemote=()=>{};
+    this.remote={imports:[],captures:[],exports:[],backup:null,error:null,downloadError:null,loaded:false};this.watchers=0;this.refreshRemote=()=>{};
     this.snapshot={jobs:[],changes:0,remote:this.remote};
   }
   subscribe=fn=>{this.listeners.add(fn);return()=>this.listeners.delete(fn)};
   getSnapshot=()=>this.snapshot;
   emit(){this.snapshot={jobs:[...this.jobs.values()].map(({runner,resolve,promise,controller,result,...row})=>row).reverse(),changes:this.changes,remote:this.remote};for(const fn of this.listeners)fn();}
-  setRemote(value){const previous=new Map(this.remote.imports.map(j=>[j.id,j.status]));if(this.remote.loaded&&value.imports.some(j=>j.status==='completed'&&previous.get(j.id)!=='completed'))this.changes++;this.remote={...value,loaded:true};this.emit();}
+  setRemote(value){
+    const next={...this.remote,...value,loaded:true};
+    if(this.remote.loaded)for(const kind of ['imports','captures']){const previous=new Map((this.remote[kind]||[]).map(j=>[j.id,j.status]));if((next[kind]||[]).some(j=>j.status==='completed'&&previous.get(j.id)!=='completed'))this.changes++;}
+    this.remote=next;this.emit();
+  }
   result(id){return this.jobs.get(id)?.result;}
   forget(id){const job=this.jobs.get(id);if(job&&!active.has(job.status)){job.runner=null;this.jobs.delete(id);this.emit();}}
   prune(){const finished=[...this.jobs.values()].filter(j=>j.status==='completed');for(const job of finished.slice(0,Math.max(0,finished.length-this.history)))this.jobs.delete(job.id);}
