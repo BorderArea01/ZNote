@@ -43,6 +43,7 @@ final class CaptureVisuals {
             if(name.equals("z")){if(NativeAppearance.glitch){c.save();c.clipRect(b.left,b.top+b.height()*.43f,b.right,b.top+b.height()*.59f);paint.setColor(0xff70c7e0);c.translate(-size*.06f,0);logo(c,new RectF(b),paint);paint.setColor(0xffd999b8);c.translate(size*.12f,0);logo(c,new RectF(b),paint);c.restore();c.save();c.clipRect(b.left,b.top+b.height()*.43f,b.right,b.top+b.height()*.59f);c.translate(size*.03f,0);paint.setColor(color);logo(c,new RectF(b),paint);c.restore();c.save();Path region=new Path();region.addRect(b.left,b.top,b.right,b.top+b.height()*.43f,Path.Direction.CW);region.addRect(b.left,b.top+b.height()*.59f,b.right,b.bottom,Path.Direction.CW);c.clipPath(region);paint.setColor(color);logo(c,new RectF(b),paint);c.restore();}else logo(c,new RectF(b),paint);return;}
             c.save();c.translate(b.left,b.top);c.scale(b.width()/24f,b.height()/24f);paint.setStrokeWidth(1.65f);Path p=new Path();
             switch(name){
+                case "refresh":c.drawArc(4,4,20,20,40,290,false,paint);p.moveTo(20,4);p.lineTo(20,10);p.lineTo(14,10);break;
                 case "folder":p.moveTo(3,7);p.lineTo(3,5);p.quadTo(3,3,5,3);p.lineTo(9,3);p.lineTo(12,6);p.lineTo(19,6);p.quadTo(21,6,21,8);p.lineTo(21,19);p.quadTo(21,21,19,21);p.lineTo(5,21);p.quadTo(3,21,3,19);p.close();break;
                 case "down":p.moveTo(7,10);p.lineTo(12,15);p.lineTo(17,10);break;
                 case "close":p.moveTo(6,6);p.lineTo(18,18);p.moveTo(18,6);p.lineTo(6,18);break;

@@ -1,6 +1,6 @@
 # 在电脑和手机上使用 ZNote
 
-ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。各平台安装包和验证范围以 [Release 说明](https://github.com/BorderArea01/ZNote/releases)为准；截至 2026-11-03，Windows 为 **0.10.0-beta.28**、Android 为 **0.10.0-beta.30**，macOS 为此前发布的版本。
+ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。各平台安装包和验证范围以 [Release 说明](https://github.com/BorderArea01/ZNote/releases)为准；截至 2026-11-04，Windows 为 **0.10.0-beta.28**、Android 为 **0.10.0-beta.31**，macOS 为此前发布的版本。
 
 Android 采集浮窗使用平滑深色面板，贴边小书签没有像素条纹装饰；连接页和图库外观可以分别跟随已选主题。网页支持简约、毛玻璃、赛博朋克、纸感、建筑故障五种风格。
 
