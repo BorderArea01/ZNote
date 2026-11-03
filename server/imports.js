@@ -177,6 +177,11 @@ export function createImportManager({ dataDir, save, downloader = downloadVideo 
       pending = Promise.resolve().then(pump); return publicJob(job);
     },
     cancel(id) { const job = jobs.get(id); if (!job) throw fail(404, '采集记录不存在'); if (job.status === 'saving') throw fail(409, '正在入库，请等待完成'); if (['queued','running'].includes(job.status)) { job.controller.abort(); if (job.status === 'queued') { job.status = 'cancelled'; job.message = '采集已取消'; } } return publicJob(job); },
+    remove(id) {
+      const job=jobs.get(id);if(!job)throw fail(404,'采集记录不存在');
+      if(!['completed','failed','cancelled'].includes(job.status))throw fail(409,'请等待任务结束后再移除记录');
+      jobs.delete(id);return {removed:true};
+    },
     retry(id) {
       const job=jobs.get(id);if(!job)throw fail(404,'采集记录不存在，服务重启后需重新提交链接');
       if(!['failed','cancelled'].includes(job.status))throw fail(409,'只有失败或取消的采集任务可以重试');

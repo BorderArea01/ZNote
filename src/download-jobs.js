@@ -40,3 +40,23 @@ export async function retryDownloads(jobs, {request, onProgress = () => {}, shou
   }
   return result;
 }
+
+export const removableDownload = job => job.type === 'capture' ? ['completed','failed'].includes(job.status) : job.type === 'import' && ['completed','failed','cancelled','resubmitted'].includes(job.status);
+export async function removeDownloads(jobs, {request,onProgress=()=>{},shouldContinue=()=>true}) {
+  const selected=[...new Map(jobs.filter(removableDownload).map(j=>[j.id,j])).values()],result={total:selected.length,removed:0,skipped:0,errors:[],remaining:selected.length};
+  for(const job of selected){
+    if(!shouldContinue())break;
+    const path='/api/'+(job.type==='capture'?'captures':'imports')+'/'+encodeURIComponent(job.remote_id);
+    try{
+      const current=await request(path);if(!shouldContinue())break;
+      if((current.collection_id||null)!==(job.collection_id||null))throw Error('任务所属知识库已变化，请刷新记录');
+      if(!removableDownload({...current,type:job.type}))result.skipped++;
+      else{await request(path+(job.type==='import'?'/record':''),{method:'DELETE'});result.removed++;}
+    }catch(error){
+      if(error.status===404)result.skipped++;
+      else{result.errors.push({id:job.id,message:error.message});if([401,403].includes(error.status)){result.remaining--;onProgress({...result});break;}}
+    }
+    result.remaining--;onProgress({...result});
+  }
+  return result;
+}

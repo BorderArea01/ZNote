@@ -1,7 +1,7 @@
 import React,{createContext,useContext,useEffect,useState,useSyncExternalStore} from 'react';
 import {ListTodo,RefreshCw,Loader2,CheckCircle2,AlertCircle} from 'lucide-react';
 import {TaskStore} from './task-store.js';
-import {downloadFailed} from './download-jobs.js';
+import {downloadFailed,removableDownload} from './download-jobs.js';
 import {api,send,bytes,uploadFile} from './api.js';
 import {Dialog} from './ui.jsx';
 import {HelpHint} from './HelpHint.jsx';
@@ -58,6 +58,8 @@ export function TaskCenter({collection,collections,onClose,onOpen,onImports,onBa
     <div className="task-list">{!visible.length&&<div className="task-empty"><ListTodo size={32}/><p>当前范围没有任务</p></div>}{visible.map(job=><article key={job.id} className="task-row" data-task-id={job.id}><div className="task-state-icon">{live(job.status)?<Loader2 size={19} className="spin"/>:downloadFailed(job)?<AlertCircle size={19}/>:<CheckCircle2 size={19}/>}</div><div className="task-info"><strong title={job.title}>{job.title}</strong><small>{({upload:'上传',export:'导出',backup:'备份',import:'视频下载',capture:'作品采集'})[job.type]} · {job.global?'全部知识库':libraryName(job.collection_id)} · {job.type!=='backup'&&job.origin==='local'?'当前页面':'服务器'}</small><p>{job.message||job.status}</p>{job.type==='export'&&job.bytes>0&&<small>已打包 {bytes(job.bytes)} · {job.entries} 个文件</small>}{live(job.status)&&job.type==='upload'&&<progress max="100" value={job.progress}/>}</div><div className="task-actions">
       {job.origin==='local'&&live(job.status)&&(job.status==='queued'||job.cancellable!==false&&job.phase!=='processing')&&<button onClick={()=>store.cancel(job.id)}>取消</button>}
       {job.origin==='local'&&['failed','cancelled'].includes(job.status)&&<button onClick={()=>{try{store.retry(job.id)}catch(e){setError(e.message)}}}>重试</button>}
+      {job.origin==='server'&&removableDownload(job)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/'+(job.type==='capture'?'captures':'imports')+'/'+job.remote_id+(job.type==='import'?'/record':''),{},'DELETE'))}>移除记录</button>}
+      {job.origin==='local'&&job.type==='upload'&&['completed','failed','cancelled'].includes(job.status)&&<button onClick={()=>store.forget(job.id)}>移除记录</button>}
       {job.type==='capture'&&downloadFailed(job)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/captures/'+job.remote_id+'/retry',{}))}>{job.bgm_status==='failed'?'重试配乐':'重试'}</button>}
       {job.type==='import'&&['queued','running'].includes(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/imports/'+job.remote_id,{},'DELETE'))}>取消</button>}
       {job.type==='import'&&['failed','cancelled'].includes(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/imports/'+job.remote_id+'/retry',{}))}>重试</button>}
