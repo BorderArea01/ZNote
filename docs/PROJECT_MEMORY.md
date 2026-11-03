@@ -592,4 +592,6 @@
 ## 2026-11-03 深色采集浮窗与书签展示
 - 用户拒绝原生静态毛刺/碎边，要求回归成熟深色面板，保留喜欢的B小书签。NativeAppearance移除随机条带轮廓、照片与边缘纹理；采集进程独立中性深色palette，不改变图库外观选择或故障Z图标，20dp平滑圆角与细描边。
 - README明确「复制链接后打开保存面板」开关、无障碍权限、选库确认流程及Bilibili/贴吧/小红书/YouTube/Pixiv适配与登录限制；实际模拟器截图展示大小面板和小书签。
-- Android30/10030原签名29→30升级及glitch light/dark原生面板、书签/小展开、选项取消、Pixiv入口、主题持久化与WebView不重载均通过，artifacts/android-appearance-local-n7S9eD；荣耀真机未连接，不能宣称真机验证。
+- Android30/10030原签名29→30升级及glitch light/dark原生面板、书签/小展开、选项取消、Pixiv入口、主题持久化与WebView不重载均通过，artifacts/android-appearance-local-RRgglK；荣耀真机未连接，不能宣称真机验证。
+
+- 用户进一步明确：小书签不要两行故障像素。已移除青色/粉色条纹，只保留轮廓、竖向把手与必要状态提示；不再擅自为极小收起控件添加故障装饰。
