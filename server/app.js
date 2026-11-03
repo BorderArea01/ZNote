@@ -1207,6 +1207,7 @@ export function createApp({
     const input = z.object({ url: z.string().max(4096), tags: cleanTags.default([]), collection_id: z.string().nullable().default(null) }).parse(req.body);
     validateCollection(input.collection_id); res.status(202).json(imports.add(input));
   });
+  app.delete('/api/imports/:id/record',(req,res)=>res.json(imports.remove(req.params.id)));
   app.delete('/api/imports/:id', (req, res) => res.json(imports.cancel(req.params.id)));
   app.post('/api/imports/:id/retry',(req,res)=>{const previous=imports.get(req.params.id);validateCollection(previous.collection_id);res.status(202).json(imports.retry(req.params.id));});
   app.get('/api/items/:id/psd-layers', async (req, res) => {

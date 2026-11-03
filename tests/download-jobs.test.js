@@ -33,3 +33,20 @@ test('capture completion signals gallery refresh once and preserves existing imp
 });
 
 test('old tasks retried or completed recently are included by their latest activity',()=>{const rows=downloadJobs({captures:[{id:'old',created_at:'2020-01-01',last_attempt_at:'2026-11-03',status:'running'},{id:'done',created_at:'2020-01-01',finished_at:'2026-11-04',status:'completed'}]});assert.deepEqual(filterDownloads(rows,{now,days:'7'}).map(j=>j.remote_id),['done','old']);});
+
+test('record removal uses dedicated routes, never cancels active work or deletes content',async()=>{
+ const {removeDownloads}=await import('../src/download-jobs.js'),calls=[];
+ const rows=[job('failed'),job('done',{status:'completed'}),job('active',{status:'running'}),job('queued',{status:'queued'}),job('saving',{status:'saving'}),job('video',{id:'import:video',type:'import',status:'cancelled'})];
+ const r=await removeDownloads(rows,{request:async(p,o)=>{calls.push([p,o?.method||'GET']);return o?{removed:true}:{status:p.endsWith('done')?'completed':p.endsWith('video')?'cancelled':'failed',collection_id:'library'}}});
+ assert.equal(r.removed,3);assert.deepEqual(calls.filter(c=>c[1]==='DELETE').map(c=>c[0]),['/api/captures/failed','/api/captures/done','/api/imports/video/record']);
+});
+test('removal rechecks target/state, handles already removed records and continues after a per-item error',async()=>{
+ const {removeDownloads}=await import('../src/download-jobs.js'),deletes=[];
+ const r=await removeDownloads(['busy','moved','gone','broken','ok'].map(id=>job(id)),{request:async(p,o)=>{if(p.endsWith('gone'))throw Object.assign(Error('gone'),{status:404});if(p.endsWith('broken'))throw Object.assign(Error('offline'),{status:503});if(o){deletes.push(p);return{removed:true}}return{status:p.endsWith('busy')?'running':'failed',collection_id:p.endsWith('moved')?'another':'library'}}});
+ assert.equal(r.removed,1);assert.equal(r.skipped,2);assert.equal(r.errors.length,2);assert.deepEqual(deletes,['/api/captures/ok']);
+});
+test('removal stops after close or authorization failure without replaying uncertain DELETE writes',async()=>{
+ const {removeDownloads}=await import('../src/download-jobs.js');let open=true,count=0;
+ const r=await removeDownloads([job('a'),job('b')],{shouldContinue:()=>open,request:async(p,o)=>{if(o){open=false;count++;return{removed:true}}return{status:'failed',collection_id:'library'}}});assert.equal(r.remaining,1);assert.equal(count,1);
+ const denied=await removeDownloads([job('a'),job('b')],{request:async()=>{throw Object.assign(Error('denied'),{status:403})}});assert.equal(denied.remaining,1);assert.equal(denied.errors.length,1);
+});

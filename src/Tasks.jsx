@@ -1,7 +1,7 @@
 import React,{createContext,useContext,useEffect,useState,useSyncExternalStore} from 'react';
 import {ListTodo,RefreshCw,Loader2,CheckCircle2,AlertCircle} from 'lucide-react';
 import {TaskStore} from './task-store.js';
-import {downloadFailed} from './download-jobs.js';
+import {downloadFailed,removableDownload} from './download-jobs.js';
 import {api,send,bytes,uploadFile} from './api.js';
 import {Dialog} from './ui.jsx';
 import {HelpHint} from './HelpHint.jsx';
@@ -49,7 +49,7 @@ export function TaskCenter({collection,collections,onClose,onOpen,onImports,onBa
   const backups=(remote.backup?.backups||[]).filter(b=>!jobs.some(j=>j.file_id===b.id)).map(b=>({...b,id:'backup:'+b.id,file_id:b.id,type:'backup',status:'completed',title:b.format==='snapshot'?'恢复快照':'旧版完整备份',message:b.format==='snapshot'?`新增占用 ${bytes(b.stored_bytes)} · 可恢复 ${bytes(b.logical_bytes)}`:bytes(b.stored_bytes),origin:'server',global:true}));
   const exports=remote.exports.map(job=>({...job,id:'export:'+job.id,remote_id:job.id,status:job.retried_as?'resubmitted':job.status,message:job.retried_as?'已重新提交，请查看后续导出任务':job.message,origin:'server'}));
   const all=[...local,...imports,...captures,...exports,...backups].filter(j=>(scope==='all'||j.global||(j.collection_id||'unfiled')===scope)&&(filter==='all'||filter==='active'&&live(j.status)||filter==='failed'&&downloadFailed(j))).sort((a,b)=>Number(live(b.status))-Number(live(a.status))||new Date(b.created_at)-new Date(a.created_at));
-  const visible=all.slice(page*40,page*40+40);
+  const currentPage=Math.min(page,Math.max(0,Math.ceil(all.length/40)-1)),visible=all.slice(currentPage*40,currentPage*40+40);
   const act=async(id,fn)=>{setBusy(id);setError('');try{await fn();store.refreshRemote();}catch(e){setError(e.message);}finally{setBusy('');}};
   return <Dialog title="任务中心" className="task-dialog" onClose={onClose}><div className="task-toolbar"><select aria-label="任务知识库" value={scope} onChange={e=>{setScope(e.target.value);setPage(0)}}><option value="all">全部知识库</option><option value="unfiled">未分类</option>{collections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><select aria-label="任务状态" value={filter} onChange={e=>{setFilter(e.target.value);setPage(0)}}><option value="all">全部状态</option><option value="active">进行中</option><option value="failed">需要处理</option></select><button aria-label="刷新任务" onClick={()=>store.refreshRemote()}><RefreshCw size={16}/></button><HelpHint label="任务保存范围">上传在本页面执行，关闭弹窗可继续，刷新网页需重新选择原文件。导出由浏览器直接接收，完成、暂停或取消请同时查看浏览器下载列表。作品采集记录保存在服务器；视频导入和导出记录重启后清空，已保存的文件保留。导出未开始时可点击开始下载；多文件下载可能需要浏览器允许。备份作用于全部知识库。</HelpHint></div>
     {(error||remote.error)&&<p className="error task-error" role="alert">{error||remote.error}</p>}
@@ -58,6 +58,8 @@ export function TaskCenter({collection,collections,onClose,onOpen,onImports,onBa
     <div className="task-list">{!visible.length&&<div className="task-empty"><ListTodo size={32}/><p>当前范围没有任务</p></div>}{visible.map(job=><article key={job.id} className="task-row" data-task-id={job.id}><div className="task-state-icon">{live(job.status)?<Loader2 size={19} className="spin"/>:downloadFailed(job)?<AlertCircle size={19}/>:<CheckCircle2 size={19}/>}</div><div className="task-info"><strong title={job.title}>{job.title}</strong><small>{({upload:'上传',export:'导出',backup:'备份',import:'视频下载',capture:'作品采集'})[job.type]} · {job.global?'全部知识库':libraryName(job.collection_id)} · {job.type!=='backup'&&job.origin==='local'?'当前页面':'服务器'}</small><p>{job.message||job.status}</p>{job.type==='export'&&job.bytes>0&&<small>已打包 {bytes(job.bytes)} · {job.entries} 个文件</small>}{live(job.status)&&job.type==='upload'&&<progress max="100" value={job.progress}/>}</div><div className="task-actions">
       {job.origin==='local'&&live(job.status)&&(job.status==='queued'||job.cancellable!==false&&job.phase!=='processing')&&<button onClick={()=>store.cancel(job.id)}>取消</button>}
       {job.origin==='local'&&['failed','cancelled'].includes(job.status)&&<button onClick={()=>{try{store.retry(job.id)}catch(e){setError(e.message)}}}>重试</button>}
+      {job.origin==='server'&&removableDownload(job)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/'+(job.type==='capture'?'captures':'imports')+'/'+job.remote_id+(job.type==='import'?'/record':''),{},'DELETE'))}>移除记录</button>}
+      {job.origin==='local'&&job.type==='upload'&&['completed','failed','cancelled'].includes(job.status)&&<button onClick={()=>store.forget(job.id)}>移除记录</button>}
       {job.type==='capture'&&downloadFailed(job)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/captures/'+job.remote_id+'/retry',{}))}>{job.bgm_status==='failed'?'重试配乐':'重试'}</button>}
       {job.type==='import'&&['queued','running'].includes(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/imports/'+job.remote_id,{},'DELETE'))}>取消</button>}
       {job.type==='import'&&['failed','cancelled'].includes(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>send('/api/imports/'+job.remote_id+'/retry',{}))}>重试</button>}
@@ -67,6 +69,6 @@ export function TaskCenter({collection,collections,onClose,onOpen,onImports,onBa
       {job.type==='export'&&['failed','cancelled','completed'].includes(job.status)&&<button disabled={!!busy} onClick={()=>act(job.id,()=>startExport(store,null,job.remote_id))}>{job.status==='completed'?'重新导出':'重试'}</button>}
       {job.file_id&&job.status==='completed'&&<a className="button" href={'/api/backups/'+job.file_id+'/download'}>下载迁移 ZIP</a>}
     </div></article>)}</div>
-    <div className="task-footer"><button onClick={()=>{store.clear({failed:true,scope});setPage(0)}}>清除本地已结束记录</button><span>{all.length} 条</span>{all.length>40&&<><button disabled={!page} onClick={()=>setPage(n=>n-1)}>上一页</button><button disabled={(page+1)*40>=all.length} onClick={()=>setPage(n=>n+1)}>下一页</button></>}<button onClick={onImports}>网络采集</button><button onClick={onBackup}>备份设置</button></div>
+    <div className="task-footer"><button onClick={()=>{store.clear({failed:true,scope});setPage(0)}}>清除本地已结束记录</button><span>{all.length} 条</span>{all.length>40&&<><button disabled={!currentPage} onClick={()=>setPage(currentPage-1)}>上一页</button><button disabled={(currentPage+1)*40>=all.length} onClick={()=>setPage(currentPage+1)}>下一页</button></>}<button onClick={onImports}>网络采集</button><button onClick={onBackup}>备份设置</button></div>
   </Dialog>;
 }
