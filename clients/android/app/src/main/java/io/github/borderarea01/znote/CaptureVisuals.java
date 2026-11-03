@@ -10,7 +10,7 @@ import android.widget.Button;
 /** Small vector artwork shared by the floating card, bookmark and result hint. */
 final class CaptureVisuals {
     static int INK=0xffe7ebf5, MUTED=0xffabb7ce, ACCENT=0xff8da0ed,
-        SUCCESS=0xff9bbcae, WARNING=0xffd3b185, SURFACE=0xff212938,
+        SUCCESS=0xffa6bfdc, WARNING=0xffd3b185, SURFACE=0xff212938,
         FIELD=0xff2a3446, PRIMARY=0xff7689d8, BORDER=0xff424e63;
     private CaptureVisuals(){}
 

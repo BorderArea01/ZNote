@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Apply,[switch]$Intermediates,[string]$CurrentVersion='0.10.0-beta.28',[string]$RollbackVersion='0.10.0-beta.27')
+param([switch]$Apply,[switch]$Intermediates,[string]$CurrentVersion='0.10.0-beta.29',[string]$RollbackVersion='0.10.0-beta.28')
 $ErrorActionPreference='Stop'
 $workspace=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $artifactRoot=Join-Path $workspace 'artifacts'
@@ -28,7 +28,9 @@ if($Apply -and $Intermediates){
  if((Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$currentApkVersion+'-android.apk'))).Hash.ToLower() -ne $verified.apk_sha256){throw 'Current effective APK is not verified'}
  if((Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$CurrentVersion+'-source.zip'))).Hash.ToLower() -ne $verified.source_sha256){throw 'Current source is not verified'}
  if($verified.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $current $currentAndroidSource)).Hash.ToLower() -ne $verified.android_source_sha256){throw 'Current effective Android source is not verified'}
- if(!$verified.windows_sha256 -or (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$CurrentVersion+'-win-x64.exe'))).Hash.ToLower() -ne $verified.windows_sha256){throw 'Current Windows installer is not verified'}
+ $activeWindows=if($verified.windows_version){$verified.windows_version}else{$CurrentVersion}
+ if($activeWindows -notmatch '^0\.10\.0-beta\.\d+$'){throw 'Invalid active Windows version'}
+ if(!$verified.windows_sha256 -or (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$activeWindows+'-win-x64.exe'))).Hash.ToLower() -ne $verified.windows_sha256){throw 'Current Windows installer is not verified'}
 }
 foreach($dir in Get-ChildItem -LiteralPath $artifactRoot -Directory){
   if($dir.Name -match '^android-(?:beta\d+|back|overlay|share)-release$' -and $dir.Name -notin @($currentDirectory,$rollbackDirectory)){$targets.Add($dir.FullName)}

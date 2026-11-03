@@ -10,14 +10,13 @@ export const styles = [
   { id: 'glitch', name: '建筑故障', description: '晴空建筑，水平像素撕裂' },
 ];
 export const palettes = [
-  { id: 'forest', name: '松林绿', color: '#287464' },
   { id: 'ocean', name: '海湾蓝', color: '#2867af' },
   { id: 'violet', name: '鸢尾紫', color: '#7553b3' },
   { id: 'rose', name: '玫瑰粉', color: '#ac4d70' },
   { id: 'amber', name: '琥珀橙', color: '#a36520' },
   { id: 'slate', name: '石墨灰', color: '#566478' },
 ];
-const defaults = { style: 'minimal', palette: 'forest', motion: 'dynamic' };
+const defaults = { style: 'minimal', palette: 'slate', motion: 'dynamic' };
 function normalize(value) {
   return { style: styles.some(s => s.id === value?.style) ? value.style : defaults.style,
     palette: palettes.some(p => p.id === value?.palette) ? value.palette : defaults.palette,
@@ -37,7 +36,7 @@ export function AppearanceProvider({ children }) {
     const sync=()=>{
       const glitch=appearance.style==='glitch';
       document.querySelector('link[rel="icon"]')?.setAttribute('href','/icon.svg?v=10');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content',glitch?'#1859a8':'#287464');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content',glitch?'#1859a8':palettes.find(p=>p.id===appearance.palette)?.color||'#566478');
       queueMicrotask(()=>{try{window.ZNoteAppearance?.set?.(JSON.stringify({style:document.documentElement.dataset.style,palette:document.documentElement.dataset.palette,motion:document.documentElement.dataset.motion,mode:localStorage.getItem('znote-theme')||'system'}));}catch{}});
     };sync();window.addEventListener('znote:theme-changed',sync);
     return()=>window.removeEventListener('znote:theme-changed',sync);
