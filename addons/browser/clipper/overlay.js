@@ -240,7 +240,7 @@
     for(const entry of performance.getEntriesByType('resource').slice(-300))rememberMedia(entry);
     preview.classList.add("hidden");
     try {
-      let state = await send({ type: "media-start" });
+      const state = await send({ type: "media-start" });
       enabled = state.enabled;
       resources = state.resources;
       scan();
@@ -257,7 +257,6 @@
       if(saveAction==='download'){notify('下载到浏览器默认目录');return;}
       const config = await send({ type: "media-connect" });
       selector.replaceChildren(
-      state = await pushCapturedHls(state);
         new Option("未分类", ""),
         ...config.collections.map((c) => new Option(c.name, c.id)),
       );
