@@ -25,11 +25,11 @@ export const captureInput = z.object({ text: z.string().trim().min(1).max(16000)
 export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, saveBgm, exists, page = fetchCapturePage, image = fetchRemoteImage, imagePage = fetchEhImageCandidates, video = downloadVideo, captureVideo = downloadCaptureVideo, captureBgm = downloadCaptureBgm }) {
   const read = () => JSON.parse(db.prepare('SELECT value FROM settings WHERE key=?').get(KEY)?.value || '[]');
   const write = jobs => {const text=JSON.stringify(jobs);if(text.length>16*1024*1024)throw fail(429,'采集记录已满，请清理完成或失败的任务');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,text);};
-  const patch = (id, changes) => { const jobs=read(), job=jobs.find(j=>j.id===id); if(job){Object.assign(job,changes);if(job.status==='completed'&&job.bgm_status!=='failed')delete job.plan;write(jobs);} return job; };
+  const patch = (id, changes) => { const jobs=read(), job=jobs.find(j=>j.id===id); if(job){if(changes.status&&changes.status!==job.status){job.updated_at=new Date().toISOString();if(['completed','failed'].includes(changes.status))job.finished_at=job.updated_at;}Object.assign(job,changes);if(job.status==='completed'&&job.bgm_status!=='failed')delete job.plan;write(jobs);} return job; };
   const exposed = ({input, plan, bgm_item_ids,bgm_only,...job}) => ({...job,...(job.bgm_status==='failed'?{bgm_item_ids}:{}), collection_id: input.collection_id});
   let active, pending = Promise.resolve(), stopped=false;
   const prior = read(); let changed=false;
-  for(const j of prior) if(['queued','running'].includes(j.status)){j.status='failed';j.message='服务曾重启，任务已保留，请重试';changed=true;}
+  for(const j of prior) if(['queued','running'].includes(j.status)){j.status='failed';j.message='服务曾重启，任务已保留，请重试';j.finished_at=new Date().toISOString();changed=true;}
   // Older versions silently turned an empty group into a text-only note.
   // Preserve that note, but make the missing-media task retryable again.
   for(const j of prior) if(j.status==='completed'&&j.input.image_mode==='group'){
@@ -270,6 +270,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
         if(browserPlan&&found.status==='failed'){
           // This is a fresh plan from the logged-in browser. Queue it here so
           // retry() cannot discard video URLs as if they were stale cache.
+          if(jobs.filter(j=>['queued','running'].includes(j.status)).length>=16)throw fail(429,'采集队列已满，请稍后重试');
+          found.last_attempt_at=new Date().toISOString();found.finished_at=null;
           found.plan=browserPlan;
           found.status='queued';
           found.message='等待服务器采集';
@@ -280,18 +282,18 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
       }
       if(stopped)throw fail(503,'服务正在停止');
       if(jobs.filter(j=>['queued','running'].includes(j.status)).length>=16)throw fail(429,'采集队列已满，请稍后重试');
-      while(jobs.length>=100){const index=jobs.findIndex(j=>j.status==='completed'&&j.bgm_status!=='failed');if(index<0)throw fail(429,'请先处理失败的采集任务');jobs.splice(index,1);}
+      while(jobs.length>=100){const candidates=jobs.map((job,index)=>({job,index})).filter(({job})=>job.status==='completed'&&job.bgm_status!=='failed').sort((a,b)=>(Date.parse(a.job.finished_at||a.job.last_attempt_at||a.job.created_at)||0)-(Date.parse(b.job.finished_at||b.job.last_attempt_at||b.job.created_at)||0));const index=candidates[0]?.index??-1;if(index<0)throw fail(429,'请先处理失败的采集任务');jobs.splice(index,1);}
       const job={id:input.request_id?stableId(input.request_id):randomUUID(),request_id:input.request_id||null,input,source_url:urls[0],title:browserPlan?.title||input.text.slice(0,100),...(browserPlan?{plan:browserPlan}:{}),created_at:new Date().toISOString(),status:'queued',message:'等待服务器采集'};
       jobs.push(job);write(jobs);schedule();return exposed(job);
     },
-    retry(id,options={}){const job=this.get(id),previous=read().find(j=>j.id===id),musicOnly=previous.bgm_item_ids?.length&&previous.plan?.bgm;if(job.status!=='failed'&&!(job.status==='completed'&&job.bgm_status==='failed'))throw fail(409,'只有失败的采集或配乐可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);
-      if(options?.browser_pixiv!==undefined){const plan=pixivCapturePlan(options.browser_pixiv,job.source_url);patch(id,{plan,status:'queued',message:'等待使用手机 Pixiv 登录重新采集'});schedule();return this.get(id);}
+    retry(id,options={}){const job=this.get(id),previous=read().find(j=>j.id===id),musicOnly=previous.bgm_item_ids?.length&&previous.plan?.bgm;if(job.status!=='failed'&&!(job.status==='completed'&&job.bgm_status==='failed'))throw fail(409,'只有失败的采集或配乐可以重试');validateCollection(job.collection_id);ehPolicy.check(job.source_url);if(read().filter(j=>['queued','running'].includes(j.status)).length>=16)throw fail(429,'采集队列已满，请稍后重试');
+      if(options?.browser_pixiv!==undefined){const plan=pixivCapturePlan(options.browser_pixiv,job.source_url);patch(id,{plan,status:'queued',last_attempt_at:new Date().toISOString(),finished_at:null,message:'等待使用手机 Pixiv 登录重新采集'});schedule();return this.get(id);}
       // Upgrade pre-parser tasks only before any media has been saved. Once
       // saving starts, retain the plan so retry cannot shuffle stable IDs.
       const oldGallery=jlijiSet(job.source_url)&&previous.plan?.parser!=='jliji-gallery-v1';
       const legacyGallery=oldGallery&&![...(previous.plan?.images||[]),...markdownImages(previous.plan?.content||'')].some((_,index)=>exists(stableId(job.id+':image:'+index)));
       const emptyPlan=previous.plan&&previous.plan.kind!=='video'&&!previous.plan.images?.length&&!previous.plan.live_videos?.length&&!markdownImages(previous.plan.content||'').length;
-      patch(id,{status:'queued',message:musicOnly?'等待重试配乐':'等待重新采集',bgm_only:Boolean(musicOnly),...(!musicOnly&&(previous.plan?.kind==='video'||ehSite(job.source_url)||legacyGallery||emptyPlan)?{plan:null}:{})});schedule();return this.get(id);},
+      patch(id,{status:'queued',last_attempt_at:new Date().toISOString(),finished_at:null,message:musicOnly?'等待重试配乐':'等待重新采集',bgm_only:Boolean(musicOnly),...(!musicOnly&&(previous.plan?.kind==='video'||ehSite(job.source_url)||legacyGallery||emptyPlan)?{plan:null}:{})});schedule();return this.get(id);},
     remove(id){const job=this.get(id);if(!['completed','failed'].includes(job.status))throw fail(409,'请等待任务结束后再移除记录');write(read().filter(j=>j.id!==id));return {removed:true};},
     async wait(id,signal){while(true){signal.throwIfAborted();const job=this.get(id);if(job.status==='completed')return job;if(job.status==='failed')throw fail(422,job.message);await sleep(200,undefined,{signal});}},
     async cancelAll(){for(const job of read())if(job.status==='queued')patch(job.id,{status:'failed',message:'采集已停止，可重试'});active?.controller.abort();await pending;},

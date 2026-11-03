@@ -5,12 +5,12 @@ export function downloadJobs(remote) {
   return ['capture', 'import'].flatMap(type => (remote[type === 'capture' ? 'captures' : 'imports'] || []).map(job => ({
     ...job, type, remote_id: job.id, id: type + ':' + job.id,
     state: job.retried_as ? 'resubmitted' : downloading(job.status) ? 'active' : downloadFailed(job) ? 'failed' : job.status,
-    title: job.title || job.source_url || '作品下载',
-  }))).sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0) || a.id.localeCompare(b.id));
+    title: job.title || job.source_url || '作品下载',activity_at:job.finished_at||job.last_attempt_at||job.created_at,
+  }))).sort((a, b) => (Date.parse(b.activity_at) || 0) - (Date.parse(a.activity_at) || 0) || a.id.localeCompare(b.id));
 }
 export function filterDownloads(jobs, {scope = 'all', days = '7', status = 'all', now = Date.now()} = {}) {
   return jobs.filter(job => (scope === 'all' || (job.collection_id || 'unfiled') === scope)
-    && (days === 'all' || Date.parse(job.created_at) >= now - Number(days) * 86400000)
+    && (days === 'all' || Date.parse(job.activity_at||job.created_at) >= now - Number(days) * 86400000)
     && (status === 'all' || job.state === status));
 }
 export function downloadSource(value) {

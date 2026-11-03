@@ -31,3 +31,5 @@ test('cancel on close stops later submissions; a failed entry does not block oth
 test('capture completion signals gallery refresh once and preserves existing import polling callers',()=>{
  const s=new TaskStore();s.setRemote({imports:[],captures:[{id:'c',status:'running'}],exports:[]});assert.equal(s.changes,0);s.setRemote({imports:[],captures:[{id:'c',status:'completed'}]});assert.equal(s.changes,1);s.setRemote({imports:[]});assert.equal(s.remote.captures.length,1);assert.equal(s.changes,1);s.dispose();
 });
+
+test('old tasks retried or completed recently are included by their latest activity',()=>{const rows=downloadJobs({captures:[{id:'old',created_at:'2020-01-01',last_attempt_at:'2026-11-03',status:'running'},{id:'done',created_at:'2020-01-01',finished_at:'2026-11-04',status:'completed'}]});assert.deepEqual(filterDownloads(rows,{now,days:'7'}).map(j=>j.remote_id),['done','old']);});
