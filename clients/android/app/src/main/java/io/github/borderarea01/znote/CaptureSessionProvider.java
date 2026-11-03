@@ -29,6 +29,7 @@ public class CaptureSessionProvider extends ContentProvider {
         Bundle result=new Bundle();result.putString("origin",origin);result.putString("route",origin.equals(selectedLan)?"lan":origin.equals(remote)&&!remote.isEmpty()?"remote":"configured");
         result.putString("cookie",origin.isEmpty()?"":CookieManager.getInstance().getCookie(origin));
         result.putString("token",captureToken(origin,result.getString("cookie","")));
+        String profile=!preferred.isEmpty()&&!ConnectionRoutes.local(preferred)&&!preferred.equals(remote)?preferred:!lan.isEmpty()&&!remote.isEmpty()?lan+"\n"+remote:preferred;result.putString("profile",fingerprint(profile));
         result.putString("share_collection",prefs.getString("share_collection",""));result.putBoolean("capture_as_note",prefs.getBoolean("capture_as_note",false));return result;
     }
     private boolean localAvailable(String origin){

@@ -236,32 +236,21 @@ public class CaptureAssistService extends AccessibilityService {
                 final String id=libraryIds.get(i),name=libraryNames.get(i);String label=name;
                 TextView option=control(label,"选择知识库："+name+(id.equals(selected)?"，当前已选择":""),()->{sharingPrefs().edit().putString("share_collection",id).apply();libraryMenuExpanded=false;if(libraryScroll!=null)libraryScroll.setVisibility(View.GONE);updateLibraryPicker();record("capture_library_selected",id.isEmpty()?"uncategorized":id);dock();});option.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);option.setPadding(dp(12),dp(6),dp(8),dp(6));option.setBackground(shape(id.equals(selected)?0xff354264:0x00202020,10));libraryList.addView(option,new LinearLayout.LayoutParams(-1,dp(44)));
             }
-            TextView refresh=control("↻  刷新列表","刷新知识库列表",()->loadLibraries(true));refresh.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);refresh.setPadding(dp(12),dp(6),dp(8),dp(6));libraryList.addView(refresh,new LinearLayout.LayoutParams(-1,dp(44)));
+            TextView refresh=control(librariesLoading?"正在刷新，仍可选库":"↻  刷新列表","刷新知识库列表",()->loadLibraries(true));refresh.setEnabled(!librariesLoading);refresh.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);refresh.setPadding(dp(12),dp(6),dp(8),dp(6));libraryList.addView(refresh,new LinearLayout.LayoutParams(-1,dp(44)));
         }
         if(libraryScroll!=null){int rows=librariesLoaded?libraryIds.size()+1+(libraryError.isEmpty()?0:1):2;ViewGroup.LayoutParams lp=libraryScroll.getLayoutParams();if(lp!=null){lp.height=Math.min(dp(176),dp(rows*44+8));libraryScroll.setLayoutParams(lp);}}
     }
+    private boolean librariesRequested;
+    private void cachedLibraries(CaptureCatalogue.Snapshot snapshot){
+        libraryIds.clear();libraryIds.addAll(snapshot.ids);libraryNames.clear();libraryNames.addAll(snapshot.names);
+        String selected=sharingPrefs().getString("share_collection","");if(!libraryIds.contains(selected)){libraryIds.add(selected);libraryNames.add("上次选择的知识库（请刷新确认）");}
+        librariesLoaded=true;buildLibraryList();updateLibraryPicker();
+    }
     private void loadLibraries(boolean force){
-        if(librariesLoading||catalogue.isShutdown()||(!force&&librariesLoaded))return;
-        librariesLoading=true;libraryError="";buildLibraryList();
-        try{catalogue.execute(()->{
-            ArrayList<String> names=new ArrayList<>(),ids=new ArrayList<>();names.add("未分类");ids.add("");String failure="";
-            try{
-                Bundle session=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"session",null,null);
-                if(session==null)throw new java.io.IOException("无法读取知识库连接信息");
-                String origin=MainActivity.normalize(session.getString("origin","")),cookie=session.getString("cookie",""),authToken=session.getString("token","");
-                if(!sharingPrefs().contains("migrated"))sharingPrefs().edit().putBoolean("migrated",true).putString("share_collection",session.getString("share_collection","")).putBoolean("capture_as_note",session.getBoolean("capture_as_note",false)).apply();
-                HttpURLConnection c=(HttpURLConnection)(ConnectionRoutes.local(origin)?new URL(origin+"/api/collections").openConnection(java.net.Proxy.NO_PROXY):new URL(origin+"/api/collections").openConnection());c.setConnectTimeout(6000);c.setReadTimeout(9000);c.setRequestProperty("Accept","application/json");if(authToken!=null&&!authToken.isEmpty())c.setRequestProperty("Authorization","Bearer "+authToken);else if(cookie!=null&&!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
-                try{int code=c.getResponseCode();java.io.InputStream stream=code>=400?c.getErrorStream():c.getInputStream();byte[] body=readSmall(stream);if(stream!=null)stream.close();if(code<200||code>=300)throw new java.io.IOException(code==401?"请先打开 ZNote 登录":"知识库连接失败（HTTP "+code+"）");String raw=new String(body,java.nio.charset.StandardCharsets.UTF_8).trim();JSONObject result=raw.startsWith("[")?new JSONObject().put("collections",new org.json.JSONArray(raw)):new JSONObject(raw);org.json.JSONArray rows=result.optJSONArray("collections");if(rows==null)throw new java.io.IOException("知识库列表格式不正确");for(int i=0;i<rows.length();i++){JSONObject item=rows.getJSONObject(i);String id=item.optString("id"),name=item.optString("name");if(!id.isEmpty()&&!name.isEmpty()){ids.add(id);names.add(name);}}}finally{c.disconnect();}
-            }catch(Exception e){failure=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
-            final String error=failure;handler.post(()->{
-                librariesLoading=false;
-                if(error.isEmpty()){
-                    libraryNames.clear();libraryNames.addAll(names);libraryIds.clear();libraryIds.addAll(ids);librariesLoaded=true;libraryError="";
-                    String selected=sharingPrefs().getString("share_collection","");if(!selected.isEmpty()&&!libraryIds.contains(selected)){sharingPrefs().edit().putString("share_collection","").apply();libraryError="上次选择的知识库已不存在，已切换到未分类";record("capture_library_missing",selected);}
-                }else libraryError=error;
-                buildLibraryList();updateLibraryPicker();if(bubble!=null)dock();
-            });
-        });}catch(RejectedExecutionException e){librariesLoading=false;libraryError="知识库列表读取任务未能启动";buildLibraryList();}
+        CaptureCatalogue.Snapshot snapshot=CaptureCatalogue.read(this);cachedLibraries(snapshot);
+        if(librariesLoading||!force&&(snapshot.cached||librariesRequested))return;
+        librariesRequested=true;librariesLoading=true;libraryError="";buildLibraryList();
+        CaptureCatalogue.refresh(this,(value,error)->{if(current!=this)return;librariesLoading=false;libraryError=error;cachedLibraries(value);if(bubble!=null)dock();});
     }
     private void beginDrag(long eventTime){
         dragging=true;expanded=false;libraryMenuExpanded=false;handleReveal=1;
@@ -435,6 +424,7 @@ public class CaptureAssistService extends AccessibilityService {
         tracker.execute(()->{HttpURLConnection c=null;try{
             Bundle session=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"session",null,null);
             if(session==null||session.getString("origin","").isEmpty())throw new java.io.IOException("请先配置知识库连接");
+            CaptureCatalogue.validate(this,session,collection==null?"":collection);
             String origin=MainActivity.normalize(session.getString("origin")),auth=session.getString("token",""),cookie=session.getString("cookie","");
             c=(HttpURLConnection)(ConnectionRoutes.local(origin)?new URL(origin+"/api/captures").openConnection(java.net.Proxy.NO_PROXY):new URL(origin+"/api/captures").openConnection());c.setConnectTimeout(8000);c.setReadTimeout(15000);c.setRequestMethod("POST");c.setInstanceFollowRedirects(false);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");if(!auth.isEmpty())c.setRequestProperty("Authorization","Bearer "+auth);else if(!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
             JSONObject input=new JSONObject().put("text",value).put("image_mode",note?"note":"group").put("collection_id",collection==null||collection.isEmpty()?JSONObject.NULL:collection).put("request_id","android:"+requestId);
