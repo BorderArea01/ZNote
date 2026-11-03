@@ -73,6 +73,7 @@ import { OrganizeDialog } from './organize.jsx';
 import { TagFilter } from './TagFilter.jsx';
 import { ImportsDialog } from './Imports.jsx';
 import {TaskButton,TaskCenter,useTaskStore,queueUploads} from './Tasks.jsx';
+import {RecentDownloads,RecentDownloadsButton} from './RecentDownloads.jsx';
 import { filesFromDataTransfer } from './file-drop.js';
 const labels = {
   home: "我的知识库",
@@ -1135,6 +1136,7 @@ export default function Workspace({
           <div className="topbar-right">
             <IconButton label="刷新内容" onClick={refresh}><RefreshCw size={18}/></IconButton>
             {view!=='home'&&<ExternalAssistantLink collection={actualCollection}/>}
+            <RecentDownloadsButton collection={actualCollection} onClick={()=>setTasksOpen('downloads')}/>
             <TaskButton onClick={()=>setTasksOpen(true)}/>
             <IconButton
               label={resolvedTheme === "dark" ? "切换浅色模式" : "切换夜间模式"}
@@ -1569,7 +1571,8 @@ export default function Workspace({
         </div>
       )}
       <UndoCenter receipt={undoReceipt} open={undoOpen} onClose={() => setUndoOpen(false)} onDismiss={() => setUndoReceipt(null)} blocked={!!selected || batchBusy || organizing || groupOrganizing || !!savedViewEditor || draftsOpen || readingOpen || tasksOpen || batchTags || !!purging} onUndone={action => { setSelection([]); setSelectionRows({}); refresh(); setUndoReceipt(null); notify('已撤销'+action.label); }}/>
-      {tasksOpen&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);await openItem(item);}catch(e){notify(e.message)}}}/>}
+      {tasksOpen==='downloads'&&<RecentDownloads collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);await openItem(item);}catch(e){notify(e.message)}}}/>}
+      {tasksOpen===true&&<TaskCenter collection={actualCollection} collections={collections} onClose={()=>setTasksOpen(false)} onImports={()=>{setTasksOpen(false);setImporting(true)}} onBackup={()=>{setTasksOpen(false);setSettings(true)}} onOpen={async id=>{try{const item=await api('/api/items/'+id);if(item.deleted_at)throw Error('内容已在回收站');if(item.collection_id!==actualCollection)chooseCollection(item.collection_id||'unfiled');setTasksOpen(false);await openItem(item);}catch(e){notify(e.message)}}}/>}
       {savedViewEditor && <React.Suspense fallback={null}><SavedViewDialog initial={savedViewEditor.row} current={savedViewEditor.current} library={savedViewEditor.library} libraryName={collections.find(c => c.id === savedViewEditor.library)?.name || '未分类'} onClose={() => setSavedViewEditor(null)} onChanged={(_row, message) => { savedViews.reload(); notify(message); }}/></React.Suspense>}
       {draftsOpen && <DraftsDialog library={actualCollection} collections={collections} onClose={() => setDraftsOpen(false)} onOpen={async draft => {
         let note;
