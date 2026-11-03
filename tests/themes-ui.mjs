@@ -10,12 +10,12 @@ const runtime = createApp({ dataDir: dir, staticDir: resolve(process.env.UI_DIST
 const server = runtime.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, colorScheme: 'light' });
+const context = await browser.newContext({locale:"zh-CN",timezoneId:"Asia/Shanghai", viewport: { width: 1440, height: 1050 }, colorScheme: 'light' });
 const page = await context.newPage(), errors = [], evidence = [];
 page.on('pageerror', e => errors.push(e.message));
 const post = async (path, data) => { const r = await context.request.post(base + path, { data }); assert.ok(r.ok(), await r.text()); return r.json(); };
 const styleNames = { minimal: '简约', glass: '毛玻璃', cyber: '赛博朋克', paper: '纸感' };
-const paletteNames = { forest: '松林绿', ocean: '海湾蓝', violet: '鸢尾紫', rose: '玫瑰粉', amber: '琥珀橙', slate: '石墨灰' };
+const paletteNames = { ocean: '海湾蓝', violet: '鸢尾紫', rose: '玫瑰粉', amber: '琥珀橙', slate: '石墨灰' };
 const setStyle = async id => { await page.getByRole('button', { name: '风格：' + styleNames[id], exact: true }).click(); await page.waitForFunction(id => document.documentElement.dataset.style === id, id); };
 const setMode = async mode => { await page.getByRole('button', { name: mode === 'dark' ? '夜间' : '浅色', exact: true }).click(); await page.waitForFunction(mode => document.documentElement.dataset.theme === mode, mode); };
 const shot = async name => { await page.screenshot({ path: resolve(`artifacts/theme-${name}.png`), animations: 'disabled', fullPage: false }); };
@@ -46,7 +46,7 @@ try {
   assert.ok(await help.getAttribute('aria-describedby'));
   await page.keyboard.press('Escape'); assert.equal(await page.getByRole('tooltip').count(),0);
   await page.screenshot({path:resolve('artifacts/v082-clean-library.png')});
-  const touchContext = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,storageState:await context.storageState()});
+  const touchContext = await browser.newContext({locale:"zh-CN",timezoneId:"Asia/Shanghai",viewport:{width:390,height:844},isMobile:true,hasTouch:true,storageState:await context.storageState()});
   const touchPage = await touchContext.newPage(); await touchPage.goto(base);
   await touchPage.getByRole('button',{name:'标签筛选说明',exact:true}).tap();
   await touchPage.getByRole('tooltip').waitFor();
@@ -86,8 +86,8 @@ try {
       }
     }
   }
-  assert.equal(new Set(Object.values(colors)).size, 12);
-  console.log('PASS: all four styles and six compatible palettes render in light/dark with readable body and primary controls');
+  assert.equal(new Set(Object.values(colors)).size, 10);
+  console.log('PASS: all four styles and five compatible palettes render in light/dark with readable body and primary controls');
   await setStyle('glass'); await page.getByRole('button', { name: '色调：鸢尾紫', exact: true }).click();
   await setMode('light');
   await shot('settings');
@@ -119,7 +119,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('group', { name: '界面风格', exact: true }).scrollIntoViewIfNeeded(); await shot('settings-mobile');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  const bootstrap = await browser.newContext({ colorScheme: 'dark', javaScriptEnabled: true });
+  const bootstrap = await browser.newContext({locale:"zh-CN",timezoneId:"Asia/Shanghai", colorScheme: 'dark', javaScriptEnabled: true });
   try {
     await bootstrap.addInitScript(() => { localStorage.setItem('znote-theme', 'bad-value'); localStorage.setItem('znote-appearance', '{broken'); });
     const login = await bootstrap.newPage(); await login.goto(base); await login.getByLabel('访问密码').waitFor();

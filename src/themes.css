@@ -1,13 +1,13 @@
 /* Theme tokens are shared by content, dialogs and authentication screens. */
 :root[data-style] {
-  --tone: 163; --accent-light: #287464; --accent-dark: #82ccb6;
+  --tone: 216; --accent-light: #566478; --accent-dark: #bcc9db;
   --canvas: hsl(var(--tone) 18% 98%); --surface: #fff;
   --surface-2: hsl(var(--tone) 20% 95%); --surface-3: hsl(var(--tone) 22% 91%);
   --ink: hsl(var(--tone) 17% 19%); --muted: hsl(var(--tone) 10% 40%);
   --border: hsl(var(--tone) 15% 84%); --green: var(--accent-light);
   --accent-ink: #fff; --accent-soft: hsl(var(--tone) 33% 92%);
   --panel-radius: 12px; --control-radius: 8px; --panel-shadow: none;
-  --shade: #10201b85; --stage-a: #edf0ef; --stage-b: #e2e6e4;
+  --shade: #17243885; --stage-a: #edf0ef; --stage-b: #e2e6e4;
   color: var(--ink); background: var(--canvas); color-scheme: light;
 }
 :root[data-palette="ocean"] { --tone: 213; --accent-light: #2867af; --accent-dark: #91bfff; }
@@ -20,7 +20,7 @@
   --surface-2: hsl(var(--tone) 16% 17%); --surface-3: hsl(var(--tone) 16% 22%);
   --ink: hsl(var(--tone) 20% 92%); --muted: hsl(var(--tone) 13% 72%);
   --border: hsl(var(--tone) 15% 30%); --green: var(--accent-dark);
-  --accent-ink: #111a18; --accent-soft: hsl(var(--tone) 28% 23%);
+  --accent-ink: #111722; --accent-soft: hsl(var(--tone) 28% 23%);
   --shade: #030708b8; --stage-a: #232629; --stage-b: #2d3033; color-scheme: dark;
 }
 html[data-style] body { background: var(--canvas); color: var(--ink); }

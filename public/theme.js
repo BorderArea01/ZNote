@@ -22,6 +22,6 @@ try {
 let appearance;
 try { appearance = JSON.parse(localStorage.getItem('znote-appearance')); } catch {}
 document.documentElement.dataset.style = ['minimal', 'glass', 'cyber', 'paper', 'glitch'].includes(appearance?.style) ? appearance.style : 'minimal';
-document.documentElement.dataset.palette = ['forest', 'ocean', 'violet', 'rose', 'amber', 'slate'].includes(appearance?.palette) ? appearance.palette : 'forest';
+document.documentElement.dataset.palette = ['ocean', 'violet', 'rose', 'amber', 'slate'].includes(appearance?.palette) ? appearance.palette : 'slate';
 document.documentElement.dataset.motion = appearance?.motion === 'still' ? 'still' : 'dynamic';
 document.querySelector('link[rel="icon"]')?.setAttribute('href','/icon.svg?v=10');

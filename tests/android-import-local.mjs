@@ -1,6 +1,6 @@
 // Isolated emulator only. Never installs on a USB, Wi-Fi, or pre-existing device.
 import {spawn,execFile} from 'node:child_process';import {promisify} from 'node:util';import {mkdir,mkdtemp,writeFile,readFile,rm,access} from 'node:fs/promises';import {resolve,join,relative,isAbsolute} from 'node:path';import assert from 'node:assert/strict';
-const routes=process.argv.includes('--routes'),overlay=process.argv.includes('--overlay'),exec=promisify(execFile),sdk=process.env.ANDROID_HOME,dir=await mkdtemp(resolve(routes?'artifacts/android-route-local-':overlay?'artifacts/android-overlay-local-':'artifacts/android-import-local-')),serial='emulator-5584';assert.ok(sdk);console.log('Emulator evidence '+dir);
+const appearance=process.argv.includes('--appearance'),routes=process.argv.includes('--routes'),overlay=process.argv.includes('--overlay'),exec=promisify(execFile),sdk=process.env.ANDROID_HOME,dir=await mkdtemp(resolve(appearance?'artifacts/android-appearance-local-':routes?'artifacts/android-route-local-':overlay?'artifacts/android-overlay-local-':'artifacts/android-import-local-')),serial='emulator-5584';assert.ok(sdk);console.log('Emulator evidence '+dir);
 await mkdir(dir,{recursive:true});const adb=join(sdk,'platform-tools/adb.exe'),environment={...process.env,ANDROID_AVD_HOME:join(dir,'avd'),JAVA_OPTS:'-Xmx128m'};await mkdir(environment.ANDROID_AVD_HOME,{recursive:true});
 const run=async(command,args,options={})=>(await exec(command,args,{windowsHide:true,env:environment,timeout:60000,maxBuffer:2e6,...options})).stdout;
 const devices=await run(adb,['devices']);assert.ok(!devices.includes(serial),'Test port is already in use');
@@ -18,8 +18,8 @@ try{
  const gradle=await readFile('clients/android/app/build.gradle','utf8'),version=/versionName '([^']+)'/.exec(gradle)[1],code=Number(/versionCode (\d+)/.exec(gradle)[1]);
  const beta=Number(/-beta\.(\d+)$/.exec(version)[1]),previous=version.replace(/\d+$/,String(beta-1));
  const signed='artifacts/android-beta'+beta+'-release/ZNote-'+version+'-android.apk',oldSigned='artifacts/android-beta'+(beta-1)+'-release/ZNote-'+previous+'-android.apk';
- const signedRelease=(routes||overlay)&&await access(signed).then(()=>true,()=>false);
- if(overlay)assert.ok(signedRelease,'Overlay verification requires the current original-signed release APK');
+ const signedRelease=(routes||overlay||appearance)&&await access(signed).then(()=>true,()=>false);
+ if(overlay||appearance)assert.ok(signedRelease,'Overlay verification requires the current original-signed release APK');
  if(signedRelease){
   await run(adb,['-s',serial,'install',oldSigned]);
   await run(adb,['-s',serial,'shell','appops','set','io.github.borderarea01.znote','REQUEST_INSTALL_PACKAGES','allow']);
@@ -32,9 +32,9 @@ try{
  // Package remove/add broadcasts from the signing-upgrade check must finish
  // before enabling the freshly installed accessibility service.
  await writeFile(join(dir,'package-broadcast-idle.txt'),await run(adb,['-s',serial,'shell','am','wait-for-broadcast-idle'],{timeout:30000}));
- fixture=spawn(process.execPath,['--max-old-space-size=128',routes?'tests/android-route-fixture.mjs':overlay?'tests/android-overlay-fixture.mjs':'tests/android-connection-import-fixture.mjs'],{windowsHide:true,stdio:['ignore','pipe','pipe']});let fixtureLog='';fixture.stdout.on('data',v=>fixtureLog+=v);fixture.stderr.on('data',v=>fixtureLog+=v);
+ fixture=spawn(process.execPath,['--max-old-space-size=128',routes?'tests/android-route-fixture.mjs':(overlay||appearance)?'tests/android-overlay-fixture.mjs':'tests/android-connection-import-fixture.mjs'],{windowsHide:true,stdio:['ignore','pipe','pipe']});let fixtureLog='';fixture.stdout.on('data',v=>fixtureLog+=v);fixture.stderr.on('data',v=>fixtureLog+=v);
  await new Promise(r=>setTimeout(r,500));
- const result=await run(adb,['-s',serial,'shell','am','instrument','-w','-e',routes?'connection_routes':overlay?'overlay_design':'connection_import','true','io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner'],{timeout:150000});
+ const result=await run(adb,['-s',serial,'shell','am','instrument','-w','-e',routes?'connection_routes':appearance?'glitch_appearance':overlay?'overlay_design':'connection_import','true','io.github.borderarea01.znote.test/io.github.borderarea01.znote.SmokeRunner'],{timeout:150000});
  await writeFile(join(dir,'result.txt'),result);await writeFile(join(dir,'fixture.log'),fixtureLog);
  const logs=await run(adb,['-s',serial,'logcat','-d','-v','threadtime','-s','AndroidRuntime:E']);await writeFile(join(dir,'android-runtime.log'),logs);
  if(routes)await writeFile(join(dir,'webview-console.log'),await run(adb,['-s',serial,'logcat','-d','-v','threadtime','-s','chromium:I','cr_WebView:I','ZNoteWeb:E']));
@@ -47,21 +47,22 @@ try{
   assert.ok(result.includes('ZNOTE_OVERLAY_SMOKE_PASS'),result);
   const dragFrames=[...captureLog.matchAll(/drag_frame ms=(\d+)/g)].map(m=>Number(m[1]));assert.ok(dragFrames.length>=3,'Missing real drag frame timings');assert.ok(Math.max(...dragFrames)<250,'Drag render exceeded 250 ms: '+dragFrames.join(','));await writeFile(join(dir,'drag-timing.json'),JSON.stringify({drag_frame_ms:dragFrames,note:'App MOVE-to-draw in isolated Android30; not Honor physical input latency'},null,2));console.log('ZNOTE_OVERLAY_SMOKE_PASS; evidence '+dir);
  }
+ if(appearance){assert.ok(result.includes('ZNOTE_GLITCH_APPEARANCE_PASS'),result);for(const name of['connect-light','connect-dark','panel-light','panel-dark','panel-classic','small-expanded','bookmark']){const png=await run(adb,['-s',serial,'exec-out','run-as','io.github.borderarea01.znote','cat','files/glitch-'+name+'.png'],{encoding:'buffer'});await writeFile(join(dir,name+'.png'),png);}console.log('ZNOTE_GLITCH_APPEARANCE_PASS; uniform photo scale, native light/dark overlay and no-reload bridge');}
  if(routes){
  assert.ok(result.includes('ZNOTE_ANDROID_ROUTE_PASS'),result);
  const stats=await(await fetch('http://127.0.0.1:3842/test/control?mode=stats')).json();await writeFile(join(dir,'routing-stats.json'),JSON.stringify(stats,null,2));assert.equal(stats.credentialLeaks,0);assert.equal(stats.localSubmissions,1);assert.equal(stats.remoteSubmissions,1);assert.equal(stats.items,1);
  assert.ok(result.includes('ZNOTE_ANDROID_ROUTE_PASS'),result);const png=await run(adb,['-s',serial,'exec-out','run-as','io.github.borderarea01.znote','cat','files/route-smoke.png'],{encoding:'buffer'});await writeFile(join(dir,'route-smoke.png'),png);console.log('ZNOTE_ANDROID_ROUTE_PASS; evidence '+dir);
  }
- if(!overlay&&!routes){
+ if(!overlay&&!routes&&!appearance){
  if(result.includes('ZNOTE_CONNECTION_IMPORT_PASS')){const png=await run(adb,['-s',serial,'exec-out','run-as','io.github.borderarea01.znote','cat','files/connection-import.png'],{encoding:'buffer'});assert.ok(png.length>1000);await writeFile(join(dir,'connection-import.png'),png);}
  await run(adb,['-s',serial,'pull','/sdcard/Android/data/io.github.borderarea01.znote/files/client-smoke.png',join(dir,'failure.png')]).catch(()=>{});
  assert.ok(result.includes('ZNOTE_CONNECTION_IMPORT_PASS'),result);console.log('ZNOTE_CONNECTION_IMPORT_PASS; evidence '+dir);
  }
 }finally{
  fixture?.kill();if(emulator){await run(adb,['-s',serial,'emu','kill'],{timeout:5000}).catch(()=>{});await new Promise(r=>setTimeout(r,1000));if(emulator.exitCode===null)emulator.kill();}
- if(routes||overlay){
+ if(routes||overlay||appearance){
    const root=resolve('artifacts'),target=resolve(dir,'device'),rel=relative(root,target);
-   assert.ok(/^android-(route|overlay)-local-/.test(rel)&&!rel.startsWith('..')&&!isAbsolute(rel)&&target.endsWith('device'),'Unsafe emulator cleanup');
+   assert.ok(/^android-(route|overlay|appearance)-local-/.test(rel)&&!rel.startsWith('..')&&!isAbsolute(rel)&&target.endsWith('device'),'Unsafe emulator cleanup');
    await rm(target,{recursive:true,force:true,maxRetries:10,retryDelay:300}).catch(e=>console.log('Test device cleanup pending: '+e.code));
  }
 }

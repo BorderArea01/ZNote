@@ -9,7 +9,7 @@ await sharp(clean).resize({width:720,withoutEnlargement:true}).webp({quality:80}
 await writeFile('clients/desktop/launcher/architecture-clean-mobile.webp',await readFile(dir+'/architecture-clean-mobile.webp'));
 await sharp(photo).resize({width:1600,withoutEnlargement:true}).webp({quality:83}).toFile(dir+'/architecture.webp');
 await sharp(photo).resize({width:720,withoutEnlargement:true}).webp({quality:80}).toFile(dir+'/architecture-mobile.webp');
-await sharp(photo).resize({width:720,withoutEnlargement:true}).webp({quality:80}).toFile(native+'/glitch_architecture.webp');
+await sharp(clean).resize({width:720,withoutEnlargement:true}).webp({quality:80}).toFile(native+'/glitch_architecture.webp');
 await writeFile('clients/desktop/launcher/glitch-architecture.webp',await readFile(dir+'/architecture-mobile.webp'));
 await writeFile('clients/desktop/launcher/fragments.css',await readFile(dir+'/fragments.css'));
 await writeFile('clients/desktop/launcher/fragment-masks.css',await readFile(dir+'/fragment-masks.css'));
