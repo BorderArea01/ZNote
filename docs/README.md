@@ -4,6 +4,7 @@
 
 ## 使用与部署
 
+- [多端采集](CAPTURE.md)：手机复制链接、浏览器就地保存、适配范围与远程连接
 - [完整使用指南](USAGE.md)：浏览、分组、多选、笔记、视频与任务
 - [部署指南](DEPLOYMENT.md)：本机、局域网、Docker、更新与运行维护
 - [客户端安装](CLIENTS.md)：Windows、Android、iPhone / iPad 与桌面入口
