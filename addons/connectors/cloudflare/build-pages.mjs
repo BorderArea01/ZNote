@@ -3,12 +3,15 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..'),dir=join(
 const themeDir=join(dir,'themes/glitch');await mkdir(themeDir,{recursive:true});for(const file of['architecture-mobile.webp','architecture-clean-mobile.webp','icon.svg','fragments.css','fragment-masks.css','motion.js','rupture.svg'])await copyFile(join(root,'public/themes/glitch',file),join(themeDir,file));
 await build({entryPoints:[join(root,'addons/connectors/cloudflare/worker.js')],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:join(dir,'_worker.js'),legalComments:'eof'});
 await writeFile(join(dir,'index.html'),portalHtml);
+// Avoid Pages SPA fallback returning portal HTML as an apparently successful
+// APK download when an old or unavailable release filename is requested.
+await writeFile(join(dir,'404.html'),'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>文件不存在 · ZNote</title><p>此文件不存在，请返回 ZNote 检查更新。</p></html>');
 // Optional public release artifacts only. Never copy collector configuration,
 // credentials, databases, or media into Pages static assets.
 let release;try{release=JSON.parse(await readFile(join(root,'data/cloudflare-collector/client-release.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
 if(release){
  if(!/^\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(release.version))throw Error('Invalid Android release version');
- const downloads=join(dir,'downloads');await mkdir(downloads,{recursive:true});const manifest={version:release.version};
+ const downloads=join(dir,'downloads');await mkdir(downloads,{recursive:true});const manifest={version:release.version,notes:typeof release.notes==='string'?release.notes:''};
  for(const [key,suffix]of[['apk','android.apk'],['source','source.zip']]){
   const file=resolve(root,release[key]);if(!file.startsWith(join(root,'artifacts')+'/')&&!file.startsWith(join(root,'artifacts')+'\\'))throw Error('Release source must be inside artifacts');
   const bytes=await readFile(file);if(bytes.length>24*1024*1024)throw Error('Release artifact exceeds static file budget');

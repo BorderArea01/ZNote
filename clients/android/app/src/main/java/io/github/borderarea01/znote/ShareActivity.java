@@ -40,6 +40,8 @@ public class ShareActivity extends Activity {
     private boolean busy=false,visible=false,ready=false,completed=false,quickSave=false,autoShare=false;
     private boolean clipboardPending,clipboardFeedback;
     private int clipboardAttempts;
+    private long copyFocusDeadline;
+    private boolean copyFocusRestored;
     private final ClipboardManager.OnPrimaryClipChangedListener clipboardListener=()->{if(clipboardPending&&hasWindowFocus())handler.post(this::readClipboard);};
     private void timing(String event){String detail="launch_ms="+Math.max(0,SystemClock.elapsedRealtime()-getIntent().getLongExtra("panel_requested_at",SystemClock.elapsedRealtime()));if(CaptureAssistService.current!=null)CaptureAssistService.current.record(event,detail);else android.util.Log.i("ZNoteCapture",event+" "+detail);}
     private boolean floating(){return this instanceof FloatingShareActivity;}
@@ -76,6 +78,7 @@ public class ShareActivity extends Activity {
         if(getIntent().getBooleanExtra("fresh_capture",false)){state=null;getIntent().removeExtra("fresh_capture");}super.onCreate(state);NativeAppearance.loadCapture(this);NativeAppearance.window(this);timing("panel_create");
         if(state!=null){requestId=state.getString("requestId",requestId);jobId=state.getString("jobId","");submissionOrigin=state.getString("submissionOrigin","");uploaded=state.getInt("uploaded",0);}
         Intent intent=getIntent();String shared=sharedText(intent);
+        copyFocusDeadline=SystemClock.uptimeMillis()+8000;
         try{
             if(Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())){ArrayList<Uri> values=intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);if(values!=null)for(Uri value:values)addFile(value);}
             else if(Intent.ACTION_SEND.equals(intent.getAction()))addFile(intent.getParcelableExtra(Intent.EXTRA_STREAM));
@@ -135,7 +138,15 @@ public class ShareActivity extends Activity {
     }
     private void openLibrary(){startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));}
     @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==61){quickSave=false;if(pixivLogin!=null)pixivLogin.setText(result==RESULT_OK?"管理 Pixiv 登录":"登录 Pixiv");if(status!=null)status.setText(result==RESULT_OK?"Pixiv 登录状态已保存在手机，可继续保存当前作品":"已返回，作品链接仍保留");}}
-    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused)timing("panel_focus");if(focused&&clipboardPending)handler.post(this::readClipboard);}
+    boolean waitingForCopyFocus(){return getIntent().getBooleanExtra("copy_prompt",false)&&!copyFocusRestored&&!busy&&!completed&&SystemClock.uptimeMillis()<copyFocusDeadline;}
+    // Activity.onUserInteraction also runs when another Activity comes to
+    // the front. Only actual input in this panel ends automatic recovery.
+    private void usedCopyPanel(){copyFocusRestored=true;if(CaptureAssistService.current!=null)CaptureAssistService.current.stopCopyFocusRecovery(this);}
+    @Override public boolean dispatchTouchEvent(MotionEvent event){if(event.getActionMasked()==MotionEvent.ACTION_DOWN||event.getActionMasked()==MotionEvent.ACTION_OUTSIDE)usedCopyPanel();return super.dispatchTouchEvent(event);}
+    @Override public boolean dispatchKeyEvent(KeyEvent event){if(event.getAction()==KeyEvent.ACTION_DOWN)usedCopyPanel();return super.dispatchKeyEvent(event);}
+    private void copyFocusLost(){if(getIntent().getBooleanExtra("copy_prompt",false)&&CaptureAssistService.current!=null)CaptureAssistService.current.record("copy_panel_focus_lost","waiting="+waitingForCopyFocus()+" restored="+copyFocusRestored+" finishing="+isFinishing()+" pending="+clipboardPending+" remaining_ms="+Math.max(0,copyFocusDeadline-SystemClock.uptimeMillis()));if(!floating()||!waitingForCopyFocus()||isFinishing()||CaptureAssistService.current==null)return;if(copyFocusDeadline==0)copyFocusDeadline=SystemClock.uptimeMillis()+8000;CaptureAssistService.current.recoverCopyFocus(this,getIntent().getStringExtra("source_package"),copyFocusDeadline);}
+    void restoreCopyFocus(){if(!waitingForCopyFocus()||isFinishing()||isDestroyed())return;copyFocusRestored=true;try{startActivity(new Intent(this,getClass()).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("restore_copy_prompt",true));}catch(RuntimeException e){timing("copy_focus_restore_blocked");}}
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused){timing("panel_focus");if(CaptureAssistService.current!=null)CaptureAssistService.current.stopCopyFocusRecovery(this);if(clipboardPending)handler.post(this::readClipboard);}else copyFocusLost();}
     private void readClipboard(){
         if(!hasWindowFocus()||!clipboardPending||isFinishing())return;
         try{
@@ -157,7 +168,7 @@ public class ShareActivity extends Activity {
         if(++clipboardAttempts<20){handler.postDelayed(this::readClipboard,200);return;}
         clipboardPending=false;clipboardFeedback=true;status.setText("未读到本次分享链接，可直接在上方输入框长按粘贴");text.requestFocus();
     }
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);intent.putExtra("fresh_capture",true);setIntent(intent);handler.removeCallbacksAndMessages(null);jobId="";submissionOrigin="";requestId=UUID.randomUUID().toString();uploaded=0;busy=false;completed=false;recreate();}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);if(intent.getBooleanExtra("restore_copy_prompt",false))return;intent.putExtra("fresh_capture",true);setIntent(intent);handler.removeCallbacksAndMessages(null);jobId="";submissionOrigin="";requestId=UUID.randomUUID().toString();uploaded=0;busy=false;completed=false;recreate();}
     private void nextCapture(){if(!files.isEmpty()){onNewIntent(new Intent(this,getClass()));return;}handler.removeCallbacksAndMessages(null);jobId="";submissionOrigin="";requestId=UUID.randomUUID().toString();uploaded=0;files.clear();busy=false;completed=false;collection.setEnabled(true);text.setEnabled(true);text.setText("");if(imageMode!=null)imageMode.setEnabled(true);save.setText("保存到知识库");save.setEnabled(ready);save.setOnClickListener(v->submit());status.setText("可粘贴下一条分享链接");}
     private String sharedText(Intent intent){
         LinkedHashSet<String> parts=new LinkedHashSet<>();for(String key:new String[]{Intent.EXTRA_TEXT,Intent.EXTRA_SUBJECT,Intent.EXTRA_TITLE}){CharSequence value=intent.getCharSequenceExtra(key);if(value!=null&&!value.toString().trim().isEmpty())parts.add(value.toString().trim());}
@@ -168,7 +179,7 @@ public class ShareActivity extends Activity {
     private void saved(String message){busy=false;completed=true;status.setText(message);save.setText("继续采集");save.setEnabled(true);save.setOnClickListener(v->nextCapture());}
     private void addFile(Uri uri){if(uri!=null&&"content".equals(uri.getScheme())&&!files.contains(uri))files.add(uri);}
     @Override protected void onResume(){super.onResume();visible=true;captureVisible=true;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).addPrimaryClipChangedListener(clipboardListener);if(!completed&&(!busy||!jobId.isEmpty()))loadCollections();}
-    @Override protected void onPause(){visible=false;captureVisible=false;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).removePrimaryClipChangedListener(clipboardListener);handler.removeCallbacksAndMessages(null);super.onPause();}
+    @Override protected void onPause(){visible=false;captureVisible=false;((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).removePrimaryClipChangedListener(clipboardListener);handler.removeCallbacksAndMessages(null);if(isFinishing()){if(CaptureAssistService.current!=null)CaptureAssistService.current.stopCopyFocusRecovery(this);}else copyFocusLost();super.onPause();}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putString("requestId",requestId);state.putString("jobId",jobId);state.putString("submissionOrigin",submissionOrigin);state.putInt("uploaded",uploaded);}
     private void ui(Runnable run){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())run.run();});}
     private String selectedCollection(){int at=collection.getSelectedItemPosition();return at>=0&&at<collectionIds.size()?collectionIds.get(at):getIntent().hasExtra("selected_collection")?getIntent().getStringExtra("selected_collection"):preferences().getString("share_collection","");}

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Main changes go through a PR whose current head checks have passed.
+# Signed release tags are created by the verified publication flow.
+while read -r local_ref local_oid remote_ref remote_oid
+do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master|refs/heads/release|refs/heads/release/*|refs/heads/releases/*|refs/tags/*)
+      echo "ZNote: direct push to $remote_ref is blocked. Use the checked PR/release flow." >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
