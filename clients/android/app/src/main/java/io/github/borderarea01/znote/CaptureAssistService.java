@@ -63,6 +63,8 @@ public class CaptureAssistService extends AccessibilityService {
     private long directShareUntil;
     private final CopyLinkTrigger copyTrigger=new CopyLinkTrigger();
     private Runnable copyPrompt;
+    private Runnable copyFocusRecovery;
+    private java.lang.ref.WeakReference<ShareActivity> copyFocusPage;
     private final java.util.concurrent.atomic.AtomicBoolean copyInspecting=new java.util.concurrent.atomic.AtomicBoolean();
     private final BroadcastReceiver appearanceReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){NativeAppearance.apply(c,i.getStringExtra("style"),i.getStringExtra("mode"));NativeAppearance.capturePalette();if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;render();}}};
     private SharedPreferences prefs(){return getSharedPreferences("CaptureAssist",MODE_PRIVATE);}
@@ -77,6 +79,10 @@ public class CaptureAssistService extends AccessibilityService {
     }
     @Override protected void onServiceConnected(){NativeAppearance.loadCapture(this);NativeAppearance.register(this,appearanceReceiver);current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
+        // Subscribe to window changes so the framework invalidates its active
+        // root cache when a system copy suggestion appears/disappears. Do not
+        // inspect those windows or treat their text as copy actions.
+        if(event!=null&&(event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED||event.getEventType()==AccessibilityEvent.TYPE_WINDOWS_CHANGED))return;
         if(event==null||event.isPassword()||busy||ShareActivity.captureVisible||bubble==null||!prefs().getBoolean("copy_link_prompt",true))return;
         String owner=String.valueOf(event.getPackageName());if(owner.equals(getPackageName())||owner.equals("null"))return;
         if(event.getEventType()==AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED){if(!"android.widget.Toast".contentEquals(event.getClassName()==null?"":event.getClassName()))return;for(CharSequence label:event.getText())if(CopyLinkTrigger.completed(label)){prepareCopyPrompt(owner,event.getEventTime());return;}return;}
@@ -101,10 +107,32 @@ public class CaptureAssistService extends AccessibilityService {
         if(busy||ShareActivity.captureVisible||bubble==null||!prefs().getBoolean("copy_link_prompt",true)||!copyTrigger.accept(time,SystemClock.uptimeMillis()))return;
         long after=System.currentTimeMillis()-(SystemClock.uptimeMillis()-time)-250;int version=generation;
         if(copyPrompt!=null)handler.removeCallbacks(copyPrompt);
-        copyPrompt=()->{copyPrompt=null;if(version==generation&&bubble!=null&&!busy&&prefs().getBoolean("copy_link_prompt",true)){record("copy_link_prompt","user_copy_action");openPanel("",owner,after,true,false);}};
-        handler.postDelayed(copyPrompt,250);
+        final long deadline=SystemClock.uptimeMillis()+8000;
+        copyPrompt=new Runnable(){@Override public void run(){
+            if(version!=generation||bubble==null||busy||!prefs().getBoolean("copy_link_prompt",true)){copyPrompt=null;return;}
+            reader.execute(()->{String focused=focusedPackage();handler.post(()->{
+                if(copyPrompt!=this||version!=generation)return;
+                if(owner.equals(focused)){copyPrompt=null;record("copy_link_prompt","user_copy_action");openPanel("",owner,after,true,false);}
+                else if(SystemClock.uptimeMillis()<deadline)handler.postDelayed(this,250);
+                else{copyPrompt=null;record("copy_link_deferred","source_not_focused");message("复制后被其他窗口遮挡，点书签可继续粘贴保存");}
+            });});
+        }};
+        handler.postDelayed(copyPrompt,450);
     }
-    void configureCopyPrompt(){android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();if(info==null)return;info.eventTypes=visible()&&prefs().getBoolean("copy_link_prompt",true)?AccessibilityEvent.TYPE_VIEW_CLICKED|AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:0;info.notificationTimeout=80;setServiceInfo(info);}
+    private String focusedPackage(){AccessibilityNodeInfo root=null;try{root=getRootInActiveWindow();return root==null?"":String.valueOf(root.getPackageName());}catch(RuntimeException e){return "";}finally{if(root!=null)root.recycle();}}
+    void stopCopyFocusRecovery(ShareActivity page){if(copyFocusPage!=null&&copyFocusPage.get()!=page)return;if(copyFocusRecovery!=null)handler.removeCallbacks(copyFocusRecovery);copyFocusRecovery=null;copyFocusPage=null;}
+    void recoverCopyFocus(ShareActivity page,String owner,long deadline){
+        if(owner==null||owner.isEmpty()||copyFocusRecovery!=null||SystemClock.uptimeMillis()>=deadline)return;
+        copyFocusPage=new java.lang.ref.WeakReference<>(page);final int version=generation;
+        copyFocusRecovery=new Runnable(){@Override public void run(){
+            ShareActivity target=copyFocusPage==null?null:copyFocusPage.get();if(target==null||target.isFinishing()||target.isDestroyed()||version!=generation||!target.waitingForCopyFocus()||target.hasWindowFocus()||SystemClock.uptimeMillis()>=deadline){stopCopyFocusRecovery(target);return;}
+            reader.execute(()->{String focused=focusedPackage();handler.post(()->{if(copyFocusRecovery!=this||version!=generation)return;ShareActivity current=copyFocusPage==null?null:copyFocusPage.get();if(current==null){stopCopyFocusRecovery(null);return;}
+                if(owner.equals(focused)){stopCopyFocusRecovery(current);current.restoreCopyFocus();record("copy_focus_recovery","source_returned");}
+                else handler.postDelayed(this,250);
+            });});
+        }};handler.postDelayed(copyFocusRecovery,350);
+    }
+    void configureCopyPrompt(){android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();if(info==null)return;info.eventTypes=visible()&&prefs().getBoolean("copy_link_prompt",true)?AccessibilityEvent.TYPE_VIEW_CLICKED|AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED|AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED|AccessibilityEvent.TYPE_WINDOWS_CHANGED:0;info.notificationTimeout=80;setServiceInfo(info);}
     @Override public void onInterrupt(){cancel();if(bubble!=null)message("采集被系统中断，可重新尝试");}
     @Override public void onDestroy(){try{unregisterReceiver(appearanceReceiver);}catch(Exception ignored){}hideBubble();record("service_destroy","called");diagnostics.shutdown();reader.shutdownNow();catalogue.shutdownNow();tracker.shutdownNow();((android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(3741);if(current==this)current=null;super.onDestroy();}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);NativeAppearance.loadCapture(this);if(bubble!=null){bubble.removeAllViews();handle=null;panel=null;}cancel();expanded=false;libraryMenuExpanded=false;render();}
@@ -137,7 +165,7 @@ public class CaptureAssistService extends AccessibilityService {
     // addView registers the window before the first View attachment callback.
     // Updating here must also position that first frame, not wait for a tap.
     private void updateWindow(){if(bubble!=null)try{manager.updateViewLayout(bubble,layout);}catch(RuntimeException e){bubble=null;record("detached",e.getClass().getSimpleName());}}
-    private void cancel(){generation++;if(operation!=null)operation.cancel(true);operation=null;busy=false;dragging=false;stopDockAnimation();dismissNotice();if(captureTimeout!=null)handler.removeCallbacks(captureTimeout);captureTimeout=null;handler.removeCallbacks(progressTick);tickScheduled=false;if(bubble!=null){layout.flags=windowFlags();updateWindow();}}
+    private void cancel(){generation++;if(copyPrompt!=null)handler.removeCallbacks(copyPrompt);copyPrompt=null;stopCopyFocusRecovery(copyFocusPage==null?null:copyFocusPage.get());if(operation!=null)operation.cancel(true);operation=null;busy=false;dragging=false;stopDockAnimation();dismissNotice();if(captureTimeout!=null)handler.removeCallbacks(captureTimeout);captureTimeout=null;handler.removeCallbacks(progressTick);tickScheduled=false;if(bubble!=null){layout.flags=windowFlags();updateWindow();}}
     private int windowFlags(){return WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;}
     private boolean working(){return busy||savingJobs>0;}
     private int artworkState(){return working()?1:resultPending?(resultFailed?3:2):0;}
@@ -277,7 +305,8 @@ public class CaptureAssistService extends AccessibilityService {
         view.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener(){boolean done;public void onDraw(){if(done)return;done=true;record(event,"ms="+Math.max(0,SystemClock.uptimeMillis()-started));view.post(()->{if(view.getViewTreeObserver().isAlive())view.getViewTreeObserver().removeOnDrawListener(this);});}});view.invalidate();
     }
     private void message(String text){lastMessage=text;busy=false;libraryMenuExpanded=false;resultFailed=!text.startsWith("已取消");resultPending=resultFailed;render();if(!expanded&&resultFailed)showResultNotice(false);}
-    private static boolean social(String pkg){return pkg.equals("com.xingin.xhs")||pkg.equals("com.ss.android.ugc.aweme")||pkg.equals("com.ss.android.ugc.aweme.lite")||bilibili(pkg);}
+    private static boolean kuaishou(String pkg){return pkg.equals("com.smile.gifmaker")||pkg.equals("com.kuaishou.nebula");}
+    private static boolean social(String pkg){return pkg.equals("com.xingin.xhs")||pkg.equals("com.ss.android.ugc.aweme")||pkg.equals("com.ss.android.ugc.aweme.lite")||kuaishou(pkg)||bilibili(pkg);}
     private static boolean bilibili(String pkg){return Arrays.asList("tv.danmaku.bili","com.bilibili.app.in","com.bilibili.app.blue").contains(pkg);}
     private static boolean browser(String pkg){return Arrays.asList("com.android.chrome","com.chrome.beta","com.microsoft.emmx","org.mozilla.firefox","org.mozilla.fenix","com.sec.android.app.sbrowser","com.heytap.browser","com.vivo.browser","com.UCMobile","com.android.browser","com.huawei.browser","com.mi.globalbrowser","com.brave.browser").contains(pkg);}
     private String pkg(AccessibilityNodeInfo n){return n.getPackageName()==null?"":n.getPackageName().toString();}
@@ -389,7 +418,7 @@ public class CaptureAssistService extends AccessibilityService {
         if(owner==null||owner.isEmpty()||!social(owner)&&!browser(owner))return true;
         String host=uri.getHost();if(host==null)return false;
         host=host.toLowerCase(Locale.ROOT);
-        String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:social(owner)?new String[]{"douyin.com","iesdouyin.com"}:new String[]{"douyin.com","iesdouyin.com","bilibili.com","b23.tv","xiaohongshu.com","xhslink.com","xhslink.cn","pixiv.net","e-hentai.org","exhentai.org","pawchive.pw","pawchive.st"};
+        String[] domains=bilibili(owner)?new String[]{"bilibili.com","b23.tv"}:owner.equals("com.xingin.xhs")?new String[]{"xiaohongshu.com","xhslink.com","xhslink.cn"}:kuaishou(owner)?new String[]{"kuaishou.com","chenzhongtech.com","gifshow.com"}:social(owner)?new String[]{"douyin.com","iesdouyin.com"}:new String[]{"douyin.com","iesdouyin.com","kuaishou.com","chenzhongtech.com","gifshow.com","bilibili.com","b23.tv","xiaohongshu.com","xhslink.com","xhslink.cn","pixiv.net","e-hentai.org","exhentai.org","pawchive.pw","pawchive.st"};
         for(String domain:domains)if(host.equals(domain)||host.endsWith("."+domain))return true;return false;
     }
     private synchronized void armDirectShare(String owner){directShareOwner=owner;directShareUntil=SystemClock.elapsedRealtime()+12000;}

@@ -1,6 +1,6 @@
 # 在电脑和手机上使用 ZNote
 
-ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。各平台安装包和验证范围以 [Release 说明](https://github.com/BorderArea01/ZNote/releases)为准；截至 2026-11-04，Windows 为 **0.10.0-beta.28**、Android 为 **0.10.0-beta.31**，macOS 为此前发布的版本。
+ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。各平台安装包和验证范围以 [Release 说明](https://github.com/BorderArea01/ZNote/releases)为准；截至 2026-11-04，Windows 为 **0.10.0-beta.28**、Android 为 **0.10.0-beta.32**，macOS 为此前发布的版本。
 
 Android 采集浮窗使用平滑深色面板，贴边小书签没有像素条纹装饰；连接页和图库外观可以分别跟随已选主题。网页支持简约、毛玻璃、赛博朋克、纸感、建筑故障五种风格。
 
@@ -68,7 +68,9 @@ Windows / macOS 首个测试版尚未获得商业代码签名证书 / Apple 公�
 
 点击下载后由 Android 在后台下载，可离开页面，返回后继续查看进度或安装。安装前校验 SHA-256、包名、版本和签名，再打开系统安装确认。首次可能需要允许 ZNote 安装应用；取消授权或安装仍保留已下载的包，可再次安装。覆盖更新保留连接地址、登录与配置，**不需要卸载旧版**。
 
-beta.9 及更早版本需要先手动覆盖安装一次带更新功能的版本，之后可在 App 内获取更新。此入口更新 Android 客户端，不代替电脑 / NAS 服务端更新。检查与下载需能访问 GitHub；失败时显示状态并支持重试。
+beta.32 起，检查版本与下载优先使用同一个 Pages 发布地址，避免代理共享出口的 GitHub API 限流阻断检查；目录失败再查 GitHub。下载失败或连接后连续 20 秒无进度时，返回更新页会自动尝试另一个来源一次；系统明确等待网络时保留下载等待恢复，不循环切换。备用包仍使用同一份预期 SHA-256 和大小校验。保留可用的代理即可，无需为了检查与下载分别切换；Pages 与 GitHub 都不可达时仍会明确报错。
+
+beta.31 及更早版本仍使用旧更新入口，如遇检查失败，可从 [Pages 下载页](https://znote-capture-inbox.pages.dev)手动覆盖安装一次新版。beta.9 及更早版本没有应用内更新入口。此入口只更新 Android 客户端，不代替电脑 / NAS 服务端更新。
 
 ### 手机分享与悬浮采集（Android 0.10.0-beta.9 起）
 
@@ -166,6 +168,8 @@ cd clients/android
 未设置签名环境变量时生成 unsigned APK，**不能将它当成可安装发行版**。可用 `ZNOTE_ANDROID_KEYSTORE`、`ZNOTE_ANDROID_STORE_PASSWORD`、`ZNOTE_ANDROID_KEY_ALIAS`、`ZNOTE_ANDROID_KEY_PASSWORD` 签名；或用 Android SDK `apksigner` 对受控构建产物签名。不要提交密钥；请保留同一签名密钥并独立备份，保证未来可覆盖升级。
 
 Windows 本机维护使用 `scripts/build-android-controlled.ps1 -PrioritizeBuildWhenNoGame`（先设置 `JAVA_HOME`、`ANDROID_HOME`，依赖需已缓存）：离线构建 release、Lint 与测试 APK，单 worker、512 MiB Gradle heap、无持久 daemon；持续检测真实游戏进程和至少 1.5 GiB 可用内存，只停止本任务进程树、不自动重试。独立模拟器导入验收见 `tests/android-import-local.mjs`，必须由 `scripts/run-android-guarded.mjs` 同样保护，不能部署到用户现有设备代替隔离验收。
+
+更新与复制焦点专项使用 `tests/android-update-local.mjs`，同样通过资源守卫启动。它新建 SDK30 模拟器，先安装上一版原签名 APK 再覆盖安装当前候选。`--public` 会在该模拟器设置开发机的 `10.0.2.2:7897` 测试代理并真实读取公开版本与 APK；`--copy` 需先构建 `:capturefixture:assembleDebug`，覆盖复制建议抢焦点与快手复制入口。这些参数不修改开发机或手机代理，也不能替代荣耀真机验证。
 
 仓库的 `Build clients` 工作流分别在 Windows、Apple 芯片 Mac、Intel Mac 与 Linux Android 构建机运行。发布前检查测试和签名，把安装包、对应版本源码及 SHA-256 校验清单一起附上。构建成功不能代替所有设备的实机验收。
 

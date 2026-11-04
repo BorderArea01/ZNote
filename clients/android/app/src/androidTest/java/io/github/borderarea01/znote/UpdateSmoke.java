@@ -36,11 +36,20 @@ final class UpdateSmoke {
         JSONObject r=new JSONObject().put("draft",false).put("prerelease",true).put("assets",new JSONArray().put(asset));
         if(AppUpdates.latest(new JSONArray().put(r),"0.10.0-beta.10")==null)throw new Exception("Beta release missing");
         r.put("draft",true);if(AppUpdates.latest(new JSONArray().put(r),"0.10.0-beta.10")!=null)throw new Exception("Draft accepted");r.put("draft",false);asset.put("browser_download_url","https://example.com/update.apk");if(AppUpdates.latest(new JSONArray().put(r),"0.10.0-beta.10")!=null)throw new Exception("Foreign update source accepted");
+        JSONObject pages=new JSONObject().put("version","0.10.0-beta.32").put("apk","/downloads/ZNote-0.10.0-beta.32-android.apk").put("apk_sha256","b".repeat(64)).put("apk_size",123);
+        AppUpdates.Release primary=AppUpdates.pagesRelease(pages,"0.10.0-beta.31");if(primary==null||!primary.url.equals(AppUpdates.pagesUrl("0.10.0-beta.32")))throw new Exception("Pages catalog missing");
+        if(AppUpdates.pagesRelease(pages,"0.10.0-beta.32")!=null)throw new Exception("Current release reported as upgrade");
+        final int[] calls={0};AppUpdates.checkCatalog("0.10.0-beta.31",url->{calls[0]++;if(!url.equals(AppUpdates.MANIFEST))throw new Exception("Should not query GitHub when Pages works");return pages.toString();});if(calls[0]!=1)throw new Exception("Redundant catalog requests");
+        pages.put("apk","https://example.com/update.apk");try{AppUpdates.pagesRelease(pages,"0.10.0-beta.31");throw new AssertionError("Foreign Pages APK accepted");}catch(IOException expected){}
+        pages.put("apk","/downloads/ZNote-0.10.0-beta.32-android.apk").put("apk_sha256","invalid");try{AppUpdates.pagesRelease(pages,"0.10.0-beta.31");throw new AssertionError("Invalid Pages digest accepted");}catch(IOException expected){}
+        asset.put("browser_download_url",AppUpdates.githubUrl("0.10.0-beta.11"));calls[0]=0;AppUpdates.Release fallback=AppUpdates.checkCatalog("0.10.0-beta.10",url->{calls[0]++;if(url.equals(AppUpdates.MANIFEST))throw new java.net.SocketTimeoutException();return new JSONArray().put(r).toString();});if(calls[0]!=2||fallback==null||!fallback.version.equals("0.10.0-beta.11"))throw new Exception("Independent catalog fallback failed");
+        try{AppUpdates.checkCatalog("0.10.0-beta.10",url->{throw new IOException("HTTP 403");});throw new AssertionError("Total outage reported as latest");}catch(IOException expected){if(!expected.getMessage().contains("HTTP 403"))throw expected;}
     }
     void run()throws Exception{
-        catalog();Context c=context();PackageInfo base=c.getPackageManager().getPackageInfo(c.getPackageName(),0);if(!"0.10.0-beta.19".equals(base.versionName)||base.getLongVersionCode()!=10019)throw new Exception("Release version name/code are not aligned");c.getSharedPreferences("MainActivity",0).edit().putString("update_marker","preserved").commit();
+        catalog();Context c=context();PackageInfo base=c.getPackageManager().getPackageInfo(c.getPackageName(),0);c.getSharedPreferences("MainActivity",0).edit().putString("update_marker","preserved").commit();
         JSONObject manifest;try(InputStream in=new java.net.URL("http://10.0.2.2:3744/manifest").openStream()){manifest=new JSONObject(new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));}
         AppUpdates.Release release=AppUpdates.Release.read(manifest);
+        if(AppUpdates.compare(release.version,base.versionName)<=0)throw new Exception("Fixture must be a newer version than installed app");
         DownloadManager dm=(DownloadManager)c.getSystemService(Context.DOWNLOAD_SERVICE);AppUpdates.clear(c);
         long id=dm.enqueue(new DownloadManager.Request(Uri.parse("http://10.0.2.2:3744/update.apk")).setDestinationInExternalFilesDir(c,Environment.DIRECTORY_DOWNLOADS,"znote-update-"+release.version+".apk"));
         AppUpdates.prefs(c).edit().putLong("download_id",id).putString("release",release.json().toString()).commit();

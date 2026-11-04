@@ -19,6 +19,7 @@ import {captureMusic} from './capture-music.js';
 import {tiebaThread, fetchTiebaPlan} from './capture-tieba.js';
 import {douyinArticle,extractDouyinArticle} from './capture-douyin-article.js';
 import {zeriComic,fetchZeriChapter} from './capture-zeri.js';
+import {kuaishouHost,fetchKuaishouPlan,extractKuaishouCapture} from './capture-kuaishou.js';
 const fail = message => Object.assign(Error(message), { status: 422 });
 const absolute = (v, base) => { try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
 const EH_HOST = /^(?:www\.)?(?:e-hentai|exhentai)\.org$/i;
@@ -37,12 +38,12 @@ async function fetchDocument(value, signal, redirects = 0, extra = {}) {
   signal.throwIfAborted();
   const target = addresses[0];
   return new Promise((resolve, reject) => {
-    const agent = getAgent();
+    const agent = extra.direct ? undefined : getAgent();
     const headers = {
       'User-Agent': extra.userAgent || 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36',
       Accept: extra.accept || 'text/html,image/*',
       'Accept-Encoding': 'identity',
-      ...(extra.body ? {'Content-Type':'application/x-www-form-urlencoded', 'Content-Length':Buffer.byteLength(extra.body)} : {}),
+      ...(extra.body ? {'Content-Type':extra.contentType||'application/x-www-form-urlencoded', 'Content-Length':Buffer.byteLength(extra.body)} : {}),
       ...(extra.referer ? { Referer: extra.referer } : {}),
       ...(extra.ehSession?.origin===url.origin && extra.ehSession.cookie ? {Cookie:extra.ehSession.cookie} : {}),
     };
@@ -78,6 +79,7 @@ const fetchDocument=createCaptureDocumentFetcher();
 
 export async function fetchCapturePage(value, signal, redirects = 0, options = {}) {
   const url = new URL(value);
+  if(kuaishouHost(url.hostname))return fetchKuaishouPlan(value,signal,fetchDocument,options);
   if(zeriComic(value))return fetchZeriChapter(value,signal,{fetchDocument,progress:options.progress});
   if(douyinArticle(value)){
     // The mobile UA redirects articles to /home. Desktop pages subsequently
@@ -507,6 +509,7 @@ function liveAddressUrls(value,base,depth=0){
 export function extractCapturePage(html, url) {
   const youtube=youtubeVideoUrl(url);
   if(youtube)return {kind:'video',url:youtube,title:'YouTube 视频',images:[]};
+  if(kuaishouHost(new URL(url).hostname))return extractKuaishouCapture(html,url);
   const gallery=extractJlijiGallery(html,url);if(gallery)return gallery;
   const chapter=extractComicChapter(html,url);if(chapter)return chapter;
   const { document } = parseHTML(html), u = new URL(url), host = u.hostname;
