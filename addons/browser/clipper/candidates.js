@@ -97,12 +97,34 @@ globalThis.ZNoteCandidates = (element) => {
 // small local wrapper; never pick the first unrelated image in a gallery.
 globalThis.ZNoteImageTarget = (event) => {
   const path = event.composedPath();
-  const direct = path.find(n => n?.tagName === 'IMG');
-  if (direct && globalThis.ZNoteCandidates(direct).length) return direct;
+  const hits = document.elementsFromPoint(event.clientX, event.clientY);
   const visibleAtPoint = el => {
     const r = el.getBoundingClientRect(), style = getComputedStyle(el);
-    return r.width > 0 && r.height > 0 && event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom && style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0';
+    if (!(r.width > 0 && r.height > 0 && event.clientX >= r.left && event.clientX < r.right && event.clientY >= r.top && event.clientY < r.bottom)) return false;
+    // Layout rectangles include carousel slides outside an overflow viewport.
+    // Use the browser's painted hit stack, not just those un-clipped boxes.
+    for (let parent = el; parent; parent = parent.parentElement || parent.getRootNode()?.host) {
+      const s = getComputedStyle(parent);
+      if (s.visibility === 'hidden' || s.visibility === 'collapse' || s.display === 'none' || Number(s.opacity) === 0 || s.contentVisibility === 'hidden') return false;
+    }
+    if (style.pointerEvents !== 'none') {
+      const tree = el.getRootNode();
+      return hits.includes(el) || tree !== document && typeof tree.elementsFromPoint === 'function' && tree.elementsFromPoint(event.clientX, event.clientY).includes(el);
+    }
+    // Non-interactive thumbnails are absent from elementsFromPoint. Preserve
+    // them under badges/links, but apply every ancestor's overflow clipping.
+    for (let parent = el.parentElement || el.getRootNode()?.host; parent; parent = parent.parentElement || parent.getRootNode()?.host) {
+      const s = getComputedStyle(parent), box = parent.getBoundingClientRect();
+      const scaleX = parent.offsetWidth ? box.width / parent.offsetWidth : 1;
+      const scaleY = parent.offsetHeight ? box.height / parent.offsetHeight : 1;
+      const left = box.left + parent.clientLeft * scaleX, top = box.top + parent.clientTop * scaleY;
+      if (s.overflowX !== 'visible' && (event.clientX < left || event.clientX >= left + parent.clientWidth * scaleX)) return false;
+      if (s.overflowY !== 'visible' && (event.clientY < top || event.clientY >= top + parent.clientHeight * scaleY)) return false;
+    }
+    return true;
   };
+  const direct = path.find(n => n?.tagName === 'IMG');
+  if (direct && visibleAtPoint(direct) && globalThis.ZNoteCandidates(direct).length) return direct;
   let target = path.find(n => n instanceof Element);
   for (let level = 0; target && level < 4 && !['BODY', 'HTML'].includes(target.tagName); level++, target = target.parentElement) {
     const images = [...target.querySelectorAll('img')].slice(0, 80).filter(visibleAtPoint);

@@ -636,3 +636,9 @@
 - 快手/极速版包名和复制口令/链接入口已补齐。服务器严格按作品ID解析Apollo或公开详情接口，仅下载完整渐进视频，不把封面、空页面、推荐视频或m3u8当MP4。用户KPpFGyRt实际解析到3xa94hhemhphbd2长视频，但公开移动页INIT_STATE为空、桌面Apollo只有站点配置、详情接口不返回作品；这条尚未采集成功，不能把模拟解析或复制弹窗成功说成真实视频入库。
 - Android32/10032原签名31→32覆盖升级及安装权限保留通过。SDK30隔离模拟器开启代理，真实Pages目录/系统APK下载哈希、独立目录故障与超时、下载源切换上限、取消与重开、复制建议先出现/迟到抢焦点、关闭与禁用、快手复制填入、Pixiv入口通过；截图已目视，证据artifacts/android-update-local-zN4R93。24项针对性代码回归通过，完整回归与双平台CI/正式发布另以最终receipt核对。
 - 本仓库未发现既有pre-push钩子，按用户Git门禁补齐.githooks并配置core.hooksPath，仅阻止直接推主分支/发布分支/标签；功能分支通过。发布仍核对最新PR head检查后走GitHub签名发行流程。私有扩展未提交改动保留。
+
+## 2026-11-04 B站轮播隐藏图片误触预览
+
+- 用户鼠标在首页右侧空白仍弹出左侧封面。ZNoteImageTarget只用图片getBoundingClientRect判断可见，遗漏轮播祖先的overflow裁切。真实匿名B站首页右边缘5点，旧逻辑4点误命中IMG、新逻辑0点；不是只验证模拟页面。
+- 普通图片/背景元素必须存在于浏览器elementsFromPoint命中栈，同时排除透明/隐藏祖先；pointer-events:none图片保留角标/链接穿透，但逐层检查overflow裁切、边框/滚动区域和缩放。直接IMG路径也应用可见性校验。
+- 扩展0.9.52受控生产构建、扩展与缓存相关测试，以及实际扩展桌面/触屏裁切轮播、空白不弹图/移开收起、快速离开、角标、不可交互图片和关闭通过（hover-hit-e3KWQc）。原生弹窗/popover/全屏、层级、组翻页、Esc与滚动回归通过（preview-layer-ui-HMWMLy）；真实B站证据hover-bilibili-live.json/png。保留原私人Topfaps/HLS改动、安装key与连接状态，当前用户标签是否重载须另行核验，不以磁盘更新冒充热加载。
