@@ -214,6 +214,10 @@ public class ShareActivity extends Activity {
         int selected=collection.getSelectedItemPosition();if(selected<0||selected>=collectionIds.size())return;
         final String operationRequest=requestId;String target=collectionIds.get(selected);preferences().edit().putString("share_collection",target).apply();
         boolean asNote=imageMode!=null&&imageMode.getSelectedItemPosition()==1;preferences().edit().putBoolean("capture_as_note",asNote).apply();if(imageMode!=null)imageMode.setEnabled(false);
+        if(floating()&&files.isEmpty()){
+            try{CaptureOutbox.enqueue(this,value,target,asNote,operationRequest);busy=true;if(CaptureAssistService.current!=null)CaptureAssistService.current.pendingSubmitQueued();Toast.makeText(this,"已转到后台提交，可继续浏览",Toast.LENGTH_SHORT).show();finish();}
+            catch(Exception e){if(imageMode!=null)imageMode.setEnabled(true);status.setText(e.getMessage());}return;
+        }
         busy=true;save.setEnabled(false);collection.setEnabled(false);text.setEnabled(false);status.setText("正在提交…");
         worker.execute(()->{try{
             // Select again immediately before the first write. Never fall back

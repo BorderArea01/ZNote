@@ -30,6 +30,9 @@ final class OverlaySmoke {
     private void shot(String name)throws Exception{Thread.sleep(350);Bitmap b=ui.takeScreenshot();if(b==null)throw new Exception("No screenshot");try(FileOutputStream out=context.openFileOutput("overlay-"+name+".png",0)){b.compress(Bitmap.CompressFormat.PNG,100,out);}b.recycle();}
     private void check(boolean value,String reason){if(!value)throw new AssertionError(reason);}
     private void pinnedControls(boolean keyboard)throws Exception{
+        // First-use IME initialization can outlast its opening animation.
+        // Require the real input-method window before measuring controls.
+        if(keyboard){long end=SystemClock.uptimeMillis()+8000;boolean shown=false;while(SystemClock.uptimeMillis()<end&&!shown){for(AccessibilityWindowInfo w:ui.getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_INPUT_METHOD){Rect r=new Rect();w.getBoundsInScreen(r);if(!r.isEmpty())shown=true;}if(!shown)Thread.sleep(100);}check(shown,"Keyboard scenario did not actually show IME");}
         Rect close=new Rect(),save=new Rect();AccessibilityNodeInfo n=node("收起采集面板",1);n.getBoundsInScreen(close);n.recycle();n=node("保存到知识库",1);n.getBoundsInScreen(save);n.recycle();
         int bottom=context.getResources().getDisplayMetrics().heightPixels;boolean ime=false;
         for(AccessibilityWindowInfo w:ui.getWindows())if(w.getType()==AccessibilityWindowInfo.TYPE_INPUT_METHOD){Rect r=new Rect();w.getBoundsInScreen(r);if(!r.isEmpty()){bottom=Math.min(bottom,r.top);ime=true;}}

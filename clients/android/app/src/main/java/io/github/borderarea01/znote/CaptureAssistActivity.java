@@ -33,6 +33,7 @@ public class CaptureAssistActivity extends Activity {
             else {if(CaptureAssistService.current!=null)CaptureAssistService.current.notifyReady();startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}
         }));
         LinearLayout tools=NativeUi.card(root,"工具");
+        NativeUi.row(tools,button("待提交任务",()->startActivity(new Intent(this,CapturePendingActivity.class))));
         NativeUi.row(tools,button("界面与图标",()->NativeAppearance.choose(this,this::recreate)));
         Switch automatic=new Switch(this);automatic.setText("复制链接后打开保存面板");automatic.setTextColor(NativeUi.TEXT);automatic.setPadding(dp(10),dp(8),dp(10),dp(8));automatic.setChecked(getSharedPreferences("CaptureAssist",MODE_PRIVATE).getBoolean("copy_link_prompt",true));automatic.setOnCheckedChangeListener((b,value)->{getSharedPreferences("CaptureAssist",MODE_PRIVATE).edit().putBoolean("copy_link_prompt",value).apply();if(CaptureAssistService.current!=null)CaptureAssistService.current.configureCopyPrompt();});tools.addView(automatic);
         NativeUi.row(tools,button("? 自动弹窗的范围",()->new AlertDialog.Builder(this).setTitle("复制链接后准备保存").setMessage("悬浮窗开启时，识别其他 App 的“复制链接”按钮点击，随后打开保存面板并读取本次链接，等待你确认。不会自动入库。普通“复制”文字、密码和未提供无障碍事件的按钮不会触发，可继续点浮窗粘贴。Android 不允许普通后台应用持续读取剪贴板。关闭此开关或隐藏悬浮窗后停止监听复制操作。").setPositiveButton("知道了",null).show()));

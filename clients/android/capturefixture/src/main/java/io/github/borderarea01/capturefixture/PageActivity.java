@@ -11,7 +11,7 @@ public class PageActivity extends Activity {
   @Override public void onCreate(Bundle state){super.onCreate(state);
     LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(30,90,30,30);page.setBackgroundColor(0xfff1f3f8);setContentView(page);
     if(getIntent().getBooleanExtra("copySuggestion",false)){TextView suggestion=new TextView(this);suggestion.setText("复制建议（系统浮层模拟）");page.addView(suggestion);new android.os.Handler(getMainLooper()).postDelayed(this::finish,1800);return;}
-    lifecycle=new TextView(this);page.addView(lifecycle);
+    lifecycle=new TextView(this);page.addView(lifecycle);if(getIntent().getBooleanExtra("continueBrowsing",false)){Button browse=new Button(this);browse.setText("继续浏览");browse.setOnClickListener(v->browse.setText("已继续浏览"));page.addView(browse);}
     boolean browser=getPackageName().equals("com.chrome.beta");
     final String url=browser?"https://example.com/fixture-article":getPackageName().equals("org.example.reader")?"https://reader.example/fixture-work":getPackageName().equals("com.xingin.xhs")?"https://xhslink.cn/a/fixture-note":getPackageName().equals("com.smile.gifmaker")?"https://v.kuaishou.com/KPpFGyRt":getPackageName().equals("tv.danmaku.bili")?"https://b23.tv/fixture-work":"https://v.douyin.com/fixture-work/";
     if(browser){EditText bar=new EditText(this);bar.setId(R.id.url_bar);bar.setSingleLine(true);bar.setText("example.com");bar.setOnClickListener(v->bar.setText(url));page.addView(bar);}

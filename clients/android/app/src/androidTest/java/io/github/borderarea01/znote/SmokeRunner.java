@@ -10,7 +10,7 @@ import java.util.concurrent.*;
 // Runs in an isolated emulator against a disposable host library. No user device or data.
 public class SmokeRunner extends Instrumentation {
     private MainActivity activity;
-    private boolean updateUpgrade; private boolean updateRoutes; private boolean publicUpdates;
+    private boolean backgroundSubmit; private boolean updateUpgrade; private boolean updateRoutes; private boolean publicUpdates;
     private boolean connectionImport;
     private boolean overlayDesign; private boolean biliBackground; private boolean catalogueCache;
     private boolean connectionRoutes;
@@ -22,7 +22,7 @@ public class SmokeRunner extends Instrumentation {
     private String nativeText(View v){String result=v instanceof TextView?((TextView)v).getText().toString()+" | ":"";if(v instanceof ViewGroup){ViewGroup group=(ViewGroup)v;for(int i=0;i<group.getChildCount();i++)result+=nativeText(group.getChildAt(i));}return result;}
     private void singleLineControls(View v){if(v instanceof TextView&&v.isClickable()&&((TextView)v).getLineCount()>1)throw new AssertionError("Floating control wraps: "+((TextView)v).getText());if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)singleLineControls(g.getChildAt(i));}}
     private void screenshot(){try{android.graphics.Bitmap shot=automation().takeScreenshot();if(shot!=null)try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getTargetContext().getExternalFilesDir(null),"client-smoke.png"))){shot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}}catch(Exception ignored){}}
-    @Override public void onCreate(Bundle args){super.onCreate(args);updateRoutes=args!=null&&"true".equals(args.getString("update_routes"));publicUpdates=args!=null&&"true".equals(args.getString("public_updates"));catalogueCache=args!=null&&"true".equals(args.getString("catalogue_cache"));biliBackground=args!=null&&"true".equals(args.getString("bili_background"));updateUpgrade=args!=null&&"true".equals(args.getString("update_upgrade"));connectionImport=args!=null&&"true".equals(args.getString("connection_import"));overlayDesign=args!=null&&"true".equals(args.getString("overlay_design"));connectionRoutes=args!=null&&"true".equals(args.getString("connection_routes"));copyPrompt=args!=null&&"true".equals(args.getString("copy_prompt"));glitchAppearance=args!=null&&"true".equals(args.getString("glitch_appearance"));start();}
+    @Override public void onCreate(Bundle args){super.onCreate(args);backgroundSubmit=args!=null&&"true".equals(args.getString("background_submit"));updateRoutes=args!=null&&"true".equals(args.getString("update_routes"));publicUpdates=args!=null&&"true".equals(args.getString("public_updates"));catalogueCache=args!=null&&"true".equals(args.getString("catalogue_cache"));biliBackground=args!=null&&"true".equals(args.getString("bili_background"));updateUpgrade=args!=null&&"true".equals(args.getString("update_upgrade"));connectionImport=args!=null&&"true".equals(args.getString("connection_import"));overlayDesign=args!=null&&"true".equals(args.getString("overlay_design"));connectionRoutes=args!=null&&"true".equals(args.getString("connection_routes"));copyPrompt=args!=null&&"true".equals(args.getString("copy_prompt"));glitchAppearance=args!=null&&"true".equals(args.getString("glitch_appearance"));start();}
     private View find(View v,Class<?> type){if(type.isInstance(v))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=find(g.getChildAt(i),type);if(r!=null)return r;}}return null;}
     private Button button(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return(Button)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){Button b=button(g.getChildAt(i),text);if(b!=null)return b;}}return null;}
     private String js(String source)throws Exception{CompletableFuture<String> result=new CompletableFuture<>();runOnMainSync(()->{WebView web=(WebView)find(activity.getWindow().getDecorView(),WebView.class);if(web==null)result.complete("null");else web.evaluateJavascript(source,result::complete);});return result.get(8,TimeUnit.SECONDS);}
@@ -202,6 +202,7 @@ public class SmokeRunner extends Instrumentation {
         prefs.edit().putString("origin",local).remove("previous_origin").commit();checkpoint("ZNOTE_CONNECTION_IMPORT_PASS");
     }
     @Override public void onStart(){Bundle report=new Bundle();try{
+        if(backgroundSubmit){new BackgroundSubmitSmoke(this).run();return;}
         if(catalogueCache){new CatalogueSmoke(this).run();return;}
         if(glitchAppearance){new GlitchAppearanceSmoke(this).run();return;}
         if(copyPrompt){new CopyPromptSmoke(this).run();return;}
