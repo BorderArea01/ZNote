@@ -62,7 +62,7 @@ final class UpdateRouteSmoke {
         if(!AppUpdates.prefs(c).getString("release","").contains(release.hash))throw new Exception("Fallback changed expected digest");
         AppUpdates.clear(c);if(downloaded.exists())throw new Exception("Cancel left update APK behind");
         report("Proxy-enabled public Pages manifest and system APK download passed; failed-source switch is bounded and original hash/size preserved");
-        String current=AppUpdates.installedVersion(c),next=current.replaceFirst("beta\\.([0-9]+)$","beta."+(Integer.parseInt(current.substring(current.lastIndexOf('.')+1))+1));
+        String current=AppUpdates.installedVersion(c);String[] parts=current.split("[-.]");String next=parts[0]+"."+parts[1]+"."+(Integer.parseInt(parts[2])+1)+"-beta.1";
         AppUpdates.Release pending=new AppUpdates.Release(next,AppUpdates.pagesUrl(next),release.hash,release.size,"验收用未发布版本，不安装");
         long pendingId=dm.enqueue(new DownloadManager.Request(Uri.parse("http://10.0.2.2:3748/hang")).setDestinationInExternalFilesDir(c,Environment.DIRECTORY_DOWNLOADS,"test-cancel-update.apk"));
         AppUpdates.prefs(c).edit().putLong("download_id",pendingId).putString("release",pending.json().toString()).commit();

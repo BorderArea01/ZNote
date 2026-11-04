@@ -1,22 +1,24 @@
 [CmdletBinding()]
-param([switch]$Apply,[switch]$Intermediates,[string]$CurrentVersion='0.10.0-beta.30',[string]$RollbackVersion='0.10.0-beta.29')
+param([switch]$Apply,[switch]$Intermediates,[Parameter(Mandatory=$true)][string]$CurrentVersion,[Parameter(Mandatory=$true)][string]$RollbackVersion)
 $ErrorActionPreference='Stop'
 $workspace=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $artifactRoot=Join-Path $workspace 'artifacts'
 # This one project-wide rollback includes both APK and complete source. Never
 # turn this into one rollback per platform or per test directory.
-if($CurrentVersion -notmatch '^0\.10\.0-beta\.(\d+)$'){throw 'Unsupported current version'};$currentDirectory='android-beta'+$Matches[1]+'-release'
-if($RollbackVersion -notmatch '^0\.10\.0-beta\.(\d+)$'){throw 'Unsupported rollback version'};$rollbackDirectory='android-beta'+$Matches[1]+'-release'
+function Release-Directory([string]$version){if($version -match '^0\.10\.0-beta\.(\d+)$'){return 'android-beta'+$Matches[1]+'-release'};if($version -match '^\d+\.\d+\.\d+(?:-beta\.\d+)?$'){return 'release-v'+$version};throw 'Unsupported release version'}
+if($CurrentVersion -eq $RollbackVersion){throw 'Current and rollback versions must differ'}
+$currentDirectory=Release-Directory $CurrentVersion
+$rollbackDirectory=Release-Directory $RollbackVersion
 $rollback=Join-Path $artifactRoot $rollbackDirectory
 $receipt=Get-Content -LiteralPath (Join-Path $rollback 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
 $rollbackApkVersion=if($receipt.apk_version){$receipt.apk_version}else{$RollbackVersion}
 $rollbackAndroidSource=if($receipt.android_source_file){$receipt.android_source_file}else{'ZNote-'+$rollbackApkVersion+'-source.zip'}
-if($rollbackAndroidSource -notmatch '^ZNote-0\.10\.0-beta\.\d+-(?:android-)?source\.zip$'){throw 'Invalid rollback Android source filename'}
+if($rollbackAndroidSource -notmatch '^ZNote-\d+\.\d+\.\d+(?:-beta\.\d+)?-(?:android-)?source\.zip$'){throw 'Invalid rollback Android source filename'}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$rollbackApkVersion+'-android.apk')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.apk_sha256){throw 'Rollback hash mismatch'}
 if((Get-FileHash -LiteralPath (Join-Path $rollback ('ZNote-'+$RollbackVersion+'-source.zip')) -Algorithm SHA256).Hash.ToLower() -ne $receipt.source_sha256){throw 'Rollback source hash mismatch'}
 if($receipt.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $rollback $rollbackAndroidSource)).Hash.ToLower() -ne $receipt.android_source_sha256){throw 'Rollback effective Android source mismatch'}
 $rollbackWindows=if($receipt.windows_version){$receipt.windows_version}else{$RollbackVersion}
-if($rollbackWindows -notmatch '^0\.10\.0-beta\.\d+$'){throw 'Invalid rollback Windows version'}
+if($rollbackWindows -notmatch '^\d+\.\d+\.\d+(?:-beta\.\d+)?$'){throw 'Invalid rollback Windows version'}
 if($receipt.windows_sha256 -and (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$rollbackWindows+'-win-x64.exe'))).Hash.ToLower() -ne $receipt.windows_sha256){throw 'Rollback Windows installer mismatch'}
 $activeReceipt=Get-Content -LiteralPath (Join-Path (Join-Path $artifactRoot $currentDirectory) 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
 $activeWindows=if($activeReceipt.windows_version){$activeReceipt.windows_version}else{$CurrentVersion}
@@ -27,16 +29,17 @@ if($Apply -and $Intermediates){
  $verified=Get-Content -LiteralPath (Join-Path $current 'ANDROID-BUILD-SOURCE.json') -Raw | ConvertFrom-Json
  $currentApkVersion=if($verified.apk_version){$verified.apk_version}else{$CurrentVersion}
  $currentAndroidSource=if($verified.android_source_file){$verified.android_source_file}else{'ZNote-'+$currentApkVersion+'-source.zip'}
- if($currentAndroidSource -notmatch '^ZNote-0\.10\.0-beta\.\d+-(?:android-)?source\.zip$'){throw 'Invalid current Android source filename'}
+ if($currentAndroidSource -notmatch '^ZNote-\d+\.\d+\.\d+(?:-beta\.\d+)?-(?:android-)?source\.zip$'){throw 'Invalid current Android source filename'}
  if((Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$currentApkVersion+'-android.apk'))).Hash.ToLower() -ne $verified.apk_sha256){throw 'Current effective APK is not verified'}
  if((Get-FileHash -LiteralPath (Join-Path $current ('ZNote-'+$CurrentVersion+'-source.zip'))).Hash.ToLower() -ne $verified.source_sha256){throw 'Current source is not verified'}
  if($verified.android_source_sha256 -and (Get-FileHash -LiteralPath (Join-Path $current $currentAndroidSource)).Hash.ToLower() -ne $verified.android_source_sha256){throw 'Current effective Android source is not verified'}
  $activeWindows=if($verified.windows_version){$verified.windows_version}else{$CurrentVersion}
- if($activeWindows -notmatch '^0\.10\.0-beta\.\d+$'){throw 'Invalid active Windows version'}
+ if($activeWindows -notmatch '^\d+\.\d+\.\d+(?:-beta\.\d+)?$'){throw 'Invalid active Windows version'}
  if(!$verified.windows_sha256 -or (Get-FileHash -LiteralPath (Join-Path $workspace ('clients/desktop/release/ZNote-'+$activeWindows+'-win-x64.exe'))).Hash.ToLower() -ne $verified.windows_sha256){throw 'Current Windows installer is not verified'}
 }
 foreach($dir in Get-ChildItem -LiteralPath $artifactRoot -Directory){
   if($dir.Name -match '^android-(?:beta\d+|back|overlay|share)-release$' -and $dir.Name -notin @($currentDirectory,$rollbackDirectory)){$targets.Add($dir.FullName)}
+  if($dir.Name -match '^release-v\d+\.\d+\.\d+(?:-beta\.\d+)?$' -and $dir.Name -notin @($currentDirectory,$rollbackDirectory)){$targets.Add($dir.FullName)}
   if($dir.Name -match '^release-(?:android-1348|mac-arm-5c19|windows-73fb|v0100|v0931-source)$'){$targets.Add($dir.FullName)}
   if($dir.Name -match '^android-(?:copy|import|overlay|route|glitch)-local(?:-.+)?$'){$device=Join-Path $dir.FullName 'device';if(Test-Path -LiteralPath $device){$targets.Add($device)}}
   if($dir.Name -in @('android-beta12','android-beta5-final-build','mobile-beta6-ci-unsigned')){foreach($file in Get-ChildItem -LiteralPath $dir.FullName -File){if($file.Name -match '\.apk(?:\.idsig)?$'){$targets.Add($file.FullName)}}}

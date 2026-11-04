@@ -3,6 +3,11 @@ gradle.beforeProject { p ->
     if (p.path == ':app') p.afterEvaluate {
         def config = p.android.defaultConfig
         config.versionCode = config.versionCode + 1
-        config.versionName = config.versionName.replaceFirst(/beta\.(\d+)$/) { match, number -> "beta.${number.toInteger() + 1}" }
+        def current = config.versionName
+        if (current.contains('-beta.')) config.versionName = current.replaceFirst(/beta\.(\d+)$/) { match, number -> "beta.${number.toInteger() + 1}" }
+        else {
+            def parts = current.tokenize('.')
+            config.versionName = "${parts[0]}.${parts[1]}.${parts[2].toInteger() + 1}-beta.1"
+        }
     }
 }

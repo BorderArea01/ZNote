@@ -1,12 +1,14 @@
 # 在电脑和手机上使用 ZNote
 
-ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。各平台安装包和验证范围以 [Release 说明](https://github.com/BorderArea01/ZNote/releases)为准；截至 2026-11-04，Windows 为 **0.10.0-beta.28**、Android 为 **0.10.0-beta.32**，macOS 为此前发布的版本。
+ZNote 的图片、笔记和数据库保存在运行服务的电脑或 NAS 上。客户端连接同一地址，看到同一份内容；手机无需重复导入素材。各平台安装包和验证范围以 [Release 说明](https://github.com/b0rderl4nder/ZNote/releases)为准；本轮 `0.10.0` 正式发布提供 Windows x64 与 Android 安装包，macOS 暂保留此前的预发布客户端。各安装包的内置版本、来源与验收记录随 Release 一起提供。
 
 Android 采集浮窗使用平滑深色面板，贴边小书签没有像素条纹装饰；连接页和图库外观可以分别跟随已选主题。网页支持简约、毛玻璃、赛博朋克、纸感、建筑故障五种风格。
 
-版本号遵循语义化版本：`0.10.0` 是目标正式版，`-beta.17` 表示第 17 个测试版；测试期间只递增 beta 序号，正式发布时移除后缀。Android 还维护单调递增的 `versionCode`，确保系统允许覆盖更新。
+正式版使用 `0.10.0` 这类简短版本号；普通修复递增补丁号（如 `0.10.1`），较大的功能更新递增次版本号（如 `0.11.0`）。只有明确用于试用的功能使用 `-beta.n`，不会把日常维护一直堆在 beta 后缀里。Android 另维护严格递增的 `versionCode`，从 beta.33 升到 0.10.0 时由 10033 增至 10034；应用 ID 和原发布签名保持一致。
 
-→ [下载 Release](https://github.com/BorderArea01/ZNote/releases) · [报告问题](https://github.com/BorderArea01/ZNote/issues/new/choose) · [交流与建议](https://github.com/BorderArea01/ZNote/discussions)
+GitHub 正式版必须同时满足：安装包内部版本与发布版本一致、当前提交的两平台 CI 成功、安装与运行验收完成、上传文件哈希匹配。`scripts/publish-release.mjs` 根据版本自动选择发布通道：正式版设置为 Latest，beta 标记为预发布且不抢占 Latest。禁止只重命名旧 beta 安装包冒充正式版。
+
+→ [下载 Release](https://github.com/b0rderl4nder/ZNote/releases) · [报告问题](https://github.com/b0rderl4nder/ZNote/issues/new/choose) · [交流与建议](https://github.com/b0rderl4nder/ZNote/discussions)
 
 ## 选择入口
 
@@ -175,7 +177,7 @@ Windows 本机维护使用 `scripts/build-android-controlled.ps1 -PrioritizeBuil
 
 ## 反馈与维护
 
-遇到问题请使用 [Bug 模板](https://github.com/BorderArea01/ZNote/issues/new?template=bug_report.yml)，注明版本、系统、访问方式和复现步骤。截图前遮住个人素材、密码、令牌和收件信息。建议与使用交流放在 [Discussions](https://github.com/BorderArea01/ZNote/discussions)。
+遇到问题请使用 [Bug 模板](https://github.com/b0rderl4nder/ZNote/issues/new?template=bug_report.yml)，注明版本、系统、访问方式和复现步骤。截图前遮住个人素材、密码、令牌和收件信息。建议与使用交流放在 [Discussions](https://github.com/b0rderl4nder/ZNote/discussions)。
 
 安全漏洞请按 [SECURITY.md](../SECURITY.md) 私下报告。贡献代码与构建步骤见 [CONTRIBUTING.md](../CONTRIBUTING.md)。这是个人维护项目，优先处理数据完整性、无法启动和无法入库等问题，不承诺固定响应时限。
 

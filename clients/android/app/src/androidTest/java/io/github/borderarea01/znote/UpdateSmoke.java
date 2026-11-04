@@ -24,6 +24,12 @@ final class UpdateSmoke {
     }
     private void awaitText(String text)throws Exception{long end=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<end){android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText(text))if(text.equalsIgnoreCase(String.valueOf(n.getText()))&&n.isVisibleToUser()&&n.isEnabled())return;Thread.sleep(150);}throw new Exception("Missing stable update screen: "+text);}
     static void catalog()throws Exception{
+        if(!AppUpdates.githubUrl("0.10.0").contains("/releases/download/v0.10.0/"))throw new Exception("Stable download must use its actual release tag");
+        if(AppUpdates.archiveVersionError("io.github.borderarea01.znote","io.github.borderarea01.znote","0.10.0","0.10.0",10034,"0.10.0-beta.33",10033)!=null)throw new Exception("Stable release must upgrade beta.33");
+        JSONObject trialAsset=new JSONObject().put("name","ZNote-0.11.0-beta.1-android.apk").put("browser_download_url",AppUpdates.githubUrl("0.11.0-beta.1")).put("digest","sha256:"+"a".repeat(64)).put("size",123);
+        JSONArray trial=new JSONArray().put(new JSONObject().put("prerelease",true).put("assets",new JSONArray().put(trialAsset)));
+        if(AppUpdates.latest(trial,"0.10.0")!=null)throw new Exception("Stable user must not be moved into beta");
+        if(AppUpdates.latest(trial,"0.10.0-beta.33")==null)throw new Exception("Explicit beta channel lost its update");
         if(AppUpdates.compare("0.10.0-beta.10","0.10.0-beta.9")<=0||AppUpdates.compare("0.10.0-beta.17","0.10.0-beta.16")<=0||AppUpdates.compare("0.10.0-beta.19","0.10.0-beta.18")<=0||AppUpdates.compare("0.10.0","0.10.0-beta.99")<=0)throw new Exception("Version order failed");
         if(AppUpdates.archiveVersionError("io.github.borderarea01.znote","io.github.borderarea01.znote","0.10.0-beta.19","0.10.0-beta.19",10019,"0.10.0-beta.18",10018)!=null)throw new Exception("New Android package should upgrade beta.18");
         IOException lower=AppUpdates.archiveVersionError("io.github.borderarea01.znote","io.github.borderarea01.znote","0.10.0-beta.19","0.10.0-beta.19",10018,"0.10.0-beta.18",10018);

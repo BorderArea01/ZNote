@@ -3,7 +3,7 @@
   <h1>ZNote</h1>
   <p><strong>在手机、浏览器和微信里收集，回到同一个知识库整理。</strong></p>
   <p>图片 · 视频 · 成组作品 · 图文笔记 · 正文与来源</p>
-  <p><a href="#多端采集">多端采集</a> · <a href="#整理与回看">整理与回看</a> · <a href="#快速开始">开始使用</a> · <a href="docs/README.md">文档</a> · <a href="https://github.com/BorderArea01/ZNote/releases">下载客户端</a></p>
+  <p><a href="#多端采集">多端采集</a> · <a href="#整理与回看">整理与回看</a> · <a href="#快速开始">开始使用</a> · <a href="docs/README.md">文档</a> · <a href="https://github.com/b0rderl4nder/ZNote/releases/latest">正式版下载</a></p>
 </div>
 
 ZNote 是自托管的多媒体知识库。刷到作品、看到参考图、想到一句话，都可以随手存下，再按项目、知识库和标签整理。文件与数据库保存在自己的电脑或 NAS，手机和电脑连接同一服务，无需重复导入素材。
@@ -62,12 +62,12 @@ Chrome / Edge 扩展在页面边缘提供可拖动的采集入口，鼠标掠过
 
 | 设备 | 使用方式 |
 | --- | --- |
-| Windows / macOS | [下载客户端](https://github.com/BorderArea01/ZNote/releases)，使用内置本机服务或连接已有服务 |
+| Windows / macOS | [下载客户端](https://github.com/b0rderl4nder/ZNote/releases)，使用内置本机服务或连接已有服务 |
 | Android 10+ | 安装签名 APK，连接电脑 / NAS；支持浮窗采集和应用内检查更新 |
 | iPhone / iPad | Safari 打开知识库，可添加到主屏幕；当前没有原生 IPA |
 | 电脑、平板与其他设备 | 使用浏览器访问自己的 ZNote 服务 |
 
-各端版本与验证范围见 [Release 说明](https://github.com/BorderArea01/ZNote/releases)；客户端连接同一份知识库，当前不提供整库离线同步。[安装与迁移指南 →](docs/CLIENTS.md)
+各端版本与验证范围见 [Release 说明](https://github.com/b0rderl4nder/ZNote/releases)；客户端连接同一份知识库，当前不提供整库离线同步。[安装与迁移指南 →](docs/CLIENTS.md)
 
 ### 从源码启动
 
