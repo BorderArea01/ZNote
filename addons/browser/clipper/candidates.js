@@ -103,14 +103,17 @@ globalThis.ZNoteImageTarget = (event) => {
     if (!(r.width > 0 && r.height > 0 && event.clientX >= r.left && event.clientX < r.right && event.clientY >= r.top && event.clientY < r.bottom)) return false;
     // Layout rectangles include carousel slides outside an overflow viewport.
     // Use the browser's painted hit stack, not just those un-clipped boxes.
-    for (let parent = el; parent; parent = parent.parentElement) {
+    for (let parent = el; parent; parent = parent.parentElement || parent.getRootNode()?.host) {
       const s = getComputedStyle(parent);
       if (s.visibility === 'hidden' || s.visibility === 'collapse' || s.display === 'none' || Number(s.opacity) === 0 || s.contentVisibility === 'hidden') return false;
     }
-    if (style.pointerEvents !== 'none') return hits.includes(el);
+    if (style.pointerEvents !== 'none') {
+      const tree = el.getRootNode();
+      return hits.includes(el) || tree !== document && typeof tree.elementsFromPoint === 'function' && tree.elementsFromPoint(event.clientX, event.clientY).includes(el);
+    }
     // Non-interactive thumbnails are absent from elementsFromPoint. Preserve
     // them under badges/links, but apply every ancestor's overflow clipping.
-    for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+    for (let parent = el.parentElement || el.getRootNode()?.host; parent; parent = parent.parentElement || parent.getRootNode()?.host) {
       const s = getComputedStyle(parent), box = parent.getBoundingClientRect();
       const scaleX = parent.offsetWidth ? box.width / parent.offsetWidth : 1;
       const scaleY = parent.offsetHeight ? box.height / parent.offsetHeight : 1;
