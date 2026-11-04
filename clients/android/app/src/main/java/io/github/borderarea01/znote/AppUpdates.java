@@ -14,8 +14,8 @@ import java.util.*;
 
 /** Public Pages catalog and APK share a route; GitHub is an independent fallback. */
 final class AppUpdates {
-    static final String REPOSITORY="https://github.com/BorderArea01/ZNote/";
-    static final String CATALOG="https://api.github.com/repos/BorderArea01/ZNote/releases?per_page=30";
+    static final String REPOSITORY="https://github.com/b0rderl4nder/ZNote/";
+    static final String CATALOG="https://api.github.com/repos/b0rderl4nder/ZNote/releases?per_page=30";
     static final String PAGES="https://znote-capture-inbox.pages.dev";
     static final String MANIFEST=PAGES+"/downloads/latest.json";
     static final long MAX_APK=100*1024*1024;
@@ -39,7 +39,7 @@ final class AppUpdates {
     static Release latest(JSONArray releases,String current)throws JSONException{
         Release best=null;
         for(int i=0;i<releases.length();i++){
-            JSONObject r=releases.getJSONObject(i);if(r.optBoolean("draft"))continue;
+            JSONObject r=releases.getJSONObject(i);if(r.optBoolean("draft")||!current.contains("-beta.")&&r.optBoolean("prerelease"))continue;
             JSONArray assets=r.optJSONArray("assets");if(assets==null)continue;
             for(int n=0;n<assets.length();n++){
                 JSONObject a=assets.getJSONObject(n);java.util.regex.Matcher name=java.util.regex.Pattern.compile("^ZNote-(\\d+\\.\\d+\\.\\d+(?:-beta\\.\\d+)?)-android\\.apk$").matcher(a.optString("name"));
@@ -50,7 +50,7 @@ final class AppUpdates {
         }return best;
     }
     static String pagesUrl(String version){parts(version);return PAGES+"/downloads/ZNote-"+version+"-android.apk";}
-    static String githubUrl(String version){parts(version);return REPOSITORY+"releases/download/android-v"+version+"/ZNote-"+version+"-android.apk";}
+    static String githubUrl(String version){parts(version);return REPOSITORY+"releases/download/"+(version.contains("-beta.")?"android-v":"v")+version+"/ZNote-"+version+"-android.apk";}
     static boolean trusted(Release r){return r!=null&&r.hash.matches("[a-f0-9]{64}")&&r.size>0&&r.size<=MAX_APK&&(r.url.equals(pagesUrl(r.version))||r.url.startsWith(REPOSITORY+"releases/download/")&&r.url.endsWith("/ZNote-"+r.version+"-android.apk")&&!r.url.contains("?")&&!r.url.contains("#"));}
     static Release pagesRelease(JSONObject data,String current)throws Exception{
         String version=data.getString("version");String expected="/downloads/ZNote-"+version+"-android.apk";parts(version);

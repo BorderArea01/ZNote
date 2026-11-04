@@ -10,11 +10,12 @@ const launch=()=>electron.launch({executablePath:exe,args:process.env.ZNOTE_DESK
 let app=await launch(),origin;
 const deadline=setTimeout(()=>{console.error('Desktop smoke exceeded 150 seconds');app.process().kill();process.exitCode=1},150000);deadline.unref();
 try{
- const launcher=await app.firstWindow();await launcher.locator('#version').filter({hasText:'ZNote 0.'}).waitFor();await launcher.locator('#local').waitFor();await launcher.screenshot({path:join(data,'launcher.png')});console.log('PASS desktop launcher renders');
+ if(process.env.ZNOTE_EXPECT_VERSION)assert.equal(await app.evaluate(({app})=>app.getVersion()),process.env.ZNOTE_EXPECT_VERSION);const launcher=await app.firstWindow();await launcher.locator('#version').filter({hasText:'ZNote 0.'}).waitFor();await launcher.locator('#local').waitFor();await launcher.screenshot({path:join(data,'launcher.png')});console.log('PASS desktop launcher renders');
  if(process.argv.includes('--glitch')){await launcher.locator('.appearance summary').click();await launcher.locator('#style').selectOption('glitch');await launcher.locator('#mode').selectOption('dark');await launcher.locator('html[data-style=glitch]').waitFor();}
  await launcher.locator('#address').fill('http://example.com');await launcher.locator('#connect button').click();await launcher.getByRole('status').filter({hasText:'HTTPS'}).waitFor();
  const next=app.waitForEvent('window',{predicate:p=>!p.url().startsWith('file:'),timeout:30000});await launcher.locator('#local').click();const page=await next;
  await page.getByLabel('访问密码').waitFor();origin=new URL(page.url()).origin;
+ if(process.env.ZNOTE_EXPECT_VERSION)assert.equal((await(await fetch(origin+'/api/health')).json()).version,process.env.ZNOTE_EXPECT_VERSION);
  assert.equal(await page.evaluate(()=>typeof require),'undefined');assert.equal(await page.evaluate(()=>typeof window.znoteLauncher),'undefined');
  await page.getByLabel('访问密码').fill('0427');await page.getByRole('button',{name:'开始使用 ZNote'}).click();await page.getByRole('heading',{name:/我的知识库/}).waitFor();
  if(process.argv.includes('--glitch')){assert.equal(await page.locator('html').getAttribute('data-style'),'glitch');assert.ok(await page.evaluate(()=>getComputedStyle(document.querySelector('.new-library'),'::before').maskImage.includes('linear-gradient')));}
