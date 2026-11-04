@@ -16,6 +16,7 @@
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/capture_accessibility"/>
     </service>
     <activity android:process=":capture" android:name=".CaptureAssistActivity" android:label="悬浮采集" android:exported="false"/>
+    <activity android:process=":capture" android:name=".CapturePendingActivity" android:label="待提交任务" android:exported="false"/>
     <activity android:process=":capture" android:name=".FloatingShareActivity" android:theme="@style/CapturePanel" android:exported="false" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize|stateAlwaysHidden"/>
     <activity android:process=":capture" android:name=".ShareActivity" android:label="保存到 ZNote" android:exported="true" android:taskAffinity="${applicationId}.capture" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
       <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="text/plain"/><data android:mimeType="image/*"/><data android:mimeType="video/*"/></intent-filter>

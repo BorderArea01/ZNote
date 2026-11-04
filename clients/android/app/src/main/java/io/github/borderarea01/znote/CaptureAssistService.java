@@ -25,7 +25,7 @@ public class CaptureAssistService extends AccessibilityService {
     private WindowManager manager;
     private WindowManager.LayoutParams layout;
     private LinearLayout bubble;
-    private TextView status,handle;
+    private TextView status,handle,pendingAction;
     private LinearLayout panel;
     private ScrollView panelScroll;
     private TextView captureAction,cancelAction;
@@ -77,7 +77,7 @@ public class CaptureAssistService extends AccessibilityService {
         // capture keys, then leave the main process's connection settings alone.
         if(!prefs().contains("capture_bubble")){SharedPreferences legacy=getSharedPreferences("MainActivity",MODE_PRIVATE);prefs().edit().putBoolean("capture_bubble",legacy.getBoolean("capture_bubble",true)).putBoolean("capture_right",legacy.getBoolean("capture_right",true)).putFloat("capture_y",legacy.getFloat("capture_y",.32f)).apply();}
     }
-    @Override protected void onServiceConnected(){NativeAppearance.loadCapture(this);NativeAppearance.register(this,appearanceReceiver);current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();}
+    @Override protected void onServiceConnected(){NativeAppearance.loadCapture(this);NativeAppearance.register(this,appearanceReceiver);current=this;manager=(WindowManager)getSystemService(WINDOW_SERVICE);savingJobs=trackedJobs().size();if(Build.VERSION.SDK_INT>=33)setCacheEnabled(false);android.accessibilityservice.AccessibilityServiceInfo info=getServiceInfo();info.eventTypes=0;setServiceInfo(info);record("connected","ready");recordEnvironment();if(prefs().getBoolean("capture_bubble",true))showBubble();notifyReady();scheduleTracking(0);loadLibraries(false);configureCopyPrompt();CaptureOutbox.resume(this);}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         // Subscribe to window changes so the framework invalidates its active
         // root cache when a system copy suggestion appears/disappears. Do not
@@ -167,7 +167,7 @@ public class CaptureAssistService extends AccessibilityService {
     private void updateWindow(){if(bubble!=null)try{manager.updateViewLayout(bubble,layout);}catch(RuntimeException e){bubble=null;record("detached",e.getClass().getSimpleName());}}
     private void cancel(){generation++;if(copyPrompt!=null)handler.removeCallbacks(copyPrompt);copyPrompt=null;stopCopyFocusRecovery(copyFocusPage==null?null:copyFocusPage.get());if(operation!=null)operation.cancel(true);operation=null;busy=false;dragging=false;stopDockAnimation();dismissNotice();if(captureTimeout!=null)handler.removeCallbacks(captureTimeout);captureTimeout=null;handler.removeCallbacks(progressTick);tickScheduled=false;if(bubble!=null){layout.flags=windowFlags();updateWindow();}}
     private int windowFlags(){return WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;}
-    private boolean working(){return busy||savingJobs>0;}
+    private boolean working(){return busy||savingJobs>0||CaptureOutbox.activeCount()>0;}
     private int artworkState(){return working()?1:resultPending?(resultFailed?3:2):0;}
     private void stopDockAnimation(){android.animation.ValueAnimator old=dockAnimation;dockAnimation=null;if(old!=null)old.cancel();}
     private void dock(){
@@ -213,10 +213,12 @@ public class CaptureAssistService extends AccessibilityService {
             TextView paste=control("粘贴链接","在浮窗内粘贴分享链接",()->open(""));paste.setTextSize(11);paste.setPadding(dp(8),0,dp(5),0);paste.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"paste",CaptureVisuals.MUTED,14),null,null,null);paste.setCompoundDrawablePadding(dp(4));actions.addView(paste,new LinearLayout.LayoutParams(0,dp(44),1));
             View divider=new View(this);divider.setBackgroundColor(0xff3b465a);actions.addView(divider,new LinearLayout.LayoutParams(dp(1),dp(20)));
             TextView browse=control("前往知识库","打开 ZNote 知识库浏览页面",this::openLibrary);browse.setTextSize(11);browse.setPadding(dp(7),0,dp(4),0);browse.setCompoundDrawablesWithIntrinsicBounds(CaptureVisuals.icon(this,"folder",CaptureVisuals.MUTED,14),null,null,null);browse.setCompoundDrawablePadding(dp(4));actions.addView(browse,new LinearLayout.LayoutParams(0,dp(44),1));panel.addView(actions,new LinearLayout.LayoutParams(-1,dp(48)));
+            pendingAction=control("待提交任务","查看手机后台提交与重试",()->startActivity(new Intent(this,CapturePendingActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));pendingAction.setTextSize(11);panel.addView(pendingAction,new LinearLayout.LayoutParams(-1,dp(44)));
             status=new TextView(this);status.setTextSize(11);status.setPadding(dp(2),dp(7),dp(2),dp(2));status.setMaxLines(4);status.setMovementMethod(android.text.method.ScrollingMovementMethod.getInstance());status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);panel.addView(status);
             panelScroll=new ScrollView(this);panelScroll.setFillViewport(false);panelScroll.addView(panel);bubble.addView(panelScroll,new LinearLayout.LayoutParams(-1,-2));
         }
         captureAction.setTextColor(0xfff7fbff);captureAction.setEnabled(!busy);captureAction.setAlpha(busy?.6f:1);captureAction.setText(busy?"正在识别作品…":"采集当前作品");cancelAction.setVisibility(busy?View.VISIBLE:View.GONE);
+        pendingAction.setVisibility(CaptureOutbox.list(this).length()>0?View.VISIBLE:View.GONE);
         status.setTextColor(resultFailed?CaptureVisuals.WARNING:CaptureVisuals.MUTED);status.setText(busy?"正在读取当前作品，可继续浏览":lastMessage);status.setVisibility(status.getText().length()==0?View.GONE:View.VISIBLE);
         panelScroll.setVisibility(expanded?View.VISIBLE:View.GONE);libraryScroll.setVisibility(expanded&&libraryMenuExpanded?View.VISIBLE:View.GONE);updateLibraryPicker();
         if(dragging){layout.width=dp(48);layout.height=dp(48);updateWindow();}else dock();
@@ -447,21 +449,12 @@ public class CaptureAssistService extends AccessibilityService {
     }
     private void open(String value){if(!value.isEmpty()&&queueLink(value,sharingPrefs().getString("share_collection",""),UUID.randomUUID().toString()))return;openPanel(value,"",0,value.isEmpty(),!value.isEmpty());}
     boolean queueLink(String value,String collection,String requestId){
-        if(value==null||value.length()>16000||link(value).isEmpty()||!PixivSession.work(link(value)).isEmpty())return false;
-        cancel();expanded=false;lastMessage="正在后台提交…";resultPending=false;resultFailed=false;render();
-        final boolean note=sharingPrefs().getBoolean("capture_as_note",false);
-        tracker.execute(()->{HttpURLConnection c=null;try{
-            Bundle session=getContentResolver().call(Uri.parse("content://"+getPackageName()+".capture-session"),"session",null,null);
-            if(session==null||session.getString("origin","").isEmpty())throw new java.io.IOException("请先配置知识库连接");
-            CaptureCatalogue.validate(this,session,collection==null?"":collection);
-            String origin=MainActivity.normalize(session.getString("origin")),auth=session.getString("token",""),cookie=session.getString("cookie","");
-            c=(HttpURLConnection)(ConnectionRoutes.local(origin)?new URL(origin+"/api/captures").openConnection(java.net.Proxy.NO_PROXY):new URL(origin+"/api/captures").openConnection());c.setConnectTimeout(8000);c.setReadTimeout(15000);c.setRequestMethod("POST");c.setInstanceFollowRedirects(false);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");if(!auth.isEmpty())c.setRequestProperty("Authorization","Bearer "+auth);else if(!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
-            JSONObject input=new JSONObject().put("text",value).put("image_mode",note?"note":"group").put("collection_id",collection==null||collection.isEmpty()?JSONObject.NULL:collection).put("request_id","android:"+requestId);
-            try(java.io.OutputStream out=c.getOutputStream()){out.write(input.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}
-            int code=c.getResponseCode();JSONObject result=new JSONObject(new String(readSmall(code>=400?c.getErrorStream():c.getInputStream()),java.nio.charset.StandardCharsets.UTF_8));if(code<200||code>=300)throw new java.io.IOException(result.optString("error","提交失败（"+code+"）"));String id=result.getString("id");handler.post(()->backgroundQueued(id,origin));
-        }catch(Exception e){directResult(false,e.getMessage()==null?"后台提交失败，请重试":e.getMessage());}finally{if(c!=null)c.disconnect();}});
-        return true;
+        if(value==null||link(value).isEmpty())return false;
+        try{CaptureOutbox.enqueue(this,value,collection,sharingPrefs().getBoolean("capture_as_note",false),requestId);pendingSubmitQueued();return true;}
+        catch(Exception e){message(e.getMessage()==null?"手机任务未能保存，请重试":e.getMessage());return false;}
     }
+    void pendingSubmitQueued(){cancel();expanded=false;lastMessage="正在后台提交…";resultPending=false;resultFailed=false;render();notifyReady();}
+    void pendingSubmitNotice(String message){lastMessage=message;resultFailed=true;resultPending=true;render();notifyReady();showResultNotice(false);}
     private void openLibrary(){
         expanded=false;libraryMenuExpanded=false;record("open_library","floating_panel");render();
         try{startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));}
@@ -474,7 +467,7 @@ public class CaptureAssistService extends AccessibilityService {
     }
     void backgroundQueued(String id,String jobOrigin){lastMessage="正在后台采集…";resultPending=false;resultFailed=false;busy=false;expanded=false;record("capture_queued",id);rememberJob(id,jobOrigin);savingJobs=trackedJobs().size();render();notifyReady();scheduleTracking(0);}
     private synchronized Set<String> trackedJobs(){return new HashSet<>(prefs().getStringSet("capture_jobs",Collections.emptySet()));}
-    private synchronized void rememberJob(String id,String jobOrigin){Set<String> jobs=trackedJobs();jobs.add(id);prefs().edit().putStringSet("capture_jobs",jobs).putLong("capture_job_"+id,System.currentTimeMillis()).putString("capture_job_origin_"+id,jobOrigin).apply();}
+    private synchronized void rememberJob(String id,String jobOrigin){Set<String> jobs=trackedJobs();jobs.add(id);if(!prefs().edit().putStringSet("capture_jobs",jobs).putLong("capture_job_"+id,System.currentTimeMillis()).putString("capture_job_origin_"+id,jobOrigin).commit())throw new IllegalStateException("采集进度保存失败，请检查手机存储；服务器任务已保留");}
     private synchronized void forgetJob(String id){Set<String> jobs=trackedJobs();jobs.remove(id);prefs().edit().putStringSet("capture_jobs",jobs).remove("capture_job_"+id).remove("capture_job_origin_"+id).apply();}
     private synchronized void scheduleTracking(long delay){if(tracker.isShutdown()||trackerScheduled||trackedJobs().isEmpty())return;trackerScheduled=true;tracker.schedule(()->{synchronized(CaptureAssistService.this){trackerScheduled=false;}trackJobs();},delay,TimeUnit.MILLISECONDS);}
     private void trackJobs(){
