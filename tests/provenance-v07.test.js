@@ -16,7 +16,7 @@ test('source sites validate host boundaries, short links and exportable multi-so
   assert.deepEqual(next.tags, ['手工标签','X','b站']);
   assert.deepEqual(sourceLinks(next).map(x=>x.url), ['https://b23.tv/two','https://x.com/one']);
   assert.deepEqual(withSource(next),next);
-  assert.throws(()=>withSource({source_url:'https://x.com',tags:Array.from({length:30},(_,i)=>'tag'+i)}), /留出一个位置/);
+  assert.throws(()=>withSource({source_url:'https://x.com',tags:Array.from({length:200},(_,i)=>'tag'+i)}), /留出一个位置/);
 });
 
 test('all image ingestion preserves original bytes and merges source tags without duplicate versions', async () => {

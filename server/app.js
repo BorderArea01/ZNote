@@ -1,3 +1,4 @@
+import {MAX_ITEM_TAGS,MAX_TAG_LENGTH} from '../shared/tag-limits.js';
 import {typeOrderSchema} from './saved-views.js';
 import { MAX_IMAGE_BYTES, MAX_PSD_BYTES, compressLargeImage } from './image-limits.js';
 import {localMediaReferences} from '../shared/local-media.js';
@@ -78,8 +79,8 @@ const filenameText = (name) => {
   }
 };
 const cleanTags = z
-  .array(z.string().trim().min(1).max(40))
-  .max(30)
+  .array(z.string().trim().min(1).max(MAX_TAG_LENGTH))
+  .max(MAX_ITEM_TAGS)
   .transform((a) => [...new Set(a)]);
 const itemInput = z.object({
   title: z.string().trim().min(1).max(200),
@@ -1140,7 +1141,7 @@ export function createApp({
     if (existing.group_manual || existing.group_key?.startsWith('note:')) input = { ...input, group_key: undefined };
     if (input.group_key !== undefined || input.tags?.some(tag=>!JSON.parse(existing.tags).includes(tag))) {
       const tags=[...new Set([...JSON.parse(existing.tags), ...(input.tags||[])])];
-      if(tags.length>30) throw fail(400,'已有图片的标签已满，请整理标签后重试；原内容未覆盖');
+      if(tags.length>MAX_ITEM_TAGS) throw fail(400,'已有图片的标签已满，请整理标签后重试；原内容未覆盖');
       transaction(()=>{
         db.prepare('UPDATE items SET tags=?,group_key=?,group_index=?,group_title=?,updated_at=?,version=version+1 WHERE id=?').run(JSON.stringify(tags),input.group_key===undefined?existing.group_key:input.group_key,input.group_key===undefined?existing.group_index:input.group_index,input.group_key===undefined?existing.group_title:input.group_title??null,now(),existing.id);
         event('item.updated',existing.id);
@@ -1392,7 +1393,7 @@ export function createApp({
       const content=appendMessageBlocks(old.content,fields.content);
       if(content.length>500000)throw fail(400,'收件笔记超过 50 万字符，请缩短原笔记后重试；后续内容可使用“开始新篇”');
       const tags=[...new Set([...JSON.parse(old.tags),...fields.tags])];
-      if(tags.length>30)throw fail(400,'收件笔记超过 30 个标签，请整理标签后重试');
+      if(tags.length>MAX_ITEM_TAGS)throw fail(400,'收件笔记超过 200 个标签，请整理标签后重试');
       transaction(()=>{
         // Appending must preserve the user's current title, text and cover order.
         const prior=db.prepare("SELECT id,COALESCE(group_order,group_index) position FROM items WHERE group_key=? AND collection_id IS ? AND deleted_at IS NULL").all('note:'+id,old.collection_id);

@@ -13,6 +13,11 @@ test('Zeri rejects missing/duplicate pages, cross-work data, forged reader links
  const a=zeriArticle(article(),source);
  for(const html of[reader(24),reader(25,{postID:321}),reader(25,{c_id:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}),reader(25,{IMAGE_FOLDER:'../private/456/'}),reader(25,{IMAGE_FOLDER:'thumbnail/1000/999/'}),reader(25,{IMAGE_SERVER:{3:['http://127.0.0.1/image/']}}),reader(25,{IMAGE_SERVER:{3:['https://user:secret@cdn.example.com/image/']}}),reader(25,{Image_List:[...pages(24),{sort:'25',extension:'exe'}]})])assert.throws(()=>extractZeriReader(html,a),/作品|阅读/);
 });
+test('Zeri reads only current-work source tags, prefers translations and preserves large tag sets',()=>{
+ const tags=Array.from({length:148},(_,i)=>({name:'tag'+i,name_ch2:'标签'+i}));tags[0]={name:'source label longer than the old forty character tag limit'};
+ const data=article(25,{tags:[...tags,tags[0],{name:'deleted',is_deleted:'1'}]});
+ const plan=extractZeriReader(reader(),zeriArticle(data,source));assert.deepEqual(plan.tags,tags.map(t=>t.name_ch2||t.name));
+});
 test('Zeri follows only the declared same-work reader once; failures and aborts never silently save a partial note',async()=>{
  const calls=[],fetchDocument=async(url,signal,redirects,extra)=>{calls.push({url,extra});return{url,type:'text/html',buffer:Buffer.from(calls.length===1?article():reader())};};
  const result=await fetchZeriChapter(source,new AbortController().signal,{fetchDocument});assert.equal(result.plan.images.length,25);assert.equal(calls.length,2);assert.equal(calls[1].extra.referer,source);
