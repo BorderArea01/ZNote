@@ -1,3 +1,4 @@
+import {MAX_ITEM_TAGS} from '../shared/tag-limits.js';
 import { sourceSite } from '../shared/provenance.js';
 // Keep provenance in both structured metadata and ordinary, exportable remarks.
 export function withSource(input) {
@@ -7,7 +8,7 @@ export function withSource(input) {
   const tags = [...new Set(input.tags || [])];
   const site = sourceSite(input.source_url);
   if (site && !tags.includes(site)) {
-    if (tags.length >= 30) throw Object.assign(new Error('最多 30 个标签，请留出一个位置用于来源网站标签'), { status: 400 });
+    if (tags.length >= MAX_ITEM_TAGS) throw Object.assign(new Error('最多 200 个标签，请留出一个位置用于来源网站标签'), { status: 400 });
     tags.push(site);
   }
   if (!content.split('\n').includes(line) && content.length + line.length + 2 > 500000)

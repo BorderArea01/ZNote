@@ -1,3 +1,4 @@
+import {MAX_ITEM_TAGS,MAX_TAG_LENGTH} from '../shared/tag-limits.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -21,7 +22,7 @@ import {normalizeRemoteImage} from '../shared/remote-image.js';
 const KEY = 'mobile_captures_v1';
 const fail = (status, message) => Object.assign(Error(message), { status });
 const stableId = value => { const h=createHash('sha256').update(value).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
-export const captureInput = z.object({ text: z.string().trim().min(1).max(16000), image_mode:z.enum(["group","note"]).optional(), image_size_mode:z.enum(['original','compress']).optional(), collection_id: z.string().nullable().default(null), tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]), request_id: z.string().regex(/^[a-zA-Z0-9:_-]{1,160}$/).optional() });
+export const captureInput = z.object({ text: z.string().trim().min(1).max(16000), image_mode:z.enum(["group","note"]).optional(), image_size_mode:z.enum(['original','compress']).optional(), collection_id: z.string().nullable().default(null), tags: z.array(z.string().trim().min(1).max(MAX_TAG_LENGTH)).max(20).default([]), request_id: z.string().regex(/^[a-zA-Z0-9:_-]{1,160}$/).optional() });
 export function createCaptureManager({ db, dataDir, validateCollection, work, saveImage, saveNote, saveVideo, saveBgm, exists, page = fetchCapturePage, image = fetchRemoteImage, imagePage = fetchEhImageCandidates, video = downloadVideo, captureVideo = downloadCaptureVideo, captureBgm = downloadCaptureBgm }) {
   const read = () => JSON.parse(db.prepare('SELECT value FROM settings WHERE key=?').get(KEY)?.value || '[]');
   const write = jobs => {const text=JSON.stringify(jobs);if(text.length>16*1024*1024)throw fail(429,'采集记录已满，请清理完成或失败的任务');db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KEY,text);};
@@ -124,7 +125,8 @@ export function createCaptureManager({ db, dataDir, validateCollection, work, sa
     const album=imageMode==='group'&&mediaCount>0;
     const liveOnly=liveVideos.length>0&&galleryEntries.length===0;
     const groupKey=liveOnly?(liveVideos.length>1?'capture:'+id:null):album?(mediaCount>1?'capture:'+id:null):'note:'+id;
-    const tags=[...new Set([...job.input.tags, ...(plan.tags||[]).map(String).map(value=>value.slice(0,40)), ...(plan.author?[String(plan.author).slice(0,40)]:[])])].slice(0,30);
+    const tags=[...new Set([...job.input.tags, ...(plan.tags||[]).map(String), ...(plan.author?[String(plan.author).slice(0,40)]:[])])];
+    if(tags.length>MAX_ITEM_TAGS)throw fail(422,`作品标签超过 ${MAX_ITEM_TAGS} 个，未截断保存，请整理标签后重试`);
     let content=plan.content||'';
     // Some platform parsers (notably Bilibili opus) already place every
     // picture in the Markdown body. Add gallery-only pictures without
